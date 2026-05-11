@@ -1,11 +1,12 @@
 import axios from "axios";
 
-const TOKEN = process.env.WHATSAPP_TOKEN;
-if (!TOKEN) {
-  throw new Error("WHATSAPP_TOKEN no está definido");
-}
-
 export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
+  const token = process.env.WHATSAPP_TOKEN;
+  if (!token) {
+    console.error("[SENDER] WHATSAPP_TOKEN no está definido");
+    return;
+  }
+
   const phone = to.replace(/\D/g, "");
   const url = `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
 
@@ -19,7 +20,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
   try {
     await axios.post(url, payload, {
       headers: {
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
