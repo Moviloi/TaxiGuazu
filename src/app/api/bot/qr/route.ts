@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 // Usamos ruta relativa directa para descartar fallos de alias
-import { getDb_Instance } from '../../../../lib/db';
+import { getDbInstance } from '../../../../lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +8,7 @@ export async function GET() {
   try {
     console.log("Intentando leer QR de la base de datos...");
     
-    const db = getDb_Instance();
+    const db = getDbInstance();
     const stmt = db.prepare('SELECT value FROM connection_state WHERE key = ?');
     const state = stmt.get('QR') as { value: string } | undefined;
     
