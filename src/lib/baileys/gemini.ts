@@ -34,7 +34,7 @@ export async function generateGeminiReply(
   userText: string,
   history: Message[],
   trip: Trip | null,
-  phone: string
+  _phone: string
 ): Promise<string> {
   const genAI = getGenAI();
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -76,7 +76,8 @@ Bot (respondé en español, breve y servicial):`;
 
 export async function analyzeClientIntent(
   userText: string,
-  trip: Trip | null
+  trip: Trip | null,
+  phone: string
 ): Promise<IntentAnalysis> {
   const text = userText.toLowerCase().trim();
 

@@ -6,7 +6,7 @@ import { DB_PATH } from "@/config/constants";
 let db: Database.Database | null = null;
 
 function getDb(): Database.Database {
-  if (db !== null) return db;
+  if (db !== null) return db as Database.Database;
 
   const dir = path.dirname(DB_PATH);
   if (!fs.existsSync(dir)) {
@@ -25,7 +25,7 @@ function getDb(): Database.Database {
     initializeSchema(db);
   }
 
-  return db;
+  return db as Database.Database;
 }
 
 function initializeSchema(database: Database.Database) {

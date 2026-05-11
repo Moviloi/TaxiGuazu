@@ -133,7 +133,7 @@ async function handleIncomingMessage(message: proto.IWebMessageInfo) {
   insertMessage(conversation.id, "user", text);
 
   const trip = getActiveTripByPhone(phone);
-  const intent = await analyzeClientIntent(text, trip);
+  const intent = await analyzeClientIntent(text, trip, phone);
 
   if (intent.shouldRespond) {
     await sock?.sendPresenceUpdate("composing", remoteJid);
@@ -154,7 +154,7 @@ async function handleIncomingMessage(message: proto.IWebMessageInfo) {
   }
 }
 
-async function handleTripEscalation(phone: string, conversationId: number) {
+async function handleTripEscalation(phone: string, _conversationId: number) {
   const trip = getActiveTripByPhone(phone);
   if (!trip) return;
 
@@ -211,12 +211,12 @@ export async function startWhatsApp() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async (update) => {
+  sock.ev.on("connection.update", async (update: any) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
       console.log("[BOT] QR recibido");
-      const qrDataUrl = await QRCode.toDataURL(qr);
+      await QRCode.toDataURL(qr);
       setConnectionStateBatch({ status: "qr", qr_string: qr, phone: null });
     }
 
@@ -260,7 +260,7 @@ export async function startWhatsApp() {
     }
   });
 
-  sock.ev.on("messages.upsert", async (upsert) => {
+  sock.ev.on("messages.upsert", async (upsert: any) => {
     if (upsert.type !== "notify") return;
     for (const message of upsert.messages) {
       await handleIncomingMessage(message);
