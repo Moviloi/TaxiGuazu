@@ -11,7 +11,6 @@ import pino from "pino";
 import QRCode from "qrcode";
 import {
   AUTH_DIR,
-  BOT_PHONE,
   TITULAR_DRIVER_PHONE,
   DRIVERS_GROUP_ID,
   TIMEOUT_TITULAR_RESPONSE,
