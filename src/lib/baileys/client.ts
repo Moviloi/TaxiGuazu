@@ -122,7 +122,7 @@ async function handleIncomingMessage(message: proto.IWebMessageInfo) {
     return;
   }
 
-  let conversation = getOrCreateConversation(phone, message.pushName);
+  let conversation = getOrCreateConversation(phone, message.pushName || undefined);
   const freshConv = getConversationById(conversation.id);
   
   if (freshConv.taken_by_human) {
