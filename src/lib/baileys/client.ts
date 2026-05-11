@@ -102,7 +102,10 @@ async function handleIncomingMessage(message: proto.IWebMessageInfo) {
   if (!remoteJid || !remoteJid.endsWith("@s.whatsapp.net")) return;
   
   const text = extractText(message.message);
-  if (!text) return;
+  if (!text) {
+    await sendText(remoteJid, "Solo respondo mensajes de texto. Escribí tu consulta por favor.");
+    return;
+  }
 
   const phone = remoteJid.split("@")[0];
   console.log(`[MSG] ← ${phone}: ${text.substring(0, 50)}`);
