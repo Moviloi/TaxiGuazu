@@ -11,13 +11,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "start:bot": "tsx scripts/start-bot.ts",
+    "start:bot": "tsx scripts/outbox-worker.ts",
     "start:all": "concurrently --kill-others --names BOT,WEB --prefix-colors yellow,cyan \"npm run start:bot\" \"npm run start\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.3.0",
     "@tailwindcss/postcss": "^4.0.0",
-    "@whiskeysockets/baileys": "^6.7.9",
+    "axios": "^1.7.0",
+    "axios": "^1.16.0",
     "better-sqlite3": "^11.0.0",
     "concurrently": "^8.2.2",
     "dotenv": "^16.4.5",

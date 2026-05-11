@@ -1,37 +1,33 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
+
+type ConnectionStatus = 'disconnected' | 'qr' | 'connecting' | 'connected';
 
 export default function BotQR() {
-  const [qrImage, setQrImage] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
+  const [connection, setConnection] = useState<{
+    status: ConnectionStatus;
+    phone: string | null;
+    qrPng: string | null;
+    platform?: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const fetchQR = async () => {
+  const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/bot/qr');
+      const res = await fetch('/api/bot/connection/status');
       const data = await res.json();
-      
-      if (data.qr) {
-        // Genera la imagen Base64 a partir del string del QR
-        const url = await QRCode.toDataURL(data.qr, {
-          width: 300,
-          margin: 2,
-        });
-        setQrImage(url);
-      } else {
-        setQrImage('');
-      }
+      setConnection(data);
     } catch (err) {
-      console.error('Error cargando QR:', err);
+      console.error('Error cargando estado:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchQR();
-    const interval = setInterval(fetchQR, 10000);
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -39,21 +35,40 @@ export default function BotQR() {
 
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-gray-100 rounded-lg shadow-md">
-      <h2 className="text-lg font-bold mb-4 text-gray-800">Escaneá para conectar TaxiGuazú</h2>
-      
-      {qrImage ? (
-        <div className="bg-white p-4 rounded-lg shadow-inner">
-          <img src={qrImage} alt="WhatsApp QR Code" />
-          <p className="text-sm text-gray-500 mt-2 text-center">El código se actualiza automáticamente</p>
+      <h2 className="text-lg font-bold mb-4 text-gray-800">TaxiGuazú Bot</h2>
+
+      {connection?.status === 'connected' ? (
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+            <p className="text-green-600 font-semibold">Conectado</p>
+          </div>
+          <p className="text-gray-600 text-sm">
+            {connection.platform === 'whatsapp-business-api'
+              ? 'WhatsApp Business API'
+              : 'Baileys'}
+          </p>
+          {connection.phone && (
+            <p className="text-gray-500 text-xs mt-1">{connection.phone}</p>
+          )}
+          <button
+            onClick={fetchStatus}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+          >
+            Actualizar
+          </button>
         </div>
       ) : (
         <div className="text-center">
-          <p className="text-green-600 font-semibold">¡Bot conectado o esperando nuevo código!</p>
-          <button 
-            onClick={fetchQR}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          <p className="text-yellow-600 font-semibold">Desconectado</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Verificá la configuración del webhook en Meta
+          </p>
+          <button
+            onClick={fetchStatus}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
           >
-            Reintentar ahora
+            Reintentar
           </button>
         </div>
       )}
