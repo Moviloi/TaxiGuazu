@@ -14,9 +14,6 @@ import {
   TITULAR_DRIVER_PHONE,
   DRIVERS_GROUP_ID,
   TIMEOUT_TITULAR_RESPONSE,
-  TIMEOUT_GROUP_RESPONSE,
-  TIMEOUT_HUMAN_RESPONSE,
-  DISCOUNT_MAX_EXPLICIT,
 } from "@/config/constants";
 import {
   setConnectionStateBatch,
@@ -24,14 +21,9 @@ import {
   getConversationById,
   insertMessage,
   getRecentHistory,
-  enqueueOutbox,
   getPendingOutbox,
   markOutboxSent,
   getActiveTripByPhone,
-  createTrip,
-  updateTripState,
-  updateTripDiscountExplicit,
-  addEscalationLog,
 } from "../db";
 import { generateGeminiReply, analyzeClientIntent } from "./gemini";
 
