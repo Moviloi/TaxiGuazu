@@ -25,7 +25,7 @@ export const DATABASE_PATH = process.env.DATABASE_PATH || "./data/bot.db";
 
 export const PROJECT_ROOT = path.resolve(__dirname, "../../");
 export const DATA_DIR = path.join(PROJECT_ROOT, "data");
-export const AUTH_DIR = path.join(PROJECT_ROOT, "auth");
+export const AUTH_DIR = path.join(PROJECT_ROOT, "auth-6648");
 export const DB_PATH = path.resolve(DATA_DIR, "bot.db");
 
 export function validateEnv(): void {
