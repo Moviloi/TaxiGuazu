@@ -38,7 +38,7 @@ cp .env.local.example .env.local
 Editar `.env.local`:
 
 ```env
-GEMINI_API_KEY=tu_api_key_de_gemini
+GEMINI_API_KEY=AIzaSyAQS0LDtOGuvGZUu3_fZOPEY-WBgzGcpls
 BOT_PHONE=+543757646648
 TITULAR_DRIVER_PHONE=+543757613215
 DRIVERS_GROUP_ID=tu_group_id@g.us
