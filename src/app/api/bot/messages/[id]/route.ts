@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMessages, insertMessage, getConversationById } from '@/lib/db';
-import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender';
+import { getMessages, insertMessage, getConversationById } from '@/lib/db/database';
+import { sendWhatsAppMessage } from '@/lib/whatsapp/sender';
 
 export async function GET(
   _request: NextRequest,

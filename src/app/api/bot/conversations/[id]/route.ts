@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { takeConversation, releaseConversation, deleteConversation } from '@/lib/db';
+import { takeConversation, releaseConversation, deleteConversation } from '@/lib/db/database';
 
 export async function POST(
   request: NextRequest,

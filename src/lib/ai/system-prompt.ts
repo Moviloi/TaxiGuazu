@@ -67,7 +67,7 @@ NO uses emojis excesivos. Mensajes breves y profesionales.
 export function getConfirmationMessage(serviceDetails: string): string {
   return `${serviceDetails}
 
-⚠️ *Importante:* Una vez confirmado, compartiremos tu número de contacto con el chofer que te llevará.
+*Importante:* Una vez confirmado, compartiremos tu número de contacto con el chofer que te llevará.
 
 ¿Confirmás el servicio? (Responde "SI" para confirmar)`;
 }

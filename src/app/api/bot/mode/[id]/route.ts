@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setConversationMode } from '@/lib/db';
+import { setConversationMode } from '@/lib/db/database';
 
 export async function POST(
   request: NextRequest,

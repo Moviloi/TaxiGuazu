@@ -88,6 +88,7 @@ function initializeSchema(database: Database.Database) {
   database.exec(`
     CREATE TABLE IF NOT EXISTS drivers (
       driver_id TEXT PRIMARY KEY,
+      name TEXT,
       phone TEXT UNIQUE NOT NULL,
       is_titular INTEGER DEFAULT 0,
       group_id TEXT,
@@ -128,7 +129,7 @@ function initializeSchema(database: Database.Database) {
       phone TEXT NOT NULL,
       content TEXT NOT NULL,
       sent INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      created_at INTEGER DEFAULT (unixepoch())
     )
   `);
 
@@ -225,6 +226,12 @@ export function getConversationById(id: number): any {
   return getDb()
     .prepare("SELECT * FROM conversations WHERE id = ?")
     .get(id);
+}
+
+export function getConversationByPhone(phone: string): any {
+  return getDb()
+    .prepare("SELECT * FROM conversations WHERE phone = ?")
+    .get(phone);
 }
 
 export function listConversations(): any[] {
@@ -436,6 +443,12 @@ export function getTitularDriver(): any {
   return getDb()
     .prepare("SELECT * FROM drivers WHERE is_titular = 1 LIMIT 1")
     .get();
+}
+
+export function getDriverByPhone(phone: string): any {
+  return getDb()
+    .prepare("SELECT * FROM drivers WHERE phone = ?")
+    .get(phone);
 }
 
 export function getDriversGroupId(): string | null {

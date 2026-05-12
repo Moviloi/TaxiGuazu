@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { listConversations } from '@/lib/db';
+import { listConversations } from '@/lib/db/database';
 
 export const dynamic = 'force-dynamic';
 

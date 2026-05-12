@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getSystemPrompt } from "../system-prompt";
+import { getSystemPrompt } from "./system-prompt";
 import { DISCOUNT_MAX_EXPLICIT } from "@/config/constants";
 
 interface Trip {
@@ -123,7 +123,13 @@ export async function analyzeClientIntent(
     (intent === "confirmacion" || intent === "reserva")
   ) {
     needsNotification = true;
-    notificationMessage = `🔔 *ALERTA VIAJE CON DESCUENTO*\n\n📱 Cliente: ${phone}\n📍 Destino: ${trip.destination}\n💰 Precio con ${trip.discount_explicit}% descuento: $${Math.round((trip.price_base || 0) * (1 - trip.discount_explicit / 100))}\n\n⚠️ Descuento alto aplicado`;
+    notificationMessage = `*ALERTA VIAJE CON DESCUENTO*
+
+Cliente: ${phone}
+Destino: ${trip.destination}
+Precio con ${trip.discount_explicit}% descuento: $${Math.round((trip.price_base || 0) * (1 - trip.discount_explicit / 100))}
+
+Descuento alto aplicado`;
   }
 
   return {

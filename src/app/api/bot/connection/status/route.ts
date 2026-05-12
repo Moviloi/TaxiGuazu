@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getConnectionState } from '@/lib/db';
+import { getConnectionState } from '@/lib/db/database';
 
 export const dynamic = 'force-dynamic';
 

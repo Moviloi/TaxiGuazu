@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-// Usamos ruta relativa directa para descartar fallos de alias
-import { getDbInstance } from '../../../../lib/db';
+import { getDbInstance } from '@/lib/db/database';
 
 export const dynamic = 'force-dynamic';
 
