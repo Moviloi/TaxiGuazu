@@ -349,6 +349,18 @@ export async function getDriverByPhone(phone: string): Promise<any> {
   return (rs.rows as any[])[0] || null;
 }
 
+export async function registerDriver(phone: string, name?: string): Promise<any> {
+  await ensureSchema();
+  const existing = await getDriverByPhone(phone);
+  if (existing) return existing;
+  const driverId = `driver_${Date.now()}`;
+  await getDbv().execute({
+    sql: "INSERT INTO drivers (driver_id, phone, name, active) VALUES (?, ?, ?, 1)",
+    args: [driverId, phone, name || null],
+  });
+  return await getDriverByPhone(phone);
+}
+
 export async function getDriversGroupId(): Promise<string | null> {
   const driver = await getTitularDriver();
   return driver?.group_id || null;

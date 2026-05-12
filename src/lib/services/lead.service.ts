@@ -5,6 +5,7 @@ import {
   getRecentHistory,
   getActiveTripByPhone,
   getConversationByPhone,
+  registerDriver,
 } from "@/lib/db/database";
 import { generateGeminiReply, analyzeClientIntent } from "@/lib/ai/gemini";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
@@ -29,6 +30,12 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   if (text.trim().toLowerCase() === "seguí vos" || text.trim().toLowerCase() === "seguimos vos") {
     await sendWhatsAppMessage(phone, "¡Genial! Retomo la atención. ¿En qué estábamos?");
     resetToIdle((await getConversationByPhone(phone))?.id || 0);
+    return;
+  }
+
+  if (text.trim().toLowerCase() === ".registrar") {
+    await registerDriver(phone);
+    await sendWhatsAppMessage(phone, "✅ Te registraste como chofer. Cuando haya un viaje recibirás la notificación.");
     return;
   }
 
