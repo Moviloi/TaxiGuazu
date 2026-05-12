@@ -11,9 +11,10 @@ let schemaReady: Promise<void> | null = null;
 function getUrl(): string {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
   if (tursoUrl) return tursoUrl;
-  const dir = path.dirname(DB_PATH);
+  const fallback = process.env.VERCEL ? "/tmp/bot.db" : DB_PATH;
+  const dir = path.dirname(fallback);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return `file:${DB_PATH}`;
+  return `file:${fallback}`;
 }
 
 function getDbv(): LibSqlClient {
