@@ -4,12 +4,21 @@ import { useEffect, useState } from 'react';
 
 type ConnectionStatus = 'disconnected' | 'qr' | 'connecting' | 'connected';
 
+interface Debug {
+  hasToken: boolean;
+  hasPhoneId: boolean;
+  hasVerifyToken: boolean;
+  hasBotPhone: boolean;
+  hasGeminiKey: boolean;
+}
+
 export default function BotQR() {
   const [connection, setConnection] = useState<{
     status: ConnectionStatus;
     phone: string | null;
     qrPng: string | null;
     platform?: string;
+    _debug?: Debug;
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,6 +59,16 @@ export default function BotQR() {
           </p>
           {connection.phone && (
             <p className="text-gray-500 text-xs mt-1">{connection.phone}</p>
+          )}
+          {connection._debug && (
+            <div className="mt-3 text-left text-xs text-gray-400 bg-gray-50 rounded p-2 font-mono">
+              <p className="font-semibold mb-1">Debug env vars:</p>
+              <p>hasToken: {connection._debug.hasToken ? 'true' : 'false'}</p>
+              <p>hasPhoneId: {connection._debug.hasPhoneId ? 'true' : 'false'}</p>
+              <p>hasVerifyToken: {connection._debug.hasVerifyToken ? 'true' : 'false'}</p>
+              <p>hasBotPhone: {connection._debug.hasBotPhone ? 'true' : 'false'}</p>
+              <p>hasGeminiKey: {connection._debug.hasGeminiKey ? 'true' : 'false'}</p>
+            </div>
           )}
           <button
             onClick={fetchStatus}

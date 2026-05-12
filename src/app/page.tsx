@@ -9,6 +9,13 @@ interface ConnectionState {
   phone?: string;
   qrPng?: string;
   updatedAt?: number;
+  _debug?: {
+    hasToken: boolean;
+    hasPhoneId: boolean;
+    hasVerifyToken: boolean;
+    hasBotPhone: boolean;
+    hasGeminiKey: boolean;
+  };
 }
 
 export default function Dashboard() {
@@ -172,12 +179,18 @@ export default function Dashboard() {
             </div>
             <div>
               <h1 className="font-bold text-gray-800">TaxiGuazú Bot</h1>
-              <p className="text-sm text-gray-500">{connection.phone}</p>
+<p className="text-sm text-gray-500">{connection.phone}</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-            <span className="text-sm text-emerald-600 font-medium">Conectado</span>
+            {connection._debug && (
+              <div className="mt-2 text-left text-xs text-gray-400 bg-gray-50 rounded p-2 font-mono">
+                <p className="font-semibold mb-1">Debug:</p>
+                <p>hasToken: {connection._debug.hasToken ? 'true' : 'false'}</p>
+                <p>hasPhoneId: {connection._debug.hasPhoneId ? 'true' : 'false'}</p>
+                <p>hasVerifyToken: {connection._debug.hasVerifyToken ? 'true' : 'false'}</p>
+                <p>hasBotPhone: {connection._debug.hasBotPhone ? 'true' : 'false'}</p>
+                <p>hasGeminiKey: {connection._debug.hasGeminiKey ? 'true' : 'false'}</p>
+              </div>
+            )}
           </div>
         </div>
       </header>
