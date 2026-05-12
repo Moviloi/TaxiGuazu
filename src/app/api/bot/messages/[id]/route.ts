@@ -9,7 +9,7 @@ export async function GET(
   try {
     const { id } = await params;
     const convId = parseInt(id);
-    const messages = getMessages(convId);
+    const messages = await getMessages(convId);
     return NextResponse.json({ messages });
   } catch (error) {
     console.error('Error fetching messages:', error);
@@ -31,10 +31,10 @@ export async function POST(
       return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
     }
 
-    const messageId = insertMessage(convId, role, content);
+    const messageId = await insertMessage(convId, role, content);
 
     if (role === 'human') {
-      const conversation = getConversationById(convId);
+      const conversation = await getConversationById(convId);
       if (conversation) {
         await sendWhatsAppMessage(conversation.phone, content);
       }

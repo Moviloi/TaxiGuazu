@@ -15,7 +15,7 @@ export async function POST(
       return NextResponse.json({ error: 'Modo inválido' }, { status: 400 });
     }
 
-    setConversationMode(convId, mode);
+    await setConversationMode(convId, mode);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Error setting mode:', error);

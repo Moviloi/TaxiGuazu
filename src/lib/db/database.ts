@@ -1,44 +1,51 @@
-import Database from "better-sqlite3";
+import { createClient } from "@libsql/client";
 import path from "path";
 import fs from "fs";
 import { DB_PATH } from "@/config/constants";
 
-let db: Database.Database | null = null;
+type LibSqlClient = ReturnType<typeof createClient>;
 
-function getDb(): Database.Database {
-  if (db !== null) return db as Database.Database;
+let dbClient: LibSqlClient | null = null;
+let schemaReady: Promise<void> | null = null;
 
+function getUrl(): string {
+  const tursoUrl = process.env.TURSO_DATABASE_URL;
+  if (tursoUrl) return tursoUrl;
   const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  if ((global as any).singletonDb) {
-    db = (global as any).singletonDb;
-  } else {
-    db = new Database(DB_PATH, {
-      verbose: (msg?: unknown) => console.log(`[DB] ${msg}`),
-    });
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    (global as any).singletonDb = db;
-    initializeSchema(db);
-  }
-
-  return db as Database.Database;
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return `file:${DB_PATH}`;
 }
 
-function initializeSchema(database: Database.Database) {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS connection_state (
+function getDbv(): LibSqlClient {
+  if (dbClient) return dbClient;
+
+  dbClient = createClient({
+    url: getUrl(),
+    authToken: process.env.TURSO_DATABASE_TOKEN,
+  });
+
+  schemaReady = initSchema();
+  
+  return dbClient;
+}
+
+async function ensureSchema(): Promise<void> {
+  if (!schemaReady) {
+    const db = getDbv();
+    schemaReady = initSchema();
+  }
+  await schemaReady;
+}
+
+async function initSchema(): Promise<void> {
+  const db = getDbv();
+  await db.batch([
+    `CREATE TABLE IF NOT EXISTS connection_state (
       key TEXT PRIMARY KEY,
       value TEXT,
       updated_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS conversations (
+    )`,
+    `CREATE TABLE IF NOT EXISTS conversations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       phone TEXT UNIQUE NOT NULL,
       name TEXT,
@@ -49,26 +56,16 @@ function initializeSchema(database: Database.Database) {
       trip_status TEXT DEFAULT 'consulta',
       last_message_at INTEGER,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
+    )`,
+    `CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       conversation_id INTEGER NOT NULL REFERENCES conversations(id),
       role TEXT CHECK(role IN ('user','assistant','human')) NOT NULL,
       content TEXT NOT NULL,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `);
-
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_messages_conv
-    ON messages(conversation_id, created_at)
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS trips (
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at)`,
+    `CREATE TABLE IF NOT EXISTS trips (
       trip_id TEXT PRIMARY KEY,
       client_phone TEXT NOT NULL,
       origin TEXT,
@@ -82,11 +79,8 @@ function initializeSchema(database: Database.Database) {
       updated_at INTEGER DEFAULT (unixepoch()),
       confirmed_at INTEGER,
       contact_shared_at INTEGER
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS drivers (
+    )`,
+    `CREATE TABLE IF NOT EXISTS drivers (
       driver_id TEXT PRIMARY KEY,
       name TEXT,
       phone TEXT UNIQUE NOT NULL,
@@ -94,11 +88,8 @@ function initializeSchema(database: Database.Database) {
       group_id TEXT,
       active INTEGER DEFAULT 1,
       created_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS inactivity_events (
+    )`,
+    `CREATE TABLE IF NOT EXISTS inactivity_events (
       event_id TEXT PRIMARY KEY,
       trip_id TEXT NOT NULL,
       client_phone TEXT,
@@ -107,11 +98,8 @@ function initializeSchema(database: Database.Database) {
       discount_offered INTEGER,
       created_at INTEGER DEFAULT (unixepoch()),
       FOREIGN KEY (trip_id) REFERENCES trips(trip_id)
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS escalation_log (
+    )`,
+    `CREATE TABLE IF NOT EXISTS escalation_log (
       escalation_id TEXT PRIMARY KEY,
       trip_id TEXT NOT NULL,
       contacted_driver_phone TEXT,
@@ -119,345 +107,254 @@ function initializeSchema(database: Database.Database) {
       response_time_seconds INTEGER,
       status TEXT,
       FOREIGN KEY (trip_id) REFERENCES trips(trip_id)
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS outbox (
+    )`,
+    `CREATE TABLE IF NOT EXISTS outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       conversation_id INTEGER NOT NULL,
       phone TEXT NOT NULL,
       content TEXT NOT NULL,
       sent INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
-
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_outbox_pending
-    ON outbox(sent, created_at)
-  `);
-
-  database.exec(`
-    INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')
-  `);
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(sent, created_at)`,
+    `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
+  ]);
 }
 
 // ========== CONNECTION STATE ==========
 
-export function getConnectionState(): { status?: string; qr_string?: string; phone?: string; updated_at?: number } | null {
-  const result = getDb()
-    .prepare("SELECT key, value, updated_at FROM connection_state")
-    .all() as { key: string; value: string; updated_at: number }[];
-  
-  if (result.length === 0) return null;
-  
+export async function getConnectionState(): Promise<{ status?: string; qr_string?: string; phone?: string; updated_at?: number } | null> {
+  await ensureSchema();
+  const rs = await getDbv().execute("SELECT key, value, updated_at FROM connection_state");
+  if (rs.rows.length === 0) return null;
   const state: any = {};
-  for (const row of result) {
+  for (const row of rs.rows as any[]) {
     state[row.key] = row.value;
     state.updated_at = row.updated_at;
   }
   return state;
 }
 
-export function setConnectionState(key: string, value: string): void {
-  const existing = getDb()
-    .prepare("SELECT value FROM connection_state WHERE key = ?")
-    .get(key) as { value: string } | undefined;
-  
-  if (existing) {
-    getDb()
-      .prepare("UPDATE connection_state SET value = ?, updated_at = unixepoch() WHERE key = ?")
-      .run(value, key);
+export async function setConnectionState(key: string, value: string): Promise<void> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT value FROM connection_state WHERE key = ?", args: [key] });
+  if ((rs.rows as any[]).length > 0) {
+    await getDbv().execute({ sql: "UPDATE connection_state SET value = ?, updated_at = unixepoch() WHERE key = ?", args: [value, key] });
   } else {
-    getDb()
-      .prepare("INSERT INTO connection_state (key, value) VALUES (?, ?)")
-      .run(key, value);
+    await getDbv().execute({ sql: "INSERT INTO connection_state (key, value) VALUES (?, ?)", args: [key, value] });
   }
 }
 
-export function setConnectionStateBatch(states: { status?: string; qr_string?: string | null; phone?: string | null }): void {
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO connection_state (key, value, updated_at)
-    VALUES (?, ?, unixepoch())
-  `);
-  
-  const update = db.transaction(() => {
-    if (states.status !== undefined) stmt.run('status', states.status);
-    if (states.qr_string !== undefined) {
-      if (states.qr_string === null) {
-        db.prepare("DELETE FROM connection_state WHERE key = 'qr_string'").run();
-      } else {
-        stmt.run('qr_string', states.qr_string);
-      }
+export async function setConnectionStateBatch(states: { status?: string; qr_string?: string | null; phone?: string | null }): Promise<void> {
+  await ensureSchema();
+  const stmts: { sql: string; args: any[] }[] = [];
+  if (states.status !== undefined) {
+    stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['status', states.status] });
+  }
+  if (states.qr_string !== undefined) {
+    if (states.qr_string === null) {
+      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'qr_string'" });
+    } else {
+      stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['qr_string', states.qr_string] });
     }
-    if (states.phone !== undefined) {
-      if (states.phone === null) {
-        db.prepare("DELETE FROM connection_state WHERE key = 'phone'").run();
-      } else {
-        stmt.run('phone', states.phone);
-      }
+  }
+  if (states.phone !== undefined) {
+    if (states.phone === null) {
+      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'phone'" });
+    } else {
+      stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['phone', states.phone] });
     }
-  });
-  
-  update();
+  }
+  if (stmts.length > 0) {
+    await getDbv().batch(stmts);
+  }
 }
 
 // ========== CONVERSATIONS ==========
 
-export function getOrCreateConversation(phone: string, name?: string): any {
-  const existing = getDb()
-    .prepare("SELECT * FROM conversations WHERE phone = ?")
-    .get(phone) as any;
-  
-  if (existing) return existing;
+export async function getOrCreateConversation(phone: string, name?: string): Promise<any> {
+  await ensureSchema();
+  const existing = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE phone = ?", args: [phone] });
+  if ((existing.rows as any[]).length > 0) return (existing.rows as any[])[0];
 
-  const info = getDb()
-    .prepare("INSERT INTO conversations (phone, name, last_message_at) VALUES (?, ?, unixepoch())")
-    .run(phone, name || null);
-
-  return getDb()
-    .prepare("SELECT * FROM conversations WHERE id = ?")
-    .get(info.lastInsertRowid);
+  const info = await getDbv().execute({ sql: "INSERT INTO conversations (phone, name, last_message_at) VALUES (?, ?, unixepoch())", args: [phone, name || null] });
+  const id = Number(info.lastInsertRowid);
+  const created = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE id = ?", args: [id] });
+  return (created.rows as any[])[0];
 }
 
-export function getConversationById(id: number): any {
-  return getDb()
-    .prepare("SELECT * FROM conversations WHERE id = ?")
-    .get(id);
+export async function getConversationById(id: number): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE id = ?", args: [id] });
+  return (rs.rows as any[])[0] || null;
 }
 
-export function getConversationByPhone(phone: string): any {
-  return getDb()
-    .prepare("SELECT * FROM conversations WHERE phone = ?")
-    .get(phone);
+export async function getConversationByPhone(phone: string): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE phone = ?", args: [phone] });
+  return (rs.rows as any[])[0] || null;
 }
 
-export function listConversations(): any[] {
-  return getDb()
-    .prepare(`
-      SELECT c.*, 
-        (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_preview
-      FROM conversations c
-      WHERE c.trip_status != 'completado' AND c.trip_status != 'cancelado'
-      ORDER BY c.last_message_at DESC
-    `)
-    .all();
+export async function listConversations(): Promise<any[]> {
+  await ensureSchema();
+  const rs = await getDbv().execute(`
+    SELECT c.*, 
+      (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_preview
+    FROM conversations c
+    WHERE c.trip_status != 'completado' AND c.trip_status != 'cancelado'
+    ORDER BY c.last_message_at DESC
+  `);
+  return rs.rows as any[];
 }
 
-export function updateConversationActivity(phone: string): void {
-  getDb()
-    .prepare("UPDATE conversations SET last_message_at = unixepoch() WHERE phone = ?")
-    .run(phone);
+export async function updateConversationActivity(phone: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE conversations SET last_message_at = unixepoch() WHERE phone = ?", args: [phone] });
 }
 
-export function setConversationMode(conversationId: number, mode: 'AI' | 'HUMAN'): void {
-  getDb()
-    .prepare("UPDATE conversations SET mode = ? WHERE id = ?")
-    .run(mode, conversationId);
+export async function setConversationMode(conversationId: number, mode: 'AI' | 'HUMAN'): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE conversations SET mode = ? WHERE id = ?", args: [mode, conversationId] });
 }
 
-export function takeConversation(conversationId: number): void {
-  getDb()
-    .prepare("UPDATE conversations SET taken_by_human = 1, human_operator_phone = ? WHERE id = ?")
-    .run('+543757613215', conversationId);
+export async function takeConversation(conversationId: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE conversations SET taken_by_human = 1, human_operator_phone = ? WHERE id = ?", args: ['+543757613215', conversationId] });
 }
 
-export function releaseConversation(conversationId: number): void {
-  getDb()
-    .prepare("UPDATE conversations SET taken_by_human = 0, human_operator_phone = NULL WHERE id = ?")
-    .run(conversationId);
+export async function releaseConversation(conversationId: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE conversations SET taken_by_human = 0, human_operator_phone = NULL WHERE id = ?", args: [conversationId] });
 }
 
-export function deleteConversation(conversationId: number): void {
-  const db = getDb();
-  db.transaction(() => {
-    db.prepare("DELETE FROM messages WHERE conversation_id = ?").run(conversationId);
-    db.prepare("DELETE FROM outbox WHERE conversation_id = ? AND sent = 0").run(conversationId);
-    db.prepare("DELETE FROM conversations WHERE id = ?").run(conversationId);
-  })();
+export async function deleteConversation(conversationId: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().batch([
+    { sql: "DELETE FROM messages WHERE conversation_id = ?", args: [conversationId] },
+    { sql: "DELETE FROM outbox WHERE conversation_id = ? AND sent = 0", args: [conversationId] },
+    { sql: "DELETE FROM conversations WHERE id = ?", args: [conversationId] },
+  ]);
 }
 
-export function setConversationTrip(conversationId: number, tripId: string): void {
-  getDb()
-    .prepare("UPDATE conversations SET trip_id = ? WHERE id = ?")
-    .run(tripId, conversationId);
+export async function setConversationTrip(conversationId: number, tripId: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE conversations SET trip_id = ? WHERE id = ?", args: [tripId, conversationId] });
 }
 
-export function setConversationTripStatus(conversationId: number, status: string): void {
-  getDb()
-    .prepare("UPDATE conversations SET trip_status = ? WHERE id = ?")
-    .run(status, conversationId);
+export async function setConversationTripStatus(conversationId: number, status: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE conversations SET trip_status = ? WHERE id = ?", args: [status, conversationId] });
 }
 
 // ========== MESSAGES ==========
 
-export function insertMessage(conversationId: number, role: string, content: string): number {
-  const db = getDb();
-  const result = db.prepare(
-    "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)"
-  ).run(conversationId, role, content);
-  
-  db.prepare("UPDATE conversations SET last_message_at = unixepoch() WHERE id = ?")
-    .run(conversationId);
-  
-  return result.lastInsertRowid as number;
+export async function insertMessage(conversationId: number, role: string, content: string): Promise<number> {
+  await ensureSchema();
+  const result = await getDbv().execute({ sql: "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)", args: [conversationId, role, content] });
+  await getDbv().execute({ sql: "UPDATE conversations SET last_message_at = unixepoch() WHERE id = ?", args: [conversationId] });
+  return Number(result.lastInsertRowid);
 }
 
-export function getMessages(conversationId: number, limit = 50): any[] {
-  return getDb()
-    .prepare(`
-      SELECT * FROM messages 
-      WHERE conversation_id = ? 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    `)
-    .all(conversationId, limit)
-    .reverse();
+export async function getMessages(conversationId: number, limit = 50): Promise<any[]> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?", args: [conversationId, limit] });
+  return (rs.rows as any[]).reverse();
 }
 
-export function getRecentHistory(conversationId: number, limit = 20): any[] {
-  return getDb()
-    .prepare(`
-      SELECT * FROM (
-        SELECT * FROM messages 
-        WHERE conversation_id = ? 
-        ORDER BY created_at DESC 
-        LIMIT ?
-      ) ORDER BY created_at ASC
-    `)
-    .all(conversationId, limit);
+export async function getRecentHistory(conversationId: number, limit = 20): Promise<any[]> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: `SELECT * FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?) ORDER BY created_at ASC`, args: [conversationId, limit] });
+  return rs.rows as any[];
 }
 
 // ========== OUTBOX ==========
 
-export function enqueueOutbox(conversationId: number, phone: string, content: string): void {
-  getDb()
-    .prepare("INSERT INTO outbox (conversation_id, phone, content) VALUES (?, ?, ?)")
-    .run(conversationId, phone, content);
+export async function enqueueOutbox(conversationId: number, phone: string, content: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "INSERT INTO outbox (conversation_id, phone, content) VALUES (?, ?, ?)", args: [conversationId, phone, content] });
 }
 
-export function getPendingOutbox(limit = 20): any[] {
-  return getDb()
-    .prepare("SELECT * FROM outbox WHERE sent = 0 ORDER BY created_at ASC LIMIT ?")
-    .all(limit);
+export async function getPendingOutbox(limit = 20): Promise<any[]> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM outbox WHERE sent = 0 ORDER BY created_at ASC LIMIT ?", args: [limit] });
+  return rs.rows as any[];
 }
 
-export function markOutboxSent(id: number): void {
-  getDb()
-    .prepare("UPDATE outbox SET sent = 1 WHERE id = ?")
-    .run(id);
+export async function markOutboxSent(id: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE outbox SET sent = 1 WHERE id = ?", args: [id] });
 }
 
 // ========== TRIPS ==========
 
-export function createTrip(
-  tripId: string,
-  clientPhone: string,
-  origin: string,
-  destination: string,
-  priceBase?: number
-): void {
-  getDb()
-    .prepare(`
-      INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, status)
-      VALUES (?, ?, ?, ?, ?, 'consulta')
-    `)
-    .run(tripId, clientPhone, origin, destination, priceBase || null);
+export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, status) VALUES (?, ?, ?, ?, ?, 'consulta')", args: [tripId, clientPhone, origin, destination, priceBase || null] });
 }
 
-export function getTripById(tripId: string): any {
-  return getDb()
-    .prepare("SELECT * FROM trips WHERE trip_id = ?")
-    .get(tripId);
+export async function getTripById(tripId: string): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM trips WHERE trip_id = ?", args: [tripId] });
+  return (rs.rows as any[])[0] || null;
 }
 
-export function getActiveTripByPhone(clientPhone: string): any {
-  return getDb()
-    .prepare(`
-      SELECT * FROM trips 
-      WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado', 'asignado_chofer')
-      ORDER BY created_at DESC LIMIT 1
-    `)
-    .get(clientPhone);
+export async function getActiveTripByPhone(clientPhone: string): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado', 'asignado_chofer') ORDER BY created_at DESC LIMIT 1", args: [clientPhone] });
+  return (rs.rows as any[])[0] || null;
 }
 
-export function updateTripState(tripId: string, newState: string): void {
-  getDb()
-    .prepare("UPDATE trips SET status = ?, updated_at = unixepoch() WHERE trip_id = ?")
-    .run(newState, tripId);
+export async function updateTripState(tripId: string, newState: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE trips SET status = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [newState, tripId] });
 }
 
-export function updateTripDiscountExplicit(tripId: string, discountPercent: number): void {
-  getDb()
-    .prepare("UPDATE trips SET discount_explicit = ?, updated_at = unixepoch() WHERE trip_id = ?")
-    .run(discountPercent, tripId);
+export async function updateTripDiscountExplicit(tripId: string, discountPercent: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE trips SET discount_explicit = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [discountPercent, tripId] });
 }
 
-export function assignDriverToTrip(tripId: string, driverPhone: string): void {
-  getDb()
-    .prepare("UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', updated_at = unixepoch() WHERE trip_id = ?")
-    .run(driverPhone, tripId);
+export async function assignDriverToTrip(tripId: string, driverPhone: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', updated_at = unixepoch() WHERE trip_id = ?", args: [driverPhone, tripId] });
 }
 
-export function addInactivityEvent(
-  eventId: string,
-  tripId: string,
-  clientPhone: string,
-  inactivityMinutes: number,
-  discountOffered: number
-): void {
-  getDb()
-    .prepare(`
-      INSERT INTO inactivity_events (event_id, trip_id, client_phone, last_message_at, inactivity_minutes, discount_offered)
-      VALUES (?, ?, ?, unixepoch(), ?, ?)
-    `)
-    .run(eventId, tripId, clientPhone, inactivityMinutes, discountOffered);
+export async function addInactivityEvent(eventId: string, tripId: string, clientPhone: string, inactivityMinutes: number, discountOffered: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "INSERT INTO inactivity_events (event_id, trip_id, client_phone, last_message_at, inactivity_minutes, discount_offered) VALUES (?, ?, ?, unixepoch(), ?, ?)", args: [eventId, tripId, clientPhone, inactivityMinutes, discountOffered] });
 }
 
-export function addEscalationLog(
-  escalationId: string,
-  tripId: string,
-  contactedDriverPhone: string,
-  status: string,
-  responseTimeSec?: number
-): void {
-  getDb()
-    .prepare(`
-      INSERT INTO escalation_log (escalation_id, trip_id, contacted_driver_phone, status, response_time_seconds)
-      VALUES (?, ?, ?, ?, ?)
-    `)
-    .run(escalationId, tripId, contactedDriverPhone, status, responseTimeSec || null);
+export async function addEscalationLog(escalationId: string, tripId: string, contactedDriverPhone: string, status: string, responseTimeSec?: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "INSERT INTO escalation_log (escalation_id, trip_id, contacted_driver_phone, status, response_time_seconds) VALUES (?, ?, ?, ?, ?)", args: [escalationId, tripId, contactedDriverPhone, status, responseTimeSec || null] });
 }
 
-export function shareContactWithDriver(tripId: string): void {
-  getDb()
-    .prepare("UPDATE trips SET contact_shared_at = unixepoch(), status = 'directo_cliente' WHERE trip_id = ?")
-    .run(tripId);
+export async function shareContactWithDriver(tripId: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE trips SET contact_shared_at = unixepoch(), status = 'directo_cliente' WHERE trip_id = ?", args: [tripId] });
 }
 
 // ========== DRIVERS ==========
 
-export function getTitularDriver(): any {
-  return getDb()
-    .prepare("SELECT * FROM drivers WHERE is_titular = 1 LIMIT 1")
-    .get();
+export async function getTitularDriver(): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute("SELECT * FROM drivers WHERE is_titular = 1 LIMIT 1");
+  return (rs.rows as any[])[0] || null;
 }
 
-export function getDriverByPhone(phone: string): any {
-  return getDb()
-    .prepare("SELECT * FROM drivers WHERE phone = ?")
-    .get(phone);
+export async function getDriverByPhone(phone: string): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM drivers WHERE phone = ?", args: [phone] });
+  return (rs.rows as any[])[0] || null;
 }
 
-export function getDriversGroupId(): string | null {
-  const titular = getTitularDriver();
-  return titular?.group_id || null;
+export async function getDriversGroupId(): Promise<string | null> {
+  const driver = await getTitularDriver();
+  return driver?.group_id || null;
 }
 
 // ========== DB INSTANCE ==========
 
-export function getDbInstance(): Database.Database {
-  return getDb();
+export function getDbInstance(): LibSqlClient {
+  return getDbv();
 }

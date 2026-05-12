@@ -27,7 +27,7 @@ export async function handleDriverResponse(
     return;
   }
 
-  const trip = getActiveTripByPhone(workflow.phone);
+  const trip = await getActiveTripByPhone(workflow.phone);
   if (!trip) return;
 
   const driverName = await getDriverName(driverPhone) || "El chofer";
@@ -52,5 +52,5 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
 
 async function getDriverName(phone: string): Promise<string | null> {
   const { getDriverByPhone } = await import("@/lib/db/database");
-  return getDriverByPhone(phone)?.name || null;
+  return (await getDriverByPhone(phone))?.name || null;
 }

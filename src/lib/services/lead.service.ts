@@ -31,12 +31,12 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
   if (text.trim().toLowerCase() === "seguí vos" || text.trim().toLowerCase() === "seguimos vos") {
     await sendWhatsAppMessage(phone, "¡Genial! Retomo la atención. ¿En qué estábamos?");
-    resetToIdle(getConversationByPhone(phone)?.id || 0);
+    resetToIdle((await getConversationByPhone(phone))?.id || 0);
     return;
   }
 
-  const conversation = getOrCreateConversation(phone, undefined);
-  const freshConv = getConversationById(conversation.id);
+  const conversation = await getOrCreateConversation(phone, undefined);
+  const freshConv = await getConversationById(conversation.id);
 
   if (freshConv.taken_by_human) {
     return;
@@ -48,19 +48,19 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     return;
   }
 
-  insertMessage(conversation.id, "user", text);
+  await insertMessage(conversation.id, "user", text);
 
-  const trip = getActiveTripByPhone(phone);
+  const trip = await getActiveTripByPhone(phone);
   const intent = await analyzeClientIntent(text, trip, phone);
 
   if (!intent.shouldRespond) {
     return;
   }
 
-  const history = getRecentHistory(conversation.id, 20);
+  const history = await getRecentHistory(conversation.id, 20);
   const response = await generateGeminiReply(text, history, trip, phone);
 
-  insertMessage(conversation.id, "assistant", response);
+  await insertMessage(conversation.id, "assistant", response);
   await sendWhatsAppMessage(phone, response);
 
   if (intent.needsNotification) {

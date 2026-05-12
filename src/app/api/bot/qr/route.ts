@@ -8,14 +8,14 @@ export async function GET() {
     console.log("Intentando leer QR de la base de datos...");
     
     const db = getDbInstance();
-    const stmt = db.prepare('SELECT value FROM connection_state WHERE key = ?');
-    const state = stmt.get('QR') as { value: string } | undefined;
+    const rs = await db.execute({ sql: 'SELECT value FROM connection_state WHERE key = ?', args: ['QR'] });
+    const rows = rs.rows as any[];
+    const state = rows[0] || null;
     
     console.log("Resultado de la DB:", state ? "QR encontrado" : "Sin QR");
     
     return NextResponse.json({ qr: state?.value || null });
   } catch (error: any) {
-    // ESTO ES LO MÁS IMPORTANTE: Mira qué dice la terminal cuando esto sale
     console.error('--- ERROR CRÍTICO API ---');
     console.error('Mensaje:', error.message);
     console.error('Stack:', error.stack);

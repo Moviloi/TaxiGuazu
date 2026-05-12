@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage } from "@/lib/services/lead.service";
 import { isGroupMessage, handleDriverResponse } from "@/lib/services/driver.service";
-import { getConversationByPhone, insertMessage } from "@/lib/db/database";
+import { getConversationByPhone } from "@/lib/db/database";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 
 const BOT_PHONE = process.env.BOT_PHONE || "+543757646645";
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     console.log(`[MSG] ← ${phone}: ${text.substring(0, 50)}`);
 
     if (isGroupMessage(phone)) {
-      const conv = getConversationByPhone(phone);
+      const conv = await getConversationByPhone(phone);
       if (conv) {
         await handleDriverResponse(text, phone, conv.id);
       }

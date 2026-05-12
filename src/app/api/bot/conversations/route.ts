@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const conversations = listConversations();
+    const conversations = await listConversations();
     return NextResponse.json({ conversations });
   } catch (error) {
     console.error('Error fetching conversations:', error);

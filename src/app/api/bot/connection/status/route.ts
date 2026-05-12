@@ -4,7 +4,7 @@ import { getConnectionState } from '@/lib/db/database';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const state = getConnectionState();
+  const state = await getConnectionState();
   const storedStatus = state?.status || 'disconnected';
   const phone = state?.phone || process.env.BOT_PHONE || null;
 

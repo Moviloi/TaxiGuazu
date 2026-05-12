@@ -12,12 +12,12 @@ export async function POST(
     const { action } = body;
 
     if (action === 'take') {
-      takeConversation(convId);
+      await takeConversation(convId);
       return NextResponse.json({ ok: true });
     }
 
     if (action === 'release') {
-      releaseConversation(convId);
+      await releaseConversation(convId);
       return NextResponse.json({ ok: true });
     }
 
@@ -35,7 +35,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     const convId = parseInt(id);
-    deleteConversation(convId);
+    await deleteConversation(convId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Error deleting conversation:', error);
