@@ -12,14 +12,11 @@ import { notifyTitular } from "./admin.service";
 import {
   advanceToAdmin,
   advanceToGroup,
-  closeWorkflow,
   resetToIdle,
   getWorkflow,
-  isWorkflowActive,
 } from "@/lib/utils/state-machine";
 
 const TIMEOUT_TITULAR_RESPONSE = 2 * 60 * 1000;
-const BOT_PHONE = process.env.BOT_PHONE || "+543757646645";
 
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   if (text.trim().toLowerCase() === ".id") {
