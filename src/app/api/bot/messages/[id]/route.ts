@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMessages, insertMessage, enqueueOutbox } from '@/lib/db';
+import { getMessages, insertMessage, getConversationById } from '@/lib/db';
+import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender';
 
 export async function GET(
   _request: NextRequest,
@@ -33,9 +34,9 @@ export async function POST(
     const messageId = insertMessage(convId, role, content);
 
     if (role === 'human') {
-      const conversation = (await import('@/lib/db')).getConversationById(convId);
+      const conversation = getConversationById(convId);
       if (conversation) {
-        enqueueOutbox(convId, conversation.phone, content);
+        await sendWhatsAppMessage(conversation.phone, content);
       }
     }
 
