@@ -42,11 +42,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`[MSG] ← ${phone}: ${text.substring(0, 50)}`);
 
-    if (phone === BOT_PHONE || isGroupMessage(phone)) {
+    if (isGroupMessage(phone)) {
       const conv = getConversationByPhone(phone);
-      if (conv && isGroupMessage(phone)) {
+      if (conv) {
         await handleDriverResponse(text, phone, conv.id);
       }
+      return NextResponse.json({ status: "ok" }, { status: 200 });
+    }
+
+    if (phone === BOT_PHONE) {
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 

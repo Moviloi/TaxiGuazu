@@ -80,6 +80,16 @@ export default function Dashboard() {
     fetchMessages(selectedConv.id);
   }
 
+  async function simulateClientMessage(text: string) {
+    if (!text.trim()) return;
+    await fetch('/api/bot/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: selectedConv.phone, text }),
+    });
+    setTimeout(() => fetchMessages(selectedConv.id), 3000);
+  }
+
   async function takeConversation(convId: number) {
     await fetch(`/api/bot/conversations/${convId}`, {
       method: 'POST',
@@ -312,9 +322,38 @@ export default function Dashboard() {
 
               {!selectedConv.taken_by_human && (
                 <div className="p-4 bg-gray-100 border-t border-gray-200">
-                  <p className="text-sm text-gray-500 text-center">
+                  <p className="text-xs text-gray-400 mb-2 text-center">
                     El bot responde automáticamente
                   </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      id="simulate-input"
+                      placeholder="Simular respuesta del cliente..."
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const input = document.getElementById('simulate-input') as HTMLInputElement;
+                          if (input?.value.trim()) {
+                            simulateClientMessage(input.value);
+                            input.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('simulate-input') as HTMLInputElement;
+                        if (input?.value.trim()) {
+                          simulateClientMessage(input.value);
+                          input.value = '';
+                        }
+                      }}
+                      className="px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
+                    >
+                      Simular
+                    </button>
+                  </div>
                 </div>
               )}
             </>
