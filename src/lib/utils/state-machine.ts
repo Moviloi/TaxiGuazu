@@ -1,4 +1,4 @@
-export type WorkflowState = "idle" | "waiting_admin" | "waiting_group" | "closed";
+export type WorkflowState = "idle" | "waiting_group" | "closed";
 
 export interface WorkflowContext {
   conversationId: number;
@@ -6,7 +6,6 @@ export interface WorkflowContext {
   state: WorkflowState;
   tripId?: string;
   assignedDriverPhone?: string;
-  adminAskedAt?: number;
   groupAskedAt?: number;
   lastMessageAt: number;
 }
@@ -25,22 +24,11 @@ export function clearWorkflow(convId: number): void {
   workflows.delete(convId);
 }
 
-export function advanceToAdmin(convId: number, tripId: string): void {
-  const existing = workflows.get(convId);
-  workflows.set(convId, {
-    ...(existing || {}),
-    conversationId: convId,
-    state: "waiting_admin",
-    tripId,
-    adminAskedAt: Date.now(),
-    lastMessageAt: Date.now(),
-  } as WorkflowContext);
-}
-
 export function advanceToGroup(convId: number): void {
   const existing = workflows.get(convId);
   workflows.set(convId, {
     ...(existing || {}),
+    conversationId: convId,
     state: "waiting_group",
     groupAskedAt: Date.now(),
     lastMessageAt: Date.now(),
@@ -64,19 +52,6 @@ export function resetToIdle(convId: number): void {
 export function isWorkflowActive(convId: number): boolean {
   const ctx = workflows.get(convId);
   return ctx !== undefined && ctx.state !== "closed";
-}
-
-export function getExpiredAdminTimeouts(timeoutMs: number): WorkflowContext[] {
-  const now = Date.now();
-  const expired: WorkflowContext[] = [];
-  for (const ctx of workflows.values()) {
-    if (ctx.state === "waiting_admin" && ctx.adminAskedAt) {
-      if (now - ctx.adminAskedAt > timeoutMs) {
-        expired.push(ctx);
-      }
-    }
-  }
-  return expired;
 }
 
 export function getExpiredGroupTimeouts(timeoutMs: number): WorkflowContext[] {

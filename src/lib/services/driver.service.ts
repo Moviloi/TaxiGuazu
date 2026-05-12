@@ -27,6 +27,14 @@ export async function handleDriverResponse(
     return;
   }
 
+  if (workflow.assignedDriverPhone) {
+    await sendWhatsAppMessage(
+      DRIVERS_GROUP_ID,
+      `⚠️ El viaje ya fue asignado a otro chofer.`
+    );
+    return;
+  }
+
   const trip = await getActiveTripByPhone(workflow.phone);
   if (!trip) return;
 

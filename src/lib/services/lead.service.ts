@@ -8,15 +8,12 @@ import {
 } from "@/lib/db/database";
 import { generateGeminiReply, analyzeClientIntent } from "@/lib/ai/gemini";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { notifyTitular } from "./admin.service";
+import { notifyGroup } from "./admin.service";
 import {
-  advanceToAdmin,
   advanceToGroup,
   resetToIdle,
   getWorkflow,
 } from "@/lib/utils/state-machine";
-
-const TIMEOUT_TITULAR_RESPONSE = 2 * 60 * 1000;
 
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   if (text.trim().toLowerCase() === ".id") {
@@ -63,45 +60,20 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   await insertMessage(conversation.id, "assistant", response);
   await sendWhatsAppMessage(phone, response);
 
-  if (intent.needsNotification) {
-    await notifyTitular(intent.notificationMessage);
-  }
-
   if (intent.tripCompleted && trip) {
-    await escalateToAdmin(conversation.id, phone, trip);
+    await escalateToGroup(conversation.id, phone, trip);
   }
 }
 
-async function escalateToAdmin(convId: number, phone: string, trip: any): Promise<void> {
-  const tripId = trip.trip_id || `trip_${Date.now()}`;
-  
-  await notifyTitular(`*NUEVO VIAJE*
+async function escalateToGroup(convId: number, phone: string, trip: any): Promise<void> {
+  const msg = `🚕 *VIAJE DISPONIBLE*
 
+Destino: ${trip.destination}
+Precio: $${trip.price_base}
 Cliente: ${phone}
-Destino: ${trip.destination}
-Precio: $${trip.price_base}
 
-¿Tomás este servicio?`);
+¿Alguien disponible? Respondé "acepto" para tomar el servicio.`;
 
-  advanceToAdmin(convId, tripId);
-
-  setTimeout(async () => {
-    const current = getWorkflow(convId);
-    if (current?.state === "waiting_admin") {
-      await escalateToGroup(convId, trip);
-    }
-  }, TIMEOUT_TITULAR_RESPONSE);
-}
-
-async function escalateToGroup(convId: number, trip: any): Promise<void> {
-  const { notifyGroup } = await import("./admin.service");
-  
-  await notifyGroup(`🚕 *VIAJE DISPONIBLE*
-
-Destino: ${trip.destination}
-Precio: $${trip.price_base}
-
-¿Alguien disponible? Respondé "acepto" para tomar el servicio.`);
-
+  await notifyGroup(msg);
   advanceToGroup(convId);
 }
