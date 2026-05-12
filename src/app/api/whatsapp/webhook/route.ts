@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage } from "@/lib/services/lead.service";
 import { isGroupMessage, handleDriverResponse } from "@/lib/services/driver.service";
 import { getConversationByPhone } from "@/lib/db/database";
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 
 const BOT_PHONE = process.env.BOT_PHONE || "+543757646645";
 
