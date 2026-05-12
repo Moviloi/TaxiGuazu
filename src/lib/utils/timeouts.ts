@@ -1,4 +1,4 @@
-import { getExpiredGroupTimeouts, closeWorkflow, getWorkflow } from "./state-machine";
+import { getExpiredGroupTimeouts, closeWorkflow } from "./state-machine";
 import { notifyTitular, notifyGroup } from "../services/admin.service";
 import { getActiveTripByPhone } from "../db/database";
 
