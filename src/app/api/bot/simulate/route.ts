@@ -4,7 +4,7 @@ import { handleLeadMessage } from "@/lib/services/lead.service";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { convId, phone, text } = body;
+    const { phone, text } = body;
 
     if (!phone || !text) {
       return NextResponse.json({ error: "Faltan phone o text" }, { status: 400 });
