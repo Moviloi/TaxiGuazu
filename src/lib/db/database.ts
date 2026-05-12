@@ -32,7 +32,7 @@ function getDbv(): LibSqlClient {
 
 async function ensureSchema(): Promise<void> {
   if (!schemaReady) {
-    const db = getDbv();
+    getDbv();
     schemaReady = initSchema();
   }
   await schemaReady;
