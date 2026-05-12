@@ -69,7 +69,20 @@ Bot (respondé en español, breve y servicial):`;
     const response = result.response;
     return response.text().trim();
   } catch (error: any) {
-    console.error("[GEMINI] Error:", error?.message || error);
+    const msg = error?.message || String(error);
+    if (msg.includes("429") || msg.includes("Too Many Requests") || msg.includes("quota")) {
+      const match = msg.match(/retry in (\d+(?:\.\d+)?)s/);
+      const delayMs = match ? Math.ceil(parseFloat(match[1]) * 1000) + 1000 : 5000;
+      console.warn(`[GEMINI] 429 rate limit, retrying in ${delayMs}ms...`);
+      await new Promise(r => setTimeout(r, delayMs));
+      try {
+        const result = await model.generateContent(prompt);
+        return result.response.text().trim();
+      } catch (retryError: any) {
+        console.error("[GEMINI] Retry también falló:", retryError?.message || retryError);
+      }
+    }
+    console.error("[GEMINI] Error:", msg);
     return "Disculpá, estoy teniendo problemas técnicos. Un operador te atenderá en breve.";
   }
 }
