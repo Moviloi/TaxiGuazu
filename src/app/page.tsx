@@ -39,11 +39,16 @@ export default function Dashboard() {
 
   async function fetchStatus() {
     try {
-      const res = await fetch('/api/bot/connection/status');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch('/api/bot/connection/status', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       setConnection(data);
       setLoading(false);
-    } catch {
+    } catch (err) {
+      console.error('[STATUS] fetchStatus falló:', err);
       setLoading(false);
     }
   }
