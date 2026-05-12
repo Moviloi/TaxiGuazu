@@ -154,14 +154,14 @@ export async function setConnectionStateBatch(states: { status?: string; qr_stri
   }
   if (states.qr_string !== undefined) {
     if (states.qr_string === null) {
-      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'qr_string'" });
+      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'qr_string'", args: [] });
     } else {
       stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['qr_string', states.qr_string] });
     }
   }
   if (states.phone !== undefined) {
     if (states.phone === null) {
-      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'phone'" });
+      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'phone'", args: [] });
     } else {
       stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['phone', states.phone] });
     }
