@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage } from "@/lib/services/lead.service";
-import { isGroupMessage, handleDriverResponse } from "@/lib/services/driver.service";
-import { getConversationByPhone } from "@/lib/db/database";
+import {
+  isGroupMessage,
+  handleDriverResponse,
+  handleDriverAccept,
+} from "@/lib/services/driver.service";
+import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
 
 const BOT_PHONE = process.env.BOT_PHONE || "+543757646645";
+
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("549")) return "+54" + digits.slice(3);
+  return "+" + digits;
+}
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -35,7 +45,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 
-    const phone = message.from;
+    const phone = normalizePhone(message.from);
     const text = message.text?.body;
 
     if (!text) {
@@ -53,6 +63,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (phone === BOT_PHONE) {
+      return NextResponse.json({ status: "ok" }, { status: 200 });
+    }
+
+    const driver = await getDriverByPhone(phone);
+    if (driver && ["acepto", "yo estoy", "yo voy", "lo tomo"].some((k) => text.toLowerCase().includes(k))) {
+      await handleDriverAccept(phone, text);
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 

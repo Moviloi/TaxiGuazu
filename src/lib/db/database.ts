@@ -128,6 +128,14 @@ async function initSchema(): Promise<void> {
       last_message_at INTEGER NOT NULL DEFAULT (unixepoch()),
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     )`,
+    `CREATE TABLE IF NOT EXISTS driver_codes (
+      code TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT UNIQUE,
+      created_by TEXT,
+      created_at INTEGER DEFAULT (unixepoch()),
+      registered_at INTEGER
+    )`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 }
@@ -376,6 +384,102 @@ export async function getDriversGroupId(): Promise<string | null> {
   return driver?.group_id || null;
 }
 
+export async function createDriverCode(code: string, name: string, createdBy: string, phone?: string): Promise<{ ok: boolean; error?: string }> {
+  await ensureSchema();
+  try {
+    if (phone) {
+      const cleaned = phone.replace(/\D/g, "");
+      if (cleaned.length < 10) return { ok: false, error: "Teléfono inválido" };
+      const fullPhone = cleaned.startsWith("54") ? `+${cleaned}` : `+54${cleaned}`;
+      await getDbv().execute({
+        sql: "INSERT INTO driver_codes (code, name, created_by, phone) VALUES (?, ?, ?, ?)",
+        args: [code.toLowerCase().trim(), name.trim(), createdBy, fullPhone],
+      });
+      await getDbv().execute({
+        sql: "INSERT OR IGNORE INTO drivers (driver_id, phone, name, active) VALUES (?, ?, ?, 1)",
+        args: [`driver_${Date.now()}`, fullPhone, name.trim()],
+      });
+    } else {
+      await getDbv().execute({
+        sql: "INSERT INTO driver_codes (code, name, created_by) VALUES (?, ?, ?)",
+        args: [code.toLowerCase().trim(), name.trim(), createdBy],
+      });
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "El código ya existe" };
+  }
+}
+
+export async function deactivateDriverByCode(code: string): Promise<boolean> {
+  await ensureSchema();
+  const entry = await getDriverCodeByCode(code);
+  if (!entry) return false;
+
+  if (entry.phone) {
+    await getDbv().execute({
+      sql: "UPDATE drivers SET active = 0 WHERE phone = ?",
+      args: [entry.phone],
+    });
+  }
+  return true;
+}
+
+export async function getDriverCodeByCode(code: string): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: "SELECT * FROM driver_codes WHERE code = ?",
+    args: [code.toLowerCase().trim()],
+  });
+  return (rs.rows as any[])[0] || null;
+}
+
+export async function registerDriverByCode(code: string, phone: string): Promise<any> {
+  await ensureSchema();
+  const existing = await getDriverCodeByCode(code);
+  if (!existing) return null;
+  if (existing.phone) return existing;
+
+  await getDbv().execute({
+    sql: "UPDATE driver_codes SET phone = ?, registered_at = unixepoch() WHERE code = ?",
+    args: [phone, code.toLowerCase().trim()],
+  });
+
+  const driverId = `driver_${Date.now()}`;
+  await getDbv().execute({
+    sql: "INSERT OR IGNORE INTO drivers (driver_id, phone, name, active) VALUES (?, ?, ?, 1)",
+    args: [driverId, phone, existing.name],
+  });
+
+  return await getDriverCodeByCode(code);
+}
+
+export async function getDriverExpiry(phone: string): Promise<{ active: boolean; expiresAt: Date | null }> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: "SELECT last_message_at FROM conversations WHERE phone = ?",
+    args: [phone],
+  });
+  const row = (rs.rows as any[])[0];
+  if (!row || !row.last_message_at) return { active: false, expiresAt: null };
+
+  const expiresAt = new Date((row.last_message_at + 86400) * 1000);
+  const active = Date.now() < expiresAt.getTime();
+  return { active, expiresAt };
+}
+
+export async function getAvailableDrivers(): Promise<any[]> {
+  await ensureSchema();
+  const cutoff = Math.floor(Date.now() / 1000) - 86400;
+  const rs = await getDbv().execute({
+    sql: `SELECT d.* FROM drivers d
+          INNER JOIN conversations c ON c.phone = d.phone
+          WHERE d.active = 1 AND c.last_message_at > ?`,
+    args: [cutoff],
+  });
+  return rs.rows as any[];
+}
+
 // ========== WORKFLOWS (DB-backed state machine) ==========
 
 export async function getWorkflow(convId: number): Promise<any> {
@@ -441,6 +545,14 @@ export async function advanceWorkflowToGroup(convId: number, phone: string): Pro
             last_message_at = ?`,
     args: [convId, phone, now, now, now, now],
   });
+}
+
+export async function getFirstWaitingWorkflow(): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: "SELECT * FROM workflows WHERE state = 'waiting_group' AND assigned_driver_phone IS NULL ORDER BY group_asked_at ASC LIMIT 1",
+  });
+  return (rs.rows as any[])[0] || null;
 }
 
 // ========== DB INSTANCE ==========

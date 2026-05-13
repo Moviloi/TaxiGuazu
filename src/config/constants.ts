@@ -7,8 +7,6 @@ const __dirname = dirname(__filename);
 
 export const BOT_PHONE = process.env.BOT_PHONE || "+543757646648";
 export const TITULAR_DRIVER_PHONE = process.env.TITULAR_DRIVER_PHONE || "+543757613215";
-export const DRIVERS_GROUP_ID = process.env.DRIVERS_GROUP_ID || "120363394046775162@g.us";
-
 export const TIMEOUT_TITULAR_RESPONSE = 2 * 60 * 1000;
 export const TIMEOUT_GROUP_RESPONSE = 8 * 60 * 1000;
 export const TIMEOUT_HUMAN_RESPONSE = 3 * 60 * 1000;

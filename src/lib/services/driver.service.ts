@@ -2,14 +2,23 @@ import {
   getWorkflow,
   closeWorkflow,
 } from "@/lib/utils/state-machine";
-import { getActiveTripByPhone, getDriverByPhone } from "@/lib/db/database";
-import { notifyTitular, sendToDriver } from "./admin.service";
+import {
+  getActiveTripByPhone,
+  getDriverByPhone,
+  getFirstWaitingWorkflow,
+} from "@/lib/db/database";
+import { notifyTitular, sendToDriver, notifyOtherDriversTaken } from "./admin.service";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-
-export const DRIVERS_GROUP_ID = process.env.DRIVERS_GROUP_ID || "120363394046775162@g.us";
 
 export function isGroupMessage(from: string): boolean {
   return from.endsWith("@g.us");
+}
+
+const ACEPTAR_KEYWORDS = ["acepto", "yo estoy", "yo voy", "lo tomo"];
+
+function isAccepting(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  return ACEPTAR_KEYWORDS.some((k) => t.includes(k));
 }
 
 export async function handleDriverResponse(
@@ -17,21 +26,26 @@ export async function handleDriverResponse(
   driverPhone: string,
   convId: number
 ): Promise<void> {
-  const text = groupMsg.toLowerCase().trim();
-  if (!["acepto", "yo estoy", "yo voy", "lo tomo"].some((k) => text.includes(k))) {
-    return;
-  }
+  if (!isAccepting(groupMsg)) return;
 
   const workflow = await getWorkflow(convId);
-  if (!workflow || workflow.state !== "waiting_group") {
-    return;
-  }
+  if (!workflow || workflow.state !== "waiting_group") return;
 
+  await assignDriver(workflow, driverPhone);
+}
+
+export async function handleDriverAccept(driverPhone: string, text: string): Promise<void> {
+  if (!isAccepting(text)) return;
+
+  const workflow = await getFirstWaitingWorkflow();
+  if (!workflow) return;
+
+  await assignDriver(workflow, driverPhone);
+}
+
+async function assignDriver(workflow: any, driverPhone: string): Promise<void> {
   if (workflow.assignedDriverPhone) {
-    await sendWhatsAppMessage(
-      DRIVERS_GROUP_ID,
-      `⚠️ El viaje ya fue asignado a otro chofer.`
-    );
+    await sendWhatsAppMessage(driverPhone, "⚠️ El viaje ya fue asignado a otro chofer.");
     return;
   }
 
@@ -42,21 +56,10 @@ export async function handleDriverResponse(
   const driverName = driver?.name || "El chofer";
   const tripDetails = `Destino: ${trip.destination}\nPrecio: $${trip.price_base}\nHora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
 
-  if (!driver) {
-    await sendWhatsAppMessage(
-      DRIVERS_GROUP_ID,
-      `✅ Viaje asignado a ${driverPhone}. Para recibir los detalles, enviá ".registrar" al bot.`
-    );
-    await sendWhatsAppMessage(
-      DRIVERS_GROUP_ID,
-      `📋 *Resumen del viaje*\n\n${tripDetails}`
-    );
-  } else {
-    await sendWhatsAppMessage(
-      DRIVERS_GROUP_ID,
-      `✅ Viaje asignado a ${driverName}.`
-    );
+  if (driver) {
     await sendToDriver(driverPhone, tripDetails);
+  } else {
+    await sendWhatsAppMessage(driverPhone, `📋 *Resumen del viaje*\n\n${tripDetails}`);
   }
 
   const clientMsg = `✅ *Viaje confirmado*
@@ -66,5 +69,7 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
 
   await notifyTitular(`Viaje asignado a ${driverName} (${driverPhone}). Destino: ${trip.destination}`);
 
-  await closeWorkflow(convId, driverPhone);
+  await notifyOtherDriversTaken(driverPhone, trip.destination);
+
+  await closeWorkflow(workflow.conversation_id, driverPhone);
 }

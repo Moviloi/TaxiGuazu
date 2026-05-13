@@ -5,14 +5,19 @@ import {
   getRecentHistory,
   getActiveTripByPhone,
   getConversationByPhone,
-  registerDriver,
   createTrip,
   setConversationTrip,
+  getDriverByPhone,
+  getDriverCodeByCode,
+  registerDriverByCode,
+  getDriverExpiry,
+  createDriverCode,
+  deactivateDriverByCode,
 } from "@/lib/db/database";
 import { generateGroqReply } from "@/lib/ai/groq";
 import { analyzeClientIntent } from "@/lib/ai/gemini";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { notifyGroup } from "./admin.service";
+import { broadcastTripToDrivers } from "./admin.service";
 import {
   advanceToGroup,
   resetToIdle,
@@ -52,9 +57,110 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     return;
   }
 
-  if (text.trim().toLowerCase() === ".registrar") {
-    await registerDriver(phone);
-    await sendWhatsAppMessage(phone, "✅ Te registraste como chofer. Cuando haya un viaje recibirás la notificación.");
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+
+  const registrarMatch = lower.match(/^\.registrar[-\s]?(.*)$/);
+  if (registrarMatch) {
+    const code = registrarMatch[1].trim();
+
+    if (!code) {
+      const existing = await getDriverByPhone(phone);
+      if (existing) {
+        const expiry = await getDriverExpiry(phone);
+        if (expiry.active && expiry.expiresAt) {
+          const h = expiry.expiresAt.getHours().toString().padStart(2, "0");
+          const m = expiry.expiresAt.getMinutes().toString().padStart(2, "0");
+          await sendWhatsAppMessage(phone, `✅ Ya estás registrado hasta las ${h}:${m}hs de hoy. Buena jornada!`);
+        } else {
+          await sendWhatsAppMessage(phone, "⚠️ Tu registro venció. Enviá .registrar-TUCODIGO para renovarlo.");
+        }
+      } else {
+        await sendWhatsAppMessage(phone, "❌ No tenés un código de registro. Pedile al administrador que te dé uno.");
+      }
+      return;
+    }
+
+    const codeEntry = await getDriverCodeByCode(code);
+    if (!codeEntry) {
+      await sendWhatsAppMessage(phone, "❌ Código inválido. Verificá con el administrador.");
+      return;
+    }
+
+    if (codeEntry.phone && codeEntry.phone !== phone) {
+      await sendWhatsAppMessage(phone, "❌ Este código ya está asignado a otro número.");
+      return;
+    }
+
+    await getOrCreateConversation(phone);
+    const result = await registerDriverByCode(code, phone);
+    if (!result) {
+      await sendWhatsAppMessage(phone, "❌ Error al registrarte. Probá de nuevo.");
+      return;
+    }
+
+    const expiry = await getDriverExpiry(phone);
+    const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
+    const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
+    await sendWhatsAppMessage(phone, `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${codeEntry.name}!`);
+    return;
+  }
+
+  if (lower.startsWith(".add_chofer") || lower.startsWith(".add-chofer")) {
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 3) {
+      await sendWhatsAppMessage(phone, "Usá: .add_chofer CODIGO NOMBRE [TELÉFONO]");
+      return;
+    }
+    const titular = process.env.TITULAR_DRIVER_PHONE || "+543757613215";
+    if (phone !== titular) {
+      await sendWhatsAppMessage(phone, "❌ Solo el administrador puede agregar choferes.");
+      return;
+    }
+    const code = parts[1].toLowerCase();
+    let name: string;
+    let phoneArg: string | undefined;
+    if (parts.length >= 4) {
+      const last = parts[parts.length - 1];
+      if (/^\+?\d{10,}$/.test(last.replace(/\D/g, ""))) {
+        phoneArg = last;
+        name = parts.slice(2, -1).join(" ");
+      } else {
+        name = parts.slice(2).join(" ");
+      }
+    } else {
+      name = parts.slice(2).join(" ");
+    }
+    const result = await createDriverCode(code, name, phone, phoneArg);
+    if (result.ok) {
+      let msg = `✅ Código "${code}" creado para ${name}.`;
+      if (phoneArg) msg += ` Teléfono registrado.`;
+      msg += ` Decile que envíe .registrar-${code} al bot para activar su ventana de 24hs.`;
+      await sendWhatsAppMessage(phone, msg);
+    } else {
+      await sendWhatsAppMessage(phone, `❌ ${result.error || "Error al crear código."}`);
+    }
+    return;
+  }
+
+  if (lower.startsWith(".baja_chofer") || lower.startsWith(".baja-chofer")) {
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 2) {
+      await sendWhatsAppMessage(phone, "Usá: .baja_chofer CODIGO");
+      return;
+    }
+    const titular = process.env.TITULAR_DRIVER_PHONE || "+543757613215";
+    if (phone !== titular) {
+      await sendWhatsAppMessage(phone, "❌ Solo el administrador puede dar de baja choferes.");
+      return;
+    }
+    const code = parts[1].toLowerCase();
+    const ok = await deactivateDriverByCode(code);
+    if (ok) {
+      await sendWhatsAppMessage(phone, `✅ Chofer "${code}" dado de baja.`);
+    } else {
+      await sendWhatsAppMessage(phone, `❌ Código "${code}" no encontrado.`);
+    }
     return;
   }
 
@@ -103,14 +209,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 }
 
 async function escalateToGroup(convId: number, phone: string, trip: any): Promise<void> {
-  const msg = `🚕 *VIAJE DISPONIBLE*
-
-Destino: ${trip.destination}
-Precio: $${trip.price_base}
-Cliente: ${phone}
-
-¿Alguien disponible? Respondé "acepto" para tomar el servicio.`;
-
-  await notifyGroup(msg);
+  await broadcastTripToDrivers(trip, convId, phone);
   await advanceToGroup(convId, phone);
 }

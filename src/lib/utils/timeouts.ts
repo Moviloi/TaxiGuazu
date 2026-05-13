@@ -1,5 +1,5 @@
 import { getExpiredGroupTimeouts, closeWorkflow } from "./state-machine";
-import { notifyTitular, notifyGroup } from "../services/admin.service";
+import { notifyTitular } from "../services/admin.service";
 import { getActiveTripByPhone } from "../db/database";
 
 const TIMEOUT_GROUP_MS = 8 * 60 * 1000;
@@ -13,17 +13,12 @@ export async function checkTimeouts(): Promise<void> {
     const trip = await getActiveTripByPhone(ctx.phone);
     const destino = trip?.destination || "sin destino";
 
-    await notifyTitular(`⚠️ *Nadie respondió en el grupo*
+    await notifyTitular(`⚠️ *Viaje sin asignar*
 
 Cliente: ${ctx.phone}
 Destino: ${destino}
 
-El viaje quedó sin asignar.`);
-
-    await notifyGroup(`⏰ *Viaje expiró*
-
-Nadie tomó el servicio a ${destino}.
-Se notificó al administrador.`);
+Ningún chofer tomó el servicio. Reasigná manualmente.`);
 
     await closeWorkflow(ctx.conversationId);
   }
