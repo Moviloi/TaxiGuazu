@@ -12,9 +12,9 @@ export interface WorkflowContext {
   conversationId: number;
   phone: string;
   state: WorkflowState;
-  tripId?: string;
-  assignedDriverPhone?: string;
-  groupAskedAt?: number;
+  tripId: string | null;
+  assignedDriverPhone: string | null;
+  groupAskedAt: number | null;
   lastMessageAt: number;
 }
 
@@ -23,16 +23,16 @@ function rowToContext(row: any): WorkflowContext {
     conversationId: row.conversation_id,
     phone: row.phone,
     state: row.state,
-    tripId: row.trip_id,
-    assignedDriverPhone: row.assigned_driver_phone,
-    groupAskedAt: row.group_asked_at ? row.group_asked_at * 1000 : undefined,
+    tripId: row.trip_id || null,
+    assignedDriverPhone: row.assigned_driver_phone || null,
+    groupAskedAt: row.group_asked_at ? row.group_asked_at * 1000 : null,
     lastMessageAt: row.last_message_at * 1000,
   };
 }
 
-export async function getWorkflow(convId: number): Promise<WorkflowContext | undefined> {
+export async function getWorkflow(convId: number): Promise<WorkflowContext | null> {
   const row = await dbGetWorkflow(convId);
-  return row ? rowToContext(row) : undefined;
+  return row ? rowToContext(row) : null;
 }
 
 export async function advanceToGroup(convId: number, phone: string): Promise<void> {
@@ -49,7 +49,7 @@ export async function resetToIdle(convId: number): Promise<void> {
 
 export async function isWorkflowActive(convId: number): Promise<boolean> {
   const ctx = await getWorkflow(convId);
-  return ctx !== undefined && ctx.state !== "closed";
+  return ctx !== null && ctx.state !== "closed";
 }
 
 export async function getExpiredGroupTimeouts(timeoutMs: number): Promise<WorkflowContext[]> {

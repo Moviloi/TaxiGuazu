@@ -4,6 +4,7 @@ import {
   isGroupMessage,
   handleDriverResponse,
   handleDriverAccept,
+  handleDriverButtonAccept,
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
@@ -46,8 +47,33 @@ export async function POST(request: NextRequest) {
     }
 
     const phone = normalizePhone(message.from);
-    const text = message.text?.body;
 
+    if (message.type === "interactive") {
+      const buttonId = message.interactive?.button_reply?.id || "";
+      console.log(`[INTERACTIVE] ← ${phone}: ${buttonId}`);
+
+      if (buttonId.startsWith("aceptar_")) {
+        const convId = parseInt(buttonId.split("_")[1]);
+        if (convId) {
+          await handleDriverButtonAccept(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
+      }
+
+      if (buttonId.startsWith("rechazar_")) {
+        console.log(`[RECHAZADO] ${phone} rechazó viaje`);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (phone === BOT_PHONE) {
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      await handleLeadMessage(phone, buttonId);
+      return NextResponse.json({ status: "ok" }, { status: 200 });
+    }
+
+    const text = message.text?.body;
     if (!text) {
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }

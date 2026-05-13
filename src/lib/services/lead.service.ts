@@ -7,32 +7,33 @@ import {
   getConversationByPhone,
   createTrip,
   setConversationTrip,
+  updateTripState,
   getDriverByPhone,
   getDriverCodeByCode,
   registerDriverByCode,
   getDriverExpiry,
-  createDriverCode,
-  deactivateDriverByCode,
 } from "@/lib/db/database";
 import { generateGroqReply } from "@/lib/ai/groq";
 import { analyzeClientIntent } from "@/lib/ai/gemini";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { broadcastTripToDrivers } from "./admin.service";
+import { handleAdminCommand } from "./admin-commands";
 import {
   advanceToGroup,
   resetToIdle,
   getWorkflow,
 } from "@/lib/utils/state-machine";
 
-const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^\]]+)\]/i;
+const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+)\]/i;
 
-function extractTripMarker(text: string): { destination: string; price: number; passengers: string } | null {
+function extractTripMarker(text: string): { code: string; destination: string; price: number; passengers: string } | null {
   const match = text.match(TRIP_MARKER_REGEX);
   if (!match) return null;
   return {
-    destination: match[1].trim(),
-    price: parseInt(match[2].replace(/[^0-9]/g, "")) || 0,
-    passengers: match[3].trim(),
+    code: match[1].trim(),
+    destination: match[2].trim(),
+    price: parseInt(match[3].replace(/[^0-9]/g, "")) || 0,
+    passengers: match[4].trim(),
   };
 }
 
@@ -106,63 +107,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     return;
   }
 
-  if (lower.startsWith(".add_chofer") || lower.startsWith(".add-chofer")) {
-    const parts = trimmed.split(/\s+/);
-    if (parts.length < 3) {
-      await sendWhatsAppMessage(phone, "Usá: .add_chofer CODIGO NOMBRE [TELÉFONO]");
-      return;
-    }
-    const titular = process.env.TITULAR_DRIVER_PHONE || "+543757613215";
-    if (phone !== titular) {
-      await sendWhatsAppMessage(phone, "❌ Solo el administrador puede agregar choferes.");
-      return;
-    }
-    const code = parts[1].toLowerCase();
-    let name: string;
-    let phoneArg: string | undefined;
-    if (parts.length >= 4) {
-      const last = parts[parts.length - 1];
-      if (/^\+?\d{10,}$/.test(last.replace(/\D/g, ""))) {
-        phoneArg = last;
-        name = parts.slice(2, -1).join(" ");
-      } else {
-        name = parts.slice(2).join(" ");
-      }
-    } else {
-      name = parts.slice(2).join(" ");
-    }
-    const result = await createDriverCode(code, name, phone, phoneArg);
-    if (result.ok) {
-      let msg = `✅ Código "${code}" creado para ${name}.`;
-      if (phoneArg) msg += ` Teléfono registrado.`;
-      msg += ` Decile que envíe .registrar-${code} al bot para activar su ventana de 24hs.`;
-      await sendWhatsAppMessage(phone, msg);
-    } else {
-      await sendWhatsAppMessage(phone, `❌ ${result.error || "Error al crear código."}`);
-    }
-    return;
-  }
-
-  if (lower.startsWith(".baja_chofer") || lower.startsWith(".baja-chofer")) {
-    const parts = trimmed.split(/\s+/);
-    if (parts.length < 2) {
-      await sendWhatsAppMessage(phone, "Usá: .baja_chofer CODIGO");
-      return;
-    }
-    const titular = process.env.TITULAR_DRIVER_PHONE || "+543757613215";
-    if (phone !== titular) {
-      await sendWhatsAppMessage(phone, "❌ Solo el administrador puede dar de baja choferes.");
-      return;
-    }
-    const code = parts[1].toLowerCase();
-    const ok = await deactivateDriverByCode(code);
-    if (ok) {
-      await sendWhatsAppMessage(phone, `✅ Chofer "${code}" dado de baja.`);
-    } else {
-      await sendWhatsAppMessage(phone, `❌ Código "${code}" no encontrado.`);
-    }
-    return;
-  }
+  if (await handleAdminCommand(phone, trimmed)) return;
 
   const conversation = await getOrCreateConversation(phone, undefined);
   const freshConv = await getConversationById(conversation.id);
@@ -192,6 +137,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   const marker = extractTripMarker(response);
   if (marker) {
     response = stripTripMarker(response);
+    if (trip && marker.destination !== trip.destination) {
+      await updateTripState(trip.trip_id, "completado");
+      trip = null;
+    }
     if (!trip) {
       const tripId = `trip_${Date.now()}`;
       await createTrip(tripId, phone, "", marker.destination, marker.price);
@@ -203,12 +152,12 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   await insertMessage(conversation.id, "assistant", response);
   await sendWhatsAppMessage(phone, response);
 
-  if (trip && trip.destination && trip.price_base) {
+  if (marker && trip && trip.destination && trip.price_base) {
     await escalateToGroup(conversation.id, phone, trip);
   }
 }
 
 async function escalateToGroup(convId: number, phone: string, trip: any): Promise<void> {
-  await broadcastTripToDrivers(trip, convId, phone);
   await advanceToGroup(convId, phone);
+  await broadcastTripToDrivers(trip, convId, phone);
 }

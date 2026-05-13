@@ -24,6 +24,3 @@ Ningún chofer tomó el servicio. Reasigná manualmente.`);
   }
 }
 
-export function getWorkerStatus(): { running: boolean } {
-  return { running: false };
-}

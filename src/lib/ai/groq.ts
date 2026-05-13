@@ -15,9 +15,12 @@ interface Message {
   created_at: number;
 }
 
-function getGroq() {
+function getGroq(): Groq | null {
   const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY no configurada");
+  if (!apiKey) {
+    console.error("[GROQ] GROQ_API_KEY no configurada");
+    return null;
+  }
   return new Groq({ apiKey });
 }
 
@@ -69,6 +72,8 @@ export async function generateGroqReply(
   _phone: string
 ): Promise<string> {
   const groq = getGroq();
+  if (!groq) return "Disculpá, estoy teniendo problemas técnicos. Un operador te atenderá en breve.";
+
   const systemPrompt = getSystemPrompt();
 
   const tripInfo = trip
@@ -113,8 +118,9 @@ export async function generateGroqReply(
     });
 
     return completion.choices[0]?.message?.content?.trim() || "Disculpá, no pude procesar tu mensaje. Un operador te atenderá en breve.";
-  } catch (error: any) {
-    console.error("[GROQ] Error:", error?.message || error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[GROQ] Error:", msg);
     return "Disculpá, estoy teniendo problemas técnicos. Un operador te atenderá en breve.";
   }
 }

@@ -1,32 +1,71 @@
 import axios from "axios";
 
-export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
+function getUrl(): string {
+  return `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
+}
+
+function getToken(): string | null {
   const token = process.env.WHATSAPP_TOKEN;
   if (!token) {
     console.error("[SENDER] WHATSAPP_TOKEN no está definido");
-    return;
+    return null;
   }
+  return token;
+}
 
-  const isGroup = to.endsWith("@g.us");
-  const recipient = isGroup ? to : to.replace(/\D/g, "");
-  const url = `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
+function normalizeRecipient(to: string): string {
+  return to.endsWith("@g.us") ? to : to.replace(/\D/g, "");
+}
 
-  const payload = {
-    messaging_product: "whatsapp",
-    to: recipient,
-    type: "text",
-    text: { body: text },
-  };
+async function postToWhatsApp(payload: any): Promise<void> {
+  const token = getToken();
+  if (!token) return;
 
   try {
-    await axios.post(url, payload, {
+    await axios.post(getUrl(), payload, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
-    console.log(`[SEND] → ${recipient}: ${text.substring(0, 50)}`);
   } catch (error: any) {
-    console.error(`[ERROR] Enviando a ${recipient}:`, error?.response?.data || error.message);
+    console.error(`[SEND ERROR]`, error?.response?.data || error.message);
   }
+}
+
+export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
+  const payload = {
+    messaging_product: "whatsapp",
+    to: normalizeRecipient(to),
+    type: "text",
+    text: { body: text },
+  };
+  console.log(`[SEND] → ${to}: ${text.substring(0, 50)}`);
+  await postToWhatsApp(payload);
+}
+
+export async function sendInteractiveButtons(
+  to: string,
+  bodyText: string,
+  buttons: { id: string; title: string }[]
+): Promise<void> {
+  if (buttons.length < 1 || buttons.length > 3) return;
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to: normalizeRecipient(to),
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: bodyText.substring(0, 1024) },
+      action: {
+        buttons: buttons.map((b) => ({
+          type: "reply",
+          reply: { id: b.id.substring(0, 256), title: b.title.substring(0, 20) },
+        })),
+      },
+    },
+  };
+  console.log(`[SEND BUTTONS] → ${to}: ${bodyText.substring(0, 50)}`);
+  await postToWhatsApp(payload);
 }

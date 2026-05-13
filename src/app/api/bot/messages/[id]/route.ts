@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMessages, insertMessage, getConversationById } from '@/lib/db/database';
 import { sendWhatsAppMessage } from '@/lib/whatsapp/sender';
+import { checkAdminAuth } from '@/lib/auth';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = checkAdminAuth(request);
+  if (auth) return auth;
+
   try {
     const { id } = await params;
     const convId = parseInt(id);
@@ -21,6 +25,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = checkAdminAuth(request);
+  if (auth) return auth;
+
   try {
     const { id } = await params;
     const convId = parseInt(id);

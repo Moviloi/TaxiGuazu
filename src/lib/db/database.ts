@@ -90,34 +90,6 @@ async function initSchema(): Promise<void> {
       active INTEGER DEFAULT 1,
       created_at INTEGER DEFAULT (unixepoch())
     )`,
-    `CREATE TABLE IF NOT EXISTS inactivity_events (
-      event_id TEXT PRIMARY KEY,
-      trip_id TEXT NOT NULL,
-      client_phone TEXT,
-      last_message_at INTEGER,
-      inactivity_minutes INTEGER,
-      discount_offered INTEGER,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (trip_id) REFERENCES trips(trip_id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS escalation_log (
-      escalation_id TEXT PRIMARY KEY,
-      trip_id TEXT NOT NULL,
-      contacted_driver_phone TEXT,
-      contact_time INTEGER DEFAULT (unixepoch()),
-      response_time_seconds INTEGER,
-      status TEXT,
-      FOREIGN KEY (trip_id) REFERENCES trips(trip_id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS outbox (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id INTEGER NOT NULL,
-      phone TEXT NOT NULL,
-      content TEXT NOT NULL,
-      sent INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(sent, created_at)`,
     `CREATE TABLE IF NOT EXISTS workflows (
       conversation_id INTEGER PRIMARY KEY,
       phone TEXT NOT NULL,
@@ -138,6 +110,17 @@ async function initSchema(): Promise<void> {
     )`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
+
+  const migrations = [
+    "ALTER TABLE drivers ADD COLUMN car_type TEXT",
+    "ALTER TABLE drivers ADD COLUMN car_capacity INTEGER",
+    "ALTER TABLE drivers ADD COLUMN color TEXT",
+    "ALTER TABLE drivers ADD COLUMN plate TEXT",
+    "ALTER TABLE drivers ADD COLUMN country TEXT DEFAULT 'AR'",
+  ];
+  for (const sql of migrations) {
+    try { await getDbv().execute(sql); } catch {}
+  }
 }
 
 // ========== CONNECTION STATE ==========
@@ -286,24 +269,6 @@ export async function getRecentHistory(conversationId: number, limit = 20): Prom
   return rs.rows as any[];
 }
 
-// ========== OUTBOX ==========
-
-export async function enqueueOutbox(conversationId: number, phone: string, content: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO outbox (conversation_id, phone, content) VALUES (?, ?, ?)", args: [conversationId, phone, content] });
-}
-
-export async function getPendingOutbox(limit = 20): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM outbox WHERE sent = 0 ORDER BY created_at ASC LIMIT ?", args: [limit] });
-  return rs.rows as any[];
-}
-
-export async function markOutboxSent(id: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "UPDATE outbox SET sent = 1 WHERE id = ?", args: [id] });
-}
-
 // ========== TRIPS ==========
 
 export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number): Promise<void> {
@@ -319,7 +284,7 @@ export async function getTripById(tripId: string): Promise<any> {
 
 export async function getActiveTripByPhone(clientPhone: string): Promise<any> {
   await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado', 'asignado_chofer') ORDER BY created_at DESC LIMIT 1", args: [clientPhone] });
+  const rs = await getDbv().execute({ sql: "SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado') ORDER BY created_at DESC LIMIT 1", args: [clientPhone] });
   return (rs.rows as any[])[0] || null;
 }
 
@@ -336,21 +301,6 @@ export async function updateTripDiscountExplicit(tripId: string, discountPercent
 export async function assignDriverToTrip(tripId: string, driverPhone: string): Promise<void> {
   await ensureSchema();
   await getDbv().execute({ sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', updated_at = unixepoch() WHERE trip_id = ?", args: [driverPhone, tripId] });
-}
-
-export async function addInactivityEvent(eventId: string, tripId: string, clientPhone: string, inactivityMinutes: number, discountOffered: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO inactivity_events (event_id, trip_id, client_phone, last_message_at, inactivity_minutes, discount_offered) VALUES (?, ?, ?, unixepoch(), ?, ?)", args: [eventId, tripId, clientPhone, inactivityMinutes, discountOffered] });
-}
-
-export async function addEscalationLog(escalationId: string, tripId: string, contactedDriverPhone: string, status: string, responseTimeSec?: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO escalation_log (escalation_id, trip_id, contacted_driver_phone, status, response_time_seconds) VALUES (?, ?, ?, ?, ?)", args: [escalationId, tripId, contactedDriverPhone, status, responseTimeSec || null] });
-}
-
-export async function shareContactWithDriver(tripId: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "UPDATE trips SET contact_shared_at = unixepoch(), status = 'directo_cliente' WHERE trip_id = ?", args: [tripId] });
 }
 
 // ========== DRIVERS ==========
@@ -379,12 +329,10 @@ export async function registerDriver(phone: string, name?: string): Promise<any>
   return await getDriverByPhone(phone);
 }
 
-export async function getDriversGroupId(): Promise<string | null> {
-  const driver = await getTitularDriver();
-  return driver?.group_id || null;
-}
-
-export async function createDriverCode(code: string, name: string, createdBy: string, phone?: string): Promise<{ ok: boolean; error?: string }> {
+export async function createDriverCode(
+  code: string, name: string, createdBy: string, phone?: string,
+  opts?: { carType?: string; carCapacity?: number; color?: string; plate?: string; country?: string }
+): Promise<{ ok: boolean; error?: string }> {
   await ensureSchema();
   try {
     if (phone) {
@@ -396,8 +344,11 @@ export async function createDriverCode(code: string, name: string, createdBy: st
         args: [code.toLowerCase().trim(), name.trim(), createdBy, fullPhone],
       });
       await getDbv().execute({
-        sql: "INSERT OR IGNORE INTO drivers (driver_id, phone, name, active) VALUES (?, ?, ?, 1)",
-        args: [`driver_${Date.now()}`, fullPhone, name.trim()],
+        sql: `INSERT OR IGNORE INTO drivers (driver_id, phone, name, active, car_type, car_capacity, color, plate, country)
+            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+        args: [`driver_${Date.now()}`, fullPhone, name.trim(),
+               opts?.carType || null, opts?.carCapacity || null, opts?.color || null, opts?.plate || null,
+               opts?.country || 'AR'],
       });
     } else {
       await getDbv().execute({
@@ -468,14 +419,26 @@ export async function getDriverExpiry(phone: string): Promise<{ active: boolean;
   return { active, expiresAt };
 }
 
-export async function getAvailableDrivers(): Promise<any[]> {
+export async function getAvailableDrivers(filters?: { minCapacity?: number; country?: string }): Promise<any[]> {
   await ensureSchema();
   const cutoff = Math.floor(Date.now() / 1000) - 86400;
+  const conditions: string[] = ["d.active = 1", "c.last_message_at > ?"];
+  const args: any[] = [cutoff];
+
+  if (filters?.minCapacity) {
+    conditions.push("(d.car_capacity IS NULL OR d.car_capacity >= ?)");
+    args.push(filters.minCapacity);
+  }
+  if (filters?.country) {
+    conditions.push("(d.country IS NULL OR d.country = ?)");
+    args.push(filters.country);
+  }
+
   const rs = await getDbv().execute({
     sql: `SELECT d.* FROM drivers d
           INNER JOIN conversations c ON c.phone = d.phone
-          WHERE d.active = 1 AND c.last_message_at > ?`,
-    args: [cutoff],
+          WHERE ${conditions.join(" AND ")}`,
+    args,
   });
   return rs.rows as any[];
 }
@@ -513,6 +476,19 @@ export async function upsertWorkflow(convId: number, ctx: {
 export async function deleteWorkflow(convId: number): Promise<void> {
   await ensureSchema();
   await getDbv().execute({ sql: "DELETE FROM workflows WHERE conversation_id = ?", args: [convId] });
+}
+
+export async function assignWorkflowAtomic(convId: number, driverPhone: string): Promise<boolean> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: `UPDATE workflows 
+          SET state = 'closed', assigned_driver_phone = ?, last_message_at = unixepoch() 
+          WHERE conversation_id = ? AND state = 'waiting_group' AND assigned_driver_phone IS NULL`,
+    args: [driverPhone, convId],
+  });
+  const ok = rs.rowsAffected > 0;
+  console.log(`[ASSIGN] convId=${convId} driver=${driverPhone} rowsAffected=${rs.rowsAffected} ok=${ok}`);
+  return ok;
 }
 
 export async function getExpiredWorkflows(timeoutMs: number): Promise<any[]> {

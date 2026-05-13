@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { takeConversation, releaseConversation, deleteConversation } from '@/lib/db/database';
+import { checkAdminAuth } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = checkAdminAuth(request);
+  if (auth) return auth;
   try {
     const { id } = await params;
     const convId = parseInt(id);
@@ -29,9 +32,12 @@ export async function POST(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = checkAdminAuth(request);
+  if (auth) return auth;
+
   try {
     const { id } = await params;
     const convId = parseInt(id);

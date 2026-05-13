@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage } from "@/lib/services/lead.service";
+import { checkAdminAuth } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
+  const auth = checkAdminAuth(request);
+  if (auth) return auth;
+
   try {
     const body = await request.json();
     const { phone, text } = body;

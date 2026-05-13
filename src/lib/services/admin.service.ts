@@ -1,4 +1,4 @@
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { getAvailableDrivers } from "@/lib/db/database";
 
 const TITULAR_DRIVER_PHONE = process.env.TITULAR_DRIVER_PHONE || "+543757613215";
@@ -24,8 +24,20 @@ Tu chofer es ${driverName}. Te contactará en breve para coordinar la recogida.`
   await sendWhatsAppMessage(clientPhone, msg);
 }
 
-export async function broadcastTripToDrivers(trip: any, _convId: number, clientPhone: string): Promise<void> {
-  const drivers = await getAvailableDrivers();
+function detectCountry(destination: string): string {
+  const d = destination.toLowerCase();
+  if (d.includes("brasil") || d.includes("foz") || d.includes("catuaí") || d.includes("br-")) return "BR";
+  if (d.includes("paraguay") || d.includes("ciudad del este") || d.includes("py-")) return "PY";
+  return "AR";
+}
+
+export async function broadcastTripToDrivers(trip: any, convId: number, clientPhone: string): Promise<void> {
+  const country = detectCountry(trip.destination || "");
+  const filters: { country?: string; minCapacity?: number } = {};
+
+  if (country) filters.country = country;
+
+  const drivers = await getAvailableDrivers(filters);
 
   if (drivers.length === 0) {
     await notifyTitular(`🚕 *VIAJE SIN CHOFER DISPONIBLE*
@@ -33,23 +45,24 @@ export async function broadcastTripToDrivers(trip: any, _convId: number, clientP
 Cliente: ${clientPhone}
 Destino: ${trip.destination}
 Precio: $${trip.price_base}
+País: ${country}
 
-No hay choferes con ventana abierta. Reenviá manualmente al grupo.`);
+No hay choferes disponibles en ${country}. Reenviá manualmente.`);
     return;
   }
 
-  const msg = `🚕 *VIAJE DISPONIBLE*
+  const body = `🚕 *VIAJE DISPONIBLE*
 
 Destino: ${trip.destination}
-Precio: $${trip.price_base}
-
-Respondé "acepto" para tomar el servicio.`;
+Precio: $${trip.price_base}`;
 
   for (const driver of drivers) {
-    await sendWhatsAppMessage(driver.phone, msg);
+    await sendInteractiveButtons(driver.phone, body, [
+      { id: `aceptar_${convId}`, title: "✅ Aceptar" },
+    ]);
   }
 
-  console.log(`[BROADCAST] Viaje notificado a ${drivers.length} choferes`);
+  console.log(`[BROADCAST] Viaje notificado a ${drivers.length} choferes (${country})`);
 }
 
 export async function notifyOtherDriversTaken(excludePhone: string, destination: string): Promise<void> {

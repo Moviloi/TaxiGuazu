@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getSystemPrompt } from "./system-prompt";
-import { DISCOUNT_MAX_EXPLICIT } from "@/config/constants";
+
 
 interface Trip {
   trip_id: string;
@@ -152,13 +152,4 @@ Descuento alto aplicado`;
     tripCompleted,
     intent,
   };
-}
-
-export function calculatePriceWithDiscount(basePrice: number, discountPercent: number): number {
-  const discount = Math.min(discountPercent, DISCOUNT_MAX_EXPLICIT);
-  return Math.round(basePrice * (1 - discount / 100));
-}
-
-export function formatPrice(price: number): string {
-  return `$${price.toLocaleString("es-AR")}`;
 }

@@ -1,11 +1,11 @@
 import {
   getWorkflow,
-  closeWorkflow,
 } from "@/lib/utils/state-machine";
 import {
   getActiveTripByPhone,
   getDriverByPhone,
   getFirstWaitingWorkflow,
+  assignWorkflowAtomic,
 } from "@/lib/db/database";
 import { notifyTitular, sendToDriver, notifyOtherDriversTaken } from "./admin.service";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
@@ -43,10 +43,25 @@ export async function handleDriverAccept(driverPhone: string, text: string): Pro
   await assignDriver(workflow, driverPhone);
 }
 
+export async function handleDriverButtonAccept(convId: number, driverPhone: string): Promise<void> {
+  const workflow = await getWorkflow(convId);
+  if (!workflow || workflow.state !== "waiting_group") return;
+
+  await assignDriver(workflow, driverPhone);
+}
+
 async function assignDriver(workflow: any, driverPhone: string): Promise<void> {
-  if (workflow.assignedDriverPhone) {
-    await sendWhatsAppMessage(driverPhone, "⚠️ El viaje ya fue asignado a otro chofer.");
-    return;
+  const convId = workflow.conversation_id || workflow.conversationId;
+
+  const assigned = await assignWorkflowAtomic(convId, driverPhone);
+  if (!assigned) {
+    const updated = await getWorkflow(convId);
+    if (updated?.assignedDriverPhone === driverPhone) {
+      console.log(`[ASSIGN] Recuperado: ${driverPhone} ya estaba asignado a conv ${convId}`);
+    } else {
+      await sendWhatsAppMessage(driverPhone, "⚠️ El viaje ya fue asignado a otro chofer.");
+      return;
+    }
   }
 
   const trip = await getActiveTripByPhone(workflow.phone);
@@ -70,6 +85,4 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
   await notifyTitular(`Viaje asignado a ${driverName} (${driverPhone}). Destino: ${trip.destination}`);
 
   await notifyOtherDriversTaken(driverPhone, trip.destination);
-
-  await closeWorkflow(workflow.conversation_id, driverPhone);
 }
