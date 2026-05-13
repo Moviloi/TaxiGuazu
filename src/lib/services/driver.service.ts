@@ -22,7 +22,7 @@ export async function handleDriverResponse(
     return;
   }
 
-  const workflow = getWorkflow(convId);
+  const workflow = await getWorkflow(convId);
   if (!workflow || workflow.state !== "waiting_group") {
     return;
   }
@@ -66,5 +66,5 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
 
   await notifyTitular(`Viaje asignado a ${driverName} (${driverPhone}). Destino: ${trip.destination}`);
 
-  closeWorkflow(convId, driverPhone);
+  await closeWorkflow(convId, driverPhone);
 }

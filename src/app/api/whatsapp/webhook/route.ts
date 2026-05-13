@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage } from "@/lib/services/lead.service";
 import { isGroupMessage, handleDriverResponse } from "@/lib/services/driver.service";
 import { getConversationByPhone } from "@/lib/db/database";
-import { checkTimeouts, startTimeoutWorker } from "@/lib/utils/timeouts";
+import { checkTimeouts } from "@/lib/utils/timeouts";
 
 const BOT_PHONE = process.env.BOT_PHONE || "+543757646645";
-
-startTimeoutWorker();
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;

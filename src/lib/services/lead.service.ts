@@ -6,8 +6,11 @@ import {
   getActiveTripByPhone,
   getConversationByPhone,
   registerDriver,
+  createTrip,
+  setConversationTrip,
 } from "@/lib/db/database";
-import { generateGeminiReply, analyzeClientIntent } from "@/lib/ai/gemini";
+import { generateGroqReply } from "@/lib/ai/groq";
+import { analyzeClientIntent } from "@/lib/ai/gemini";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { notifyGroup } from "./admin.service";
 import {
@@ -15,6 +18,22 @@ import {
   resetToIdle,
   getWorkflow,
 } from "@/lib/utils/state-machine";
+
+const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^\]]+)\]/i;
+
+function extractTripMarker(text: string): { destination: string; price: number; passengers: string } | null {
+  const match = text.match(TRIP_MARKER_REGEX);
+  if (!match) return null;
+  return {
+    destination: match[1].trim(),
+    price: parseInt(match[2].replace(/[^0-9]/g, "")) || 0,
+    passengers: match[3].trim(),
+  };
+}
+
+function stripTripMarker(text: string): string {
+  return text.replace(TRIP_MARKER_REGEX, "").trim();
+}
 
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   if (text.trim().toLowerCase() === ".id") {
@@ -29,7 +48,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
   if (text.trim().toLowerCase() === "seguí vos" || text.trim().toLowerCase() === "seguimos vos") {
     await sendWhatsAppMessage(phone, "¡Genial! Retomo la atención. ¿En qué estábamos?");
-    resetToIdle((await getConversationByPhone(phone))?.id || 0);
+    await resetToIdle((await getConversationByPhone(phone))?.id || 0);
     return;
   }
 
@@ -46,7 +65,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     return;
   }
 
-  const workflow = getWorkflow(conversation.id);
+  const workflow = await getWorkflow(conversation.id);
 
   if (workflow && workflow.state !== "idle" && workflow.state !== "closed") {
     return;
@@ -54,7 +73,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
   await insertMessage(conversation.id, "user", text);
 
-  const trip = await getActiveTripByPhone(phone);
+  let trip = await getActiveTripByPhone(phone);
   const intent = await analyzeClientIntent(text, trip, phone);
 
   if (!intent.shouldRespond) {
@@ -62,12 +81,23 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   }
 
   const history = await getRecentHistory(conversation.id, 20);
-  const response = await generateGeminiReply(text, history, trip, phone);
+  let response = await generateGroqReply(text, history, trip, phone);
+
+  const marker = extractTripMarker(response);
+  if (marker) {
+    response = stripTripMarker(response);
+    if (!trip) {
+      const tripId = `trip_${Date.now()}`;
+      await createTrip(tripId, phone, "", marker.destination, marker.price);
+      await setConversationTrip(conversation.id, tripId);
+      trip = await getActiveTripByPhone(phone);
+    }
+  }
 
   await insertMessage(conversation.id, "assistant", response);
   await sendWhatsAppMessage(phone, response);
 
-  if (intent.tripCompleted && trip) {
+  if (trip && trip.destination && trip.price_base) {
     await escalateToGroup(conversation.id, phone, trip);
   }
 }
@@ -82,5 +112,5 @@ Cliente: ${phone}
 ¿Alguien disponible? Respondé "acepto" para tomar el servicio.`;
 
   await notifyGroup(msg);
-  advanceToGroup(convId);
+  await advanceToGroup(convId, phone);
 }

@@ -118,6 +118,16 @@ async function initSchema(): Promise<void> {
       created_at INTEGER DEFAULT (unixepoch())
     )`,
     `CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(sent, created_at)`,
+    `CREATE TABLE IF NOT EXISTS workflows (
+      conversation_id INTEGER PRIMARY KEY,
+      phone TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'idle' CHECK(state IN ('idle','waiting_group','closed')),
+      trip_id TEXT,
+      assigned_driver_phone TEXT,
+      group_asked_at INTEGER,
+      last_message_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 }
@@ -364,6 +374,73 @@ export async function registerDriver(phone: string, name?: string): Promise<any>
 export async function getDriversGroupId(): Promise<string | null> {
   const driver = await getTitularDriver();
   return driver?.group_id || null;
+}
+
+// ========== WORKFLOWS (DB-backed state machine) ==========
+
+export async function getWorkflow(convId: number): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql: "SELECT * FROM workflows WHERE conversation_id = ?", args: [convId] });
+  return (rs.rows as any[])[0] || null;
+}
+
+export async function upsertWorkflow(convId: number, ctx: {
+  phone: string;
+  state: string;
+  tripId?: string;
+  assignedDriverPhone?: string;
+  groupAskedAt?: number;
+}): Promise<void> {
+  await ensureSchema();
+  const now = Math.floor(Date.now() / 1000);
+  await getDbv().execute({
+    sql: `INSERT INTO workflows (conversation_id, phone, state, trip_id, assigned_driver_phone, group_asked_at, last_message_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(conversation_id) DO UPDATE SET
+            state = excluded.state,
+            trip_id = excluded.trip_id,
+            assigned_driver_phone = excluded.assigned_driver_phone,
+            group_asked_at = COALESCE(excluded.group_asked_at, group_asked_at),
+            last_message_at = excluded.last_message_at`,
+    args: [convId, ctx.phone, ctx.state, ctx.tripId || null, ctx.assignedDriverPhone || null, ctx.groupAskedAt ? Math.floor(ctx.groupAskedAt / 1000) : null, now],
+  });
+}
+
+export async function deleteWorkflow(convId: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "DELETE FROM workflows WHERE conversation_id = ?", args: [convId] });
+}
+
+export async function getExpiredWorkflows(timeoutMs: number): Promise<any[]> {
+  await ensureSchema();
+  const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
+  const rs = await getDbv().execute({
+    sql: "SELECT * FROM workflows WHERE state = 'waiting_group' AND group_asked_at IS NOT NULL AND group_asked_at < ?",
+    args: [cutoff],
+  });
+  return rs.rows as any[];
+}
+
+export async function closeWorkflow(convId: number, driverPhone?: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE workflows SET state = 'closed', assigned_driver_phone = ?, last_message_at = unixepoch() WHERE conversation_id = ?",
+    args: [driverPhone || null, convId],
+  });
+}
+
+export async function advanceWorkflowToGroup(convId: number, phone: string): Promise<void> {
+  await ensureSchema();
+  const now = Math.floor(Date.now() / 1000);
+  await getDbv().execute({
+    sql: `INSERT INTO workflows (conversation_id, phone, state, group_asked_at, last_message_at)
+          VALUES (?, ?, 'waiting_group', ?, ?)
+          ON CONFLICT(conversation_id) DO UPDATE SET
+            state = 'waiting_group',
+            group_asked_at = ?,
+            last_message_at = ?`,
+    args: [convId, phone, now, now, now, now],
+  });
 }
 
 // ========== DB INSTANCE ==========
