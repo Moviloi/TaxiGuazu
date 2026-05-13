@@ -73,6 +73,7 @@ async function initSchema(): Promise<void> {
       destination TEXT,
       status TEXT DEFAULT 'consulta',
       price_base REAL,
+      passengers INTEGER,
       discount_tier INTEGER DEFAULT 0,
       discount_explicit INTEGER DEFAULT 0,
       assigned_driver_phone TEXT,
@@ -117,6 +118,7 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE drivers ADD COLUMN color TEXT",
     "ALTER TABLE drivers ADD COLUMN plate TEXT",
     "ALTER TABLE drivers ADD COLUMN country TEXT DEFAULT 'AR'",
+    "ALTER TABLE trips ADD COLUMN passengers INTEGER",
   ];
   for (const sql of migrations) {
     try { await getDbv().execute(sql); } catch {}
@@ -271,9 +273,9 @@ export async function getRecentHistory(conversationId: number, limit = 20): Prom
 
 // ========== TRIPS ==========
 
-export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number): Promise<void> {
+export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number): Promise<void> {
   await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, status) VALUES (?, ?, ?, ?, ?, 'consulta')", args: [tripId, clientPhone, origin, destination, priceBase || null] });
+  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status) VALUES (?, ?, ?, ?, ?, ?, 'consulta')", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null] });
 }
 
 export async function getTripById(tripId: string): Promise<any> {
@@ -285,6 +287,15 @@ export async function getTripById(tripId: string): Promise<any> {
 export async function getActiveTripByPhone(clientPhone: string): Promise<any> {
   await ensureSchema();
   const rs = await getDbv().execute({ sql: "SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado') ORDER BY created_at DESC LIMIT 1", args: [clientPhone] });
+  return (rs.rows as any[])[0] || null;
+}
+
+export async function getTripByAssignedDriver(driverPhone: string): Promise<any> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: "SELECT * FROM trips WHERE assigned_driver_phone = ? AND status = 'asignado_chofer' ORDER BY created_at DESC LIMIT 1",
+    args: [driverPhone],
+  });
   return (rs.rows as any[])[0] || null;
 }
 

@@ -68,9 +68,10 @@ FLUJO DE CIERRE (CRÍTICO - SEGUIR AL PIE DE LA LETRA):
 6. NO preguntes "¿Confirmás?" más de una vez. Si ya preguntaste y el cliente respondió afirmativamente, es confirmación.
 7. NO digas "servicio confirmado" ni "excelente" como cierre. El viaje se confirma solo cuando un chofer acepta.
 8. En tu mensaje de confirmación final, informá que se envió la solicitud a los choferes, e incluí EXACTAMENTE al final:
-[DATOS_VIAJE: CODIGO | Destino | Precio | Pasajeros]
+[DATOS_VIAJE: CODIGO | Destino | Precio | Pasajeros | Ahora/Reserva]
    El código DEBE ser uno del tarifario (AER-IGR, CAT-AR, BR-CAT, etc.).
-   Ejemplo: "Gracias, tu solicitud fue enviada a nuestros choferes. Te avisaremos en breve. [DATOS_VIAJE: AER-IGR | Aeropuerto IGR | 32000 | 4]"
+   Usá "Ahora" si el viaje es inmediato o mañana, "Reserva" si es para más adelante.
+   Ejemplo: "Gracias, tu solicitud fue enviada a nuestros choferes. Te avisaremos en breve. [DATOS_VIAJE: AER-IGR | Aeropuerto IGR | 32000 | 4 | Ahora]"
 
 NO uses emojis excesivos. Mensajes breves y profesionales.
 `.trim();

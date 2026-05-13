@@ -5,6 +5,7 @@ import {
   handleDriverResponse,
   handleDriverAccept,
   handleDriverButtonAccept,
+  handleDriverArrived,
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
@@ -95,6 +96,11 @@ export async function POST(request: NextRequest) {
     const driver = await getDriverByPhone(phone);
     if (driver && ["acepto", "yo estoy", "yo voy", "lo tomo"].some((k) => text.toLowerCase().includes(k))) {
       await handleDriverAccept(phone, text);
+      return NextResponse.json({ status: "ok" }, { status: 200 });
+    }
+
+    if (driver && text.toLowerCase().trim() === "llegué") {
+      await handleDriverArrived(phone);
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 

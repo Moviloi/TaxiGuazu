@@ -24,16 +24,17 @@ import {
   getWorkflow,
 } from "@/lib/utils/state-machine";
 
-const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+)\]/i;
+const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+)\]/i;
 
-function extractTripMarker(text: string): { code: string; destination: string; price: number; passengers: string } | null {
+function extractTripMarker(text: string): { code: string; destination: string; price: number; passengers: number; urgency: string } | null {
   const match = text.match(TRIP_MARKER_REGEX);
   if (!match) return null;
   return {
     code: match[1].trim(),
     destination: match[2].trim(),
     price: parseInt(match[3].replace(/[^0-9]/g, "")) || 0,
-    passengers: match[4].trim(),
+    passengers: parseInt(match[4].replace(/[^0-9]/g, "")) || 0,
+    urgency: match[5].trim(),
   };
 }
 
@@ -143,7 +144,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
     if (!trip) {
       const tripId = `trip_${Date.now()}`;
-      await createTrip(tripId, phone, "", marker.destination, marker.price);
+      await createTrip(tripId, phone, "", marker.destination, marker.price, marker.passengers);
       await setConversationTrip(conversation.id, tripId);
       trip = await getActiveTripByPhone(phone);
     }
@@ -153,11 +154,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   await sendWhatsAppMessage(phone, response);
 
   if (marker && trip && trip.destination && trip.price_base) {
-    await escalateToGroup(conversation.id, phone, trip);
+    await escalateToGroup(conversation.id, phone, trip, marker.urgency, marker.passengers);
   }
 }
 
-async function escalateToGroup(convId: number, phone: string, trip: any): Promise<void> {
+async function escalateToGroup(convId: number, phone: string, trip: any, urgency?: string, passengers?: number): Promise<void> {
   await advanceToGroup(convId, phone);
-  await broadcastTripToDrivers(trip, convId, phone);
+  await broadcastTripToDrivers(trip, convId, phone, urgency, passengers);
 }

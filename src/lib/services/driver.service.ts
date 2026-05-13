@@ -5,6 +5,7 @@ import {
   getActiveTripByPhone,
   getDriverByPhone,
   getFirstWaitingWorkflow,
+  getTripByAssignedDriver,
   assignWorkflowAtomic,
 } from "@/lib/db/database";
 import { notifyTitular, sendToDriver, notifyOtherDriversTaken } from "./admin.service";
@@ -41,6 +42,16 @@ export async function handleDriverAccept(driverPhone: string, text: string): Pro
   if (!workflow) return;
 
   await assignDriver(workflow, driverPhone);
+}
+
+export async function handleDriverArrived(driverPhone: string): Promise<void> {
+  const trip = await getTripByAssignedDriver(driverPhone);
+  if (!trip) return;
+
+  await sendWhatsAppMessage(trip.client_phone, `🟢 *Chofer en camino*
+
+Tu chofer está llegando al destino. Que tengas un buen viaje!`);
+  console.log(`[LLEGUÉ] Chofer ${driverPhone} llegó, cliente ${trip.client_phone} notificado`);
 }
 
 export async function handleDriverButtonAccept(convId: number, driverPhone: string): Promise<void> {

@@ -31,11 +31,25 @@ function detectCountry(destination: string): string {
   return "AR";
 }
 
-export async function broadcastTripToDrivers(trip: any, convId: number, clientPhone: string): Promise<void> {
+function urgencyIcon(urgency: string): string {
+  const u = urgency.toLowerCase();
+  if (u.includes("reserva") || u.includes("semana") || u.includes("proximo") || u.includes("lunes") || u.includes("martes")) return "📅";
+  return "🚕";
+}
+
+function urgencyLabel(urgency: string): string {
+  const u = urgency.toLowerCase();
+  if (u.includes("reserva")) return "RESERVA";
+  if (u.includes("consulta")) return "CONSULTA";
+  return "VIAJE DISPONIBLE";
+}
+
+export async function broadcastTripToDrivers(trip: any, convId: number, clientPhone: string, urgency?: string, passengers?: number): Promise<void> {
   const country = detectCountry(trip.destination || "");
   const filters: { country?: string; minCapacity?: number } = {};
 
   if (country) filters.country = country;
+  if (passengers && passengers >= 4) filters.minCapacity = passengers;
 
   const drivers = await getAvailableDrivers(filters);
 
@@ -51,10 +65,12 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
     return;
   }
 
-  const body = `🚕 *VIAJE DISPONIBLE*
+  const icon = urgencyIcon(urgency || "");
+  const label = urgencyLabel(urgency || "");
+  const body = `${icon} *${label}*
 
 Destino: ${trip.destination}
-Precio: $${trip.price_base}`;
+Precio: $${trip.price_base}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
 
   for (const driver of drivers) {
     await sendInteractiveButtons(driver.phone, body, [
@@ -62,7 +78,7 @@ Precio: $${trip.price_base}`;
     ]);
   }
 
-  console.log(`[BROADCAST] Viaje notificado a ${drivers.length} choferes (${country})`);
+  console.log(`[BROADCAST] ${label} notificado a ${drivers.length} choferes (${country})`);
 }
 
 export async function notifyOtherDriversTaken(excludePhone: string, destination: string): Promise<void> {
