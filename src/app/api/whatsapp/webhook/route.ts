@@ -9,6 +9,7 @@ import {
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
+import { handleSurveyResponse, handleNewTripResponse } from "@/lib/services/survey.service";
 
 const BOT_PHONE = process.env.BOT_PHONE || "+543757646645";
 
@@ -63,6 +64,16 @@ export async function POST(request: NextRequest) {
 
       if (buttonId.startsWith("rechazar_")) {
         console.log(`[RECHAZADO] ${phone} rechazó viaje`);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("survey_")) {
+        await handleSurveyResponse(phone, buttonId);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("newtrip_")) {
+        await handleNewTripResponse(phone, buttonId);
         return NextResponse.json({ status: "ok" }, { status: 200 });
       }
 

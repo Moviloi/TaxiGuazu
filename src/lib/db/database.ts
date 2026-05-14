@@ -119,6 +119,11 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE drivers ADD COLUMN plate TEXT",
     "ALTER TABLE drivers ADD COLUMN country TEXT DEFAULT 'AR'",
     "ALTER TABLE trips ADD COLUMN passengers INTEGER",
+    "ALTER TABLE trips ADD COLUMN commission_amount REAL",
+    "ALTER TABLE trips ADD COLUMN commission_paid INTEGER DEFAULT 0",
+    "ALTER TABLE trips ADD COLUMN driver_payout REAL",
+    "ALTER TABLE trips ADD COLUMN survey_sent INTEGER DEFAULT 0",
+    "ALTER TABLE trips ADD COLUMN post_trip_response TEXT",
   ];
   for (const sql of migrations) {
     try { await getDbv().execute(sql); } catch {}
@@ -309,9 +314,20 @@ export async function updateTripDiscountExplicit(tripId: string, discountPercent
   await getDbv().execute({ sql: "UPDATE trips SET discount_explicit = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [discountPercent, tripId] });
 }
 
-export async function assignDriverToTrip(tripId: string, driverPhone: string): Promise<void> {
+export async function assignDriverToTrip(tripId: string, driverPhone: string): Promise<{ commission: number; payout: number } | null> {
   await ensureSchema();
-  await getDbv().execute({ sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', updated_at = unixepoch() WHERE trip_id = ?", args: [driverPhone, tripId] });
+  const trip = await getTripById(tripId);
+  if (!trip) return null;
+
+  const price = trip.price_base || 0;
+  const commission = Math.round(price * 0.15);
+  const payout = price - commission;
+
+  await getDbv().execute({
+    sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', commission_amount = ?, driver_payout = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [driverPhone, commission, payout, tripId],
+  });
+  return { commission, payout };
 }
 
 // ========== DRIVERS ==========
@@ -540,6 +556,26 @@ export async function getFirstWaitingWorkflow(): Promise<any> {
     sql: "SELECT * FROM workflows WHERE state = 'waiting_group' AND assigned_driver_phone IS NULL ORDER BY group_asked_at ASC LIMIT 1",
   });
   return (rs.rows as any[])[0] || null;
+}
+
+export async function getTripsPendingSurvey(): Promise<any[]> {
+  await ensureSchema();
+  const cutoff = Math.floor(Date.now() / 1000) - 86400;
+  const rs = await getDbv().execute({
+    sql: "SELECT * FROM trips WHERE status = 'asignado_chofer' AND (survey_sent IS NULL OR survey_sent = 0) AND updated_at < ? ORDER BY updated_at ASC LIMIT 10",
+    args: [cutoff],
+  });
+  return rs.rows as any[];
+}
+
+export async function markSurveySent(tripId: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE trips SET survey_sent = 1 WHERE trip_id = ?", args: [tripId] });
+}
+
+export async function setSurveyResponse(tripId: string, response: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "UPDATE trips SET post_trip_response = ? WHERE trip_id = ?", args: [response, tripId] });
 }
 
 // ========== DB INSTANCE ==========

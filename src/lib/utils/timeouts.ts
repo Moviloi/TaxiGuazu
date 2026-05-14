@@ -1,10 +1,13 @@
 import { getExpiredGroupTimeouts, closeWorkflow } from "./state-machine";
 import { notifyTitular } from "../services/admin.service";
 import { getActiveTripByPhone } from "../db/database";
+import { sendPendingSurveys } from "../services/survey.service";
 
 const TIMEOUT_GROUP_MS = 8 * 60 * 1000;
 
 export async function checkTimeouts(): Promise<void> {
+  await sendPendingSurveys();
+
   const expired = await getExpiredGroupTimeouts(TIMEOUT_GROUP_MS);
 
   for (const ctx of expired) {

@@ -8,12 +8,17 @@ export async function notifyTitular(message: string): Promise<void> {
   await sendWhatsAppMessage(phone, message);
 }
 
-export async function sendToDriver(driverPhone: string, tripDetails: string): Promise<void> {
-  const msg = `🚕 *Nuevo servicio asignado*
+export async function sendToDriver(driverPhone: string, tripDetails: string, commission?: number, payout?: number): Promise<void> {
+  let msg = `🚕 *Nuevo servicio asignado*
 
-${tripDetails}
+${tripDetails}`;
 
-Respondé "llegué" cuando estés en camino.`;
+  if (commission !== undefined && payout !== undefined) {
+    msg += `\n\n💰 *Comisión 15%*: $${commission.toLocaleString("es-AR")}
+Recibís: $${payout.toLocaleString("es-AR")}`;
+  }
+
+  msg += `\n\nRespondé "llegué" cuando estés en camino.`;
   await sendWhatsAppMessage(driverPhone, msg);
 }
 

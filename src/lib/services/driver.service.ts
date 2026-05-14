@@ -7,6 +7,7 @@ import {
   getFirstWaitingWorkflow,
   getTripByAssignedDriver,
   assignWorkflowAtomic,
+  assignDriverToTrip,
 } from "@/lib/db/database";
 import { notifyTitular, sendToDriver, notifyOtherDriversTaken } from "./admin.service";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
@@ -78,14 +79,18 @@ async function assignDriver(workflow: any, driverPhone: string): Promise<void> {
   const trip = await getActiveTripByPhone(workflow.phone);
   if (!trip) return;
 
+  const fin = await assignDriverToTrip(trip.trip_id, driverPhone);
+  const commission = fin?.commission || 0;
+  const payout = fin?.payout || trip.price_base || 0;
+
   const driver = await getDriverByPhone(driverPhone);
   const driverName = driver?.name || "El chofer";
   const tripDetails = `Destino: ${trip.destination}\nPrecio: $${trip.price_base}\nHora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
 
   if (driver) {
-    await sendToDriver(driverPhone, tripDetails);
+    await sendToDriver(driverPhone, tripDetails, commission, payout);
   } else {
-    await sendWhatsAppMessage(driverPhone, `📋 *Resumen del viaje*\n\n${tripDetails}`);
+    await sendWhatsAppMessage(driverPhone, `📋 *Resumen del viaje*\n\n${tripDetails}\n\n💰 *Comisión 15%*: $${commission.toLocaleString("es-AR")}\nRecibís: $${payout.toLocaleString("es-AR")}`);
   }
 
   const clientMsg = `✅ *Viaje confirmado*
