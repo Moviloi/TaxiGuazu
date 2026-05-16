@@ -1,5 +1,6 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff } from "@/lib/db/database";
+import type { DriverRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
 
@@ -103,7 +104,7 @@ function driverFloor(driver: any, tripPiso: number): number {
 
 export async function broadcastTripToDrivers(
   trip: any, convId: number, clientPhone: string,
-  urgency?: string, passengers?: number
+  urgency?: string, passengers?: number | null
 ): Promise<void> {
   const country = detectCountry(trip.origin || "", trip.destination || "");
   const filters: { country?: string; minCapacity?: number } = {};
@@ -144,9 +145,9 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
     }
   }
 
-  let eligible: any[] = [];
+  let eligible: Array<DriverRow & { discount_pct: number }> = [];
   for (const d of drivers) {
-    d.discount_pct = discountMap[d.phone] || 0;
+    const discountPct = discountMap[d.phone] || 0;
     let floor = driverFloor(d, tripPiso);
 
     // Package override: use package floor if lower
@@ -156,14 +157,14 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
     }
 
     if (effectivePayout >= floor) {
-      eligible.push(d);
+      eligible.push({ ...d, discount_pct: discountPct });
     }
   }
 
   // If margin is below minimum, only low tier drivers qualify
   if (margin < MIN_MARGIN) {
     const before = eligible.length;
-    eligible = eligible.filter((d: any) => d.tier === 'low');
+    eligible = eligible.filter((d) => d.tier === 'low');
     if (eligible.length !== before) {
       console.log(`[MARGIN] Margen $${margin} < $${MIN_MARGIN}. Filtrados no-low, quedan ${eligible.length}/${before}`);
     }

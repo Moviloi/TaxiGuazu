@@ -1,14 +1,9 @@
 import Groq from "groq-sdk";
 import { getSystemPrompt } from "./system-prompt";
 import { getEnv } from "@/config/env";
+import type { TripRow } from "@/lib/db/types";
 
-interface Trip {
-  trip_id: string;
-  destination?: string;
-  price_base?: number;
-  discount_explicit?: number;
-  status?: string;
-}
+type Trip = Pick<TripRow, "trip_id" | "destination" | "price_base" | "discount_explicit" | "status">;
 
 interface Message {
   role: string;

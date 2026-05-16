@@ -1,9 +1,35 @@
-import { createClient } from "@libsql/client";
+import { createClient, type InValue } from "@libsql/client";
 import path from "path";
 import fs from "fs";
 import { DB_PATH } from "@/config/constants";
+import type {
+  ConnectionStateRow,
+  ConversationRow,
+  MessageRow,
+  TripRow,
+  DriverRow,
+  WorkflowRow,
+  DriverCodeRow,
+  ClientPreferredDriverRow,
+  PackagePriceRow,
+  ReservationSlotRow,
+  TariffRow,
+  DriverDiscountRow,
+  DriverDiscountWithDriverRow,
+} from "./types";
 
 type LibSqlClient = ReturnType<typeof createClient>;
+
+async function query<T>(sql: string, args?: InValue[]): Promise<T[]> {
+  await ensureSchema();
+  const rs = await getDbv().execute({ sql, args: args ?? [] });
+  return rs.rows as unknown as T[];
+}
+
+async function queryOne<T>(sql: string, args?: InValue[]): Promise<T | null> {
+  const rows = await query<T>(sql, args);
+  return rows[0] ?? null;
+}
 
 let dbClient: LibSqlClient | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -220,11 +246,10 @@ async function initSchema(): Promise<void> {
 // ========== CONNECTION STATE ==========
 
 export async function getConnectionState(): Promise<{ status?: string; qr_string?: string; phone?: string; updated_at?: number } | null> {
-  await ensureSchema();
-  const rs = await getDbv().execute("SELECT key, value, updated_at FROM connection_state");
-  if (rs.rows.length === 0) return null;
-  const state: any = {};
-  for (const row of rs.rows as any[]) {
+  const rows = await query<ConnectionStateRow>("SELECT key, value, updated_at FROM connection_state");
+  if (rows.length === 0) return null;
+  const state: Record<string, string | number | null> = {};
+  for (const row of rows) {
     state[row.key] = row.value;
     state.updated_at = row.updated_at;
   }
@@ -232,9 +257,8 @@ export async function getConnectionState(): Promise<{ status?: string; qr_string
 }
 
 export async function setConnectionState(key: string, value: string): Promise<void> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT value FROM connection_state WHERE key = ?", args: [key] });
-  if ((rs.rows as any[]).length > 0) {
+  const existing = await queryOne<ConnectionStateRow>("SELECT value FROM connection_state WHERE key = ?", [key]);
+  if (existing) {
     await getDbv().execute({ sql: "UPDATE connection_state SET value = ?, updated_at = unixepoch() WHERE key = ?", args: [value, key] });
   } else {
     await getDbv().execute({ sql: "INSERT INTO connection_state (key, value) VALUES (?, ?)", args: [key, value] });
@@ -268,39 +292,36 @@ export async function setConnectionStateBatch(states: { status?: string; qr_stri
 
 // ========== CONVERSATIONS ==========
 
-export async function getOrCreateConversation(phone: string, name?: string): Promise<any> {
-  await ensureSchema();
-  const existing = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE phone = ?", args: [phone] });
-  if ((existing.rows as any[]).length > 0) return (existing.rows as any[])[0];
+export async function getOrCreateConversation(phone: string, name?: string): Promise<ConversationRow> {
+  const existing = await queryOne<ConversationRow>("SELECT * FROM conversations WHERE phone = ?", [phone]);
+  if (existing) return existing;
 
   const info = await getDbv().execute({ sql: "INSERT INTO conversations (phone, name, last_message_at) VALUES (?, ?, unixepoch())", args: [phone, name || null] });
   const id = Number(info.lastInsertRowid);
-  const created = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE id = ?", args: [id] });
-  return (created.rows as any[])[0];
+  const created = await queryOne<ConversationRow>("SELECT * FROM conversations WHERE id = ?", [id]);
+  return created!;
 }
 
-export async function getConversationById(id: number): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE id = ?", args: [id] });
-  return (rs.rows as any[])[0] || null;
+export async function getConversationById(id: number): Promise<ConversationRow | null> {
+  return queryOne<ConversationRow>("SELECT * FROM conversations WHERE id = ?", [id]);
 }
 
-export async function getConversationByPhone(phone: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM conversations WHERE phone = ?", args: [phone] });
-  return (rs.rows as any[])[0] || null;
+export async function getConversationByPhone(phone: string): Promise<ConversationRow | null> {
+  return queryOne<ConversationRow>("SELECT * FROM conversations WHERE phone = ?", [phone]);
 }
 
-export async function listConversations(): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute(`
+interface ConversationWithPreview extends ConversationRow {
+  last_message_preview: string;
+}
+
+export async function listConversations(): Promise<ConversationWithPreview[]> {
+  return query<ConversationWithPreview>(`
     SELECT c.*, 
       (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_preview
     FROM conversations c
     WHERE c.trip_status != 'completado' AND c.trip_status != 'cancelado'
     ORDER BY c.last_message_at DESC
   `);
-  return rs.rows as any[];
 }
 
 export async function updateConversationActivity(phone: string): Promise<void> {
@@ -345,22 +366,18 @@ export async function setConversationTripStatus(conversationId: number, status: 
 // ========== MESSAGES ==========
 
 export async function insertMessage(conversationId: number, role: string, content: string): Promise<number> {
-  await ensureSchema();
   const result = await getDbv().execute({ sql: "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)", args: [conversationId, role, content] });
   await getDbv().execute({ sql: "UPDATE conversations SET last_message_at = unixepoch() WHERE id = ?", args: [conversationId] });
   return Number(result.lastInsertRowid);
 }
 
-export async function getMessages(conversationId: number, limit = 50): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?", args: [conversationId, limit] });
-  return (rs.rows as any[]).reverse();
+export async function getMessages(conversationId: number, limit = 50): Promise<MessageRow[]> {
+  const rows = await query<MessageRow>("SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?", [conversationId, limit]);
+  return rows.reverse();
 }
 
-export async function getRecentHistory(conversationId: number, limit = 20): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: `SELECT * FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?) ORDER BY created_at ASC`, args: [conversationId, limit] });
-  return rs.rows as any[];
+export async function getRecentHistory(conversationId: number, limit = 20): Promise<MessageRow[]> {
+  return query<MessageRow>("SELECT * FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?) ORDER BY created_at ASC", [conversationId, limit]);
 }
 
 // ========== TRIPS ==========
@@ -370,25 +387,16 @@ export async function createTrip(tripId: string, clientPhone: string, origin: st
   await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, 'consulta', ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, scheduledAt || null] });
 }
 
-export async function getTripById(tripId: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM trips WHERE trip_id = ?", args: [tripId] });
-  return (rs.rows as any[])[0] || null;
+export async function getTripById(tripId: string): Promise<TripRow | null> {
+  return queryOne<TripRow>("SELECT * FROM trips WHERE trip_id = ?", [tripId]);
 }
 
-export async function getActiveTripByPhone(clientPhone: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado') ORDER BY created_at DESC LIMIT 1", args: [clientPhone] });
-  return (rs.rows as any[])[0] || null;
+export async function getActiveTripByPhone(clientPhone: string): Promise<TripRow | null> {
+  return queryOne<TripRow>("SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado') ORDER BY created_at DESC LIMIT 1", [clientPhone]);
 }
 
-export async function getTripByAssignedDriver(driverPhone: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM trips WHERE assigned_driver_phone = ? AND status = 'asignado_chofer' ORDER BY created_at DESC LIMIT 1",
-    args: [driverPhone],
-  });
-  return (rs.rows as any[])[0] || null;
+export async function getTripByAssignedDriver(driverPhone: string): Promise<TripRow | null> {
+  return queryOne<TripRow>("SELECT * FROM trips WHERE assigned_driver_phone = ? AND status = 'asignado_chofer' ORDER BY created_at DESC LIMIT 1", [driverPhone]);
 }
 
 export async function updateTripState(tripId: string, newState: string): Promise<void> {
@@ -419,20 +427,15 @@ export async function assignDriverToTrip(tripId: string, driverPhone: string): P
 
 // ========== DRIVERS ==========
 
-export async function getTitularDriver(): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute("SELECT * FROM drivers WHERE is_titular = 1 LIMIT 1");
-  return (rs.rows as any[])[0] || null;
+export async function getTitularDriver(): Promise<DriverRow | null> {
+  return queryOne<DriverRow>("SELECT * FROM drivers WHERE is_titular = 1 LIMIT 1");
 }
 
-export async function getDriverByPhone(phone: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM drivers WHERE phone = ?", args: [phone] });
-  return (rs.rows as any[])[0] || null;
+export async function getDriverByPhone(phone: string): Promise<DriverRow | null> {
+  return queryOne<DriverRow>("SELECT * FROM drivers WHERE phone = ?", [phone]);
 }
 
-export async function registerDriver(phone: string, name?: string): Promise<any> {
-  await ensureSchema();
+export async function registerDriver(phone: string, name?: string): Promise<DriverRow | null> {
   const existing = await getDriverByPhone(phone);
   if (existing) return existing;
   const driverId = `driver_${Date.now()}`;
@@ -490,17 +493,11 @@ export async function deactivateDriverByCode(code: string): Promise<boolean> {
   return true;
 }
 
-export async function getDriverCodeByCode(code: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM driver_codes WHERE code = ?",
-    args: [code.toLowerCase().trim()],
-  });
-  return (rs.rows as any[])[0] || null;
+export async function getDriverCodeByCode(code: string): Promise<DriverCodeRow | null> {
+  return queryOne<DriverCodeRow>("SELECT * FROM driver_codes WHERE code = ?", [code.toLowerCase().trim()]);
 }
 
-export async function registerDriverByCode(code: string, phone: string): Promise<any> {
-  await ensureSchema();
+export async function registerDriverByCode(code: string, phone: string): Promise<DriverCodeRow | null> {
   const existing = await getDriverCodeByCode(code);
   if (!existing) return null;
   if (existing.phone) return existing;
@@ -520,13 +517,8 @@ export async function registerDriverByCode(code: string, phone: string): Promise
 }
 
 export async function getDriverExpiry(phone: string): Promise<{ active: boolean; expiresAt: Date | null }> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT last_message_at FROM conversations WHERE phone = ?",
-    args: [phone],
-  });
-  const row = (rs.rows as any[])[0];
-  if (!row || !row.last_message_at) return { active: false, expiresAt: null };
+  const row = await queryOne<{ last_message_at: number }>("SELECT last_message_at FROM conversations WHERE phone = ?", [phone]);
+  if (!row?.last_message_at) return { active: false, expiresAt: null };
 
   const expiresAt = new Date((row.last_message_at + 86400) * 1000);
   const active = Date.now() < expiresAt.getTime();
@@ -595,11 +587,10 @@ export async function updateDriverGuide(phone: string, isGuide: boolean): Promis
   });
 }
 
-export async function getAvailableDrivers(filters?: { minCapacity?: number; country?: string }): Promise<any[]> {
-  await ensureSchema();
+export async function getAvailableDrivers(filters?: { minCapacity?: number; country?: string }): Promise<DriverRow[]> {
   const cutoff = Math.floor(Date.now() / 1000) - 86400;
   const conditions: string[] = ["d.active = 1", "c.last_message_at > ?"];
-  const args: any[] = [cutoff];
+  const args: InValue[] = [cutoff];
 
   if (filters?.minCapacity) {
     conditions.push("(d.car_capacity IS NULL OR d.car_capacity >= ?)");
@@ -610,24 +601,15 @@ export async function getAvailableDrivers(filters?: { minCapacity?: number; coun
     args.push(filters.country);
   }
 
-  const rs = await getDbv().execute({
-    sql: `SELECT d.* FROM drivers d
-          INNER JOIN conversations c ON c.phone = d.phone
-          WHERE ${conditions.join(" AND ")}`,
-    args,
-  });
-  return rs.rows as any[];
+  return query<DriverRow>(`SELECT d.* FROM drivers d
+    INNER JOIN conversations c ON c.phone = d.phone
+    WHERE ${conditions.join(" AND ")}`, args);
 }
 
 // ========== PREFERRED DRIVERS ==========
 
-export async function getClientPreferredDriver(clientPhone: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM client_preferred_drivers WHERE client_phone = ?",
-    args: [clientPhone],
-  });
-  return (rs.rows as any[])[0] || null;
+export async function getClientPreferredDriver(clientPhone: string): Promise<ClientPreferredDriverRow | null> {
+  return queryOne<ClientPreferredDriverRow>("SELECT * FROM client_preferred_drivers WHERE client_phone = ?", [clientPhone]);
 }
 
 export async function setClientPreferredDriver(clientPhone: string, driverPhone: string): Promise<void> {
@@ -656,10 +638,8 @@ export async function setBackupDriver(clientPhone: string, driverPhone: string):
 
 // ========== WORKFLOWS (DB-backed state machine) ==========
 
-export async function getWorkflow(convId: number): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql: "SELECT * FROM workflows WHERE conversation_id = ?", args: [convId] });
-  return (rs.rows as any[])[0] || null;
+export async function getWorkflow(convId: number): Promise<WorkflowRow | null> {
+  return queryOne<WorkflowRow>("SELECT * FROM workflows WHERE conversation_id = ?", [convId]);
 }
 
 export async function upsertWorkflow(convId: number, ctx: {
@@ -716,24 +696,14 @@ export async function advanceWorkflowState(convId: number, phone: string, newSta
   });
 }
 
-export async function getExpiredWorkflowsByState(state: string, timeoutMs: number): Promise<any[]> {
-  await ensureSchema();
+export async function getExpiredWorkflowsByState(state: string, timeoutMs: number): Promise<WorkflowRow[]> {
   const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM workflows WHERE state = ? AND group_asked_at IS NOT NULL AND group_asked_at < ? AND assigned_driver_phone IS NULL",
-    args: [state, cutoff],
-  });
-  return rs.rows as any[];
+  return query<WorkflowRow>("SELECT * FROM workflows WHERE state = ? AND group_asked_at IS NOT NULL AND group_asked_at < ? AND assigned_driver_phone IS NULL", [state, cutoff]);
 }
 
-export async function getExpiredWorkflows(timeoutMs: number): Promise<any[]> {
-  await ensureSchema();
+export async function getExpiredWorkflows(timeoutMs: number): Promise<WorkflowRow[]> {
   const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM workflows WHERE state = 'waiting_group' AND group_asked_at IS NOT NULL AND group_asked_at < ? AND assigned_driver_phone IS NULL",
-    args: [cutoff],
-  });
-  return rs.rows as any[];
+  return query<WorkflowRow>("SELECT * FROM workflows WHERE state = 'waiting_group' AND group_asked_at IS NOT NULL AND group_asked_at < ? AND assigned_driver_phone IS NULL", [cutoff]);
 }
 
 export async function closeWorkflow(convId: number, driverPhone?: string): Promise<void> {
@@ -758,12 +728,8 @@ export async function advanceWorkflowToGroup(convId: number, phone: string): Pro
   });
 }
 
-export async function getFirstWaitingWorkflow(): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM workflows WHERE state = 'waiting_group' AND assigned_driver_phone IS NULL ORDER BY group_asked_at ASC LIMIT 1",
-  });
-  return (rs.rows as any[])[0] || null;
+export async function getFirstWaitingWorkflow(): Promise<WorkflowRow | null> {
+  return queryOne<WorkflowRow>("SELECT * FROM workflows WHERE state = 'waiting_group' AND assigned_driver_phone IS NULL ORDER BY group_asked_at ASC LIMIT 1");
 }
 
 // ========== PACKAGE PRICES ==========
@@ -778,34 +744,19 @@ export async function setPackagePrice(driverPhone: string, packageType: string, 
   });
 }
 
-export async function getPackagePrice(driverPhone: string, packageType: string): Promise<any> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM package_prices WHERE driver_phone = ? AND package_type = ?",
-    args: [driverPhone, packageType],
-  });
-  return (rs.rows as any[])[0] || null;
+export async function getPackagePrice(driverPhone: string, packageType: string): Promise<PackagePriceRow | null> {
+  return queryOne<PackagePriceRow>("SELECT * FROM package_prices WHERE driver_phone = ? AND package_type = ?", [driverPhone, packageType]);
 }
 
-export async function getActiveTripsByClient(clientPhone: string): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado') ORDER BY created_at ASC",
-    args: [clientPhone],
-  });
-  return rs.rows as any[];
+export async function getActiveTripsByClient(clientPhone: string): Promise<TripRow[]> {
+  return query<TripRow>("SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado') ORDER BY created_at ASC", [clientPhone]);
 }
 
 // ========== SURVEY ==========
 
-export async function getTripsPendingSurvey(): Promise<any[]> {
-  await ensureSchema();
+export async function getTripsPendingSurvey(): Promise<TripRow[]> {
   const cutoff = Math.floor(Date.now() / 1000) - 86400;
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM trips WHERE status = 'asignado_chofer' AND (survey_sent IS NULL OR survey_sent = 0) AND updated_at < ? ORDER BY updated_at ASC LIMIT 10",
-    args: [cutoff],
-  });
-  return rs.rows as any[];
+  return query<TripRow>("SELECT * FROM trips WHERE status = 'asignado_chofer' AND (survey_sent IS NULL OR survey_sent = 0) AND updated_at < ? ORDER BY updated_at ASC LIMIT 10", [cutoff]);
 }
 
 export async function markSurveySent(tripId: string): Promise<void> {
@@ -849,19 +800,12 @@ export async function createReservationSlot(dayOfWeek: number, startTime: string
   }
 }
 
-export async function getActiveSlots(): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute("SELECT * FROM reservation_slots WHERE active = 1 ORDER BY day_of_week, start_time");
-  return rs.rows as any[];
+export async function getActiveSlots(): Promise<ReservationSlotRow[]> {
+  return query<ReservationSlotRow>("SELECT * FROM reservation_slots WHERE active = 1 ORDER BY day_of_week, start_time");
 }
 
-export async function getSlotsByDayOfWeek(dayOfWeek: number): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM reservation_slots WHERE day_of_week = ? AND active = 1 ORDER BY start_time",
-    args: [dayOfWeek],
-  });
-  return rs.rows as any[];
+export async function getSlotsByDayOfWeek(dayOfWeek: number): Promise<ReservationSlotRow[]> {
+  return query<ReservationSlotRow>("SELECT * FROM reservation_slots WHERE day_of_week = ? AND active = 1 ORDER BY start_time", [dayOfWeek]);
 }
 
 export async function deleteReservationSlot(id: number): Promise<boolean> {
@@ -873,40 +817,29 @@ export async function deleteReservationSlot(id: number): Promise<boolean> {
   return rs.rowsAffected > 0;
 }
 
-export async function getTripsScheduledForDate(dateStr: string): Promise<any[]> {
-  await ensureSchema();
+export async function getTripsScheduledForDate(dateStr: string): Promise<TripRow[]> {
   const startOfDay = Math.floor(new Date(dateStr + "T00:00:00").getTime() / 1000);
   const endOfDay = Math.floor(new Date(dateStr + "T23:59:59").getTime() / 1000);
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM trips WHERE scheduled_at >= ? AND scheduled_at <= ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at",
-    args: [startOfDay, endOfDay],
-  });
-  return rs.rows as any[];
+  return query<TripRow>("SELECT * FROM trips WHERE scheduled_at >= ? AND scheduled_at <= ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at", [startOfDay, endOfDay]);
 }
 
-export async function getUpcomingReservations(limit = 20): Promise<any[]> {
-  await ensureSchema();
+export async function getUpcomingReservations(limit = 20): Promise<TripRow[]> {
   const now = Math.floor(Date.now() / 1000);
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at > ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at ASC LIMIT ?",
-    args: [now, limit],
-  });
-  return rs.rows as any[];
+  return query<TripRow>("SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at > ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at ASC LIMIT ?", [now, limit]);
 }
 
 // ========== TARIFFS ==========
 
-export async function findTariff(origin: string, destination: string, passengers: number): Promise<any | null> {
-  await ensureSchema();
+interface TariffWithPrice extends TariffRow {
+  price: number;
+  piso: number;
+}
+
+export async function findTariff(origin: string, destination: string, passengers: number): Promise<TariffWithPrice | null> {
   const o = origin.toLowerCase().trim();
   const d = destination.toLowerCase().trim();
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM tariffs WHERE LOWER(origin) = ? AND LOWER(destination) = ? LIMIT 1",
-    args: [o, d],
-  });
-  const rows = rs.rows as any[];
-  if (rows.length === 0) return null;
-  const t = rows[0];
+  const t = await queryOne<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) = ? AND LOWER(destination) = ? LIMIT 1", [o, d]);
+  if (!t) return null;
   return {
     ...t,
     price: passengers > 4 ? t.price_6p : t.price_4p,
@@ -914,14 +847,9 @@ export async function findTariff(origin: string, destination: string, passengers
   };
 }
 
-export async function searchTariffs(query: string): Promise<any[]> {
-  await ensureSchema();
-  const q = `%${query.toLowerCase()}%`;
-  const rs = await getDbv().execute({
-    sql: "SELECT * FROM tariffs WHERE LOWER(origin) LIKE ? OR LOWER(destination) LIKE ? LIMIT 10",
-    args: [q, q],
-  });
-  return rs.rows as any[];
+export async function searchTariffs(text: string): Promise<TariffRow[]> {
+  const q = `%${text.toLowerCase()}%`;
+  return query<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) LIKE ? OR LOWER(destination) LIKE ? LIMIT 10", [q, q]);
 }
 
 async function seedTariffs(): Promise<void> {
@@ -1005,27 +933,22 @@ async function seedTariffs(): Promise<void> {
   }
 }
 
-export async function getDiscountsForTariff(tariffId: number): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: `SELECT d.*, dr.name as driver_name FROM driver_discounts d
-          LEFT JOIN drivers dr ON dr.phone = d.driver_phone
-          WHERE d.tariff_id = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())`,
-    args: [tariffId],
-  });
-  return rs.rows as any[];
+interface DriverDiscountWithTariff extends DriverDiscountRow {
+  origin: string;
+  destination: string;
 }
 
-export async function getDriverDiscounts(driverPhone: string): Promise<any[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: `SELECT d.*, t.origin, t.destination FROM driver_discounts d
-          LEFT JOIN tariffs t ON t.id = d.tariff_id
-          WHERE d.driver_phone = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())
-          ORDER BY d.created_at DESC`,
-    args: [driverPhone],
-  });
-  return rs.rows as any[];
+export async function getDiscountsForTariff(tariffId: number): Promise<DriverDiscountWithDriverRow[]> {
+  return query<DriverDiscountWithDriverRow>(`SELECT d.*, dr.name as driver_name FROM driver_discounts d
+    LEFT JOIN drivers dr ON dr.phone = d.driver_phone
+    WHERE d.tariff_id = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())`, [tariffId]);
+}
+
+export async function getDriverDiscounts(driverPhone: string): Promise<DriverDiscountWithTariff[]> {
+  return query<DriverDiscountWithTariff>(`SELECT d.*, t.origin, t.destination FROM driver_discounts d
+    LEFT JOIN tariffs t ON t.id = d.tariff_id
+    WHERE d.driver_phone = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())
+    ORDER BY d.created_at DESC`, [driverPhone]);
 }
 
 export async function createDriverDiscount(driverPhone: string, tariffId: number, discountPct: number, validUntilDays?: number): Promise<{ ok: boolean; error?: string }> {

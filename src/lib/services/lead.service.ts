@@ -140,8 +140,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
   const conversation = await getOrCreateConversation(phone, undefined);
   const freshConv = await getConversationById(conversation.id);
-
-  if (freshConv.taken_by_human) return;
+  if (!freshConv || freshConv.taken_by_human) return;
 
   const workflow = await getWorkflow(conversation.id);
   if (workflow && workflow.state !== "idle" && workflow.state !== "closed") return;
@@ -175,6 +174,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       await createTrip(tripId, phone, marker.origin, marker.destination, marker.price, marker.passengers, marker.scheduledAt);
       await setConversationTrip(conversation.id, tripId);
       trip = await getActiveTripByPhone(phone);
+      if (!trip) return;
       // Match tariff to set piso_base
       const tariff = await findTariff(marker.origin, marker.destination, marker.passengers);
       if (tariff) {
@@ -183,7 +183,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     } else {
       if (marker.scheduledAt) await updateTripScheduledAt(trip.trip_id, marker.scheduledAt);
       if (!trip.piso_base) {
-        const tariff = await findTariff(trip.origin, trip.destination, trip.passengers || marker.passengers);
+        const tariff = await findTariff(trip.origin || marker.origin, trip.destination || marker.destination, trip.passengers || marker.passengers);
         if (tariff) await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
       }
     }
@@ -293,7 +293,7 @@ export async function handleSlotResponse(phone: string, buttonId: string): Promi
   await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
 }
 
-async function escalateTrip(convId: number, phone: string, trip: any, urgency?: string, passengers?: number): Promise<void> {
+async function escalateTrip(convId: number, phone: string, trip: any, urgency?: string, passengers?: number | null): Promise<void> {
   const u = (urgency || "").toLowerCase();
 
   if (u.includes("reserva")) {

@@ -119,7 +119,8 @@ async function assignDriver(workflow: any, driverPhone: string): Promise<void> {
 Tu chofer es ${driverName}. Te contactará en breve.`;
   await sendWhatsAppMessage(workflow.phone, clientMsg);
 
-  await notifyAdmin(`Viaje asignado a ${driverName} (${driverPhone}). Destino: ${trip.destination}`);
+  const dest = trip.destination || "No especificado";
+  await notifyAdmin(`Viaje asignado a ${driverName} (${driverPhone}). Destino: ${dest}`);
 
-  await notifyOtherDriversTaken(driverPhone, trip.destination);
+  await notifyOtherDriversTaken(driverPhone, dest);
 }
