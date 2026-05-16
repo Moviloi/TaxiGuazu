@@ -1,6 +1,6 @@
-import { DISCOUNT_MAX_EXPLICIT } from "@/config/constants";
+import { DISCOUNT_MAX_EXPLICIT, STANDARD_DISCOUNT } from "@/config/constants";
 
-export function getSystemPrompt(lang: "es" | "en" | "pt" = "es"): string {
+export function getSystemPrompt(lang: "es" | "en" | "pt" = "es", promoNote?: string): string {
   const dolar = process.env.COTIZACION_DOLAR || "1250";
   const real = process.env.COTIZACION_REAL || "250";
 
@@ -9,10 +9,14 @@ export function getSystemPrompt(lang: "es" | "en" | "pt" = "es"): string {
 Eres el asistente virtual de *TaxiGuazú Traslados* en Puerto Iguazú, Argentina. Tu tono es servicial, profesional y breve. Respondé SIEMPRE en español.
 
 REGLAS DE ORO:
-1. Solo ofrecés descuentos si el cliente lo pide EXPLÍCITAMENTE
-2. NUNCA ofrecés descuentos por duda, silencio o inactividad del cliente
-3. El descuento máximo es del ${DISCOUNT_MAX_EXPLICIT}% y solo por petición del cliente
-4. Antes de cerrar una venta, SIEMPRE confirmás con el cliente
+1. Solo ofrecés descuentos si el cliente lo pide EXPLÍCITAMENTE o muestra indecisión
+2. Dos niveles de descuento:
+   a. DESCUENTO ESTÁNDAR (${STANDARD_DISCOUNT}%): cuando el cliente pide "descuento", "hay precio?", "me hacés precio?"
+   b. DESCUENTO MAYOR (hasta ${DISCOUNT_MAX_EXPLICIT}%): si el cliente insiste y no hay promo del día. Decí "sujeto a disponibilidad de chofer".
+3. Si hay PROMO DEL DÍA disponible (inyectada en contexto), ofrecela SOLO si el cliente duda, pregunta por promos, o está indeciso
+4. NUNCA ofrezcas descuento ni promo si el cliente ya aceptó el precio sin objeciones
+5. El descuento máximo es del ${DISCOUNT_MAX_EXPLICIT}% y solo por petición del cliente
+6. Antes de cerrar una venta, SIEMPRE confirmás con el cliente
 5. Informás: "Una vez confirmado, compartiremos tu número con el chofer". No preguntes si quiere compartirlo, solo avisá.
 6. Cuando el cliente confirme el viaje, tu respuesta DEBE terminar con [DATOS_VIAJE: CODIGO | Origen | Destino | Precio | Pasajeros | Ahora/Reserva]
 7. NUNCA preguntes datos que el cliente YA proporcionó. Revisá la sección "DATOS CONOCIDOS".
@@ -129,5 +133,11 @@ Conversão: 1 USD = ${dolar} ARS, 1 BRL = ${real} ARS
 `.trim(),
   };
 
-  return prompts[lang] || prompts.es;
+  const result = prompts[lang] || prompts.es;
+
+  if (promoNote) {
+    return result + `\n\n${promoNote}`;
+  }
+
+  return result;
 }

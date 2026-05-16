@@ -87,13 +87,14 @@ export async function generateGroqReply(
   userText: string,
   history: Message[],
   trip: Trip | null,
-  _phone: string
+  _phone: string,
+  promoNote?: string
 ): Promise<string> {
   const groq = getGroq();
   if (!groq) return "Disculpá, estoy teniendo problemas técnicos. Un operador te atenderá en breve.";
 
   const lang = detectLang(userText);
-  const systemPrompt = getSystemPrompt(lang);
+  const systemPrompt = getSystemPrompt(lang, promoNote);
 
   const tripInfo = trip
     ? `\n\nVIAJE ACTUAL:\n- Origen: ${trip.destination ? "conversado" : "por definir"}\n- Destino: ${trip.destination || "por definir"}\n- Precio: $${trip.price_base || "por definir"}\n- Descuento: ${trip.discount_explicit || 0}%\n- Estado: ${trip.status || "en consulta"}`

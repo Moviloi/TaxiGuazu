@@ -11,6 +11,7 @@ import {
   updateTripScheduledAt,
   updateTripTariff,
   findTariff,
+  getDiscountsForTariff,
   getDriverByPhone,
   getDriverCodeByCode,
   registerDriverByCode,
@@ -150,7 +151,17 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   let trip = await getActiveTripByPhone(phone);
 
   const history = await getRecentHistory(conversation.id, 20);
-  let response = await generateGroqReply(text, history, trip, phone);
+
+  let promoNote: string | undefined;
+  if (trip?.tariff_id) {
+    const discounts = await getDiscountsForTariff(trip.tariff_id);
+    if (discounts.length > 0) {
+      const maxPct = Math.max(...discounts.map((d: any) => d.discount_pct));
+      promoNote = `🔥 PROMO DEL DÍA: descuento de hasta ${maxPct}% en esta ruta por tiempo limitado. Solo ofrecela si el cliente duda, pregunta por promos, o pide más descuento del estándar. No menciones esta promo si el cliente ya aceptó el precio.`;
+    }
+  }
+
+  let response = await generateGroqReply(text, history, trip, phone, promoNote);
 
   const marker = extractTripMarker(response);
   if (marker) {
