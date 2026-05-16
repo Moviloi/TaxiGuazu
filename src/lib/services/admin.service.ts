@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
-import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived } from "@/lib/db/database";
+import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff } from "@/lib/db/database";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 
 const ADMIN_PHONE = process.env.ADMIN_PHONE || process.env.TITULAR_DRIVER_PHONE || "+543757613215";
@@ -90,6 +90,9 @@ function tierFactor(tier: string): number {
 
 function driverFloor(driver: any, tripPiso: number): number {
   let floor = Math.round(tripPiso * tierFactor(driver.tier || 'normal'));
+  if (driver.discount_pct && driver.discount_pct > 0) {
+    floor = Math.round(floor * (1 - driver.discount_pct / 100));
+  }
   if (driver.min_payout && driver.min_payout > floor) {
     floor = driver.min_payout;
   }
@@ -130,8 +133,18 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
   const packageType = tripCount >= 3 ? 'three_leg' : tripCount >= 2 ? 'in_out' : '';
   const packageLabel = packageType === 'three_leg' ? '📦 Paquete 3+ tramos' : packageType === 'in_out' ? '📦 Paquete 2 tramos' : '';
 
+  // Load driver discounts for this tariff
+  let discountMap: Record<string, number> = {};
+  if (trip.tariff_id) {
+    const discounts = await getDiscountsForTariff(trip.tariff_id);
+    for (const d of discounts) {
+      discountMap[d.driver_phone] = d.discount_pct;
+    }
+  }
+
   let eligible: any[] = [];
   for (const d of drivers) {
+    d.discount_pct = discountMap[d.phone] || 0;
     let floor = driverFloor(d, tripPiso);
 
     // Package override: use package floor if lower

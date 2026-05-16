@@ -145,6 +145,15 @@ async function initSchema(): Promise<void> {
       piso_4p REAL NOT NULL,
       piso_6p REAL NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS driver_discounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      driver_phone TEXT NOT NULL,
+      tariff_id INTEGER NOT NULL,
+      discount_pct INTEGER NOT NULL CHECK(discount_pct > 0 AND discount_pct <= 100),
+      valid_until INTEGER,
+      active INTEGER DEFAULT 1,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 
@@ -994,6 +1003,63 @@ async function seedTariffs(): Promise<void> {
       });
     } catch {}
   }
+}
+
+export async function getDiscountsForTariff(tariffId: number): Promise<any[]> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: `SELECT d.*, dr.name as driver_name FROM driver_discounts d
+          LEFT JOIN drivers dr ON dr.phone = d.driver_phone
+          WHERE d.tariff_id = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())`,
+    args: [tariffId],
+  });
+  return rs.rows as any[];
+}
+
+export async function getDriverDiscounts(driverPhone: string): Promise<any[]> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: `SELECT d.*, t.origin, t.destination FROM driver_discounts d
+          LEFT JOIN tariffs t ON t.id = d.tariff_id
+          WHERE d.driver_phone = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())
+          ORDER BY d.created_at DESC`,
+    args: [driverPhone],
+  });
+  return rs.rows as any[];
+}
+
+export async function createDriverDiscount(driverPhone: string, tariffId: number, discountPct: number, validUntilDays?: number): Promise<{ ok: boolean; error?: string }> {
+  await ensureSchema();
+  // Check max 4 active discounts per driver
+  const count = await getDbv().execute({
+    sql: `SELECT COUNT(*) as c FROM driver_discounts WHERE driver_phone = ? AND active = 1 AND (valid_until IS NULL OR valid_until > unixepoch())`,
+    args: [driverPhone],
+  });
+  if ((count.rows as any[])[0].c >= 4) {
+    return { ok: false, error: "Ya tenés 4 descuentos activos. Eliminá uno antes de agregar otro." };
+  }
+  let validUntil: number | null = null;
+  if (validUntilDays && validUntilDays > 0) {
+    validUntil = Math.floor(Date.now() / 1000) + validUntilDays * 86400;
+  }
+  try {
+    await getDbv().execute({
+      sql: "INSERT INTO driver_discounts (driver_phone, tariff_id, discount_pct, valid_until) VALUES (?, ?, ?, ?)",
+      args: [driverPhone, tariffId, discountPct, validUntil],
+    });
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+}
+
+export async function deleteDriverDiscount(id: number, driverPhone: string): Promise<boolean> {
+  await ensureSchema();
+  const rs = await getDbv().execute({
+    sql: "DELETE FROM driver_discounts WHERE id = ? AND driver_phone = ?",
+    args: [id, driverPhone],
+  });
+  return rs.rowsAffected > 0;
 }
 
 // ========== DB INSTANCE ==========
