@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import { getSystemPrompt } from "./system-prompt";
+import { getEnv } from "@/config/env";
 
 interface Trip {
   trip_id: string;
@@ -16,12 +17,13 @@ interface Message {
 }
 
 function getGroq(): Groq | null {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    console.error("[GROQ] GROQ_API_KEY no configurada");
+  try {
+    const env = getEnv();
+    return new Groq({ apiKey: env.GROQ_API_KEY });
+  } catch (e) {
+    console.error("[GROQ]", e instanceof Error ? e.message : String(e));
     return null;
   }
-  return new Groq({ apiKey });
 }
 
 const DESTINATIONS = [

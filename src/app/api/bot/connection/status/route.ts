@@ -1,21 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getConnectionState } from '@/lib/db/database';
+import { getEnv } from '@/config/env';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const state = await getConnectionState();
   const storedStatus = state?.status || 'disconnected';
-  const phone = state?.phone || process.env.BOT_PHONE || null;
 
-  const isConnected = !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+  let env: ReturnType<typeof getEnv> | null = null;
+  try { env = getEnv(); } catch {}
+
+  const phone = state?.phone || env?.BOT_PHONE || null;
+
+  const hasToken = !!(env?.WHATSAPP_TOKEN);
+  const hasPhoneId = !!(env?.WHATSAPP_PHONE_ID);
+  const hasVerifyToken = !!(env?.WHATSAPP_VERIFY_TOKEN);
+  const hasBotPhone = !!(env?.BOT_PHONE);
+
+  const isConnected = !!(env?.WHATSAPP_TOKEN && env?.WHATSAPP_PHONE_ID);
   const status = isConnected ? 'connected' : storedStatus;
-
-  const hasToken = !!(process.env.WHATSAPP_TOKEN);
-  const hasPhoneId = !!(process.env.WHATSAPP_PHONE_ID);
-  const hasVerifyToken = !!(process.env.WHATSAPP_VERIFY_TOKEN);
-  const hasBotPhone = !!(process.env.BOT_PHONE);
-  const hasGeminiKey = !!(process.env.GEMINI_API_KEY);
 
   return NextResponse.json({
     status,
@@ -23,13 +27,12 @@ export async function GET() {
     qrPng: null,
     updatedAt: state?.updated_at,
     platform: 'whatsapp-business-api',
-    phoneId: process.env.WHATSAPP_PHONE_ID || null,
+    phoneId: env?.WHATSAPP_PHONE_ID || null,
     _debug: {
       hasToken,
       hasPhoneId,
       hasVerifyToken,
       hasBotPhone,
-      hasGeminiKey,
     },
   }, { status: 200 });
 }

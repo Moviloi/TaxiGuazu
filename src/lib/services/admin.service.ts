@@ -1,8 +1,10 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff } from "@/lib/db/database";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
+import { getEnv } from "@/config/env";
 
-const ADMIN_PHONE = process.env.ADMIN_PHONE || process.env.TITULAR_DRIVER_PHONE || "+543757613215";
+let ADMIN_PHONE: string;
+try { ADMIN_PHONE = getEnv().TITULAR_DRIVER_PHONE; } catch { ADMIN_PHONE = "+543757613215"; }
 
 export async function notifyAdmin(message: string): Promise<void> {
   const phone = ADMIN_PHONE.replace(/\D/g, "");

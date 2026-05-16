@@ -1,16 +1,19 @@
 import axios from "axios";
+import { getEnv } from "@/config/env";
 
 function getUrl(): string {
-  return `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
+  const env = getEnv();
+  return `https://graph.facebook.com/v18.0/${env.WHATSAPP_PHONE_ID}/messages`;
 }
 
 function getToken(): string | null {
-  const token = process.env.WHATSAPP_TOKEN;
-  if (!token) {
-    console.error("[SENDER] WHATSAPP_TOKEN no está definido");
+  try {
+    const env = getEnv();
+    return env.WHATSAPP_TOKEN;
+  } catch (e) {
+    console.error("[SENDER]", e instanceof Error ? e.message : String(e));
     return null;
   }
-  return token;
 }
 
 function normalizeRecipient(to: string): string {

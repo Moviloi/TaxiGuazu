@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { getEnv } from "@/config/env";
 
 export function checkAdminAuth(request: Request): NextResponse | null {
-  const adminKey = process.env.ADMIN_API_KEY;
-  if (!adminKey) return null;
+  let adminKey: string;
+  try {
+    adminKey = getEnv().ADMIN_API_KEY;
+  } catch {
+    return null;
+  }
 
   const apiKey = request.headers.get("x-api-key");
   if (apiKey !== adminKey) {

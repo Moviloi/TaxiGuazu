@@ -10,8 +10,11 @@ import {
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
 import { handleSurveyResponse, handleNewTripResponse } from "@/lib/services/survey.service";
+import { getEnv } from "@/config/env";
 
-const BOT_PHONE = process.env.BOT_PHONE || "+543757646645";
+function getBotPhone(): string {
+  try { return getEnv().BOT_PHONE; } catch { return "+543757646645"; }
+}
 
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
@@ -24,7 +27,8 @@ export async function GET(request: NextRequest) {
   const mode = params.get("hub.mode");
   const token = params.get("hub.verify_token");
   const challenge = params.get("hub.challenge");
-  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "taxiguazu-bot-2025";
+  let VERIFY_TOKEN: string;
+  try { VERIFY_TOKEN = getEnv().WHATSAPP_VERIFY_TOKEN; } catch { VERIFY_TOKEN = "taxiguazu-bot-2025"; }
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("[WEBHOOK] Verificación exitosa");
@@ -82,7 +86,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "ok" }, { status: 200 });
       }
 
-      if (phone === BOT_PHONE) {
+      if (phone === getBotPhone()) {
         return NextResponse.json({ status: "ok" }, { status: 200 });
       }
 
@@ -105,7 +109,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 
-    if (phone === BOT_PHONE) {
+    if (phone === getBotPhone()) {
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 
