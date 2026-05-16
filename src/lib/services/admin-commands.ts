@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, getDriverByPhone } from "@/lib/db/database";
+import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, getDriverByPhone } from "@/lib/db/database";
 import { TIERS } from "@/config/constants";
 
 const ADMIN_PHONE = process.env.ADMIN_PHONE || process.env.TITULAR_DRIVER_PHONE || "+543757613215";
@@ -50,6 +50,16 @@ export async function handleAdminCommand(phone: string, text: string): Promise<b
 
   if (lower === ".low_cost" || lower === ".low-cost") {
     await handleToggleLowCost(phone);
+    return true;
+  }
+
+  if (lower.startsWith(".idiomas") || lower.startsWith(".languages")) {
+    await handleSetLanguages(phone, trimmed);
+    return true;
+  }
+
+  if (lower === ".guia" || lower === ".guide") {
+    await handleToggleGuide(phone);
     return true;
   }
 
@@ -364,5 +374,40 @@ async function handleToggleLowCost(phone: string): Promise<void> {
     await sendWhatsAppMessage(phone, "🟢 Ahora sos *Low Cost*. Aceptarás viajes con piso reducido y tendrás prioridad en viajes de margen bajo.");
   } else {
     await sendWhatsAppMessage(phone, "🔵 Ahora sos *Normal*. Participás en viajes con piso estándar.");
+  }
+}
+
+async function handleSetLanguages(phone: string, text: string): Promise<void> {
+  const driver = await getDriverByPhone(phone);
+  if (!driver) {
+    await sendWhatsAppMessage(phone, "❌ No estás registrado como chofer.");
+    return;
+  }
+
+  const parts = text.split(/\s+/);
+  if (parts.length < 2) {
+    const current = driver.languages || "ninguno";
+    await sendWhatsAppMessage(phone, `🌐 Tus idiomas: ${current}\n\nPara actualizar: .idiomas es,en,pt`);
+    return;
+  }
+
+  const langs = parts.slice(1).join(",").toLowerCase().trim();
+  await updateDriverLanguages(phone, langs);
+  await sendWhatsAppMessage(phone, `✅ Idiomas actualizados: ${langs}`);
+}
+
+async function handleToggleGuide(phone: string): Promise<void> {
+  const driver = await getDriverByPhone(phone);
+  if (!driver) {
+    await sendWhatsAppMessage(phone, "❌ No estás registrado como chofer.");
+    return;
+  }
+
+  const newVal = !driver.is_guide;
+  await updateDriverGuide(phone, newVal);
+  if (newVal) {
+    await sendWhatsAppMessage(phone, "✅ Registrado como guía. Podés optar a la categoría Premium si cumplís los demás requisitos.");
+  } else {
+    await sendWhatsAppMessage(phone, "❌ Desactivado modo guía.");
   }
 }

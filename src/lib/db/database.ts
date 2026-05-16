@@ -171,6 +171,10 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE trips ADD COLUMN post_trip_response TEXT",
     "ALTER TABLE trips ADD COLUMN scheduled_at INTEGER",
     "ALTER TABLE drivers ADD COLUMN tier TEXT DEFAULT 'normal'",
+    "ALTER TABLE drivers ADD COLUMN languages TEXT",
+    "ALTER TABLE drivers ADD COLUMN is_guide INTEGER DEFAULT 0",
+    "ALTER TABLE drivers ADD COLUMN car_model TEXT",
+    "ALTER TABLE drivers ADD COLUMN car_year INTEGER",
     "ALTER TABLE trips ADD COLUMN tariff_id INTEGER",
     "ALTER TABLE trips ADD COLUMN piso_base REAL",
   ];
@@ -563,6 +567,22 @@ export async function updateDriverMinPayout(phone: string, minPayout: number | n
   await getDbv().execute({
     sql: "UPDATE drivers SET min_payout = ? WHERE phone = ?",
     args: [minPayout, phone],
+  });
+}
+
+export async function updateDriverLanguages(phone: string, languages: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE drivers SET languages = ? WHERE phone = ?",
+    args: [languages, phone],
+  });
+}
+
+export async function updateDriverGuide(phone: string, isGuide: boolean): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE drivers SET is_guide = ? WHERE phone = ?",
+    args: [isGuide ? 1 : 0, phone],
   });
 }
 
