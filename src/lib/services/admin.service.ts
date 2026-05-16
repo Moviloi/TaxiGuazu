@@ -5,7 +5,7 @@ import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
 
 let ADMIN_PHONE: string;
-try { ADMIN_PHONE = getEnv().TITULAR_DRIVER_PHONE; } catch { ADMIN_PHONE = "+543757613215"; }
+try { ADMIN_PHONE = getEnv().ADMIN_PHONE; } catch { ADMIN_PHONE = "+5493757613215"; }
 
 export async function notifyAdmin(message: string): Promise<void> {
   const phone = ADMIN_PHONE.replace(/\D/g, "");

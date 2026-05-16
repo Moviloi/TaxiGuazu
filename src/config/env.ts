@@ -7,7 +7,7 @@ const envSchema = z.object({
   WHATSAPP_VERIFY_TOKEN: z.string().min(1, "WHATSAPP_VERIFY_TOKEN es obligatorio. Seteá uno seguro en el webhook de Meta"),
   ADMIN_API_KEY: z.string().min(1, "ADMIN_API_KEY es obligatoria. Usá un valor seguro para proteger las rutas admin"),
   BOT_PHONE: z.string().min(1, "BOT_PHONE es obligatorio. El número de WhatsApp del bot"),
-  TITULAR_DRIVER_PHONE: z.string().min(1, "TITULAR_DRIVER_PHONE es obligatorio. Teléfono del titular del servicio"),
+  ADMIN_PHONE: z.string().min(1, "ADMIN_PHONE es obligatorio. Teléfono del administrador del bot"),
 });
 
 type Env = z.infer<typeof envSchema>;
