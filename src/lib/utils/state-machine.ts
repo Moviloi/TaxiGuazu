@@ -2,11 +2,12 @@ import {
   getWorkflow as dbGetWorkflow,
   deleteWorkflow,
   getExpiredWorkflows as dbGetExpiredWorkflows,
+  getExpiredWorkflowsByState as dbGetExpiredByState,
   closeWorkflow as dbCloseWorkflow,
-  advanceWorkflowToGroup,
+  advanceWorkflowState as dbAdvanceState,
 } from "@/lib/db/database";
 
-export type WorkflowState = "idle" | "waiting_group" | "closed";
+export type WorkflowState = "idle" | "awaiting_slot" | "waiting_preferred" | "waiting_backup" | "waiting_group" | "closed";
 
 export interface WorkflowContext {
   conversationId: number;
@@ -35,8 +36,20 @@ export async function getWorkflow(convId: number): Promise<WorkflowContext | nul
   return row ? rowToContext(row) : null;
 }
 
+export async function advanceToSlotSelection(convId: number, phone: string): Promise<void> {
+  await dbAdvanceState(convId, phone, "awaiting_slot");
+}
+
+export async function advanceToPreferred(convId: number, phone: string): Promise<void> {
+  await dbAdvanceState(convId, phone, "waiting_preferred");
+}
+
+export async function advanceToBackup(convId: number, phone: string): Promise<void> {
+  await dbAdvanceState(convId, phone, "waiting_backup");
+}
+
 export async function advanceToGroup(convId: number, phone: string): Promise<void> {
-  await advanceWorkflowToGroup(convId, phone);
+  await dbAdvanceState(convId, phone, "waiting_group");
 }
 
 export async function closeWorkflow(convId: number, driverPhone?: string): Promise<void> {
@@ -54,5 +67,10 @@ export async function isWorkflowActive(convId: number): Promise<boolean> {
 
 export async function getExpiredGroupTimeouts(timeoutMs: number): Promise<WorkflowContext[]> {
   const rows = await dbGetExpiredWorkflows(timeoutMs);
+  return rows.map(rowToContext);
+}
+
+export async function getExpiredByState(state: WorkflowState, timeoutMs: number): Promise<WorkflowContext[]> {
+  const rows = await dbGetExpiredByState(state, timeoutMs);
   return rows.map(rowToContext);
 }

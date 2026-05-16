@@ -36,6 +36,21 @@ const DESTINATIONS = [
   "centro", "centro puerto iguazú",
 ];
 
+function detectLang(text: string): "es" | "en" | "pt" {
+  const lower = text.toLowerCase();
+  const ptMarkers = ["você", "obrigado", "por favor", "gostaria", "quero", "para", "iguaçu",
+    "brasil", "foz", "português", "então", "são", "estou", "está"];
+  const enMarkers = ["please", "thank you", "i want", "i would like", "how much",
+    "hello", "hi ", "help", "airport", "hotel"];
+
+  let ptScore = ptMarkers.filter((m) => lower.includes(m)).length;
+  let enScore = enMarkers.filter((m) => lower.includes(m)).length;
+
+  if (ptScore > enScore && ptScore >= 2) return "pt";
+  if (enScore > ptScore && enScore >= 2) return "en";
+  return "es";
+}
+
 function extractKnownData(history: Message[], userText: string): string {
   const allText = [...history.map((m) => m.content), userText].join(" ");
 
@@ -59,6 +74,9 @@ function extractKnownData(history: Message[], userText: string): string {
   if (/\bvuelo\b/i.test(allText)) rows.push(`- Nro vuelo: mencionado`);
   if (/\$\s*\d[\d.]*/i.test(allText)) rows.push(`- Precio: conversado`);
 
+  const originMatch = allText.match(/(?:desde|de|from)\s+([a-záéíóúñ\s]+?)(?:\s+(?:hasta|a|to|para|hacia|pará)\s+)/i);
+  if (originMatch) rows.push(`- Posible origen: ${originMatch[1].trim()}`);
+
   if (rows.length === 0) return "\n\nDATOS CONOCIDOS: (ninguno aún, preguntá todo)";
 
   return `\n\nDATOS CONOCIDOS (NO preguntes lo que ya está marcado):\n${rows.join("\n")}
@@ -74,10 +92,11 @@ export async function generateGroqReply(
   const groq = getGroq();
   if (!groq) return "Disculpá, estoy teniendo problemas técnicos. Un operador te atenderá en breve.";
 
-  const systemPrompt = getSystemPrompt();
+  const lang = detectLang(userText);
+  const systemPrompt = getSystemPrompt(lang);
 
   const tripInfo = trip
-    ? `\n\nVIAJE ACTUAL:\n- Destino: ${trip.destination || "por definir"}\n- Precio base: $${trip.price_base || "por definir"}\n- Descuento actual: ${trip.discount_explicit || 0}%\n- Estado: ${trip.status || "en consulta"}`
+    ? `\n\nVIAJE ACTUAL:\n- Origen: ${trip.destination ? "conversado" : "por definir"}\n- Destino: ${trip.destination || "por definir"}\n- Precio: $${trip.price_base || "por definir"}\n- Descuento: ${trip.discount_explicit || 0}%\n- Estado: ${trip.status || "en consulta"}`
     : "\n\n(No hay viaje activo aún)";
 
   const conversationHistory = history
@@ -104,9 +123,15 @@ export async function generateGroqReply(
     });
   }
 
+  const langInstruction = lang === "en"
+    ? "Respond in English, brief and helpful."
+    : lang === "pt"
+    ? "Responda em português, breve e útil."
+    : "Respondé en español, breve y servicial.";
+
   messages.push({
     role: "user",
-    content: `Cliente: ${userText}\n\nBot (respondé en español, breve y servicial, sin preguntar datos que el cliente ya dio):`,
+    content: `Cliente: ${userText}\n\n${langInstruction} No preguntes datos que el cliente ya dio. Usá formato itinerario. No menciones códigos internos.`,
   });
 
   try {

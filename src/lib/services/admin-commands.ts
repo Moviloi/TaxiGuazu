@@ -1,7 +1,8 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { createDriverCode, deactivateDriverByCode } from "@/lib/db/database";
+import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, getDriverByPhone } from "@/lib/db/database";
+import { TIERS } from "@/config/constants";
 
-const TITULAR_PHONE = process.env.TITULAR_DRIVER_PHONE || "+543757613215";
+const ADMIN_PHONE = process.env.ADMIN_PHONE || process.env.TITULAR_DRIVER_PHONE || "+543757613215";
 
 export async function handleAdminCommand(phone: string, text: string): Promise<boolean> {
   const trimmed = text.trim();
@@ -17,7 +18,150 @@ export async function handleAdminCommand(phone: string, text: string): Promise<b
     return true;
   }
 
+  if (lower.startsWith(".set_paquete") || lower.startsWith(".set-paquete")) {
+    await handleSetPaquete(phone, trimmed);
+    return true;
+  }
+
+  if (lower.startsWith(".add_slot") || lower.startsWith(".add-slot")) {
+    await handleAddSlot(phone, trimmed);
+    return true;
+  }
+
+  if (lower.startsWith(".remove_slot") || lower.startsWith(".remove-slot") || lower.startsWith(".rm_slot") || lower.startsWith(".rm-slot")) {
+    await handleRemoveSlot(phone, trimmed);
+    return true;
+  }
+
+  if (lower.startsWith(".list_slots") || lower.startsWith(".list-slots") || lower === ".slots") {
+    await handleListSlots(phone);
+    return true;
+  }
+
+  if (lower.startsWith(".set_tier") || lower.startsWith(".set-tier")) {
+    await handleSetTier(phone, trimmed);
+    return true;
+  }
+
+  if (lower.startsWith(".set_minimo") || lower.startsWith(".set-minimo")) {
+    await handleSetMinimo(phone, trimmed);
+    return true;
+  }
+
+  if (lower === ".low_cost" || lower === ".low-cost") {
+    await handleToggleLowCost(phone);
+    return true;
+  }
+
   return false;
+}
+
+const DAY_NAMES: Record<string, number> = {
+  dom: 0, domingo: 0,
+  lun: 1, lunes: 1,
+  mar: 2, martes: 2,
+  mie: 3, miercoles: 3, miércoles: 3,
+  jue: 4, jueves: 4,
+  vie: 5, viernes: 5,
+  sab: 6, sabado: 6, sábado: 6,
+};
+
+function parseDay(dayStr: string): number | null {
+  const d = dayStr.toLowerCase();
+  if (DAY_NAMES[d] !== undefined) return DAY_NAMES[d];
+  const n = parseInt(d);
+  if (n >= 0 && n <= 6) return n;
+  return null;
+}
+
+async function handleAddSlot(phone: string, text: string): Promise<void> {
+  const parts = text.split(/\s+/);
+  if (parts.length < 4) {
+    await sendWhatsAppMessage(phone, "Usá: .add_slot DIA HH:MM HH:MM [ETIQUETA] [max]\nEj: .add_slot lunes 08:00 12:00 Mañana 2\nDías: lun,mar,mie,jue,vie,sab,dom");
+    return;
+  }
+
+  if (phone !== ADMIN_PHONE) {
+    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede configurar slots.");
+    return;
+  }
+
+  const dayOfWeek = parseDay(parts[1]);
+  if (dayOfWeek === null) {
+    await sendWhatsAppMessage(phone, `❌ Día inválido: "${parts[1]}". Usá lun,mar,mie,jue,vie,sab,dom.`);
+    return;
+  }
+
+  const timeRegex = /^(\d{1,2}):(\d{2})$/;
+  const startMatch = parts[2].match(timeRegex);
+  const endMatch = parts[3].match(timeRegex);
+  if (!startMatch || !endMatch) {
+    await sendWhatsAppMessage(phone, "❌ Formato de hora inválido. Usá HH:MM (ej: 08:00).");
+    return;
+  }
+
+  let label: string | undefined;
+  let maxBookings = 1;
+  for (let i = 4; i < parts.length; i++) {
+    const n = parseInt(parts[i]);
+    if (!isNaN(n) && n > 0) {
+      maxBookings = n;
+    } else if (!label) {
+      label = parts[i];
+    }
+  }
+
+  const result = await createReservationSlot(dayOfWeek, parts[2], parts[3], label, maxBookings);
+  if (result.ok) {
+    const dayName = Object.entries(DAY_NAMES).find(([, v]) => v === dayOfWeek)?.[0] || String(dayOfWeek);
+    await sendWhatsAppMessage(phone, `✅ Slot agregado: ${dayName} ${parts[2]}-${parts[3]}${label ? ` (${label})` : ""} máx ${maxBookings} reserva(s).`);
+  } else {
+    await sendWhatsAppMessage(phone, `❌ Error: ${result.error || "no se pudo crear el slot"}.`);
+  }
+}
+
+async function handleRemoveSlot(phone: string, text: string): Promise<void> {
+  const parts = text.split(/\s+/);
+  if (parts.length < 2) {
+    await sendWhatsAppMessage(phone, "Usá: .remove_slot ID\nUsá .list_slots para ver los IDs.");
+    return;
+  }
+
+  if (phone !== ADMIN_PHONE) {
+    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede eliminar slots.");
+    return;
+  }
+
+  const id = parseInt(parts[1]);
+  if (isNaN(id)) {
+    await sendWhatsAppMessage(phone, "❌ ID inválido.");
+    return;
+  }
+
+  const ok = await deleteReservationSlot(id);
+  if (ok) {
+    await sendWhatsAppMessage(phone, `✅ Slot #${id} eliminado.`);
+  } else {
+    await sendWhatsAppMessage(phone, `❌ Slot #${id} no encontrado.`);
+  }
+}
+
+async function handleListSlots(phone: string): Promise<void> {
+  const slots = await getActiveSlots();
+  if (slots.length === 0) {
+    await sendWhatsAppMessage(phone, "📅 No hay slots configurados. Usá .add_slot para agregar.");
+    return;
+  }
+
+  const dayNames = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  let msg = "📅 *Slots disponibles:*\n";
+  for (const s of slots) {
+    const dayName = dayNames[s.day_of_week] || `Día ${s.day_of_week}`;
+    msg += `\n#${s.id} ${dayName} ${s.start_time}-${s.end_time}`;
+    if (s.label) msg += ` (${s.label})`;
+    msg += ` máx ${s.max_bookings}`;
+  }
+  await sendWhatsAppMessage(phone, msg);
 }
 
 async function handleAddChofer(phone: string, text: string): Promise<void> {
@@ -27,7 +171,7 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== TITULAR_PHONE) {
+  if (phone !== ADMIN_PHONE) {
     await sendWhatsAppMessage(phone, "❌ Solo el administrador puede agregar choferes.");
     return;
   }
@@ -93,7 +237,7 @@ async function handleBajaChofer(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== TITULAR_PHONE) {
+  if (phone !== ADMIN_PHONE) {
     await sendWhatsAppMessage(phone, "❌ Solo el administrador puede dar de baja choferes.");
     return;
   }
@@ -104,5 +248,121 @@ async function handleBajaChofer(phone: string, text: string): Promise<void> {
     await sendWhatsAppMessage(phone, `✅ Chofer "${code}" dado de baja.`);
   } else {
     await sendWhatsAppMessage(phone, `❌ Código "${code}" no encontrado.`);
+  }
+}
+
+async function handleSetPaquete(phone: string, text: string): Promise<void> {
+  const parts = text.split(/\s+/);
+  if (parts.length < 4) {
+    await sendWhatsAppMessage(phone, "Usá: .set_paquete CODIGO TIPO MONTO\nTIPO: in_out / three_leg\nEj: .set_paquete cristian in_out 23000");
+    return;
+  }
+
+  if (phone !== ADMIN_PHONE) {
+    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede configurar precios de paquete.");
+    return;
+  }
+
+  const code = parts[1].toLowerCase();
+  const packageType = parts[2].toLowerCase();
+  const monto = parseInt(parts[3].replace(/[^0-9]/g, ""));
+
+  if (!packageType || !["in_out", "three_leg"].includes(packageType)) {
+    await sendWhatsAppMessage(phone, '❌ Tipo inválido. Usá: in_out (2 tramos) o three_leg (3+ tramos).');
+    return;
+  }
+
+  if (isNaN(monto) || monto <= 0) {
+    await sendWhatsAppMessage(phone, "❌ Monto inválido. Debe ser un número positivo (ARS).");
+    return;
+  }
+
+  const codeEntry = await getDriverCodeByCode(code);
+  if (!codeEntry || !codeEntry.phone) {
+    await sendWhatsAppMessage(phone, `❌ Código "${code}" no encontrado o el chofer no se registró aún.`);
+    return;
+  }
+
+  await setPackagePrice(codeEntry.phone, packageType, monto);
+  const tipoLabel = packageType === "in_out" ? "2 tramos (IN+OUT)" : "3+ tramos";
+  await sendWhatsAppMessage(phone, `✅ Paquete ${tipoLabel} para "${code}": piso $${monto.toLocaleString("es-AR")} por tramo.`);
+}
+
+async function handleSetTier(phone: string, text: string): Promise<void> {
+  const parts = text.split(/\s+/);
+  if (parts.length < 3) {
+    await sendWhatsAppMessage(phone, `Usá: .set_tier CODIGO TIER\nTiers: ${TIERS.join(', ')}`);
+    return;
+  }
+
+  if (phone !== ADMIN_PHONE) {
+    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede cambiar tiers.");
+    return;
+  }
+
+  const code = parts[1].toLowerCase();
+  const tier = parts[2].toLowerCase();
+
+  if (!TIERS.includes(tier as any)) {
+    await sendWhatsAppMessage(phone, `❌ Tier inválido. Tiers válidos: ${TIERS.join(', ')}`);
+    return;
+  }
+
+  const codeEntry = await getDriverCodeByCode(code);
+  if (!codeEntry || !codeEntry.phone) {
+    await sendWhatsAppMessage(phone, `❌ Código "${code}" no encontrado o el chofer no se registró aún.`);
+    return;
+  }
+
+  await updateDriverTier(codeEntry.phone, tier);
+  const tierLabels: Record<string, string> = { premium: '⭐ Premium', normal: '🔵 Normal', low: '🟢 Low Cost' };
+  await sendWhatsAppMessage(phone, `✅ ${tierLabels[tier] || tier} para "${code}".`);
+}
+
+async function handleSetMinimo(phone: string, text: string): Promise<void> {
+  const parts = text.split(/\s+/);
+  if (parts.length < 3) {
+    await sendWhatsAppMessage(phone, "Usá: .set_minimo CODIGO MONTO\nPara eliminar el mínimo: .set_minimo CODIGO 0");
+    return;
+  }
+
+  if (phone !== ADMIN_PHONE) {
+    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede configurar mínimos.");
+    return;
+  }
+
+  const code = parts[1].toLowerCase();
+  const monto = parseInt(parts[2].replace(/[^0-9]/g, ""));
+
+  const codeEntry = await getDriverCodeByCode(code);
+  if (!codeEntry || !codeEntry.phone) {
+    await sendWhatsAppMessage(phone, `❌ Código "${code}" no encontrado o el chofer no se registró aún.`);
+    return;
+  }
+
+  const finalMonto = isNaN(monto) || monto <= 0 ? null : monto;
+  await updateDriverMinPayout(codeEntry.phone, finalMonto);
+  if (finalMonto) {
+    await sendWhatsAppMessage(phone, `✅ Mínimo de $${finalMonto.toLocaleString("es-AR")} para "${code}".`);
+  } else {
+    await sendWhatsAppMessage(phone, `✅ Mínimo eliminado para "${code}". Usa el piso del tarifario.`);
+  }
+}
+
+async function handleToggleLowCost(phone: string): Promise<void> {
+  const driver = await getDriverByPhone(phone);
+  if (!driver) {
+    await sendWhatsAppMessage(phone, "❌ No estás registrado como chofer. Usá .registrar-CODIGO primero.");
+    return;
+  }
+
+  const isLow = driver.tier === 'low';
+  const newTier = isLow ? 'normal' : 'low';
+  await updateDriverTier(phone, newTier);
+
+  if (newTier === 'low') {
+    await sendWhatsAppMessage(phone, "🟢 Ahora sos *Low Cost*. Aceptarás viajes con piso reducido y tendrás prioridad en viajes de margen bajo.");
+  } else {
+    await sendWhatsAppMessage(phone, "🔵 Ahora sos *Normal*. Participás en viajes con piso estándar.");
   }
 }

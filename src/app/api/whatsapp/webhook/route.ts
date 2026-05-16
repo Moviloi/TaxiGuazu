@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleLeadMessage } from "@/lib/services/lead.service";
+import { handleLeadMessage, handleSlotResponse } from "@/lib/services/lead.service";
 import {
   isGroupMessage,
   handleDriverResponse,
@@ -74,6 +74,11 @@ export async function POST(request: NextRequest) {
 
       if (buttonId.startsWith("newtrip_")) {
         await handleNewTripResponse(phone, buttonId);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("slot_")) {
+        await handleSlotResponse(phone, buttonId);
         return NextResponse.json({ status: "ok" }, { status: 200 });
       }
 
