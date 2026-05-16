@@ -238,12 +238,11 @@ Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
 Precio: $${trip.price_base}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
 
-  for (const driver of eligible) {
-    await sendInteractiveButtons(driver.phone, body, [
+  await Promise.all(eligible.map(driver =>
+    sendInteractiveButtons(driver.phone, body, [
       { id: `aceptar_${convId}`, title: "✅ Aceptar" },
-    ]);
-    await incrementOfferReceived(driver.phone);
-  }
+    ]).then(() => incrementOfferReceived(driver.phone))
+  ));
 
   const tierCounts = { low: 0, normal: 0, premium: 0 };
   for (const d of eligible) tierCounts[d.tier as keyof typeof tierCounts] = (tierCounts[d.tier as keyof typeof tierCounts] || 0) + 1;
@@ -252,9 +251,8 @@ Precio: $${trip.price_base}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
 
 export async function notifyOtherDriversTaken(excludePhone: string, destination: string): Promise<void> {
   const drivers = await getAvailableDrivers();
-  for (const d of drivers) {
-    if (d.phone !== excludePhone) {
-      await sendWhatsAppMessage(d.phone, `⏰ El viaje a ${destination} ya fue tomado por otro chofer.`);
-    }
-  }
+  await Promise.all(drivers
+    .filter(d => d.phone !== excludePhone)
+    .map(d => sendWhatsAppMessage(d.phone, `⏰ El viaje a ${destination} ya fue tomado por otro chofer.`))
+  );
 }

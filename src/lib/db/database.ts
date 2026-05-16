@@ -219,9 +219,9 @@ async function initSchema(): Promise<void> {
     if ((count.rows as any[])[0].c === 0) {
       await seedTariffs();
     }
-  } catch {}
+  } catch (e) { console.error("[migration] seed tariffs error:", e); }
   for (const sql of migrations) {
-    try { await getDbv().execute(sql); } catch {}
+    try { await getDbv().execute(sql); } catch (e) { console.error("[migration] error:", sql, e); }
   }
 
   // Migration: recreate workflows table without CHECK constraint to allow new states
@@ -240,7 +240,7 @@ async function initSchema(): Promise<void> {
     )`);
     await getDbv().execute("INSERT INTO workflows SELECT * FROM workflows_old");
     await getDbv().execute("DROP TABLE workflows_old");
-  } catch {}
+  } catch (e) { console.error("[migration] workflows table migration error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -474,7 +474,8 @@ export async function createDriverCode(
       });
     }
     return { ok: true };
-  } catch {
+  } catch (e) {
+    console.error("[createDriverCode] error:", e);
     return { ok: false, error: "El código ya existe" };
   }
 }
@@ -929,7 +930,7 @@ async function seedTariffs(): Promise<void> {
         sql: "INSERT OR IGNORE INTO tariffs (origin, destination, modality, crosses_border, wait_included, price_4p, price_6p, piso_4p, piso_6p) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         args: [r.origin, r.destination, r.modality, r.crosses, r.wait, r.price4, r.price6, r.piso4, r.piso6],
       });
-    } catch {}
+    } catch (e) { console.error("[seedTariffs] error inserting row:", r, e); }
   }
 }
 

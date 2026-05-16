@@ -58,12 +58,20 @@ export default function Dashboard() {
     if (!adminKey) return;
     fetchStatus();
     fetchConversations();
-    const interval = setInterval(() => {
-      fetchStatus();
-      fetchConversations();
-      if (selectedConv) fetchMessages(selectedConv.id);
-    }, 3000);
-    return () => clearInterval(interval);
+    const POLL_MS = 8000;
+    let interval: ReturnType<typeof setInterval>;
+    function start() {
+      interval = setInterval(() => {
+        fetchStatus();
+        fetchConversations();
+        if (selectedConv) fetchMessages(selectedConv.id);
+      }, POLL_MS);
+    }
+    function stop() { clearInterval(interval); }
+    start();
+    const onVisibility = () => { if (document.hidden) stop(); else start(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
   }, [adminKey, selectedConv]);
 
   async function fetchStatus() {
