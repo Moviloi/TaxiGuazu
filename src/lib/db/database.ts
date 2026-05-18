@@ -227,6 +227,7 @@ async function initSchema(): Promise<void> {
   // Migration: recreate workflows table without CHECK constraint to allow new states
   try {
     await getDbv().execute("SELECT state FROM workflows LIMIT 1");
+    await getDbv().execute("DROP TABLE IF EXISTS workflows_old");
     await getDbv().execute("ALTER TABLE workflows RENAME TO workflows_old");
     await getDbv().execute(`CREATE TABLE workflows (
       conversation_id INTEGER PRIMARY KEY,
