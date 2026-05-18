@@ -18,6 +18,7 @@ import {
   getDriverExpiry,
   getClientPreferredDriver,
   getActiveSlots,
+  clearConversationHistory,
 } from "@/lib/db/database";
 import { generateGroqReply } from "@/lib/ai/groq";
 import { sendWhatsAppMessage, sendInteractiveList } from "@/lib/whatsapp/sender";
@@ -70,6 +71,20 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
   if (lower === ".id") {
     await sendWhatsAppMessage(phone, `Tu número: ${phone}`);
+    return;
+  }
+
+  if (lower === ".limpiar") {
+    const conv = await getConversationByPhone(phone);
+    if (conv) {
+      await clearConversationHistory(conv.id);
+      await resetToIdle(conv.id);
+    }
+    const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
+    const welcome = isStructured
+      ? "Bienvenido a TaxiGuazu! Soy tu asistente de traslados. ¿A dónde necesitas ir?"
+      : "Hola! Soy TaxiGuazu. ¿En qué te ayudo?";
+    await sendWhatsAppMessage(phone, welcome);
     return;
   }
 

@@ -380,6 +380,11 @@ export async function getRecentHistory(conversationId: number, limit = 20): Prom
   return query<MessageRow>("SELECT * FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?) ORDER BY created_at ASC", [conversationId, limit]);
 }
 
+export async function clearConversationHistory(convId: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({ sql: "DELETE FROM messages WHERE conversation_id = ?", args: [convId] });
+}
+
 // ========== TRIPS ==========
 
 export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number): Promise<void> {
