@@ -88,7 +88,7 @@ export async function generateGroqReply(
   promoNote?: string
 ): Promise<string> {
   const groq = getGroq();
-  if (!groq) return "Disculpá, estoy teniendo problemas técnicos. Un operador te atenderá en breve.";
+  if (!groq) return "Disculpe, estoy teniendo problemas técnicos. Un operador lo atenderá en breve.";
 
   const lang = detectLang(userText);
   const systemPrompt = getSystemPrompt(lang, promoNote);
@@ -140,10 +140,10 @@ export async function generateGroqReply(
       temperature: 0.7,
     });
 
-    return completion.choices[0]?.message?.content?.trim() || "Disculpá, no pude procesar tu mensaje. Un operador te atenderá en breve.";
+    return completion.choices[0]?.message?.content?.trim() || "Disculpe, no pude procesar su mensaje. Un operador lo atenderá en breve.";
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[GROQ] Error:", msg);
-    return "Disculpá, estoy teniendo problemas técnicos. Un operador te atenderá en breve.";
+    return "Disculpe, estoy teniendo problemas técnicos. Un operador lo atenderá en breve.";
   }
 }
