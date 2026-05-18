@@ -29,8 +29,8 @@ export async function notifyClient(clientPhone: string, driverName: string): Pro
   await sendWhatsAppMessage(clientPhone, msg);
 }
 
-function detectCountry(origin: string, destination: string): string {
-  const text = `${origin} ${destination}`.toLowerCase();
+function detectCountry(origin: string): string {
+  const text = origin.toLowerCase();
   if (text.includes("brasil") || text.includes("foz") || text.includes("catuaí") || text.includes("br-")) return "BR";
   if (text.includes("paraguay") || text.includes("ciudad del este") || text.includes("py-")) return "PY";
   return "AR";
@@ -106,7 +106,7 @@ export async function broadcastTripToDrivers(
   trip: any, convId: number, clientPhone: string,
   urgency?: string, passengers?: number | null
 ): Promise<void> {
-  const country = detectCountry(trip.origin || "", trip.destination || "");
+  const country = detectCountry(trip.origin || "");
   const filters: { country?: string; minCapacity?: number } = {};
   if (country) filters.country = country;
   if (passengers && passengers >= 4) filters.minCapacity = passengers;
