@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
-import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff } from "@/lib/db/database";
+import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff, getDbInstance } from "@/lib/db/database";
 import type { DriverRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
@@ -114,6 +114,20 @@ export async function broadcastTripToDrivers(
   let drivers = await getAvailableDrivers(filters);
 
   if (drivers.length === 0) {
+    // Debug: dump all drivers with conversation state
+    try {
+      const all = await getDbInstance().execute(`SELECT d.phone, d.name, d.active, d.tier, d.country,
+        c.phone as conv_phone, c.last_message_at,
+        CASE WHEN c.phone IS NULL THEN 'no_join'
+             WHEN c.last_message_at IS NULL THEN 'no_msg'
+             WHEN c.last_message_at <= ${Math.floor(Date.now() / 1000) - 86400} THEN 'expired'
+             ELSE 'ok' END as conv_status
+        FROM drivers d
+        LEFT JOIN conversations c ON c.phone = d.phone
+        WHERE d.active = 1`);
+      console.log("[BROADCAST_DEBUG] No drivers found via getAvailableDrivers. All active drivers:", JSON.stringify(all.rows));
+    } catch (e) { console.error("[BROADCAST_DEBUG] error:", e); }
+
     await notifyAdmin(`🚕 *VIAJE SIN CHOFER DISPONIBLE*
 
 Cliente: ${clientPhone}
