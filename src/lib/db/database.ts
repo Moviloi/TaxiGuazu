@@ -180,6 +180,10 @@ async function initSchema(): Promise<void> {
       active INTEGER DEFAULT 1,
       created_at INTEGER DEFAULT (unixepoch())
     )`,
+    `CREATE TABLE IF NOT EXISTS _migrations (
+      name TEXT PRIMARY KEY,
+      applied_at INTEGER DEFAULT (unixepoch())
+    )`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 
@@ -212,6 +216,8 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE drivers ADD COLUMN car_year INTEGER",
     "ALTER TABLE trips ADD COLUMN tariff_id INTEGER",
     "ALTER TABLE trips ADD COLUMN piso_base REAL",
+    "ALTER TABLE tariffs ADD COLUMN piso_4p_low REAL",
+    "ALTER TABLE tariffs ADD COLUMN piso_6p_low REAL",
   ];
   // Seed tariffs if empty
   try {
@@ -224,24 +230,44 @@ async function initSchema(): Promise<void> {
     try { await getDbv().execute(sql); } catch (e) { console.error("[migration] error:", sql, e); }
   }
 
-  // Migration: recreate workflows table without CHECK constraint to allow new states
+  // Migration: recreate workflows table without CHECK constraint to allow new states.
+  // Uses INSERT OR IGNORE into _migrations as an atomic lock so only one
+  // serverless instance performs the migration.
   try {
-    await getDbv().execute("SELECT state FROM workflows LIMIT 1");
-    await getDbv().execute("DROP TABLE IF EXISTS workflows_old");
-    await getDbv().execute("ALTER TABLE workflows RENAME TO workflows_old");
-    await getDbv().execute(`CREATE TABLE workflows (
-      conversation_id INTEGER PRIMARY KEY,
-      phone TEXT NOT NULL,
-      state TEXT NOT NULL DEFAULT 'idle',
-      trip_id TEXT,
-      assigned_driver_phone TEXT,
-      group_asked_at INTEGER,
-      last_message_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )`);
-    await getDbv().execute("INSERT INTO workflows SELECT * FROM workflows_old");
-    await getDbv().execute("DROP TABLE workflows_old");
+    const result = await getDbv().execute(
+      "INSERT OR IGNORE INTO _migrations (name) VALUES ('workflows_recreate')"
+    );
+    if ((result as any).rowsAffected === 0) {
+      // already migrated (another instance beat us)
+    } else {
+      await getDbv().execute("SELECT state FROM workflows LIMIT 1");
+      await getDbv().execute("DROP TABLE IF EXISTS workflows_old");
+      await getDbv().execute("ALTER TABLE workflows RENAME TO workflows_old");
+      await getDbv().execute(`CREATE TABLE IF NOT EXISTS workflows (
+        conversation_id INTEGER PRIMARY KEY,
+        phone TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'idle',
+        trip_id TEXT,
+        assigned_driver_phone TEXT,
+        group_asked_at INTEGER,
+        last_message_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )`);
+      await getDbv().execute("INSERT INTO workflows SELECT * FROM workflows_old");
+      await getDbv().execute("DROP TABLE workflows_old");
+    }
   } catch (e) { console.error("[migration] workflows table migration error:", e); }
+
+  // Migration: set default piso_4p_low / piso_6p_low for existing tariffs
+  try {
+    const result = await getDbv().execute(
+      "INSERT OR IGNORE INTO _migrations (name) VALUES ('tariffs_piso_low_defaults')"
+    );
+    if ((result as any).rowsAffected > 0) {
+      await getDbv().execute("UPDATE tariffs SET piso_4p_low = ROUND(piso_4p * 0.8) WHERE piso_4p_low IS NULL");
+      await getDbv().execute("UPDATE tariffs SET piso_6p_low = ROUND(piso_6p * 0.8) WHERE piso_6p_low IS NULL");
+    }
+  } catch (e) { console.error("[migration] tariffs piso_low defaults error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -594,6 +620,34 @@ export async function updateDriverGuide(phone: string, isGuide: boolean): Promis
   });
 }
 
+export async function updateDriverByCode(
+  code: string,
+  updates: { name?: string; carType?: string; carCapacity?: number | null; color?: string; plate?: string; country?: string }
+): Promise<{ ok: boolean; error?: string }> {
+  await ensureSchema();
+  const entry = await getDriverCodeByCode(code);
+  if (!entry) return { ok: false, error: "Código no encontrado" };
+  if (!entry.phone) return { ok: false, error: "El chofer no se registró aún. No se puede actualizar." };
+
+  const sets: string[] = [];
+  const args: any[] = [];
+  if (updates.name) { sets.push("name = ?"); args.push(updates.name.trim()); }
+  if (updates.carType) { sets.push("car_type = ?"); args.push(updates.carType); }
+  if (updates.carCapacity !== undefined) { sets.push("car_capacity = ?"); args.push(updates.carCapacity); }
+  if (updates.color) { sets.push("color = ?"); args.push(updates.color); }
+  if (updates.plate) { sets.push("plate = ?"); args.push(updates.plate); }
+  if (updates.country) { sets.push("country = ?"); args.push(updates.country); }
+
+  if (sets.length === 0) return { ok: true };
+
+  args.push(entry.phone);
+  await getDbv().execute({
+    sql: `UPDATE drivers SET ${sets.join(", ")} WHERE phone = ?`,
+    args,
+  });
+  return { ok: true };
+}
+
 export async function getAvailableDrivers(filters?: { minCapacity?: number; country?: string }): Promise<DriverRow[]> {
   const cutoff = Math.floor(Date.now() / 1000) - 86400;
   const conditions: string[] = ["d.active = 1", "c.last_message_at > ?"];
@@ -840,6 +894,7 @@ export async function getUpcomingReservations(limit = 20): Promise<TripRow[]> {
 interface TariffWithPrice extends TariffRow {
   price: number;
   piso: number;
+  piso_low: number | null;
 }
 
 export async function findTariff(origin: string, destination: string, passengers: number): Promise<TariffWithPrice | null> {
@@ -851,6 +906,7 @@ export async function findTariff(origin: string, destination: string, passengers
     ...t,
     price: passengers > 4 ? t.price_6p : t.price_4p,
     piso: passengers > 4 ? t.piso_6p : t.piso_4p,
+    piso_low: passengers > 4 ? t.piso_6p_low : t.piso_4p_low,
   };
 }
 
@@ -933,8 +989,8 @@ async function seedTariffs(): Promise<void> {
   for (const r of data) {
     try {
       await getDbv().execute({
-        sql: "INSERT OR IGNORE INTO tariffs (origin, destination, modality, crosses_border, wait_included, price_4p, price_6p, piso_4p, piso_6p) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        args: [r.origin, r.destination, r.modality, r.crosses, r.wait, r.price4, r.price6, r.piso4, r.piso6],
+        sql: "INSERT OR IGNORE INTO tariffs (origin, destination, modality, crosses_border, wait_included, price_4p, price_6p, piso_4p, piso_6p, piso_4p_low, piso_6p_low) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: [r.origin, r.destination, r.modality, r.crosses, r.wait, r.price4, r.price6, r.piso4, r.piso6, Math.round(r.piso4 * 0.8), Math.round(r.piso6 * 0.8)],
       });
     } catch (e) { console.error("[seedTariffs] error inserting row:", r, e); }
   }

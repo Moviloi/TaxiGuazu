@@ -136,6 +136,8 @@ export interface TariffRow {
   price_6p: number;
   piso_4p: number;
   piso_6p: number;
+  piso_4p_low: number | null;
+  piso_6p_low: number | null;
 }
 
 export interface DriverDiscountRow {

@@ -91,8 +91,10 @@ function tierFactor(tier: string): number {
   return 1.0;
 }
 
-function driverFloor(driver: any, tripPiso: number): number {
-  let floor = Math.round(tripPiso * tierFactor(driver.tier || 'normal'));
+function driverFloor(driver: any, tripPiso: number, pisoLow?: number | null): number {
+  const useLow = driver.tier === 'low' && pisoLow != null;
+  const base = useLow ? pisoLow! : tripPiso;
+  let floor = Math.round(base * tierFactor(driver.tier || 'normal'));
   if (driver.discount_pct && driver.discount_pct > 0) {
     floor = Math.round(floor * (1 - driver.discount_pct / 100));
   }
@@ -159,10 +161,23 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
     }
   }
 
+  // Load low piso for this tariff (used for low-tier drivers)
+  let pisoLow: number | null = null;
+  if (trip.tariff_id) {
+    try {
+      const t = await getDbInstance().execute({ sql: "SELECT piso_4p_low, piso_6p_low FROM tariffs WHERE id = ?", args: [trip.tariff_id] });
+      const row = t.rows[0] as any;
+      if (row) {
+        const passengersNum = trip.passengers || 0;
+        pisoLow = passengersNum > 4 ? (row.piso_6p_low ?? null) : (row.piso_4p_low ?? null);
+      }
+    } catch (e) { console.error("[broadcastTripToDrivers] load low piso error:", e); }
+  }
+
   let eligible: Array<DriverRow & { discount_pct: number }> = [];
   for (const d of drivers) {
     const discountPct = discountMap[d.phone] || 0;
-    let floor = driverFloor(d, tripPiso);
+    let floor = driverFloor(d, tripPiso, pisoLow);
 
     // Package override: use package floor if lower
     if (packageType && d.min_payout) {

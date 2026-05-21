@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, getDriverByPhone, searchTariffs, getDriverDiscounts, createDriverDiscount, deleteDriverDiscount } from "@/lib/db/database";
+import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs, getDriverDiscounts, createDriverDiscount, deleteDriverDiscount } from "@/lib/db/database";
 import { TIERS } from "@/config/constants";
 import { getEnv } from "@/config/env";
 
@@ -12,6 +12,11 @@ export async function handleAdminCommand(phone: string, text: string): Promise<b
 
   if (lower.startsWith(".add_chofer") || lower.startsWith(".add-chofer")) {
     await handleAddChofer(phone, trimmed);
+    return true;
+  }
+
+  if (lower.startsWith(".update_chofer") || lower.startsWith(".update-chofer")) {
+    await handleUpdateChofer(phone, trimmed);
     return true;
   }
 
@@ -259,6 +264,66 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
     await sendWhatsAppMessage(phone, msg);
   } else {
     await sendWhatsAppMessage(phone, `❌ ${result.error || "Error al crear código."}`);
+  }
+}
+
+async function handleUpdateChofer(phone: string, text: string): Promise<void> {
+  const parts = text.split(/\s+/);
+  if (parts.length < 3) {
+    await sendWhatsAppMessage(phone, "Usá: .update_chofer CODIGO [NOMBRE] [TIPO SEDAN/SUV/VAN] [CAPACIDAD 4/6] [COLOR] [PATENTE] [PAIS AR/BR/PY]");
+    return;
+  }
+
+  if (phone !== ADMIN_PHONE) {
+    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede actualizar choferes.");
+    return;
+  }
+
+  const code = parts[1].toLowerCase();
+  const knownCarTypes = ["sedan", "suv", "van", "pickup"];
+  const knownCountries = ["ar", "br", "py"];
+
+  let nameTokens: string[] = [];
+  let carType: string | undefined;
+  let carCapacity: number | undefined;
+  let color: string | undefined;
+  let plate: string | undefined;
+  let country: string | undefined;
+
+  let i = 2;
+  while (i < parts.length) {
+    const p = parts[i];
+
+    if (!carType && knownCarTypes.includes(p.toLowerCase())) {
+      carType = p.toLowerCase();
+    } else if (carCapacity === undefined && (p === "4" || p === "6")) {
+      carCapacity = parseInt(p);
+    } else if (!color && /^[a-záéíóúñü]+$/i.test(p) && !knownCountries.includes(p.toLowerCase())) {
+      color = p;
+    } else if (!plate && /^[a-z0-9]{4,7}$/i.test(p) && !knownCountries.includes(p.toLowerCase())) {
+      plate = p.toUpperCase();
+    } else if (!country && knownCountries.includes(p.toLowerCase())) {
+      country = p.toUpperCase();
+    } else {
+      nameTokens.push(p);
+    }
+    i++;
+  }
+
+  const name = nameTokens.join(" ") || undefined;
+
+  const result = await updateDriverByCode(code, { name, carType, carCapacity, color, plate, country });
+
+  if (result.ok) {
+    let msg = `✅ Chofer "${code}" actualizado.`;
+    if (name) msg += ` Nombre: ${name}.`;
+    if (carType) msg += ` ${carType}${carCapacity ? " " + carCapacity + "p" : ""}.`;
+    if (color) msg += ` ${color}.`;
+    if (plate) msg += ` Patente: ${plate}.`;
+    if (country && country !== "AR") msg += ` (${country}).`;
+    await sendWhatsAppMessage(phone, msg);
+  } else {
+    await sendWhatsAppMessage(phone, `❌ ${result.error || "Error al actualizar chofer."}`);
   }
 }
 
