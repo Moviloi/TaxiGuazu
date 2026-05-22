@@ -85,7 +85,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   const lower = trimmed.toLowerCase();
 
   if (lower === ".id") {
-    await sendWhatsAppMessage(phone, `Tu número: ${phone}`);
+    const resp = `Tu número: ${phone}`;
+    await sendWhatsAppMessage(phone, resp);
+    const conv = await getOrCreateConversation(phone);
+    await insertMessage(conv.id, "assistant", resp);
     return;
   }
 
@@ -100,22 +103,35 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       ? "Bienvenido a la Red Colaborativa de Conductores! Soy tu Asistente Virtual. ¿A dónde necesitas ir?"
       : "Hola! Soy el Asistente Virtual de la Red Colaborativa. ¿En qué te ayudo?";
     await sendWhatsAppMessage(phone, welcome);
+    const c = await getOrCreateConversation(phone);
+    await insertMessage(c.id, "assistant", welcome);
     return;
   }
 
   if (lower === "sigo yo") {
-    await sendWhatsAppMessage(phone, "Perfecto, continuás vos. Avisame cuando termines para volver al Asistente Virtual.");
+    const resp = "Perfecto, continuás vos. Avisame cuando termines para volver al Asistente Virtual.";
+    await sendWhatsAppMessage(phone, resp);
+    const conv = await getOrCreateConversation(phone);
+    await insertMessage(conv.id, "assistant", resp);
     return;
   }
 
   if (lower === "seguí vos" || lower === "seguimos vos") {
-    await sendWhatsAppMessage(phone, "¡Genial! Retomo la atención. ¿En qué estábamos?");
-    await resetToIdle((await getConversationByPhone(phone))?.id || 0);
+    const resp = "¡Genial! Retomo la atención. ¿En qué estábamos?";
+    await sendWhatsAppMessage(phone, resp);
+    const conv = await getConversationByPhone(phone);
+    if (conv) {
+      await insertMessage(conv.id, "assistant", resp);
+      await resetToIdle(conv.id);
+    }
     return;
   }
 
   if (HABLAR_HUMANO.some((h) => lower.includes(h))) {
-    await sendWhatsAppMessage(phone, "Te va a atender el primer chofer disponible. En breve te contactarán.");
+    const resp = "Te va a atender el primer chofer disponible. En breve te contactarán.";
+    await sendWhatsAppMessage(phone, resp);
+    const conv = await getOrCreateConversation(phone);
+    await insertMessage(conv.id, "assistant", resp);
     await notifyAdmin(`🗣️ *Cliente pide atención humana*\n\nTeléfono: ${phone}\nMensaje: "${trimmed.substring(0, 100)}"`);
     return;
   }
@@ -126,40 +142,56 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     if (!code) {
       const existing = await getDriverByPhone(phone);
+      const conv = await getOrCreateConversation(phone);
       if (existing) {
-        await getOrCreateConversation(phone);
         const expiry = await getDriverExpiry(phone);
         const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
         const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
-        await sendWhatsAppMessage(phone, `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${existing.name}!`);
+        const resp = `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${existing.name}!`;
+        await sendWhatsAppMessage(phone, resp);
+        await insertMessage(conv.id, "assistant", resp);
       } else {
-        await sendWhatsAppMessage(phone, "❌ No tenés un código de registro. Pedile al administrador que te dé uno.");
+        const resp = "❌ No tenés un código de registro. Pedile al administrador que te dé uno.";
+        await sendWhatsAppMessage(phone, resp);
+        await insertMessage(conv.id, "assistant", resp);
       }
       return;
     }
 
     const codeEntry = await getDriverCodeByCode(code);
     if (!codeEntry) {
-      await sendWhatsAppMessage(phone, "❌ Código inválido. Verificá con el administrador.");
+      const conv = await getOrCreateConversation(phone);
+      const resp = "❌ Código inválido. Verificá con el administrador.";
+      await sendWhatsAppMessage(phone, resp);
+      await insertMessage(conv.id, "assistant", resp);
       return;
     }
 
     if (codeEntry.phone && codeEntry.phone !== phone) {
-      await sendWhatsAppMessage(phone, "❌ Este código ya está asignado a otro número.");
+      const conv = await getOrCreateConversation(phone);
+      const resp = "❌ Este código ya está asignado a otro número.";
+      await sendWhatsAppMessage(phone, resp);
+      await insertMessage(conv.id, "assistant", resp);
       return;
     }
 
     await getOrCreateConversation(phone);
     const result = await registerDriverByCode(code, phone);
     if (!result) {
-      await sendWhatsAppMessage(phone, "❌ Error al registrarte. Probá de nuevo.");
+      const resp = "❌ Error al registrarte. Probá de nuevo.";
+      await sendWhatsAppMessage(phone, resp);
+      const conv = await getConversationByPhone(phone);
+      if (conv) await insertMessage(conv.id, "assistant", resp);
       return;
     }
 
     const expiry = await getDriverExpiry(phone);
     const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
     const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
-    await sendWhatsAppMessage(phone, `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${codeEntry.name}!`);
+    const resp = `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${codeEntry.name}!`;
+    await sendWhatsAppMessage(phone, resp);
+    const conv2 = await getConversationByPhone(phone);
+    if (conv2) await insertMessage(conv2.id, "assistant", resp);
     return;
   }
 
