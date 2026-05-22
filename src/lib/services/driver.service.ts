@@ -8,12 +8,13 @@ import {
   getTripByAssignedDriver,
   assignWorkflowAtomic,
   assignDriverToTrip,
+  completeTrip,
   getClientPreferredDriver,
   setClientPreferredDriver,
   incrementOfferAccepted,
 } from "@/lib/db/database";
-import { notifyAdmin, sendToDriver, notifyOtherDriversTaken } from "./admin.service";
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { notifyAdmin, notifyOtherDriversTaken } from "./admin.service";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 
 export function isGroupMessage(from: string): boolean {
   return from.endsWith("@g.us");
@@ -58,6 +59,74 @@ Tu chofer está llegando al destino. Que tengas un buen viaje!`);
   console.log(`[LLEGUÉ] Chofer ${driverPhone} llegó, cliente ${trip.client_phone} notificado`);
 }
 
+export async function handleDriverEnViaje(convId: number, driverPhone: string): Promise<void> {
+  const workflow = await getWorkflow(convId);
+  if (!workflow) return;
+
+  const trip = await getActiveTripByPhone(workflow.phone);
+  if (!trip) return;
+
+  const driver = await getDriverByPhone(driverPhone);
+  const driverName = driver?.name || "El chofer";
+
+  await sendWhatsAppMessage(trip.client_phone, `🟢 *Chofer en camino*
+
+${driverName} está en camino. Que tengas un buen viaje!`);
+  console.log(`[EN VIAJE] Chofer ${driverPhone} en viaje, cliente ${trip.client_phone} notificado`);
+}
+
+export async function handleDriverCompleted(convId: number, driverPhone: string): Promise<void> {
+  const workflow = await getWorkflow(convId);
+  if (!workflow) return;
+
+  const trip = await getActiveTripByPhone(workflow.phone);
+  if (!trip) return;
+
+  await completeTrip(trip.trip_id);
+
+  // Set as preferred driver (Titular) for this client
+  const existingPref = await getClientPreferredDriver(trip.client_phone);
+  if (!existingPref) {
+    await setClientPreferredDriver(trip.client_phone, driverPhone);
+    console.log(`[TITULAR] Cliente ${trip.client_phone} → chofer ${driverPhone} (post-servicio)`);
+  }
+
+  const driver = await getDriverByPhone(driverPhone);
+  const driverName = driver?.name || "El chofer";
+
+  // Send full breakdown to driver post-completion
+  const existingPref2 = await getClientPreferredDriver(trip.client_phone);
+  const isPreferred = existingPref2 && existingPref2.preferred_driver_phone === driverPhone;
+  let roleLine = "";
+  if (existingPref2) {
+    if (isPreferred) {
+      roleLine = `\n⭐ *Sos Chofer Titular* de este cliente`;
+    } else {
+      const prefDriver = await getDriverByPhone(existingPref2.preferred_driver_phone);
+      const prefName = prefDriver?.name || "otro chofer";
+      roleLine = `\n🧑‍🤝‍🧑 *Sos Chofer Suplente* de ${prefName} (Titular)`;
+    }
+  }
+
+  const price = trip.price_base || 0;
+  const commission = Math.round(price * 0.15);
+  const payout = price - commission;
+
+  const completedMsg = `🎉 *Viaje completado*
+
+${roleLine ? roleLine.trimStart() : ""}
+
+💰 *Cliente pagó*: $${price.toLocaleString("es-AR")}
+📊 *Comisión 15%*: $${commission.toLocaleString("es-AR")}
+💵 *Recibís*: $${payout.toLocaleString("es-AR")}
+💳 *Pago*: Al chofer
+
+👤 *Cliente*: ${trip.client_phone}`;
+
+  await sendWhatsAppMessage(driverPhone, completedMsg);
+  await notifyAdmin(`🎉 Viaje completado por ${driverName} (${driverPhone}). Destino: ${trip.destination}`);
+}
+
 export async function handleDriverButtonAccept(convId: number, driverPhone: string): Promise<void> {
   const workflow = await getWorkflow(convId);
   if (!workflow || workflow.state !== "waiting_group") return;
@@ -90,29 +159,21 @@ async function assignDriver(workflow: any, driverPhone: string): Promise<void> {
   const driver = await getDriverByPhone(driverPhone);
   const driverName = driver?.name || "El chofer";
 
-  const existingPref = await getClientPreferredDriver(trip.client_phone);
-  const isPreferred = existingPref && existingPref.preferred_driver_phone === driverPhone;
-  let paxNote = "";
+  // Send clean post-acceptance message with actions
+  const summary = `✅ *Viaje aceptado*
 
-  if (existingPref && !isPreferred) {
-    const prefDriver = await getDriverByPhone(existingPref.preferred_driver_phone);
-    const prefName = prefDriver?.name || "otro chofer";
-    paxNote = `\n\n🧑‍🤝‍🧑 Pax de ${prefName}. Solo traslado, sin ofertas adicionales.`;
-  }
+Origen: ${trip.origin || "No especificado"}
+Destino: ${trip.destination || "No especificado"}
+Precio: $${(trip.price_base || 0).toLocaleString("es-AR")}
+Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
 
-  let tripDetails = `Origen: ${trip.origin || "No especificado"}\nDestino: ${trip.destination}\nPrecio: $${trip.price_base}\nHora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}${paxNote}`;
+💰 *Comisión 15%*: $${commission.toLocaleString("es-AR")}
+Recibís: $${payout.toLocaleString("es-AR")}`;
 
-  if (driver) {
-    await sendToDriver(driverPhone, tripDetails, commission, payout);
-  } else {
-    await sendWhatsAppMessage(driverPhone, `📋 *Resumen del viaje*\n\n${tripDetails}\n\n💰 *Comisión 15%*: $${commission.toLocaleString("es-AR")}\nRecibís: $${payout.toLocaleString("es-AR")}`);
-  }
-
-  // Link as preferred driver on first trip
-  if (!existingPref) {
-    await setClientPreferredDriver(trip.client_phone, driverPhone);
-    console.log(`[PREFERRED] Cliente ${trip.client_phone} → chofer ${driverPhone}`);
-  }
+  await sendInteractiveButtons(driverPhone, summary, [
+    { id: `realizado_${convId}`, title: "✅ Realizado" },
+    { id: `enviaje_${convId}`, title: "🔄 En viaje" },
+  ]);
 
   const clientMsg = `✅ *Viaje confirmado*
 

@@ -6,6 +6,8 @@ import {
   handleDriverAccept,
   handleDriverButtonAccept,
   handleDriverArrived,
+  handleDriverEnViaje,
+  handleDriverCompleted,
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
@@ -62,6 +64,22 @@ export async function POST(request: NextRequest) {
         const convId = parseInt(buttonId.split("_")[1]);
         if (convId) {
           await handleDriverButtonAccept(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
+      }
+
+      if (buttonId.startsWith("realizado_")) {
+        const convId = parseInt(buttonId.split("_")[1]);
+        if (convId) {
+          await handleDriverCompleted(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
+      }
+
+      if (buttonId.startsWith("enviaje_")) {
+        const convId = parseInt(buttonId.split("_")[1]);
+        if (convId) {
+          await handleDriverEnViaje(convId, phone);
           return NextResponse.json({ status: "ok" }, { status: 200 });
         }
       }

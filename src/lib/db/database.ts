@@ -457,6 +457,14 @@ export async function assignDriverToTrip(tripId: string, driverPhone: string): P
   return { commission, payout };
 }
 
+export async function completeTrip(tripId: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET status = 'completado', confirmed_at = unixepoch(), updated_at = unixepoch() WHERE trip_id = ?",
+    args: [tripId],
+  });
+}
+
 // ========== DRIVERS ==========
 
 export async function getTitularDriver(): Promise<DriverRow | null> {
@@ -817,7 +825,7 @@ export async function getActiveTripsByClient(clientPhone: string): Promise<TripR
 
 export async function getTripsPendingSurvey(): Promise<TripRow[]> {
   const cutoff = Math.floor(Date.now() / 1000) - 86400;
-  return query<TripRow>("SELECT * FROM trips WHERE status = 'asignado_chofer' AND (survey_sent IS NULL OR survey_sent = 0) AND updated_at < ? ORDER BY updated_at ASC LIMIT 10", [cutoff]);
+  return query<TripRow>("SELECT * FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (survey_sent IS NULL OR survey_sent = 0) AND updated_at < ? ORDER BY updated_at ASC LIMIT 10", [cutoff]);
 }
 
 export async function markSurveySent(tripId: string): Promise<void> {
