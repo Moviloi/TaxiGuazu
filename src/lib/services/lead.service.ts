@@ -81,6 +81,7 @@ const HABLAR_HUMANO = [
 ];
 
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
+  console.log(`[DEBUG_LEAD] phone=${phone} text="${text.substring(0, 60)}"`);
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
 
@@ -139,9 +140,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   const registrarMatch = lower.match(/^\.registrar[-\s]?(.*)$/);
   if (registrarMatch) {
     const code = registrarMatch[1].trim();
+    console.log(`[DEBUG_REGISTRAR] phone=${phone} code="${code}"`);
 
     if (!code) {
       const existing = await getDriverByPhone(phone);
+      console.log(`[DEBUG_REGISTRAR] getDriverByPhone found=${!!existing} name=${existing?.name}`);
       const conv = await getOrCreateConversation(phone);
       if (existing) {
         const expiry = await getDriverExpiry(phone);
@@ -159,9 +162,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
 
     const codeEntry = await getDriverCodeByCode(code);
+    console.log(`[DEBUG_REGISTRAR] getDriverCodeByCode found=${!!codeEntry}`);
     if (!codeEntry) {
       const conv = await getOrCreateConversation(phone);
       const resp = "❌ Código inválido. Verificá con el administrador.";
+      console.log(`[DEBUG_REGISTRAR] sending: ${resp.substring(0, 50)}`);
       await sendWhatsAppMessage(phone, resp);
       await insertMessage(conv.id, "assistant", resp);
       return;
@@ -170,6 +175,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (codeEntry.phone && codeEntry.phone !== phone) {
       const conv = await getOrCreateConversation(phone);
       const resp = "❌ Este código ya está asignado a otro número.";
+      console.log(`[DEBUG_REGISTRAR] sending: ${resp.substring(0, 50)}`);
       await sendWhatsAppMessage(phone, resp);
       await insertMessage(conv.id, "assistant", resp);
       return;
@@ -177,8 +183,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     await getOrCreateConversation(phone);
     const result = await registerDriverByCode(code, phone);
+    console.log(`[DEBUG_REGISTRAR] registerDriverByCode result=${!!result}`);
     if (!result) {
       const resp = "❌ Error al registrarte. Probá de nuevo.";
+      console.log(`[DEBUG_REGISTRAR] sending: ${resp.substring(0, 50)}`);
       await sendWhatsAppMessage(phone, resp);
       const conv = await getConversationByPhone(phone);
       if (conv) await insertMessage(conv.id, "assistant", resp);
