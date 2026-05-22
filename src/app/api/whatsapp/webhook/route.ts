@@ -114,9 +114,11 @@ export async function POST(request: NextRequest) {
       }
 
       if (phone === getBotPhone()) {
+        console.log(`[WEBHOOK_DEBUG] botPhone matched, skipping interactive`);
         return NextResponse.json({ status: "ok" }, { status: 200 });
       }
 
+      console.log(`[WEBHOOK_DEBUG] calling handleLeadMessage for interactive button ${buttonId}`);
       await handleLeadMessage(phone, buttonId);
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
@@ -127,6 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[MSG] ← ${phone}: ${text.substring(0, 50)}`);
+    console.log(`[WEBHOOK_DEBUG] phone=${phone} botPhone=${getBotPhone()} isGroup=${isGroupMessage(phone)}`);
 
     if (isGroupMessage(phone)) {
       const conv = await getConversationByPhone(phone);
@@ -137,20 +140,25 @@ export async function POST(request: NextRequest) {
     }
 
     if (phone === getBotPhone()) {
+      console.log(`[WEBHOOK_DEBUG] botPhone matched, skipping text`);
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 
     const driver = await getDriverByPhone(phone);
+    console.log(`[WEBHOOK_DEBUG] driverLookup=${!!driver}`);
     if (driver && ["acepto", "yo estoy", "yo voy", "lo tomo"].some((k) => text.toLowerCase().includes(k))) {
+      console.log(`[WEBHOOK_DEBUG] matched accept keyword, routing to handleDriverAccept`);
       await handleDriverAccept(phone, text);
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 
     if (driver && text.toLowerCase().trim() === "llegué") {
+      console.log(`[WEBHOOK_DEBUG] matched llegue, routing to handleDriverArrived`);
       await handleDriverArrived(phone);
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 
+    console.log(`[WEBHOOK_DEBUG] falling through to handleLeadMessage`);
     await handleLeadMessage(phone, text);
 
     return NextResponse.json({ status: "ok" }, { status: 200 });
