@@ -109,16 +109,16 @@ export async function handleDriverCompleted(convId: number, driverPhone: string)
   }
 
   const price = trip.price_base || 0;
-  const commission = Math.round(price * 0.15);
-  const payout = price - commission;
+  const garantizado = trip.garantizado_base ?? Math.round(price * 0.85);
+  const tg = price - garantizado;
 
   const completedMsg = `🎉 *Viaje completado*
 
 ${roleLine ? roleLine.trimStart() : ""}
 
-💰 *Cliente pagó*: $${price.toLocaleString("es-AR")}
-📊 *Comisión 15%*: $${commission.toLocaleString("es-AR")}
-💵 *Recibís*: $${payout.toLocaleString("es-AR")}
+💰 *Tarifa pública*: $${price.toLocaleString("es-AR")}
+📊 *TG*: $${tg.toLocaleString("es-AR")}
+💵 *Recibís*: $${garantizado.toLocaleString("es-AR")}
 💳 *Pago*: Al chofer
 
 👤 *Cliente*: ${trip.client_phone}`;
@@ -155,6 +155,7 @@ async function assignDriver(workflow: any, driverPhone: string): Promise<void> {
   await incrementOfferAccepted(driverPhone);
   const commission = fin?.commission || 0;
   const payout = fin?.payout || trip.price_base || 0;
+  const price = trip.price_base || 0;
 
   const driver = await getDriverByPhone(driverPhone);
   const driverName = driver?.name || "El chofer";
@@ -164,11 +165,11 @@ async function assignDriver(workflow: any, driverPhone: string): Promise<void> {
 
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination || "No especificado"}
-Precio: $${(trip.price_base || 0).toLocaleString("es-AR")}
+Tarifa pública: $${price.toLocaleString("es-AR")}
 Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
 
-💰 *Comisión 15%*: $${commission.toLocaleString("es-AR")}
-Recibís: $${payout.toLocaleString("es-AR")}`;
+📊 *TG*: $${commission.toLocaleString("es-AR")}
+💵 *Recibís*: $${payout.toLocaleString("es-AR")}`;
 
   await sendInteractiveButtons(driverPhone, summary, [
     { id: `realizado_${convId}`, title: "✅ Realizado" },

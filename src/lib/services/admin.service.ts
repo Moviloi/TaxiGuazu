@@ -115,6 +115,10 @@ export async function broadcastTripToDrivers(
 
   let drivers = await getAvailableDrivers(filters);
 
+  const effectivePayout = trip.garantizado_base ?? Math.round((trip.price_base || 0) * 0.85);
+  const tripPiso = trip.piso_base || effectivePayout;
+  const margin = (trip.price_base || 0) - effectivePayout;
+
   if (drivers.length === 0) {
     // Debug: dump all drivers with conversation state
     try {
@@ -135,16 +139,14 @@ export async function broadcastTripToDrivers(
 Cliente: ${clientPhone}
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
-Precio: $${trip.price_base}
+Tarifa pública: $${trip.price_base}
+Valor garantizado: $${effectivePayout.toLocaleString("es-AR")}
+TG: $${margin.toLocaleString("es-AR")}
 País: ${country}
 
 No hay choferes disponibles en ${country}. Reenviá manualmente.`);
     return;
   }
-
-  const effectivePayout = Math.round((trip.price_base || 0) * 0.85);
-  const tripPiso = trip.piso_base || effectivePayout;
-  const margin = (trip.price_base || 0) - effectivePayout;
 
   // Package detection: if client has 2+ active trips, use package floor
   const activeTrips = await getActiveTripsByClient(clientPhone);
@@ -205,9 +207,9 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
 Cliente: ${clientPhone}
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
-Precio: $${trip.price_base} → Pago al chofer: $${effectivePayout}
+Tarifa pública: $${trip.price_base} → Valor garantizado: $${effectivePayout}
 Piso base: $${tripPiso}
-Margen: $${margin}
+TG: $${margin}
 País: ${country}
 ${packageLabel ? `\n${packageLabel}` : ''}
 
@@ -237,7 +239,8 @@ Ningún chofer tiene un piso menor o igual a $${effectivePayout}. Reasigná manu
 Cliente: ${clientPhone}
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
-Precio: $${trip.price_base}
+Tarifa pública: $${trip.price_base}
+Valor garantizado: $${effectivePayout.toLocaleString("es-AR")}
 País: ${country}
 Turno: ${shiftLabel(shiftClass)}
 
@@ -265,7 +268,7 @@ Ningún chofer activo en este turno. Reenviá manualmente.`);
 
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
-Precio: $${trip.price_base}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
+Valor garantizado: $${effectivePayout.toLocaleString("es-AR")}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
 
   await Promise.all(eligible.map(driver =>
     sendInteractiveButtons(driver.phone, body, [

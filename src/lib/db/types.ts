@@ -48,6 +48,7 @@ export interface TripRow {
   scheduled_at: number | null;
   tariff_id: number | null;
   piso_base: number | null;
+  garantizado_base: number | null;
 }
 
 export interface DriverRow {
@@ -138,6 +139,8 @@ export interface TariffRow {
   piso_6p: number;
   piso_4p_low: number | null;
   piso_6p_low: number | null;
+  garantizado_4p: number | null;
+  garantizado_6p: number | null;
 }
 
 export interface DriverDiscountRow {

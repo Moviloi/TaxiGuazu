@@ -218,6 +218,9 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE trips ADD COLUMN piso_base REAL",
     "ALTER TABLE tariffs ADD COLUMN piso_4p_low REAL",
     "ALTER TABLE tariffs ADD COLUMN piso_6p_low REAL",
+    "ALTER TABLE tariffs ADD COLUMN garantizado_4p REAL",
+    "ALTER TABLE tariffs ADD COLUMN garantizado_6p REAL",
+    "ALTER TABLE trips ADD COLUMN garantizado_base REAL",
   ];
   // Seed tariffs if empty
   try {
@@ -268,6 +271,17 @@ async function initSchema(): Promise<void> {
       await getDbv().execute("UPDATE tariffs SET piso_6p_low = ROUND(piso_6p * 0.8) WHERE piso_6p_low IS NULL");
     }
   } catch (e) { console.error("[migration] tariffs piso_low defaults error:", e); }
+
+  // Migration: set default garantizado for existing tariffs (85% of price)
+  try {
+    const result = await getDbv().execute(
+      "INSERT OR IGNORE INTO _migrations (name) VALUES ('tariffs_garantizado_defaults')"
+    );
+    if ((result as any).rowsAffected > 0) {
+      await getDbv().execute("UPDATE tariffs SET garantizado_4p = ROUND(price_4p * 0.85) WHERE garantizado_4p IS NULL");
+      await getDbv().execute("UPDATE tariffs SET garantizado_6p = ROUND(price_6p * 0.85) WHERE garantizado_6p IS NULL");
+    }
+  } catch (e) { console.error("[migration] tariffs garantizado defaults error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -447,8 +461,8 @@ export async function assignDriverToTrip(tripId: string, driverPhone: string): P
   if (!trip) return null;
 
   const price = trip.price_base || 0;
-  const commission = Math.round(price * 0.15);
-  const payout = price - commission;
+  const payout = trip.garantizado_base ?? Math.round(price * 0.85);
+  const commission = price - payout;
 
   await getDbv().execute({
     sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', commission_amount = ?, driver_payout = ?, updated_at = unixepoch() WHERE trip_id = ?",
@@ -840,11 +854,18 @@ export async function setSurveyResponse(tripId: string, response: string): Promi
 
 // ========== RESERVATION SLOTS ==========
 
-export async function updateTripTariff(tripId: string, tariffId: number, pisoBase: number): Promise<void> {
+export async function updateTripTariff(tripId: string, tariffId: number, pisoBase: number, passengers?: number): Promise<void> {
   await ensureSchema();
+  const trip = await getTripById(tripId);
+  const pax = passengers ?? trip?.passengers ?? 0;
+  const garantizado = await getDbv().execute({
+    sql: `SELECT ${pax > 4 ? "COALESCE(garantizado_6p, ROUND(price_6p * 0.85))" : "COALESCE(garantizado_4p, ROUND(price_4p * 0.85))"} as val FROM tariffs WHERE id = ?`,
+    args: [tariffId],
+  });
+  const val = (garantizado.rows[0] as any)?.val ?? Math.round((trip?.price_base || 0) * 0.85);
   await getDbv().execute({
-    sql: "UPDATE trips SET tariff_id = ?, piso_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [tariffId, pisoBase, tripId],
+    sql: "UPDATE trips SET tariff_id = ?, piso_base = ?, garantizado_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [tariffId, pisoBase, val, tripId],
   });
 }
 
@@ -903,6 +924,7 @@ interface TariffWithPrice extends TariffRow {
   price: number;
   piso: number;
   piso_low: number | null;
+  garantizado: number;
 }
 
 export async function findTariff(origin: string, destination: string, passengers: number): Promise<TariffWithPrice | null> {
@@ -915,6 +937,7 @@ export async function findTariff(origin: string, destination: string, passengers
     price: passengers > 4 ? t.price_6p : t.price_4p,
     piso: passengers > 4 ? t.piso_6p : t.piso_4p,
     piso_low: passengers > 4 ? t.piso_6p_low : t.piso_4p_low,
+    garantizado: passengers > 4 ? (t.garantizado_6p ?? Math.round(t.price_6p * 0.85)) : (t.garantizado_4p ?? Math.round(t.price_4p * 0.85)),
   };
 }
 
@@ -997,8 +1020,8 @@ async function seedTariffs(): Promise<void> {
   for (const r of data) {
     try {
       await getDbv().execute({
-        sql: "INSERT OR IGNORE INTO tariffs (origin, destination, modality, crosses_border, wait_included, price_4p, price_6p, piso_4p, piso_6p, piso_4p_low, piso_6p_low) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        args: [r.origin, r.destination, r.modality, r.crosses, r.wait, r.price4, r.price6, r.piso4, r.piso6, Math.round(r.piso4 * 0.8), Math.round(r.piso6 * 0.8)],
+        sql: "INSERT OR IGNORE INTO tariffs (origin, destination, modality, crosses_border, wait_included, price_4p, price_6p, piso_4p, piso_6p, piso_4p_low, piso_6p_low, garantizado_4p, garantizado_6p) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        args: [r.origin, r.destination, r.modality, r.crosses, r.wait, r.price4, r.price6, r.piso4, r.piso6, Math.round(r.piso4 * 0.8), Math.round(r.piso6 * 0.8), Math.round(r.price4 * 0.85), Math.round(r.price6 * 0.85)],
       });
     } catch (e) { console.error("[seedTariffs] error inserting row:", r, e); }
   }
