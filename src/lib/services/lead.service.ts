@@ -19,10 +19,11 @@ import {
   getClientPreferredDriver,
   getActiveSlots,
   clearConversationHistory,
+  createLead,
 } from "@/lib/db/database";
 import { generateGroqReply } from "@/lib/ai/groq";
 import { sendWhatsAppMessage, sendInteractiveList } from "@/lib/whatsapp/sender";
-import { broadcastTripToDrivers, offerToSpecificDriver, notifyAdmin } from "./admin.service";
+import { broadcastTripToDrivers, broadcastLeadToDrivers, offerToSpecificDriver, notifyAdmin } from "./admin.service";
 import { handleAdminCommand } from "./admin-commands";
 import {
   advanceToPreferred,
@@ -33,6 +34,20 @@ import {
 } from "@/lib/utils/state-machine";
 
 const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+?)(?:\s*\|\s*([^\]]+?))?\]/i;
+
+const LEAD_MARKER_REGEX = /\[LEAD:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+?)\s*(?:\|\s*([^\]]+?))?\]/i;
+
+function extractLeadMarker(text: string): { origin: string; destination: string; price: number; passengers: number; urgency?: string } | null {
+  const match = text.match(LEAD_MARKER_REGEX);
+  if (!match) return null;
+  return {
+    origin: match[1].trim(),
+    destination: match[2].trim(),
+    price: parseInt(match[3].replace(/[^0-9]/g, "")) || 0,
+    passengers: parseInt(match[4].replace(/[^0-9]/g, "")) || 0,
+    urgency: match[5]?.trim(),
+  };
+}
 
 function extractTripMarker(text: string): { code: string; origin: string; destination: string; price: number; passengers: number; urgency: string; scheduledAt?: number } | null {
   const match = text.match(TRIP_MARKER_REGEX);
@@ -56,7 +71,7 @@ function extractTripMarker(text: string): { code: string; origin: string; destin
 }
 
 function stripTripMarker(text: string): string {
-  return text.replace(TRIP_MARKER_REGEX, "").trim();
+  return text.replace(TRIP_MARKER_REGEX, "").replace(LEAD_MARKER_REGEX, "").trim();
 }
 
 const HABLAR_HUMANO = [
@@ -82,14 +97,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
     const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
     const welcome = isStructured
-      ? "Bienvenido a TaxiGuazu! Soy tu asistente de traslados. ¿A dónde necesitas ir?"
-      : "Hola! Soy TaxiGuazu. ¿En qué te ayudo?";
+      ? "Bienvenido a la Red Colaborativa de Conductores! Soy tu Asistente Virtual. ¿A dónde necesitas ir?"
+      : "Hola! Soy el Asistente Virtual de la Red Colaborativa. ¿En qué te ayudo?";
     await sendWhatsAppMessage(phone, welcome);
     return;
   }
 
   if (lower === "sigo yo") {
-    await sendWhatsAppMessage(phone, "Perfecto, continuás vos. Avisame cuando termines para volver al bot.");
+    await sendWhatsAppMessage(phone, "Perfecto, continuás vos. Avisame cuando termines para volver al Asistente Virtual.");
     return;
   }
 
@@ -112,14 +127,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (!code) {
       const existing = await getDriverByPhone(phone);
       if (existing) {
+        await getOrCreateConversation(phone);
         const expiry = await getDriverExpiry(phone);
-        if (expiry.active && expiry.expiresAt) {
-          const h = expiry.expiresAt.getHours().toString().padStart(2, "0");
-          const m = expiry.expiresAt.getMinutes().toString().padStart(2, "0");
-          await sendWhatsAppMessage(phone, `✅ Ya estás registrado hasta las ${h}:${m}hs de hoy. Buena jornada!`);
-        } else {
-          await sendWhatsAppMessage(phone, "⚠️ Tu registro venció. Enviá .registrar-TUCODIGO para renovarlo.");
-        }
+        const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
+        const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
+        await sendWhatsAppMessage(phone, `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${existing.name}!`);
       } else {
         await sendWhatsAppMessage(phone, "❌ No tenés un código de registro. Pedile al administrador que te dé uno.");
       }
@@ -204,8 +216,19 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
   }
 
+  // Check for LEAD marker BEFORE sending response
+  const leadMarker = !marker ? extractLeadMarker(response) : null;
+  if (leadMarker) {
+    response = stripTripMarker(response);
+  }
+
   await insertMessage(conversation.id, "assistant", response);
   await sendWhatsAppMessage(phone, response);
+
+  if (leadMarker) {
+    await createLead(conversation.id, phone, leadMarker.origin, leadMarker.destination, leadMarker.price, leadMarker.passengers);
+    await broadcastLeadToDrivers(leadMarker, conversation.id, phone, leadMarker.urgency, leadMarker.passengers);
+  }
 
   if (marker && trip && trip.destination && trip.price_base) {
     const u = (marker.urgency || "").toLowerCase();

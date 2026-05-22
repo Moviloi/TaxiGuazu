@@ -39,7 +39,7 @@ export async function checkTimeouts(): Promise<void> {
           const prefName = prefDriver?.name || "otro chofer";
           await offerToSpecificDriver(
             backupDriver.phone, trip, ctx.conversationId,
-            `🔄 *RESERVA — SUPLENTE*`,
+            `🔄 *RESERVA — CHOFER SUPLENTE*`,
             `Pax de ${prefName} no respondió. Tenés 3min para tomar el viaje.`
           );
           console.log(`[PRIORITY] Preferido timeout → backup ${backupDriver.name} (${ctx.conversationId})`);

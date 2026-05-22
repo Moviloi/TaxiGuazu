@@ -16,6 +16,7 @@ import type {
   TariffRow,
   DriverDiscountRow,
   DriverDiscountWithDriverRow,
+  LeadRow,
 } from "./types";
 
 type LibSqlClient = ReturnType<typeof createClient>;
@@ -112,7 +113,7 @@ async function initSchema(): Promise<void> {
       driver_id TEXT PRIMARY KEY,
       name TEXT,
       phone TEXT UNIQUE NOT NULL,
-      is_titular INTEGER DEFAULT 0,
+      is_principal INTEGER DEFAULT 0,
       group_id TEXT,
       active INTEGER DEFAULT 1,
       created_at INTEGER DEFAULT (unixepoch())
@@ -178,6 +179,16 @@ async function initSchema(): Promise<void> {
       discount_pct INTEGER NOT NULL CHECK(discount_pct > 0 AND discount_pct <= 100),
       valid_until INTEGER,
       active INTEGER DEFAULT 1,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS leads (
+      conv_id INTEGER PRIMARY KEY,
+      client_phone TEXT NOT NULL,
+      origin TEXT,
+      destination TEXT NOT NULL,
+      price REAL,
+      passengers INTEGER,
+      taken_by TEXT,
       created_at INTEGER DEFAULT (unixepoch())
     )`,
     `CREATE TABLE IF NOT EXISTS _migrations (
@@ -282,6 +293,16 @@ async function initSchema(): Promise<void> {
       await getDbv().execute("UPDATE tariffs SET garantizado_6p = ROUND(price_6p * 0.85) WHERE garantizado_6p IS NULL");
     }
   } catch (e) { console.error("[migration] tariffs garantizado defaults error:", e); }
+
+  // Migration: rename is_titular to is_principal in drivers table
+  try {
+    const result = await getDbv().execute(
+      "INSERT OR IGNORE INTO _migrations (name) VALUES ('rename_is_titular_to_is_principal')"
+    );
+    if ((result as any).rowsAffected > 0) {
+      await getDbv().execute("ALTER TABLE drivers RENAME COLUMN is_titular TO is_principal");
+    }
+  } catch (e) { console.error("[migration] rename is_titular error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -335,7 +356,10 @@ export async function setConnectionStateBatch(states: { status?: string; qr_stri
 
 export async function getOrCreateConversation(phone: string, name?: string): Promise<ConversationRow> {
   const existing = await queryOne<ConversationRow>("SELECT * FROM conversations WHERE phone = ?", [phone]);
-  if (existing) return existing;
+  if (existing) {
+    await updateConversationActivity(phone);
+    return existing;
+  }
 
   const info = await getDbv().execute({ sql: "INSERT INTO conversations (phone, name, last_message_at) VALUES (?, ?, unixepoch())", args: [phone, name || null] });
   const id = Number(info.lastInsertRowid);
@@ -479,10 +503,32 @@ export async function completeTrip(tripId: string): Promise<void> {
   });
 }
 
+// ========== LEADS ==========
+
+export async function createLead(convId: number, clientPhone: string, origin: string, destination: string, price?: number, passengers?: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "INSERT OR REPLACE INTO leads (conv_id, client_phone, origin, destination, price, passengers) VALUES (?, ?, ?, ?, ?, ?)",
+    args: [convId, clientPhone, origin, destination, price || null, passengers || null],
+  });
+}
+
+export async function getLeadByConv(convId: number): Promise<LeadRow | null> {
+  return queryOne<LeadRow>("SELECT * FROM leads WHERE conv_id = ?", [convId]);
+}
+
+export async function takeLead(convId: number, driverPhone: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE leads SET taken_by = ? WHERE conv_id = ? AND taken_by IS NULL",
+    args: [driverPhone, convId],
+  });
+}
+
 // ========== DRIVERS ==========
 
-export async function getTitularDriver(): Promise<DriverRow | null> {
-  return queryOne<DriverRow>("SELECT * FROM drivers WHERE is_titular = 1 LIMIT 1");
+export async function getPrincipalDriver(): Promise<DriverRow | null> {
+  return queryOne<DriverRow>("SELECT * FROM drivers WHERE is_principal = 1 LIMIT 1");
 }
 
 export async function getDriverByPhone(phone: string): Promise<DriverRow | null> {

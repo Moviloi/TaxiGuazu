@@ -55,7 +55,7 @@ export interface DriverRow {
   driver_id: string;
   name: string | null;
   phone: string;
-  is_titular: number | null;
+  is_principal: number | null;
   group_id: string | null;
   active: number | null;
   created_at: number | null;
@@ -155,6 +155,17 @@ export interface DriverDiscountRow {
 
 export interface DriverDiscountWithDriverRow extends DriverDiscountRow {
   driver_name: string;
+}
+
+export interface LeadRow {
+  conv_id: number;
+  client_phone: string;
+  origin: string | null;
+  destination: string;
+  price: number | null;
+  passengers: number | null;
+  taken_by: string | null;
+  created_at: number | null;
 }
 
 export interface SurveyRow {

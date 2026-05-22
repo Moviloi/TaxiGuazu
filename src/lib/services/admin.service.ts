@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
-import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff, getDbInstance } from "@/lib/db/database";
+import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff, getDbInstance, getPrincipalDriver } from "@/lib/db/database";
 import type { DriverRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
@@ -248,11 +248,17 @@ Ningún chofer activo en este turno. Reenviá manualmente.`);
     return;
   }
 
-  // Sort: preferred first, then by rating desc, then acceptance score desc
+  // Sort: preferred first, then principal (if no preferred), then by rating, then acceptance
+  const principal = !pref ? await getPrincipalDriver() : null;
   eligible.sort((a: any, b: any) => {
     const aPref = pref && a.phone === pref.preferred_driver_phone ? 1 : 0;
     const bPref = pref && b.phone === pref.preferred_driver_phone ? 1 : 0;
     if (aPref !== bPref) return bPref - aPref;
+    if (principal) {
+      const aPri = a.phone === principal.phone ? 1 : 0;
+      const bPri = b.phone === principal.phone ? 1 : 0;
+      if (aPri !== bPri) return bPri - aPri;
+    }
     const aRating = a.rating || 0;
     const bRating = b.rating || 0;
     if (aRating !== bRating) return bRating - aRating;
@@ -287,4 +293,39 @@ export async function notifyOtherDriversTaken(excludePhone: string, destination:
     .filter(d => d.phone !== excludePhone)
     .map(d => sendWhatsAppMessage(d.phone, `⏰ El viaje a ${destination} ya fue tomado por otro chofer.`))
   );
+}
+
+export async function broadcastLeadToDrivers(
+  lead: { origin: string; destination: string; price: number; passengers: number },
+  convId: number, clientPhone: string,
+  _urgency?: string, passengers?: number | null
+): Promise<void> {
+  const country = detectCountry(lead.origin || "");
+  const filters: { country?: string; minCapacity?: number } = {};
+  if (country) filters.country = country;
+  if (passengers && passengers >= 4) filters.minCapacity = passengers;
+
+  const drivers = await getAvailableDrivers(filters);
+  if (drivers.length === 0) {
+    await notifyAdmin(`👤 *LEAD SIN CHOFER DISPONIBLE*
+Cliente: ${clientPhone}
+Destino: ${lead.destination}
+Precio ref: $${lead.price.toLocaleString("es-AR")}
+País: ${country}
+No hay choferes disponibles para tomar este lead.`);
+    return;
+  }
+
+  const body = `👤 *NUEVO LEAD*
+Origen: ${lead.origin || "No especificado"}
+Destino: ${lead.destination}
+Precio ref: $${lead.price.toLocaleString("es-AR")}${passengers ? `\nPasajeros: ${passengers}` : ""}\n\nCliente interesado. Tocá "Tomar lead" para contactarlo.`;
+
+  await Promise.all(drivers.map(driver =>
+    sendInteractiveButtons(driver.phone, body, [
+      { id: `tomar_lead_${convId}`, title: "Tomar lead" },
+    ])
+  ));
+
+  console.log(`[LEAD] Broadcast a ${drivers.length} choferes: ${lead.destination} (${country})`);
 }

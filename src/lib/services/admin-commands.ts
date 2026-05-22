@@ -537,7 +537,7 @@ async function handleAddDiscount(phone: string, text: string): Promise<void> {
   if (result.ok) {
     let msg = `✅ Descuento del ${discountPct}% en tarifa #${tariffId}`;
     if (validDays) msg += ` por ${validDays} días`;
-    msg += ". El bot lo ofrecerá a leads interesados.";
+    msg += ". El Asistente Virtual lo ofrecerá a leads interesados.";
     await sendWhatsAppMessage(phone, msg);
   } else {
     await sendWhatsAppMessage(phone, `❌ ${result.error || "Error al crear descuento."}`);

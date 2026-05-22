@@ -12,6 +12,12 @@ import {
   getClientPreferredDriver,
   setClientPreferredDriver,
   incrementOfferAccepted,
+  getLeadByConv,
+  takeLead,
+  createTrip,
+  setConversationTrip,
+  getConversationByPhone,
+  getOrCreateConversation,
 } from "@/lib/db/database";
 import { notifyAdmin, notifyOtherDriversTaken } from "./admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
@@ -185,4 +191,54 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
   await notifyAdmin(`Viaje asignado a ${driverName} (${driverPhone}). Destino: ${dest}`);
 
   await notifyOtherDriversTaken(driverPhone, dest);
+}
+
+export async function handleDriverTakeLead(convId: number, driverPhone: string): Promise<void> {
+  const lead = await getLeadByConv(convId);
+  if (!lead) {
+    await sendWhatsAppMessage(driverPhone, "❌ Este lead ya no está disponible.");
+    return;
+  }
+
+  if (lead.taken_by) {
+    await sendWhatsAppMessage(driverPhone, "❌ Otro chofer ya tomó este lead.");
+    return;
+  }
+
+  await takeLead(convId, driverPhone);
+
+  // Verify atomic take succeeded
+  const updated = await getLeadByConv(convId);
+  if (!updated || updated.taken_by !== driverPhone) {
+    await sendWhatsAppMessage(driverPhone, "❌ Otro chofer ya tomó este lead.");
+    return;
+  }
+
+  // Create trip from lead
+  const tripId = `trip_${Date.now()}`;
+  await createTrip(tripId, lead.client_phone, lead.origin || "", lead.destination, lead.price || undefined, lead.passengers || undefined);
+  await getOrCreateConversation(lead.client_phone);
+  const conv = await getConversationByPhone(lead.client_phone);
+  if (conv) await setConversationTrip(conv.id, tripId);
+
+  // Assign this driver to the trip
+  const fin = await assignDriverToTrip(tripId, driverPhone);
+  const payout = fin?.payout || lead.price || 0;
+
+  const driver = await getDriverByPhone(driverPhone);
+  const driverName = driver?.name || "El chofer";
+
+  // Notify driver
+  await sendWhatsAppMessage(driverPhone, `✅ *Lead tomado exitosamente*\n\nCliente: ${lead.client_phone}\nDestino: ${lead.destination}\n💰 *Recibís*: $${payout.toLocaleString("es-AR")}\n\nContactá al cliente para coordinar.`);
+
+  // Notify client
+  await sendWhatsAppMessage(lead.client_phone, `✅ *Viaje confirmado*\n\nTu chofer es ${driverName}. Te contactará en breve.`);
+
+  // Notify admin
+  await notifyAdmin(`👤 Lead tomado por ${driverName} (${driverPhone})\nCliente: ${lead.client_phone}\nDestino: ${lead.destination}\nPrecio: $${lead.price}`);
+
+  // Notify other drivers
+  notifyOtherDriversTaken(driverPhone, lead.destination);
+
+  console.log(`[LEAD] Tomado por ${driverPhone} para conv ${convId}: ${lead.destination}`);
 }

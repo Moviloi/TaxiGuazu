@@ -8,6 +8,7 @@ import {
   handleDriverArrived,
   handleDriverEnViaje,
   handleDriverCompleted,
+  handleDriverTakeLead,
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
   const token = params.get("hub.verify_token");
   const challenge = params.get("hub.challenge");
   let VERIFY_TOKEN: string;
-  try { VERIFY_TOKEN = getEnv().WHATSAPP_VERIFY_TOKEN; } catch { VERIFY_TOKEN = "taxiguazu-bot-2025"; }
+  try { VERIFY_TOKEN = getEnv().WHATSAPP_VERIFY_TOKEN; } catch { VERIFY_TOKEN = "redcolaborativa-bot-2025"; }
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("[WEBHOOK] Verificación exitosa");
@@ -87,6 +88,14 @@ export async function POST(request: NextRequest) {
       if (buttonId.startsWith("rechazar_")) {
         console.log(`[RECHAZADO] ${phone} rechazó viaje`);
         return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("tomar_lead_")) {
+        const convId = parseInt(buttonId.split("_")[2]);
+        if (convId) {
+          await handleDriverTakeLead(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
       }
 
       if (buttonId.startsWith("survey_")) {
