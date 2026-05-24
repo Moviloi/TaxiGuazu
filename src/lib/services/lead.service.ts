@@ -283,6 +283,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       await sendWhatsAppMessage(phone, "Disculpe, ocurrió un error. Un operador lo asistirá.");
       const conv = await getConversationByPhone(phone);
       if (conv) await insertMessage(conv.id, "assistant", "Error interno. Cliente derivado a operador.");
+      await notifyAdmin(`⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`);
     } catch (e2) {
       console.error("[LEAD_ERROR] fallback también falló:", e2);
     }

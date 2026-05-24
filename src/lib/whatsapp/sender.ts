@@ -22,7 +22,7 @@ function normalizeRecipient(to: string): string {
 
 async function postToWhatsApp(payload: any): Promise<void> {
   const token = getToken();
-  if (!token) return;
+  if (!token) throw new Error("WhatsApp token not configured");
 
   try {
     await axios.post(getUrl(), payload, {
@@ -32,7 +32,9 @@ async function postToWhatsApp(payload: any): Promise<void> {
       },
     });
   } catch (error: any) {
-    console.error(`[SEND ERROR]`, error?.response?.data || error.message);
+    const detail = error?.response?.data || error.message;
+    console.error(`[SEND ERROR]`, detail);
+    throw new Error(`WhatsApp send failed: ${JSON.stringify(detail)}`);
   }
 }
 
