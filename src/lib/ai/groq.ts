@@ -53,7 +53,7 @@ export async function generateGroqReply(
   dynamicContext += `Teléfono del Cliente: ${clientPhone}\n`;
 
   if (trip) {
-    dynamicContext += `Viaje Actual Activo en Base de Datos: ID ${trip.trip_id} | Destino: ${trip.destination} | Precio: $${trip.price_base} | Descuento: ${trip.discount_explicit || 0}% | Estado: ${trip.status}\n`;
+    dynamicContext += `Viaje Actual Activo en Base de Datos: ID ${trip.trip_id} | Destino: ${trip.destination} | Estado: ${trip.status}\n`;
   } else {
     dynamicContext += `Viaje Actual Activo en Base de Datos: Ninguno.\n`;
   }
