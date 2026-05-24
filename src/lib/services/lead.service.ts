@@ -101,8 +101,8 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
     const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
     const welcome = isStructured
-      ? "Bienvenido a la Red Colaborativa de Conductores! Soy tu Asistente Virtual. ¿A dónde necesitas ir?"
-      : "Hola! Soy el Asistente Virtual de la Red Colaborativa. ¿En qué te ayudo?";
+      ? "Bienvenido a TaxiGuazú! Soy tu Asistente Virtual. ¿A dónde necesitas ir?"
+      : "Hola! Soy el Asistente Virtual de TaxiGuazú. ¿En qué te ayudo?";
     await sendWhatsAppMessage(phone, welcome);
     const c = await getOrCreateConversation(phone);
     await insertMessage(c.id, "assistant", welcome);
