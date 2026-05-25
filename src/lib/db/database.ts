@@ -827,6 +827,7 @@ export async function advanceWorkflowState(convId: number, phone: string, newSta
           VALUES (?, ?, ?, ?, ?)
           ON CONFLICT(conversation_id) DO UPDATE SET
             state = excluded.state,
+            assigned_driver_phone = NULL,
             group_asked_at = excluded.group_asked_at,
             last_message_at = excluded.last_message_at`,
     args: [convId, phone, newState, now, now],

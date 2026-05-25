@@ -39,7 +39,7 @@ export async function generateGroqReply(
   promoNote?: string
 ): Promise<string> {
   const groq = getGroq();
-  if (!groq) return "Disculpe, no pude procesar su mensaje. Un operador lo asistirá.";
+  if (!groq) return "Disculpe, no pude responder. Un operador lo asistirá.";
 
   const lang = detectLang(userText);
   const systemPromptBase = getSystemPrompt(lang);
@@ -99,9 +99,9 @@ export async function generateGroqReply(
       { timeout: 8000 }
     );
 
-    return completion.choices[0]?.message?.content?.trim() || "Disculpe, no pude procesar su mensaje.";
+    return completion.choices[0]?.message?.content?.trim() || "Disculpe, no pude responder.";
   } catch (e) {
     console.error("[GROQ_ERROR]", e);
-    return "Disculpe, no pude procesar su mensaje. Un operador lo asistirá.";
+    return "Disculpe, no pude responder. Un operador lo asistirá.";
   }
 }

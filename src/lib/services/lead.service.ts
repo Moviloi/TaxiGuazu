@@ -112,8 +112,8 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
       const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
       const welcome = isStructured
-        ? "Bienvenido a TaxiGuazú! Soy tu Asistente Virtual. ¿A dónde necesitas ir?"
-        : "Hola! Soy el Asistente Virtual de TaxiGuazú. ¿En qué te ayudo?";
+        ? "Bienvenido a TaxiGuazú! Soy Cris Virtual (Asistente 24/7). ¿A dónde necesitas ir?"
+        : "Hola! Soy Cris Virtual (Asistente 24/7). ¿En qué te ayudo?";
       await sendWhatsAppMessage(phone, welcome);
       const c = await getOrCreateConversation(phone);
       await insertMessage(c.id, "assistant", welcome);
@@ -121,7 +121,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
 
     if (lower === "sigo yo") {
-      const resp = "Perfecto, continuás vos. Avisame cuando termines para volver al Asistente Virtual.";
+      const resp = "Perfecto, continuás vos. Avisame cuando termines para volver con Cris Virtual.";
       await sendWhatsAppMessage(phone, resp);
       const conv = await getOrCreateConversation(phone);
       await insertMessage(conv.id, "assistant", resp);
@@ -351,7 +351,6 @@ async function handleReservationSlotSelection(convId: number, phone: string, tri
 
   if (sections.length === 0) {
     await sendWhatsAppMessage(phone, "📅 No hay horarios disponibles en los próximos días. Te contactaremos para coordinar.");
-    await advanceToGroup(convId, phone);
     await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
     return;
   }
@@ -391,7 +390,6 @@ export async function handleSlotResponse(phone: string, buttonId: string): Promi
   });
   await sendWhatsAppMessage(phone, `✅ Reserva confirmada para el ${dateStr}. Buscamos chofer para vos.`);
 
-  await advanceToGroup(convId, phone);
   await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
 }
 
