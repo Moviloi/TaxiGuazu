@@ -437,7 +437,6 @@ async function escalateTrip(convId: number, phone: string, trip: any, urgency?: 
   if (u.includes("ahora")) {
     // "Ahora" → waiting_driver + broadcast inmediato
     await advanceToWaitingDriver(convId, phone);
-    await sendWhatsAppMessage(phone, "Buscando chofer disponible para vos...");
     await broadcastTripToDrivers(trip, convId, phone, urgency, passengers);
     console.log(`[DISPATCH] Ahora → waiting_driver + broadcast conv ${convId}`);
     return;

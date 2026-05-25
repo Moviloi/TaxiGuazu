@@ -1,6 +1,7 @@
 import {
   getWorkflow,
   advanceToNivel1,
+  advanceToWaitingDriver,
 } from "@/lib/utils/state-machine";
 import {
   getActiveTripByPhone,
@@ -23,8 +24,11 @@ import {
   setComisionDeclarada,
   getTripById,
   getPrincipalDriver,
+  findTariff,
+  updateTripTariff,
+  getDbInstance,
 } from "@/lib/db/database";
-import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver } from "./admin.service";
+import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver, broadcastTripToDrivers } from "./admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 
 export function isGroupMessage(from: string): boolean {
@@ -191,15 +195,50 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
     { id: `enviaje_${convId}`, title: "🔄 En viaje" },
   ]);
 
-  const clientMsg = `✅ *Viaje confirmado*
+  const isAhora = workflow.state === "waiting_driver";
+
+  if (isAhora) {
+    const clientMsg = `¡Listo! Mi colega ${driverName} ya te va a buscar y te va a escribir al WhatsApp en este instante para coordinar la puerta de salida. El pago de los $${price.toLocaleString("es-AR")} lo arreglás directamente con él en efectivo.\n\nNota: Si tu hotel llega a quedar muy alejado, él puede ajustar la tarifa antes de salir, pero lo manejás directo con él. ¡Buen viaje!`;
+    await sendWhatsAppMessage(workflow.phone, clientMsg);
+  } else {
+    const clientMsg = `✅ *Viaje confirmado*
 
 Tu chofer es ${driverName}. Te contactará en breve.`;
-  await sendWhatsAppMessage(workflow.phone, clientMsg);
+    await sendWhatsAppMessage(workflow.phone, clientMsg);
+    await sendWhatsAppMessage(workflow.phone, `Mi colega que hará tu servicio es ${driverName} y te va a contactar para coordinar todos los detalles.`);
+  }
 
   const dest = trip.destination || "No especificado";
   await notifyAdmin(`Viaje asignado a ${driverName} (${driverPhone}). Destino: ${dest}`);
 
   await notifyOtherDriversTaken(driverPhone, dest);
+
+  // Contingency sequel: if there's a pending Trip B, dispatch it now
+  const pendingB = await getDbInstance().execute({
+    sql: "SELECT value FROM connection_state WHERE key = ?",
+    args: [`contingency_pending_B_${convId}`],
+  });
+  if ((pendingB.rows as any[]).length > 0) {
+    const bData = JSON.parse((pendingB.rows as any[])[0].value);
+    await getDbInstance().execute({
+      sql: "DELETE FROM connection_state WHERE key = ?",
+      args: [`contingency_pending_B_${convId}`],
+    });
+
+    const tripIdB = `trip_contingency_${convId}_b_${Date.now()}`;
+    await createTrip(tripIdB, workflow.phone, bData.origin, bData.destination, bData.price, bData.passengers, undefined, bData.flight_number || undefined);
+    await setConversationTrip(convId, tripIdB);
+    const tripB = await getActiveTripByPhone(workflow.phone);
+    if (tripB) {
+      if (bData.tariff_id) {
+        await updateTripTariff(tripB.trip_id, bData.tariff_id, bData.piso || 0);
+      }
+      await advanceToWaitingDriver(convId, workflow.phone);
+      await sendWhatsAppMessage(workflow.phone, `Buscando el segundo auto para vos...`);
+      await broadcastTripToDrivers(tripB, convId, workflow.phone, "ahora", bData.passengers);
+      console.log(`[CONTINGENCIA] Trip B dispatchado para conv ${convId}`);
+    }
+  }
 }
 
 export async function handleDriverTakeLead(convId: number, driverPhone: string): Promise<void> {
@@ -316,4 +355,94 @@ Comisión actual: $${(trip.commission_amount || Math.round((trip.price_base || 0
 
 El chofer pide revisar la comisión. Contactarlo manualmente.`);
   console.log(`[COMISION] Revision solicitada ${driverPhone} trip ${tripId}`);
+}
+
+export async function handleContingenciaSi(convId: number, clientPhone: string): Promise<void> {
+  console.log(`[CONTINGENCIA] Sí aceptado para conv ${convId}`);
+
+  const dataRow = await getDbInstance().execute({
+    sql: "SELECT value FROM connection_state WHERE key = ?",
+    args: [`contingency_data_${convId}`],
+  });
+  if ((dataRow.rows as any[]).length === 0) {
+    console.log(`[CONTINGENCIA] No hay data para conv ${convId}`);
+    return;
+  }
+
+  const origData = JSON.parse((dataRow.rows as any[])[0].value);
+  await getDbInstance().execute({
+    sql: "DELETE FROM connection_state WHERE key = ?",
+    args: [`contingency_data_${convId}`],
+  });
+  await getDbInstance().execute({
+    sql: "DELETE FROM connection_state WHERE key = ?",
+    args: [`contingency_offered_${convId}`],
+  });
+
+  // Mark original trip as completed to avoid conflicts
+  const existingTrip = await getActiveTripByPhone(clientPhone);
+  if (existingTrip) {
+    await updateTripState(existingTrip.trip_id, "completado");
+  }
+
+  // Find standard 4p tariff for this route
+  const tariff = await findTariff(origData.origin, origData.destination, 4);
+  const price4p = tariff?.price || origData.price_base || 0;
+
+  // Calculate passengers split
+  const paxA = Math.min(origData.passengers, 4);
+  const paxB = origData.passengers - paxA;
+
+  // --- Trip A ---
+  const tripIdA = `trip_contingency_${convId}_a_${Date.now()}`;
+  await createTrip(tripIdA, clientPhone, origData.origin, origData.destination, price4p, paxA, undefined, origData.flight_number || undefined);
+  await setConversationTrip(convId, tripIdA);
+  const tripA = await getActiveTripByPhone(clientPhone);
+  if (!tripA) return;
+
+  if (tariff?.id) {
+    await updateTripTariff(tripA.trip_id, tariff.id, tariff.piso || 0);
+  }
+
+  // Store Trip B data for sequel
+  const bData = JSON.stringify({
+    origin: origData.origin,
+    destination: origData.destination,
+    price: price4p,
+    passengers: paxB,
+    flight_number: origData.flight_number || null,
+    tariff_id: tariff?.id || null,
+    piso: tariff?.piso || 0,
+  });
+  await getDbInstance().execute({
+    sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())",
+    args: [`contingency_pending_B_${convId}`, bData],
+  });
+
+  await advanceToWaitingDriver(convId, clientPhone);
+  await sendWhatsAppMessage(clientPhone, "¡Dale! Buscando los dos autos para vos...");
+  await broadcastTripToDrivers(tripA, convId, clientPhone, "ahora", paxA);
+  console.log(`[CONTINGENCIA] Trip A dispatchado para conv ${convId}`);
+}
+
+export async function handleContingenciaNo(convId: number, clientPhone: string): Promise<void> {
+  console.log(`[CONTINGENCIA] No aceptado para conv ${convId}`);
+
+  await getDbInstance().execute({
+    sql: "DELETE FROM connection_state WHERE key = ?",
+    args: [`contingency_data_${convId}`],
+  });
+  await getDbInstance().execute({
+    sql: "DELETE FROM connection_state WHERE key = ?",
+    args: [`contingency_offered_${convId}`],
+  });
+
+  await sendWhatsAppMessage(clientPhone, "No hay problema. Un operador se va a comunicar para ayudarte con tu viaje.");
+  await notifyAdmin(`👎 *Contingencia rechazada*
+
+Cliente: ${clientPhone}
+Conversación: ${convId}
+
+El cliente rechazó la opción de dos autos. Contactarlo manualmente.`);
+  console.log(`[CONTINGENCIA] Rechazada para conv ${convId}`);
 }

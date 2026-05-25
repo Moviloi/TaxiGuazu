@@ -85,12 +85,50 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
     await closeWorkflow(ctx.conversationId);
   }
 
-  // Waiting driver (AHORA) expired → notify admin
+  // Waiting driver (AHORA) expired → notify admin, or offer contingency for 5-6pax
   const waitingDriverExpired = await getExpiredByState("waiting_driver", TIMEOUT_WAITING_DRIVER_MS);
   for (const ctx of waitingDriverExpired) {
     console.log(`[TIMEOUT] Waiting driver expiró para conv ${ctx.conversationId}`);
     const trip = await getActiveTripByPhone(ctx.phone);
     const destino = trip?.destination || "sin destino";
+
+    // Check if contingency was already offered for this conv
+    const alreadyOffered = await getDbInstance().execute({
+      sql: "SELECT value FROM connection_state WHERE key = ?",
+      args: [`contingency_offered_${ctx.conversationId}`],
+    });
+    if ((alreadyOffered.rows as any[]).length > 0) continue;
+
+    if (trip && trip.passengers && trip.passengers > 4) {
+      // Store original trip data for contingency handler
+      const tripData = JSON.stringify({
+        origin: trip.origin,
+        destination: trip.destination,
+        price_base: trip.price_base,
+        passengers: trip.passengers,
+        flight_number: trip.flight_number || null,
+      });
+      await getDbInstance().execute({
+        sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())",
+        args: [`contingency_data_${ctx.conversationId}`, tripData],
+      });
+
+      await getDbInstance().execute({
+        sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
+        args: [`contingency_offered_${ctx.conversationId}`],
+      });
+
+      await closeWorkflow(ctx.conversationId);
+
+      await sendInteractiveButtons(ctx.phone,
+        `Mirá, en este microsegundo no encuentro una minivan de hasta 6 plazas libre ahí mismo en la terminal. Pero para no hacerte esperar, te puedo buscar dos autos de hasta 4 pasajeros ya mismo. Te saldría el equivalente a dos tarifas de $${trip.price_base?.toLocaleString("es-AR") || " — "} cada uno. ¿Te sirve que intente buscártelos?`, [
+        { id: `contingencia_si_${ctx.conversationId}`, title: "✅ Sí, buscá" },
+        { id: `contingencia_no_${ctx.conversationId}`, title: "❌ No, gracias" },
+      ]);
+
+      console.log(`[CONTINGENCIA] Ofrecida para conv ${ctx.conversationId} (${trip.passengers} pax)`);
+      continue;
+    }
 
     await sendWhatsAppMessage(ctx.phone, "Disculpá, no encontramos un chofer disponible ahora mismo. Un operador se va a comunicar para ayudarte.");
     await notifyAdmin(`⚠️ *AHORA sin chofer*

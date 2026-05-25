@@ -17,6 +17,7 @@ import {
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
 import { handleSurveyResponse, handleNewTripResponse } from "@/lib/services/survey.service";
+import { handleContingenciaSi, handleContingenciaNo } from "@/lib/services/driver.service";
 import { getEnv } from "@/config/env";
 
 function getBotPhone(): string {
@@ -118,6 +119,22 @@ export async function POST(request: NextRequest) {
         const convId = parseInt(buttonId.split("_")[2]);
         if (convId) {
           await handleDriverTakeLead(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
+      }
+
+      if (buttonId.startsWith("contingencia_si_")) {
+        const convId = parseInt(buttonId.split("_")[2]);
+        if (convId) {
+          await handleContingenciaSi(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
+      }
+
+      if (buttonId.startsWith("contingencia_no_")) {
+        const convId = parseInt(buttonId.split("_")[2]);
+        if (convId) {
+          await handleContingenciaNo(convId, phone);
           return NextResponse.json({ status: "ok" }, { status: 200 });
         }
       }

@@ -117,9 +117,12 @@ export async function broadcastTripToDrivers(
   urgency?: string, passengers?: number | null
 ): Promise<void> {
   const country = detectCountry(trip.origin || "");
-  const filters: { country?: string; minCapacity?: number } = {};
+  const filters: { country?: string; minCapacity?: number; strictMinCapacity?: boolean } = {};
   if (country) filters.country = country;
-  if (passengers && passengers >= 4) filters.minCapacity = passengers;
+  if (passengers && passengers > 4) {
+    filters.minCapacity = 6;
+    filters.strictMinCapacity = true;
+  }
 
   let drivers = await getAvailableDrivers(filters);
 
@@ -309,9 +312,12 @@ export async function broadcastLeadToDrivers(
   _urgency?: string, passengers?: number | null
 ): Promise<void> {
   const country = detectCountry(lead.origin || "");
-  const filters: { country?: string; minCapacity?: number } = {};
+  const filters: { country?: string; minCapacity?: number; strictMinCapacity?: boolean } = {};
   if (country) filters.country = country;
-  if (passengers && passengers >= 4) filters.minCapacity = passengers;
+  if (passengers && passengers > 4) {
+    filters.minCapacity = 6;
+    filters.strictMinCapacity = true;
+  }
 
   const drivers = await getAvailableDrivers(filters);
   if (drivers.length === 0) {
