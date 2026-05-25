@@ -11,3 +11,8 @@ export const MIN_MARGIN = 3000;
 export const LOW_PISO_FACTOR = 0.8;
 export const TIERS = ['premium', 'normal', 'low'] as const;
 export type Tier = typeof TIERS[number];
+
+export const TIMEOUT_NIVEL_1_MS = 60 * 60 * 1000;
+export const TIMEOUT_NIVEL_2_MS = 30 * 60 * 1000;
+export const TIMEOUT_NIVEL_3_MS = 8 * 60 * 1000;
+export const TIMEOUT_WAITING_DRIVER_MS = 3 * 60 * 1000;

@@ -10,30 +10,35 @@ import {
   updateTripState,
   updateTripScheduledAt,
   updateTripTariff,
+  updateTripFlight,
+  updateTripHotel,
   findTariff,
   getDiscountsForTariff,
   getDriverByPhone,
   getDriverCodeByCode,
   registerDriverByCode,
   getDriverExpiry,
-  getClientPreferredDriver,
+  getPrincipalDriver,
   getActiveSlots,
   clearConversationHistory,
   createLead,
 } from "@/lib/db/database";
 import { generateGroqReply } from "@/lib/ai/groq";
 import { sendWhatsAppMessage, sendInteractiveList } from "@/lib/whatsapp/sender";
-import { broadcastTripToDrivers, broadcastLeadToDrivers, offerToSpecificDriver, notifyAdmin } from "./admin.service";
+import { broadcastTripToDrivers, broadcastLeadToDrivers, offerToSpecificDriver, getPrincipal2, notifyAdmin } from "./admin.service";
 import { handleAdminCommand } from "./admin-commands";
 import {
-  advanceToPreferred,
+  advanceToNivel1,
+  advanceToNivel2,
+  advanceToNivel3,
+  advanceToWaitingDriver,
   advanceToGroup,
   resetToIdle,
   getWorkflow,
   advanceToSlotSelection,
 } from "@/lib/utils/state-machine";
 
-const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+?)(?:\s*\|\s*([^\]]+?))?\]/i;
+const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?(?:\s*\|\s*([^|\]]+?))?\]/i;
 
 const LEAD_MARKER_REGEX = /\[LEAD:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+?)\s*(?:\|\s*([^\]]+?))?\]/i;
 
@@ -49,7 +54,7 @@ function extractLeadMarker(text: string): { origin: string; destination: string;
   };
 }
 
-function extractTripMarker(text: string): { code: string; origin: string; destination: string; price: number; passengers: number; urgency: string; scheduledAt?: number } | null {
+function extractTripMarker(text: string): { code: string; origin: string; destination: string; price: number; passengers: number; urgency: string; scheduledAt?: number; flightNumber?: string } | null {
   const match = text.match(TRIP_MARKER_REGEX);
   if (!match) return null;
   const result: any = {
@@ -65,7 +70,12 @@ function extractTripMarker(text: string): { code: string; origin: string; destin
     const ts = Date.parse(dateStr);
     if (!isNaN(ts)) {
       result.scheduledAt = Math.floor(ts / 1000);
+    } else {
+      result.flightNumber = dateStr;
     }
+  }
+  if (match[8]) {
+    result.flightNumber = match[8].trim();
   }
   return result;
 }
@@ -239,7 +249,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
       if (!trip) {
         const tripId = `trip_${Date.now()}`;
-        await createTrip(tripId, phone, marker.origin, marker.destination, marker.price, marker.passengers, marker.scheduledAt);
+        await createTrip(tripId, phone, marker.origin, marker.destination, marker.price, marker.passengers, marker.scheduledAt, marker.flightNumber);
         await setConversationTrip(conversation.id, tripId);
         trip = await getActiveTripByPhone(phone);
         if (!trip) return;
@@ -247,8 +257,12 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         if (tariff) {
           await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
         }
+        if (marker.destination.toLowerCase().includes("pendiente hotel")) {
+          await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
+        }
       } else {
         if (marker.scheduledAt) await updateTripScheduledAt(trip.trip_id, marker.scheduledAt);
+        if (marker.flightNumber) await updateTripFlight(trip.trip_id, marker.flightNumber);
         if (!trip.piso_base) {
           const tariff = await findTariff(trip.origin || marker.origin, trip.destination || marker.destination, trip.passengers || marker.passengers);
           if (tariff) await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
@@ -385,31 +399,54 @@ async function escalateTrip(convId: number, phone: string, trip: any, urgency?: 
   const u = (urgency || "").toLowerCase();
 
   if (u.includes("reserva")) {
-    const pref = await getClientPreferredDriver(phone);
-    if (pref) {
-      const prefDriver = await getDriverByPhone(pref.preferred_driver_phone);
-      if (prefDriver && prefDriver.active) {
-        const expiry = await getDriverExpiry(pref.preferred_driver_phone);
-        if (expiry.active) {
-          await advanceToPreferred(convId, phone);
-          const prefName = prefDriver.name || "chofer";
-          await offerToSpecificDriver(
-            prefDriver.phone, trip, convId,
-            `⭐ *RESERVA — TU PASAJERO*`,
-            `Este pasajero es tuyo. Tenés 3min para aceptar antes de que se ofrezca a otro chofer.`
-          );
-          console.log(`[PRIORITY] Reserva → preferido ${prefName} (${convId})`);
-          return;
-        }
+    // Nivel 1: Principal (Cristian, 1h timeout)
+    const principal = await getPrincipalDriver();
+    if (principal && principal.active) {
+      const expiry = await getDriverExpiry(principal.phone);
+      if (expiry.active) {
+        await advanceToNivel1(convId, phone);
+        await offerToSpecificDriver(
+          principal.phone, trip, convId,
+          `⭐ *NIVEL 1 — RESERVA*`,
+          `Sos el Principal. Tenés 1h para aceptar antes de pasar al siguiente nivel.`
+        );
+        console.log(`[DISPATCH] Reserva → Nivel 1 (${principal.name}) conv ${convId}`);
+        return;
       }
     }
-    // No preferred/available → broadcast
-    await advanceToGroup(convId, phone);
+    // Nivel 2: Principal2 (30min timeout)
+    const principal2 = await getPrincipal2();
+    if (principal2 && principal2.active) {
+      const expiry = await getDriverExpiry(principal2.phone);
+      if (expiry.active) {
+        await advanceToNivel2(convId, phone);
+        await offerToSpecificDriver(
+          principal2.phone, trip, convId,
+          `⭐ *NIVEL 2 — RESERVA*`,
+          `Sos el Segundo Principal. Tenés 30min para aceptar.`
+        );
+        console.log(`[DISPATCH] Reserva → Nivel 2 (${principal2.name}) conv ${convId}`);
+        return;
+      }
+    }
+    // Nivel 3: Broadcast
+    await advanceToNivel3(convId, phone);
     await broadcastTripToDrivers(trip, convId, phone, urgency, passengers);
+    console.log(`[DISPATCH] Reserva → Nivel 3 (broadcast) conv ${convId}`);
     return;
   }
 
-  // "Ahora" or unknown → broadcast immediately
+  if (u.includes("ahora")) {
+    // "Ahora" → waiting_driver + broadcast inmediato
+    await advanceToWaitingDriver(convId, phone);
+    await sendWhatsAppMessage(phone, "Buscando chofer disponible para vos...");
+    await broadcastTripToDrivers(trip, convId, phone, urgency, passengers);
+    console.log(`[DISPATCH] Ahora → waiting_driver + broadcast conv ${convId}`);
+    return;
+  }
+
+  // Consulta/otro → broadcast directo
   await advanceToGroup(convId, phone);
   await broadcastTripToDrivers(trip, convId, phone, urgency, passengers);
+  console.log(`[DISPATCH] Consulta/otro → broadcast conv ${convId}`);
 }

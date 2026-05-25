@@ -9,6 +9,10 @@ import {
   handleDriverEnViaje,
   handleDriverCompleted,
   handleDriverTakeLead,
+  handleDriverReconfirmOk,
+  handleDriverReconfirmNo,
+  handleComisionOk,
+  handleComisionRevision,
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
@@ -87,6 +91,26 @@ export async function POST(request: NextRequest) {
 
       if (buttonId.startsWith("rechazar_")) {
         console.log(`[RECHAZADO] ${phone} rechazó viaje`);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("reconfirm_ok_")) {
+        await handleDriverReconfirmOk(buttonId, phone);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("reconfirm_no_")) {
+        await handleDriverReconfirmNo(buttonId, phone);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("comision_ok_")) {
+        await handleComisionOk(buttonId, phone);
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+
+      if (buttonId.startsWith("comision_revision_")) {
+        await handleComisionRevision(buttonId, phone);
         return NextResponse.json({ status: "ok" }, { status: 200 });
       }
 

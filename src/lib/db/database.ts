@@ -232,6 +232,10 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE tariffs ADD COLUMN garantizado_4p REAL",
     "ALTER TABLE tariffs ADD COLUMN garantizado_6p REAL",
     "ALTER TABLE trips ADD COLUMN garantizado_base REAL",
+    "ALTER TABLE trips ADD COLUMN flight_number TEXT",
+    "ALTER TABLE trips ADD COLUMN hotel_destination TEXT DEFAULT 'A confirmar por el chofer'",
+    "ALTER TABLE trips ADD COLUMN comision_declarada INTEGER DEFAULT 0",
+    "ALTER TABLE drivers ADD COLUMN is_principal2 INTEGER DEFAULT 0",
   ];
   // Seed tariffs if empty
   try {
@@ -452,9 +456,9 @@ export async function clearConversationHistory(convId: number): Promise<void> {
 
 // ========== TRIPS ==========
 
-export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number): Promise<void> {
+export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number, flightNumber?: string): Promise<void> {
   await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, 'consulta', ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, scheduledAt || null] });
+  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, 'consulta', ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, scheduledAt || null, flightNumber || null] });
 }
 
 export async function getTripById(tripId: string): Promise<TripRow | null> {
@@ -533,6 +537,10 @@ export async function getPrincipalDriver(): Promise<DriverRow | null> {
 
 export async function getDriverByPhone(phone: string): Promise<DriverRow | null> {
   return queryOne<DriverRow>("SELECT * FROM drivers WHERE phone = ?", [phone]);
+}
+
+export async function getPrincipal2Driver(): Promise<DriverRow | null> {
+  return queryOne<DriverRow>("SELECT * FROM drivers WHERE is_principal2 = 1 LIMIT 1");
 }
 
 export async function registerDriver(phone: string, name?: string): Promise<DriverRow | null> {
@@ -803,7 +811,7 @@ export async function assignWorkflowAtomic(convId: number, driverPhone: string):
   const rs = await getDbv().execute({
     sql: `UPDATE workflows 
           SET state = 'closed', assigned_driver_phone = ?, last_message_at = unixepoch() 
-          WHERE conversation_id = ? AND state IN ('waiting_group','waiting_preferred','waiting_backup') AND assigned_driver_phone IS NULL`,
+          WHERE conversation_id = ? AND state IN ('waiting_group','waiting_preferred','waiting_backup','nivel_1','nivel_2','nivel_3','waiting_driver') AND assigned_driver_phone IS NULL`,
     args: [driverPhone, convId],
   });
   const ok = rs.rowsAffected > 0;
@@ -884,8 +892,8 @@ export async function getActiveTripsByClient(clientPhone: string): Promise<TripR
 // ========== SURVEY ==========
 
 export async function getTripsPendingSurvey(): Promise<TripRow[]> {
-  const cutoff = Math.floor(Date.now() / 1000) - 86400;
-  return query<TripRow>("SELECT * FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (survey_sent IS NULL OR survey_sent = 0) AND updated_at < ? ORDER BY updated_at ASC LIMIT 10", [cutoff]);
+  const cutoff = Math.floor(Date.now() / 1000);
+  return query<TripRow>("SELECT * FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?) ORDER BY confirmed_at ASC LIMIT 10", [cutoff]);
 }
 
 export async function markSurveySent(tripId: string): Promise<void> {
@@ -921,6 +929,45 @@ export async function updateTripScheduledAt(tripId: string, scheduledAt: number)
     sql: "UPDATE trips SET scheduled_at = ?, updated_at = unixepoch() WHERE trip_id = ?",
     args: [scheduledAt, tripId],
   });
+}
+
+export async function updateTripFlight(tripId: string, flightNumber: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET flight_number = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [flightNumber, tripId],
+  });
+}
+
+export async function updateTripHotel(tripId: string, hotel: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET hotel_destination = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [hotel, tripId],
+  });
+}
+
+export async function setComisionDeclarada(tripId: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET comision_declarada = 1, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [tripId],
+  });
+}
+
+export async function getTripsByScheduledAtWindow(startTs: number, endTs: number): Promise<TripRow[]> {
+  return query<TripRow>(
+    "SELECT * FROM trips WHERE scheduled_at >= ? AND scheduled_at <= ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at",
+    [startTs, endTs]
+  );
+}
+
+export async function getTripsPendingCloseOut(): Promise<TripRow[]> {
+  const cutoff = Math.floor(Date.now() / 1000) - 7200;
+  return query<TripRow>(
+    "SELECT * FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ? ORDER BY confirmed_at",
+    [cutoff]
+  );
 }
 
 export async function createReservationSlot(dayOfWeek: number, startTime: string, endTime: string, label?: string, maxBookings = 1): Promise<{ ok: boolean; error?: string }> {

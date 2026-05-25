@@ -1,75 +1,131 @@
 import {
   getExpiredGroupTimeouts,
   getExpiredByState,
-  advanceToGroup,
-  advanceToBackup,
+  advanceToNivel2,
+  advanceToNivel3,
   closeWorkflow,
 } from "./state-machine";
 import {
   getActiveTripByPhone,
-  getClientPreferredDriver,
   getDriverByPhone,
   getDriverExpiry,
+  getTripsByScheduledAtWindow,
+  getTripsPendingCloseOut,
+  getDbInstance,
 } from "../db/database";
-import { notifyAdmin, broadcastTripToDrivers, offerToSpecificDriver } from "../services/admin.service";
+import { notifyAdmin, broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2 } from "../services/admin.service";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "../whatsapp/sender";
 import { sendPendingSurveys } from "../services/survey.service";
-
-const TIMEOUT_PREFERRED_MS = 3 * 60 * 1000;
-const TIMEOUT_BACKUP_MS = 3 * 60 * 1000;
-const TIMEOUT_GROUP_MS = 8 * 60 * 1000;
+import {
+  TIMEOUT_NIVEL_1_MS,
+  TIMEOUT_NIVEL_2_MS,
+  TIMEOUT_NIVEL_3_MS,
+  TIMEOUT_WAITING_DRIVER_MS,
+} from "@/config/constants";
 
 export async function checkTimeouts(): Promise<void> {
   await sendPendingSurveys();
 
-  // Stage 1: Preferred driver timed out → offer to backup or broadcast
-  const preferredExpired = await getExpiredByState("waiting_preferred", TIMEOUT_PREFERRED_MS);
-  for (const ctx of preferredExpired) {
-    console.log(`[TIMEOUT] Preferido expiró para conv ${ctx.conversationId}`);
+  // === DISPATCH LEVELS ===
+
+  // Nivel 1 expired → offer to Nivel 2 (Principal2)
+  const nivel1Expired = await getExpiredByState("nivel_1", TIMEOUT_NIVEL_1_MS);
+  for (const ctx of nivel1Expired) {
+    console.log(`[TIMEOUT] Nivel 1 expiró para conv ${ctx.conversationId}`);
     const trip = await getActiveTripByPhone(ctx.phone);
     if (!trip) continue;
 
-    const pref = await getClientPreferredDriver(ctx.phone);
-    if (pref && pref.backup_driver_phone) {
-      const backupDriver = await getDriverByPhone(pref.backup_driver_phone);
-      if (backupDriver && backupDriver.active) {
-        const expiry = await getDriverExpiry(pref.backup_driver_phone);
-        if (expiry.active) {
-          await advanceToBackup(ctx.conversationId, ctx.phone);
-          const prefDriver = await getDriverByPhone(pref.preferred_driver_phone);
-          const prefName = prefDriver?.name || "otro chofer";
-          await offerToSpecificDriver(
-            backupDriver.phone, trip, ctx.conversationId,
-            `🔄 *RESERVA — CHOFER SUPLENTE*`,
-            `Pax de ${prefName} no respondió. Tenés 3min para tomar el viaje.`
-          );
-          console.log(`[PRIORITY] Preferido timeout → backup ${backupDriver.name} (${ctx.conversationId})`);
-          continue;
-        }
+    const principal2 = await getPrincipal2();
+    if (principal2 && principal2.active) {
+      const expiry = await getDriverExpiry(principal2.phone);
+      if (expiry.active) {
+        await advanceToNivel2(ctx.conversationId, ctx.phone);
+        await offerToSpecificDriver(
+          principal2.phone, trip, ctx.conversationId,
+          `⭐ *NIVEL 2 — RESERVA*`,
+          `El Principal no respondió. Tenés 30min para aceptar.`
+        );
+        console.log(`[DISPATCH] Nivel 1 timeout → Nivel 2 (${principal2.name}) conv ${ctx.conversationId}`);
+        continue;
       }
     }
 
-    // No backup → broadcast
-    await advanceToGroup(ctx.conversationId, ctx.phone);
+    // No principal2 → broadcast
+    await advanceToNivel3(ctx.conversationId, ctx.phone);
     await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
-    console.log(`[PRIORITY] Preferido timeout → broadcast (${ctx.conversationId})`);
+    console.log(`[DISPATCH] Nivel 1 timeout → broadcast conv ${ctx.conversationId}`);
   }
 
-  // Stage 2: Backup driver timed out → broadcast
-  const backupExpired = await getExpiredByState("waiting_backup", TIMEOUT_BACKUP_MS);
-  for (const ctx of backupExpired) {
-    console.log(`[TIMEOUT] Backup expiró para conv ${ctx.conversationId}`);
+  // Nivel 2 expired → broadcast (Nivel 3)
+  const nivel2Expired = await getExpiredByState("nivel_2", TIMEOUT_NIVEL_2_MS);
+  for (const ctx of nivel2Expired) {
+    console.log(`[TIMEOUT] Nivel 2 expiró para conv ${ctx.conversationId}`);
     const trip = await getActiveTripByPhone(ctx.phone);
     if (!trip) continue;
 
-    await advanceToGroup(ctx.conversationId, ctx.phone);
+    await advanceToNivel3(ctx.conversationId, ctx.phone);
     await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
-    console.log(`[PRIORITY] Backup timeout → broadcast (${ctx.conversationId})`);
+    console.log(`[DISPATCH] Nivel 2 timeout → broadcast conv ${ctx.conversationId}`);
   }
 
-  // Stage 3: Group (broadcast) timed out → notify admin
-  const groupExpired = await getExpiredGroupTimeouts(TIMEOUT_GROUP_MS);
+  // Nivel 3 expired → notify admin
+  const nivel3Expired = await getExpiredByState("nivel_3", TIMEOUT_NIVEL_3_MS);
+  for (const ctx of nivel3Expired) {
+    console.log(`[TIMEOUT] Nivel 3 expiró para conv ${ctx.conversationId}`);
+    const trip = await getActiveTripByPhone(ctx.phone);
+    const destino = trip?.destination || "sin destino";
+
+    await notifyAdmin(`⚠️ *Viaje sin asignar*
+
+Cliente: ${ctx.phone}
+Destino: ${destino}
+
+Los 3 niveles de despacho agotados. Reasigná manualmente.`);
+
+    await closeWorkflow(ctx.conversationId);
+  }
+
+  // Waiting driver (AHORA) expired → notify admin
+  const waitingDriverExpired = await getExpiredByState("waiting_driver", TIMEOUT_WAITING_DRIVER_MS);
+  for (const ctx of waitingDriverExpired) {
+    console.log(`[TIMEOUT] Waiting driver expiró para conv ${ctx.conversationId}`);
+    const trip = await getActiveTripByPhone(ctx.phone);
+    const destino = trip?.destination || "sin destino";
+
+    await sendWhatsAppMessage(ctx.phone, "Disculpá, no encontramos un chofer disponible ahora mismo. Un operador se va a comunicar para ayudarte.");
+    await notifyAdmin(`⚠️ *AHORA sin chofer*
+
+Cliente: ${ctx.phone}
+Destino: ${destino}
+
+Ningún chofer tomó el servicio AHORA. Reasigná manualmente.`);
+
+    await closeWorkflow(ctx.conversationId);
+  }
+
+  // === BACKWARD COMPAT: old waiting_preferred / waiting_backup ===
+  const oldPreferredExpired = await getExpiredByState("waiting_preferred", 3 * 60 * 1000);
+  for (const ctx of oldPreferredExpired) {
+    console.log(`[TIMEOUT] (old) waiting_preferred expiró para conv ${ctx.conversationId}`);
+    const trip = await getActiveTripByPhone(ctx.phone);
+    if (!trip) continue;
+    await advanceToNivel3(ctx.conversationId, ctx.phone);
+    await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
+  }
+
+  const oldBackupExpired = await getExpiredByState("waiting_backup", 3 * 60 * 1000);
+  for (const ctx of oldBackupExpired) {
+    console.log(`[TIMEOUT] (old) waiting_backup expiró para conv ${ctx.conversationId}`);
+    const trip = await getActiveTripByPhone(ctx.phone);
+    if (!trip) continue;
+    await advanceToNivel3(ctx.conversationId, ctx.phone);
+    await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
+  }
+
+  // Old waiting_group → still works
+  const groupExpired = await getExpiredGroupTimeouts(TIMEOUT_NIVEL_3_MS);
   for (const ctx of groupExpired) {
-    console.log(`[TIMEOUT] Grupo expiró para conv ${ctx.conversationId}`);
+    console.log(`[TIMEOUT] (old) waiting_group expiró para conv ${ctx.conversationId}`);
     const trip = await getActiveTripByPhone(ctx.phone);
     const destino = trip?.destination || "sin destino";
 
@@ -82,4 +138,210 @@ Ningún chofer tomó el servicio. Reasigná manualmente.`);
 
     await closeWorkflow(ctx.conversationId);
   }
+
+  // === CRON JOBS ===
+  await checkReconfirmacion24hs();
+  await checkMensajeFelicidad12hs();
+  await checkCierreChofer();
+  await checkDiscrepanciaComision();
+  await checkDolarApiNotification();
+}
+
+// === RECONFIRMACIÓN 24HS ===
+async function checkReconfirmacion24hs(): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const in24h = now + 86400;
+  const trips = await getTripsByScheduledAtWindow(now, in24h);
+  const reconfKey = "last_reconfirm_24hs";
+
+  for (const trip of trips) {
+    if (!trip.assigned_driver_phone) continue;
+    if (trip.status === "completado" || trip.status === "cancelado") continue;
+
+    // Check if already notified for this window
+    const lastNotified = await getDbInstance().execute({
+      sql: "SELECT value FROM connection_state WHERE key = ?",
+      args: [`${reconfKey}_${trip.trip_id}`],
+    });
+    if ((lastNotified.rows as any[]).length > 0) continue;
+
+    const driver = await getDriverByPhone(trip.assigned_driver_phone);
+    if (!driver) continue;
+
+    const dateStr = new Date((trip.scheduled_at || 0) * 1000).toLocaleString("es-AR", {
+      weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+    });
+
+    await sendInteractiveButtons(driver.phone,
+      `🔄 *Reconfirmación de viaje*
+
+Quedan 24hs para el viaje a *${trip.destination}*
+📅 ${dateStr}
+
+¿Confirmás que vas a realizarlo?`, [
+      { id: `reconfirm_ok_${trip.trip_id}`, title: "✅ Confirmado" },
+      { id: `reconfirm_no_${trip.trip_id}`, title: "❌ No puedo" },
+    ]);
+
+    await getDbInstance().execute({
+      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
+      args: [`${reconfKey}_${trip.trip_id}`],
+    });
+
+    console.log(`[CRON] Reconfirmación 24hs enviada a ${driver.phone} para trip ${trip.trip_id}`);
+  }
+}
+
+// === MENSAJE FELICIDAD 12HS ===
+async function checkMensajeFelicidad12hs(): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const in12h = now + 43200;
+  const trips = await getTripsByScheduledAtWindow(now, in12h);
+  const felizKey = "last_feliz_msg";
+
+  for (const trip of trips) {
+    if (trip.status === "completado" || trip.status === "cancelado") continue;
+
+    const lastNotified = await getDbInstance().execute({
+      sql: "SELECT value FROM connection_state WHERE key = ?",
+      args: [`${felizKey}_${trip.trip_id}`],
+    });
+    if ((lastNotified.rows as any[]).length > 0) continue;
+
+    await sendWhatsAppMessage(trip.client_phone,
+      `🌟 *Todo listo para tu viaje*
+
+Recordá que tu chofer asignado se contactará con vos antes del servicio para coordinar todos los detalles.
+
+Cualquier cambio, avisanos por este chat.`);
+
+    await getDbInstance().execute({
+      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
+      args: [`${felizKey}_${trip.trip_id}`],
+    });
+
+    console.log(`[CRON] Mensaje felicidad 12hs enviado a ${trip.client_phone} para trip ${trip.trip_id}`);
+  }
+}
+
+// === CIERRE CHOFER (2H POST VIAJE) ===
+async function checkCierreChofer(): Promise<void> {
+  const trips = await getTripsPendingCloseOut();
+  const cierreKey = "last_cierre_msg";
+
+  for (const trip of trips) {
+    if (!trip.assigned_driver_phone) continue;
+
+    const lastNotified = await getDbInstance().execute({
+      sql: "SELECT value FROM connection_state WHERE key = ?",
+      args: [`${cierreKey}_${trip.trip_id}`],
+    });
+    if ((lastNotified.rows as any[]).length > 0) continue;
+
+    const commission = trip.commission_amount || Math.round((trip.price_base || 0) * 0.15);
+
+    await sendInteractiveButtons(trip.assigned_driver_phone,
+      `📊 *Cierre de viaje*
+
+Destino: ${trip.destination}
+Comisión: $${commission.toLocaleString("es-AR")}
+
+¿Confirmás la comisión declarada?`, [
+      { id: `comision_ok_${trip.trip_id}`, title: "✅ Confirmar" },
+      { id: `comision_revision_${trip.trip_id}`, title: "📝 Revisar" },
+    ]);
+
+    await getDbInstance().execute({
+      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
+      args: [`${cierreKey}_${trip.trip_id}`],
+    });
+
+    console.log(`[CRON] Cierre chofer enviado a ${trip.assigned_driver_phone} para trip ${trip.trip_id}`);
+  }
+}
+
+// === DISCREPANCIA COMISIÓN (24H POST) ===
+async function checkDiscrepanciaComision(): Promise<void> {
+  const cutoff = Math.floor(Date.now() / 1000) - 86400;
+  const discreKey = "last_discre_msg";
+
+  const trips = await getDbInstance().execute({
+    sql: "SELECT * FROM trips WHERE status = 'completado' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
+    args: [cutoff],
+  });
+
+  for (const row of trips.rows as any[]) {
+    const tripId = row.trip_id;
+
+    const lastNotified = await getDbInstance().execute({
+      sql: "SELECT value FROM connection_state WHERE key = ?",
+      args: [`${discreKey}_${tripId}`],
+    });
+    if ((lastNotified.rows as any[]).length > 0) continue;
+
+    const trip = await getActiveTripByPhone(row.client_phone);
+    const commission = trip?.commission_amount || Math.round((row.price_base || 0) * 0.15);
+
+    await notifyAdmin(`⚠️ *Discrepancia de comisión*
+
+Viaje: ${tripId}
+Cliente: ${row.client_phone}
+Destino: ${row.destination}
+Comisión pendiente: $${commission.toLocaleString("es-AR")}
+Chofer: ${row.assigned_driver_phone || "N/A"}
+
+Hace más de 24hs del viaje y el chofer no declaró la comisión.`);
+
+    await getDbInstance().execute({
+      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
+      args: [`${discreKey}_${tripId}`],
+    });
+
+    console.log(`[CRON] Discrepancia comisión notificada para trip ${tripId}`);
+  }
+}
+
+// === DOLARAPI DIARIO ===
+async function checkDolarApiNotification(): Promise<void> {
+  const today = new Date().toISOString().split("T")[0];
+  const lastFetch = await getDbInstance().execute({
+    sql: "SELECT value FROM connection_state WHERE key = 'dolar_last_fetch_date'",
+  });
+  const lastDate = (lastFetch.rows as any[])[0]?.value;
+  if (lastDate === today) return;
+
+  let dolarBlue = "N/A";
+  let realRate = "N/A";
+
+  try {
+    const resp = await fetch("https://dolarapi.com/v1/dolares", { signal: AbortSignal.timeout(5000) });
+    const data = await resp.json() as any[];
+    const blue = data.find((d: any) => d.nombre?.toLowerCase().includes("blue"));
+    if (blue) dolarBlue = `$${blue.compra}/${blue.venta}`;
+  } catch (e) {
+    console.error("[DOLARAPI] Error fetching USD:", e);
+  }
+
+  try {
+    const resp = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", { signal: AbortSignal.timeout(5000) });
+    const data = await resp.json() as any;
+    const bid = data?.USDBRL?.bid;
+    if (bid) realRate = `R$${bid}`;
+  } catch (e) {
+    console.error("[DOLARAPI] Error fetching BRL:", e);
+  }
+
+  await notifyAdmin(`📊 *Cotizaciones del día* (${today})
+
+💵 Dólar Blue: ${dolarBlue}
+💶 Real (USD→BRL): ${realRate}
+
+Usá .env: COTIZACION_DOLAR y COTIZACION_REAL`);
+
+  await getDbInstance().execute({
+    sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES ('dolar_last_fetch_date', ?, unixepoch())",
+    args: [today],
+  });
+
+  console.log(`[DOLARAPI] Cotizaciones notificadas para ${today}`);
 }

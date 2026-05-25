@@ -47,10 +47,15 @@ export async function generateGroqReply(
   const dolar = process.env.COTIZACION_DOLAR || "1250";
   const real = process.env.COTIZACION_REAL || "250";
 
+  const isExtranjero = !clientPhone.startsWith('+54') || lang !== 'es';
+  const monedaSugerida = isExtranjero ? (lang === 'pt' ? 'BRL' : 'USD') : 'ARS';
+
   let dynamicContext = `[ESTADO_SISTEMA_DINÁMICO]\n`;
   dynamicContext += `Cotización Dólar: $${dolar} ARS | Cotización Real: $${real} ARS\n`;
   dynamicContext += `Nota Promocional Vigente del Traslado: ${promoNote || "Ninguna promoción activa"}\n`;
   dynamicContext += `Teléfono del Cliente: ${clientPhone}\n`;
+  dynamicContext += `[CLIENTE_EXTRANJERO: ${isExtranjero}]\n`;
+  dynamicContext += `[MONEDA_SUGERIDA: ${monedaSugerida}]\n`;
 
   if (trip) {
     dynamicContext += `Viaje Actual Activo en Base de Datos: ID ${trip.trip_id} | Destino: ${trip.destination} | Estado: ${trip.status}\n`;

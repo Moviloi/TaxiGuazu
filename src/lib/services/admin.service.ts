@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
-import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff, getDbInstance, getPrincipalDriver } from "@/lib/db/database";
+import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff, getDbInstance, getPrincipalDriver, getPrincipal2Driver, getDriverByPhone } from "@/lib/db/database";
 import type { DriverRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
@@ -67,6 +67,14 @@ function scheduledLabel(trip: any): string {
   const dateStr = d.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
   const timeStr = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   return `\n📅 ${dateStr} ${timeStr}`;
+}
+
+export async function getPrincipal2(): Promise<DriverRow | null> {
+  const p2 = await getPrincipal2Driver();
+  if (p2) return p2;
+  const envPhone = process.env.PRINCIPAL_2_PHONE;
+  if (envPhone) return getDriverByPhone(envPhone);
+  return null;
 }
 
 export async function offerToSpecificDriver(

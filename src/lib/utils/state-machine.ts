@@ -7,7 +7,7 @@ import {
   advanceWorkflowState as dbAdvanceState,
 } from "@/lib/db/database";
 
-export type WorkflowState = "idle" | "awaiting_slot" | "waiting_preferred" | "waiting_backup" | "waiting_group" | "closed";
+export type WorkflowState = "idle" | "awaiting_slot" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_group" | "waiting_driver" | "waiting_preferred" | "waiting_backup" | "closed";
 
 export interface WorkflowContext {
   conversationId: number;
@@ -40,12 +40,20 @@ export async function advanceToSlotSelection(convId: number, phone: string): Pro
   await dbAdvanceState(convId, phone, "awaiting_slot");
 }
 
-export async function advanceToPreferred(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "waiting_preferred");
+export async function advanceToNivel1(convId: number, phone: string): Promise<void> {
+  await dbAdvanceState(convId, phone, "nivel_1");
 }
 
-export async function advanceToBackup(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "waiting_backup");
+export async function advanceToNivel2(convId: number, phone: string): Promise<void> {
+  await dbAdvanceState(convId, phone, "nivel_2");
+}
+
+export async function advanceToNivel3(convId: number, phone: string): Promise<void> {
+  await dbAdvanceState(convId, phone, "nivel_3");
+}
+
+export async function advanceToWaitingDriver(convId: number, phone: string): Promise<void> {
+  await dbAdvanceState(convId, phone, "waiting_driver");
 }
 
 export async function advanceToGroup(convId: number, phone: string): Promise<void> {

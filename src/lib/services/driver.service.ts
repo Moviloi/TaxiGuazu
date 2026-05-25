@@ -1,5 +1,6 @@
 import {
   getWorkflow,
+  advanceToNivel1,
 } from "@/lib/utils/state-machine";
 import {
   getActiveTripByPhone,
@@ -18,8 +19,12 @@ import {
   setConversationTrip,
   getConversationByPhone,
   getOrCreateConversation,
+  updateTripState,
+  setComisionDeclarada,
+  getTripById,
+  getPrincipalDriver,
 } from "@/lib/db/database";
-import { notifyAdmin, notifyOtherDriversTaken } from "./admin.service";
+import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver } from "./admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 
 export function isGroupMessage(from: string): boolean {
@@ -41,7 +46,9 @@ export async function handleDriverResponse(
   if (!isAccepting(groupMsg)) return;
 
   const workflow = await getWorkflow(convId);
-  if (!workflow || workflow.state !== "waiting_group") return;
+  if (!workflow) return;
+  const validStates = ["waiting_group", "nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
+  if (!validStates.includes(workflow.state)) return;
 
   await assignDriver(workflow, driverPhone);
 }
@@ -135,7 +142,9 @@ ${roleLine ? roleLine.trimStart() : ""}
 
 export async function handleDriverButtonAccept(convId: number, driverPhone: string): Promise<void> {
   const workflow = await getWorkflow(convId);
-  if (!workflow || workflow.state !== "waiting_group") return;
+  if (!workflow) return;
+  const validStates = ["waiting_group", "nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
+  if (!validStates.includes(workflow.state)) return;
 
   await assignDriver(workflow, driverPhone);
 }
@@ -241,4 +250,70 @@ export async function handleDriverTakeLead(convId: number, driverPhone: string):
   notifyOtherDriversTaken(driverPhone, lead.destination);
 
   console.log(`[LEAD] Tomado por ${driverPhone} para conv ${convId}: ${lead.destination}`);
+}
+
+export async function handleDriverReconfirmOk(buttonId: string, driverPhone: string): Promise<void> {
+  const tripId = buttonId.replace("reconfirm_ok_", "");
+  const trip = await getTripById(tripId);
+  if (!trip) return;
+
+  await updateTripState(tripId, "reconfirmado_24hs");
+  await sendWhatsAppMessage(driverPhone, `✅ Viaje a ${trip.destination} reconfirmado. Gracias!`);
+  await notifyAdmin(`🔄 Viaje reconfirmado por ${driverPhone} para ${tripId} → ${trip.destination}`);
+  console.log(`[RECONFIRM] OK ${driverPhone} trip ${tripId}`);
+}
+
+export async function handleDriverReconfirmNo(buttonId: string, driverPhone: string): Promise<void> {
+  const tripId = buttonId.replace("reconfirm_no_", "");
+  const trip = await getTripById(tripId);
+  if (!trip) return;
+
+  await sendWhatsAppMessage(driverPhone, "Entendido. Vamos a buscar otro chofer para el viaje.");
+  await notifyAdmin(`🔄 *Reasignar viaje*
+
+El chofer ${driverPhone} no puede realizar el viaje ${tripId} → ${trip.destination}
+
+Reasignar manualmente.`);
+
+  // Reassign to principal
+  const conv = await getConversationByPhone(trip.client_phone);
+  if (conv) {
+    const principal = await getPrincipalDriver();
+    if (principal) {
+      await advanceToNivel1(conv.id, trip.client_phone);
+      await offerToSpecificDriver(
+        principal.phone, trip, conv.id,
+        `🔄 *REASIGNACIÓN — RESERVA*`,
+        `Otro chofer no pudo. Te ofrecemos este viaje (principal).`
+      );
+    }
+  }
+
+  console.log(`[RECONFIRM] NO ${driverPhone} trip ${tripId}`);
+}
+
+export async function handleComisionOk(buttonId: string, driverPhone: string): Promise<void> {
+  const tripId = buttonId.replace("comision_ok_", "");
+  const trip = await getTripById(tripId);
+  if (!trip) return;
+
+  await setComisionDeclarada(tripId);
+  const commission = trip.commission_amount || Math.round((trip.price_base || 0) * 0.15);
+  await sendWhatsAppMessage(driverPhone, `✅ Comisión de $${commission.toLocaleString("es-AR")} confirmada. Gracias!`);
+  console.log(`[COMISION] OK ${driverPhone} trip ${tripId} comision=${commission}`);
+}
+
+export async function handleComisionRevision(buttonId: string, driverPhone: string): Promise<void> {
+  const tripId = buttonId.replace("comision_revision_", "");
+  const trip = await getTripById(tripId);
+  if (!trip) return;
+
+  await notifyAdmin(`📝 *Revisión de comisión solicitada*
+
+Chofer: ${driverPhone}
+Viaje: ${tripId} → ${trip.destination}
+Comisión actual: $${(trip.commission_amount || Math.round((trip.price_base || 0) * 0.15)).toLocaleString("es-AR")}
+
+El chofer pide revisar la comisión. Contactarlo manualmente.`);
+  console.log(`[COMISION] Revision solicitada ${driverPhone} trip ${tripId}`);
 }

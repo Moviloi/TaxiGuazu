@@ -11,7 +11,9 @@ export async function sendPendingSurveys(): Promise<void> {
   const trips = await getTripsPendingSurvey();
 
   for (const trip of trips) {
-    if (!shouldSendSurvey(trip)) continue;
+    const hoursSince = (Date.now() / 1000 - (trip.confirmed_at || trip.updated_at || trip.created_at || 0)) / 3600;
+    if (hoursSince < 4) continue;
+    if (trip.survey_sent) continue;
 
     const clientMsg = `Hola! ¿Cómo estuvo tu viaje a ${trip.destination}?
 
@@ -30,43 +32,6 @@ Tu opinión nos ayuda a mejorar.`;
   if (trips.length > 0) {
     console.log(`[SURVEY] ${trips.length} encuesta(s) enviada(s)`);
   }
-}
-
-function shouldSendSurvey(trip: any): boolean {
-  const now = new Date();
-  const tripTime = new Date((trip.updated_at || trip.created_at) * 1000);
-  const tripHour = tripTime.getHours();
-  const hoursSince = (now.getTime() - tripTime.getTime()) / 3600000;
-
-  if (hoursSince < 4) return false;
-
-  const today = new Date(tripTime);
-  today.setDate(tripTime.getDate());
-
-  const nextDay = new Date(tripTime);
-  nextDay.setDate(tripTime.getDate() + 1);
-
-  function inWindow(startH: number, startM: number, endH: number, endM: number, base: Date = today): boolean {
-    const start = new Date(base);
-    start.setHours(startH, startM, 0, 0);
-    const end = new Date(base);
-    end.setHours(endH, endM, 0, 0);
-    return now >= start && now <= end && hoursSince >= 4;
-  }
-
-  if (tripHour >= 5 && tripHour < 12) {
-    return inWindow(8, 0, 10, 0, nextDay) || inWindow(18, 30, 20, 30, nextDay);
-  }
-
-  if (tripHour >= 12 && tripHour < 18) {
-    return inWindow(18, 30, 21, 0) || inWindow(8, 0, 10, 0, nextDay);
-  }
-
-  if (tripHour >= 18) {
-    return inWindow(14, 0, 16, 0, nextDay) || inWindow(18, 30, 20, 30, nextDay);
-  }
-
-  return inWindow(18, 30, 20, 30) || inWindow(10, 0, 12, 0, nextDay);
 }
 
 export async function handleSurveyResponse(phone: string, buttonId: string): Promise<void> {

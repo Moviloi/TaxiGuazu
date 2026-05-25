@@ -42,7 +42,10 @@ export interface TripRow {
   contact_shared_at: number | null;
   commission_amount: number | null;
   commission_paid: number | null;
+  comision_declarada: number | null;
   driver_payout: number | null;
+  flight_number: string | null;
+  hotel_destination: string | null;
   survey_sent: number | null;
   post_trip_response: string | null;
   scheduled_at: number | null;
