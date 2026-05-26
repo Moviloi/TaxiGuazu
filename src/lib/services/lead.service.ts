@@ -118,8 +118,22 @@ function formatConfidenceNote(
   tariffMatch?: TariffMatchResult,
 ): string {
   const parts: string[] = [];
-  if (e.origin) parts.push(`Origen: "${e.origin}" (confianza: ${(confidenceResult.slots.origin?.score ?? 0) * 100}%)`);
-  if (e.destination) parts.push(`Destino: "${e.destination}" (confianza: ${(confidenceResult.slots.destination?.score ?? 0) * 100}%)`);
+  if (e.origin) {
+    const originScore = confidenceResult.slots.origin?.score ?? 0;
+    if (confidenceResult.slots.origin?.reason === "unknown_location") {
+      parts.push(`Origen desconocido: "${e.origin}". No está en mi tarifario. Preguntale al cliente qué lugar quiso decir.`);
+    } else {
+      parts.push(`Origen: "${e.origin}" (confianza: ${originScore * 100}%)`);
+    }
+  }
+  if (e.destination) {
+    const destScore = confidenceResult.slots.destination?.score ?? 0;
+    if (confidenceResult.slots.destination?.reason === "unknown_location") {
+      parts.push(`Destino desconocido: "${e.destination}". No está en mi tarifario. Preguntale al cliente qué lugar quiso decir.`);
+    } else {
+      parts.push(`Destino: "${e.destination}" (confianza: ${destScore * 100}%)`);
+    }
+  }
   if (e.passengers) parts.push(`Pasajeros: ${e.passengers}`);
   if (e.price) parts.push(`Precio: $${e.price}`);
   if (e.urgency) parts.push(`Urgencia: ${e.urgency}`);

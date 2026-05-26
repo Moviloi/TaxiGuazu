@@ -272,6 +272,7 @@ async function initSchema(): Promise<void> {
       await seedLocationAliases();
     }
   } catch (e) { console.error("[migration] seed location_aliases error:", e); }
+  await migrateCentroAlias();
   for (const sql of migrations) {
     try { await getDbv().execute(sql); } catch (e) { console.error("[migration] error:", sql, e); }
   }
@@ -1311,6 +1312,24 @@ async function seedLocationAliases(): Promise<void> {
   }
 }
 
+// ========== MIGRATION: update centro canonical to match tariffs table ==========
+async function migrateCentroAlias(): Promise<void> {
+  try {
+    await getDbv().execute({
+      sql: "UPDATE location_aliases SET canonical_name = ? WHERE LOWER(alias) = ? AND LOWER(canonical_name) = ?",
+      args: ["Puerto Iguazú", "centro", "centro (urbano)"],
+    });
+    await getDbv().execute({
+      sql: "UPDATE location_aliases SET canonical_name = ? WHERE LOWER(alias) = ? AND LOWER(canonical_name) = ?",
+      args: ["Puerto Iguazú", "centro iguazu", "centro (urbano)"],
+    });
+    await getDbv().execute({
+      sql: "UPDATE location_aliases SET canonical_name = ? WHERE LOWER(alias) = ? AND LOWER(canonical_name) = ?",
+      args: ["Puerto Iguazú", "centro puerto", "centro (urbano)"],
+    });
+  } catch (e) { console.error("[migrateCentroAlias] error:", e); }
+}
+
 function levenshtein(a: string, b: string): number {
   const m = a.length, n = b.length;
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
@@ -1326,30 +1345,39 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
-export async function resolveAlias(text: string): Promise<string[]> {
-  if (!text) return [];
+export async function resolveAlias(text: string): Promise<{ resolved: boolean; names: string[] }> {
+  if (!text) return { resolved: false, names: [] };
   const lower = text.toLowerCase().trim();
   const direct = await query<LocationAliasRow>(
     "SELECT canonical_name FROM location_aliases WHERE LOWER(alias) = ? LIMIT 5",
     [lower]
   );
-  if (direct.length > 0) return [...new Set(direct.map(r => r.canonical_name))];
+  if (direct.length > 0) return { resolved: true, names: [...new Set(direct.map(r => r.canonical_name))] };
 
   // Fuzzy fallback — Levenshtein ≤ 3 against all unique aliases
   const all = await query<LocationAliasRow>(
     "SELECT DISTINCT alias, canonical_name FROM location_aliases"
   );
   let bestDist = Infinity;
+  let bestAlias: string | undefined;
   let bestCanonical: string | undefined;
   for (const row of all) {
     const d = levenshtein(lower, row.alias.toLowerCase());
     if (d < bestDist) {
       bestDist = d;
+      bestAlias = row.alias;
       bestCanonical = row.canonical_name;
     }
   }
-  if (bestDist <= 3 && bestCanonical) return [bestCanonical];
-  return [text];
+  if (bestDist <= 3 && bestCanonical && bestAlias) {
+    // Auto-insert the new alias so future requests get exact match
+    await getDbv().execute({
+      sql: "INSERT OR IGNORE INTO location_aliases (alias, canonical_name) VALUES (?, ?)",
+      args: [lower, bestCanonical],
+    });
+    return { resolved: true, names: [bestCanonical] };
+  }
+  return { resolved: false, names: [text] };
 }
 
 // ========== CHAT SESSIONS (Slot-Filling) ==========

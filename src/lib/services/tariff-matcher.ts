@@ -39,8 +39,8 @@ export async function matchTariff(
   const paxNum = Math.max(1, Math.min(pax || 1, 6));
 
   // Step A: Resolve via location_aliases
-  const origins = await resolveAlias(origin);
-  const destinations = await resolveAlias(destination);
+  const origins = (await resolveAlias(origin)).names;
+  const destinations = (await resolveAlias(destination)).names;
   const canonicalOrigin = origins[0] || origin;
   const canonicalDestination = destinations[0] || destination;
 

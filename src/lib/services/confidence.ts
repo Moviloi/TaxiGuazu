@@ -26,22 +26,27 @@ export async function calculateSlotConfidence(
 
   // ── Origin ──
   if (extractedData.origin) {
-    const aliases = await resolveAlias(extractedData.origin);
-    const exactMatch = aliases.some(a => a.toLowerCase() === extractedData.origin!.toLowerCase());
-    if (exactMatch) {
-      slots.origin = { value: extractedData.origin, score: 1.0, reason: "exact_alias_match" };
-    } else if (aliases.length > 0 && aliases[0] !== extractedData.origin) {
-      const text = extractedData.origin.toLowerCase();
-      const isCentro = text === "centro" || text.includes("centro");
-      if (isCentro) {
-        const score = isForeign ? 0.5 : 0.85;
-        const reason = isForeign ? "centro_ambiguous_foreign" : "centro_asume_puerto_iguazu";
-        slots.origin = { value: aliases[0], score, reason };
-      } else {
-        slots.origin = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
-      }
+    const aliasResult = await resolveAlias(extractedData.origin);
+    if (!aliasResult.resolved) {
+      slots.origin = { value: extractedData.origin, score: 0.0, reason: "unknown_location" };
     } else {
-      slots.origin = { value: extractedData.origin, score: 0.6, reason: "approximate_match" };
+      const aliases = aliasResult.names;
+      const exactMatch = aliases.some(a => a.toLowerCase() === extractedData.origin!.toLowerCase());
+      if (exactMatch) {
+        slots.origin = { value: extractedData.origin, score: 1.0, reason: "exact_alias_match" };
+      } else if (aliases.length > 0 && aliases[0] !== extractedData.origin) {
+        const text = extractedData.origin.toLowerCase();
+        const isCentro = text === "centro" || text.includes("centro");
+        if (isCentro) {
+          const score = isForeign ? 0.5 : 0.85;
+          const reason = isForeign ? "centro_ambiguous_foreign" : "centro_asume_puerto_iguazu";
+          slots.origin = { value: aliases[0], score, reason };
+        } else {
+          slots.origin = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
+        }
+      } else {
+        slots.origin = { value: extractedData.origin, score: 0.6, reason: "approximate_match" };
+      }
     }
   } else {
     slots.origin = { value: null, score: 0.0, reason: "missing" };
@@ -49,22 +54,27 @@ export async function calculateSlotConfidence(
 
   // ── Destination ──
   if (extractedData.destination) {
-    const aliases = await resolveAlias(extractedData.destination);
-    const exactMatch = aliases.some(a => a.toLowerCase() === extractedData.destination!.toLowerCase());
-    if (exactMatch) {
-      slots.destination = { value: extractedData.destination, score: 1.0, reason: "exact_alias_match" };
-    } else if (aliases.length > 0 && aliases[0] !== extractedData.destination) {
-      const text = extractedData.destination.toLowerCase();
-      const isCentro = text === "centro" || text.includes("centro");
-      if (isCentro) {
-        const score = isForeign ? 0.5 : 0.85;
-        const reason = isForeign ? "centro_ambiguous_foreign" : "centro_asume_puerto_iguazu";
-        slots.destination = { value: aliases[0], score, reason };
-      } else {
-        slots.destination = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
-      }
+    const aliasResult = await resolveAlias(extractedData.destination);
+    if (!aliasResult.resolved) {
+      slots.destination = { value: extractedData.destination, score: 0.0, reason: "unknown_location" };
     } else {
-      slots.destination = { value: extractedData.destination, score: 0.6, reason: "approximate_match" };
+      const aliases = aliasResult.names;
+      const exactMatch = aliases.some(a => a.toLowerCase() === extractedData.destination!.toLowerCase());
+      if (exactMatch) {
+        slots.destination = { value: extractedData.destination, score: 1.0, reason: "exact_alias_match" };
+      } else if (aliases.length > 0 && aliases[0] !== extractedData.destination) {
+        const text = extractedData.destination.toLowerCase();
+        const isCentro = text === "centro" || text.includes("centro");
+        if (isCentro) {
+          const score = isForeign ? 0.5 : 0.85;
+          const reason = isForeign ? "centro_ambiguous_foreign" : "centro_asume_puerto_iguazu";
+          slots.destination = { value: aliases[0], score, reason };
+        } else {
+          slots.destination = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
+        }
+      } else {
+        slots.destination = { value: extractedData.destination, score: 0.6, reason: "approximate_match" };
+      }
     }
   } else {
     slots.destination = { value: null, score: 0.0, reason: "missing" };
