@@ -280,7 +280,15 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined);
 
-    const marker = extractTripMarker(response);
+    let marker = extractTripMarker(response);
+    if (marker) {
+      // BACKEND GUARD: Reject markers with 0 passengers (prevents premature dispatch)
+      if (!marker.passengers || marker.passengers <= 0) {
+        console.log(`[GUARD] Marker con passengers=${marker.passengers}, eliminando: ${response.substring(0,80)}...`);
+        response = stripTripMarker(response);
+        marker = null;
+      }
+    }
     if (marker) {
       response = stripTripMarker(response);
       if (trip && marker.destination !== trip.destination) {
