@@ -1237,6 +1237,13 @@ async function seedLocationAliases(): Promise<void> {
     { alias: "centro puerto", canonical: "Centro (Urbano)" },
     { alias: "urbano", canonical: "Centro (Urbano)" },
     { alias: "microcentro", canonical: "Centro (Urbano)" },
+
+    // Centro → Puerto Iguazú (alias adicional para match con tariffs)
+    { alias: "centro", canonical: "Puerto Iguazú" },
+    { alias: "centro iguazu", canonical: "Puerto Iguazú" },
+    { alias: "centro puerto", canonical: "Puerto Iguazú" },
+    { alias: "urbano", canonical: "Puerto Iguazú" },
+    { alias: "microcentro", canonical: "Puerto Iguazú" },
     // Centro de Foz
     { alias: "centro foz", canonical: "Centro de Foz" },
     { alias: "centro de foz", canonical: "Centro de Foz" },
