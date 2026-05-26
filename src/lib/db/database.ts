@@ -944,6 +944,38 @@ export async function updateTripFlight(tripId: string, flightNumber: string): Pr
   });
 }
 
+export async function updateTripPassengers(tripId: string, passengers: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET passengers = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [passengers, tripId],
+  });
+}
+
+export async function updateTripOrigin(tripId: string, origin: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET origin = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [origin, tripId],
+  });
+}
+
+export async function updateTripDestination(tripId: string, destination: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET destination = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [destination, tripId],
+  });
+}
+
+export async function updateTripPriceBase(tripId: string, price: number): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE trips SET price_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
+    args: [price, tripId],
+  });
+}
+
 export async function updateTripHotel(tripId: string, hotel: string): Promise<void> {
   await ensureSchema();
   await getDbv().execute({

@@ -220,7 +220,7 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
 
   // Split proforma: instruction first, then standalone copiable text
   await sendWhatsAppMessage(driverPhone, `📋 *Recomendación de seguridad* — copiá y pegá este mensaje al cliente:`);
-  await sendWhatsAppMessage(driverPhone, `Hola, buenas tardes. Le saluda ${driverName}, de TaxiGuazú. Veo en el sistema que solicita un traslado desde ${trip.origin || "No especificado"} hacia ${trip.destination || "No especificado"} y son ${trip.passengers || "—"} pasajeros, ¿es correcto todo? Por favor, indíqueme el nombre del hotel o dirección exacta para dejar todo coordinado de mi parte. Le avisaré en cuanto esté llegando para nuestro encuentro. Muchas gracias.`);
+  await sendWhatsAppMessage(driverPhone, `Hola, buenas tardes. Le saluda ${driverName}, de TaxiGuazú. Veo en el sistema que solicita un traslado desde ${trip.origin ?? "No especificado"} hacia ${trip.destination ?? "No especificado"} y son ${trip.passengers ?? "—"} pasajeros, ¿es correcto todo? Por favor, indíqueme el nombre del hotel o dirección exacta para dejar todo coordinado de mi parte. Le avisaré en cuanto esté llegando para nuestro encuentro. Muchas gracias.`);
 
   // Check if this is Trip A in a dual contingency (pending_B exists)
   const hasPendingB = await getConnectionValueFlag(`contingency_pending_B_${convId}`);

@@ -12,6 +12,10 @@ import {
   updateTripTariff,
   updateTripFlight,
   updateTripHotel,
+  updateTripPassengers,
+  updateTripOrigin,
+  updateTripDestination,
+  updateTripPriceBase,
   findTariff,
   getDiscountsForTariff,
   getDriverByPhone,
@@ -293,10 +297,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
     if (marker) {
       response = stripTripMarker(response);
-      if (trip && marker.destination !== trip.destination) {
-        await updateTripState(trip.trip_id, "completado");
-        trip = null;
-      }
       if (!trip) {
         const tripId = `trip_${Date.now()}`;
         await createTrip(tripId, phone, marker.origin, marker.destination, marker.price, marker.passengers, marker.scheduledAt, marker.flightNumber);
@@ -311,11 +311,18 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
         }
       } else {
+        if (marker.passengers && marker.passengers !== trip.passengers) await updateTripPassengers(trip.trip_id, marker.passengers);
+        if (marker.origin && marker.origin !== trip.origin) await updateTripOrigin(trip.trip_id, marker.origin);
+        if (marker.destination && marker.destination !== trip.destination) await updateTripDestination(trip.trip_id, marker.destination);
+        if (marker.price && marker.price !== trip.price_base) await updateTripPriceBase(trip.trip_id, marker.price);
         if (marker.scheduledAt) await updateTripScheduledAt(trip.trip_id, marker.scheduledAt);
         if (marker.flightNumber) await updateTripFlight(trip.trip_id, marker.flightNumber);
-        if (!trip.piso_base) {
-          const tariff = await findTariff(trip.origin || marker.origin, trip.destination || marker.destination, trip.passengers || marker.passengers);
-          if (tariff) await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
+        if (marker.destination.toLowerCase().includes("pendiente hotel")) {
+          await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
+        }
+        const tariff = await findTariff(trip.origin || marker.origin, trip.destination || marker.destination, trip.passengers || marker.passengers);
+        if (tariff && !trip.piso_base) {
+          await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
         }
       }
     }
