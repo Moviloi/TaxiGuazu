@@ -78,10 +78,11 @@ export async function matchTariff(
     seen.add(row.id);
     const oDist = levenshtein(canonicalOrigin.toLowerCase(), row.origin.toLowerCase());
     const dDist = levenshtein(canonicalDestination.toLowerCase(), row.destination.toLowerCase());
-    const score = oDist + dDist;
-    const maxLen = Math.max(canonicalOrigin.length, canonicalDestination.length, 1);
-    if (score <= maxLen * 0.6) {
-      scored.push({ row, score });
+    // Each field must independently pass ≤ 35% of its own string length
+    const maxOriginLen = Math.max(canonicalOrigin.length, row.origin.length, 1);
+    const maxDestLen = Math.max(canonicalDestination.length, row.destination.length, 1);
+    if (oDist <= maxOriginLen * 0.35 && dDist <= maxDestLen * 0.35) {
+      scored.push({ row, score: oDist + dDist });
     }
   }
 

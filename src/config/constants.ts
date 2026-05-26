@@ -21,7 +21,6 @@ export const TIMEOUT_WAITING_DRIVER_MS = 3 * 60 * 1000;
 export const SESSION_INACTIVITY_48H_S = 172800;
 export const CRON_12H_S = 43200;
 export const CRON_24H_S = 86400;
-export const CRON_2H_S = 7200;
 
 // Session cleanup
 export const STALE_WORKFLOW_THRESHOLD_S = 86400;
