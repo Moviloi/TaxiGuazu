@@ -239,27 +239,58 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       return;
     }
 
+    // ── -activar / .activo / .activar (driver daily check-in) ──
+    const activarMatch = lower.match(/^[-.]activar$|^\.activo$/);
+    if (activarMatch) {
+      const existing = await getDriverByPhone(phone);
+      if (!existing) {
+        const conv = await getOrCreateConversation(phone);
+        const resp = "❌ No estás registrado como chofer. Pedí al administrador que te dé de alta.";
+        await sendWhatsAppMessage(phone, resp);
+        await insertMessage(conv.id, "assistant", resp);
+        return;
+      }
+      await getOrCreateConversation(phone);
+      const shift = await updateDriverShiftIfNull(phone);
+      const msg = buildShiftActivationMsg(shift || "day", existing.name || "Chofer");
+      await sendWhatsAppMessage(phone, msg || "✅ Activado!");
+      const conv = await getConversationByPhone(phone);
+      if (conv) await insertMessage(conv.id, "assistant", msg || "✅ Activado!");
+      // Always check shift-end prompt after activation
+      if (shift) {
+        const prompt = buildShiftEndPrompt(shift);
+        if (prompt) {
+          await sendWhatsAppMessage(phone, prompt);
+          if (conv) await insertMessage(conv.id, "assistant", prompt);
+        }
+      }
+      return;
+    }
+
     const registrarMatch = lower.match(/^\.registrar[-\s]?(.*)$/);
     if (registrarMatch) {
       const code = registrarMatch[1].trim();
       console.log(`[DEBUG_REGISTRAR] phone=${phone} code="${code}"`);
 
       if (!code) {
+        // .registrar without code = alias for -activar (registered drivers)
         const existing = await getDriverByPhone(phone);
-        console.log(`[DEBUG_REGISTRAR] getDriverByPhone found=${!!existing} name=${existing?.name}`);
-        const conv = await getOrCreateConversation(phone);
         if (existing) {
+          await getOrCreateConversation(phone);
           const shift = await updateDriverShiftIfNull(phone);
-          const expiry = await getDriverExpiry(phone);
-          const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
-          const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
-          const shiftLabel = shift === "day" ? "☀️ Turno día (6-18)" : shift === "night" ? "🌙 Turno noche (18-6)" : "";
-          const warn = buildExpiryWarning(expiry.expiresAt);
-          const resp = [`✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${existing.name}!`,
-            shiftLabel, warn].filter(Boolean).join("\n");
-          await sendWhatsAppMessage(phone, resp);
-          await insertMessage(conv.id, "assistant", resp);
+          const msg = buildShiftActivationMsg(shift || "day", existing.name || "Chofer");
+          await sendWhatsAppMessage(phone, msg || "✅ Activado!");
+          const conv = await getConversationByPhone(phone);
+          if (conv) await insertMessage(conv.id, "assistant", msg || "✅ Activado!");
+          if (shift) {
+            const prompt = buildShiftEndPrompt(shift);
+            if (prompt) {
+              await sendWhatsAppMessage(phone, prompt);
+              if (conv) await insertMessage(conv.id, "assistant", prompt);
+            }
+          }
         } else {
+          const conv = await getOrCreateConversation(phone);
           const resp = "❌ No tenés un código de registro. Pedile al administrador que te dé uno.";
           await sendWhatsAppMessage(phone, resp);
           await insertMessage(conv.id, "assistant", resp);
@@ -300,16 +331,17 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
 
       const shift = await updateDriverShiftIfNull(phone);
-      const expiry = await getDriverExpiry(phone);
-      const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
-      const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
-      const shiftLabel = shift === "day" ? "☀️ Turno día (6-18)" : shift === "night" ? "🌙 Turno noche (18-6)" : "";
-      const warn = buildExpiryWarning(expiry.expiresAt);
-      const resp = [`✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${codeEntry.name}!`,
-        shiftLabel, warn].filter(Boolean).join("\n");
-      await sendWhatsAppMessage(phone, resp);
+      const msg = buildShiftActivationMsg(shift || "day", codeEntry.name || "Chofer");
+      await sendWhatsAppMessage(phone, msg || "✅ Activado!");
       const conv2 = await getConversationByPhone(phone);
-      if (conv2) await insertMessage(conv2.id, "assistant", resp);
+      if (conv2) await insertMessage(conv2.id, "assistant", msg || "✅ Activado!");
+      if (shift) {
+        const prompt = buildShiftEndPrompt(shift);
+        if (prompt) {
+          await sendWhatsAppMessage(phone, prompt);
+          if (conv2) await insertMessage(conv2.id, "assistant", prompt);
+        }
+      }
       return;
     }
 
@@ -527,6 +559,19 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         }
       }
     }
+
+    // ── Shift-end auto-prompt for drivers ──
+    try {
+      const driver = await getDriverByPhone(phone);
+      if (driver && driver.shift) {
+        const prompt = buildShiftEndPrompt(driver.shift);
+        if (prompt) {
+          await sendWhatsAppMessage(phone, prompt);
+          const conv = await getConversationByPhone(phone);
+          if (conv) await insertMessage(conv.id, "assistant", prompt);
+        }
+      }
+    } catch (_) { /* silent */ }
   } catch (e) {
     console.error("[LEAD_ERROR]", e);
     const errMsg = `⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`;
@@ -689,13 +734,33 @@ async function escalateTrip(convId: number, phone: string, trip: TripRow, urgenc
   console.log(`[DISPATCH] Consulta/otro → broadcast conv ${convId}`);
 }
 
-function buildExpiryWarning(expiresAt: Date | null): string | null {
-  if (!expiresAt) return null;
-  const remainingMs = expiresAt.getTime() - Date.now();
-  if (remainingMs <= 0) return "⚠️ Tu ventana expiró. Enviá .registrar para renovar.";
-  if (remainingMs <= 300000) {
-    const min = Math.ceil(remainingMs / 60000);
-    return `⚠️ Tu ventana expira en ${min} min. Enviá .registrar para renovar.`;
-  }
-  return null;
+function computeShiftEnd(shift: string): Date | null {
+  if (shift !== "day" && shift !== "night") return null;
+  const now = new Date();
+  const endHour = shift === "day" ? 18 : 6;
+  const end = new Date(now);
+  end.setHours(endHour, 0, 0, 0);
+  if (now >= end) end.setDate(end.getDate() + 1);
+  return end;
+}
+
+function buildShiftActivationMsg(shift: string, name: string): string | null {
+  if (shift !== "day" && shift !== "night") return null;
+  const end = computeShiftEnd(shift);
+  if (!end) return null;
+  const h = end.getHours().toString().padStart(2, "0");
+  const m = end.getMinutes().toString().padStart(2, "0");
+  const label = shift === "day" ? "☀️ día (6-18)" : "🌙 noche (18-6)";
+  return `🔥 Activado! Turno ${label} hasta las ${h}:${m}. Buena jornada ${name}!`;
+}
+
+function buildShiftEndPrompt(driverShift: string): string | null {
+  if (driverShift !== "day" && driverShift !== "night") return null;
+  const end = computeShiftEnd(driverShift);
+  if (!end) return null;
+  const now = Date.now();
+  const remainingMs = end.getTime() - now;
+  if (remainingMs <= 0 || remainingMs > 1800000) return null; // only within 30min of shift end
+  const min = Math.ceil(remainingMs / 60000);
+  return `⚠️ Tu turno termina en ${min} min. Mandá -activar mañana para renovar.`;
 }
