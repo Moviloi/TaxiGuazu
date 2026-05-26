@@ -22,6 +22,8 @@ import {
   getActiveSlots,
   clearConversationHistory,
   createLead,
+  setCustomerName,
+  getCustomerName,
 } from "@/lib/db/database";
 import { generateGroqReply } from "@/lib/ai/groq";
 import { sendWhatsAppMessage, sendInteractiveList } from "@/lib/whatsapp/sender";
@@ -223,11 +225,49 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const workflow = await getWorkflow(conversation.id);
     if (workflow && workflow.state !== "idle" && workflow.state !== "closed") return;
 
-    await insertMessage(conversation.id, "user", text);
-
+    // === SESSION RESET CHECK ===
+    const now = Math.floor(Date.now() / 1000);
+    let sessionReset = false;
+    let customerName = null;
     let trip = await getActiveTripByPhone(phone);
 
-    const history = await getRecentHistory(conversation.id, 20);
+    // Condition A: Trip con scheduled_at en el pasado y no completado
+    if (trip && trip.scheduled_at && trip.scheduled_at < now) {
+      console.log(`[SESSION] Cond A: trip ${trip.trip_id} expirado, archivando`);
+      await updateTripState(trip.trip_id, 'completado');
+      sessionReset = true;
+      trip = null;
+    }
+
+    // Condition B: Sin reserva confirmada + >48h inactividad
+    if (!sessionReset) {
+      const lastMsgAt = freshConv.last_message_at || 0;
+      const inactive48h = (now - lastMsgAt) > 172800;
+      if (inactive48h && !trip) {
+        console.log(`[SESSION] Cond B: inactividad >48h sin reserva, reseteando`);
+        sessionReset = true;
+      }
+    }
+
+    // Condition C: trip activo con futuro → no reset (implícito, no hacer nada)
+
+    // Extract or restore customer name
+    if (sessionReset) {
+      await clearConversationHistory(conversation.id);
+      await resetToIdle(conversation.id);
+    }
+    customerName = await getCustomerName(phone);
+
+    // If user introduces themselves in this message, store it
+    const nameMatch = text.match(/(?:me llamo|soy|mi nombre es)\s+(\w+(?:\s+\w+)?)/i);
+    if (nameMatch) {
+      await setCustomerName(phone, nameMatch[1]);
+      customerName = nameMatch[1];
+    }
+
+    await insertMessage(conversation.id, "user", text);
+
+    const history = sessionReset ? [] : await getRecentHistory(conversation.id, 20);
 
     let promoNote: string | undefined;
     if (trip?.tariff_id) {
@@ -238,7 +278,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
     }
 
-    let response = await generateGroqReply(text, history, trip, phone, promoNote);
+    let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined);
 
     const marker = extractTripMarker(response);
     if (marker) {

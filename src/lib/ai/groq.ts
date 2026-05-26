@@ -36,7 +36,8 @@ export async function generateGroqReply(
   history: Message[],
   trip: Trip | null,
   clientPhone: string,
-  promoNote?: string
+  promoNote?: string,
+  customerName?: string
 ): Promise<string> {
   const groq = getGroq();
   if (!groq) return "Disculpe, no pude responder. Un operador lo asistirá.";
@@ -56,6 +57,10 @@ export async function generateGroqReply(
   dynamicContext += `Teléfono del Cliente: ${clientPhone}\n`;
   dynamicContext += `[CLIENTE_EXTRANJERO: ${isExtranjero}]\n`;
   dynamicContext += `[MONEDA_SUGERIDA: ${monedaSugerida}]\n`;
+  dynamicContext += `[SESION_LIMPIA: ${!!customerName}]\n`;
+  if (customerName) {
+    dynamicContext += `[NOMBRE_CLIENTE: ${customerName}]\n`;
+  }
 
   if (trip) {
     dynamicContext += `Viaje Actual Activo en Base de Datos: ID ${trip.trip_id} | Destino: ${trip.destination} | Estado: ${trip.status}\n`;

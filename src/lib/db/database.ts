@@ -1016,6 +1016,11 @@ export async function getUpcomingReservations(limit = 20): Promise<TripRow[]> {
   return query<TripRow>("SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at > ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at ASC LIMIT ?", [now, limit]);
 }
 
+export async function getExpiredTrips(): Promise<TripRow[]> {
+  const now = Math.floor(Date.now() / 1000);
+  return query<TripRow>("SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at < ? AND status NOT IN ('completado','cancelado')", [now]);
+}
+
 // ========== TARIFFS ==========
 
 interface TariffWithPrice extends TariffRow {
@@ -1184,6 +1189,22 @@ export async function deleteDriverDiscount(id: number, driverPhone: string): Pro
     args: [id, driverPhone],
   });
   return rs.rowsAffected > 0;
+}
+
+export async function setCustomerName(phone: string, name: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())",
+    args: [`customer_name_${phone}`, name.trim()],
+  });
+}
+
+export async function getCustomerName(phone: string): Promise<string | null> {
+  const row = await getDbv().execute({
+    sql: "SELECT value FROM connection_state WHERE key = ?",
+    args: [`customer_name_${phone}`],
+  });
+  return ((row.rows as any[])[0]?.value) || null;
 }
 
 // ========== DB INSTANCE ==========

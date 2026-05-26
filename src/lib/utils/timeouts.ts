@@ -14,6 +14,7 @@ import {
   getDbInstance,
   updateTripState,
   findTariff,
+  getExpiredTrips,
 } from "../db/database";
 import { notifyAdmin, broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2 } from "../services/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "../whatsapp/sender";
@@ -229,6 +230,7 @@ Ningún chofer tomó el servicio. Reasigná manualmente.`);
   await checkCierreChofer();
   await checkDiscrepanciaComision();
   await checkDolarApiNotification();
+  await checkSessionCleanup();
 }
 
 // === RECONFIRMACIÓN 24HS ===
@@ -428,4 +430,41 @@ Usá .env: COTIZACION_DOLAR y COTIZACION_REAL`);
   });
 
   console.log(`[DOLARAPI] Cotizaciones notificadas para ${today}`);
+}
+
+// === SESSION CLEANUP DIARIO ===
+async function checkSessionCleanup(): Promise<void> {
+  const today = new Date().toISOString().split("T")[0];
+  const lastCleanup = await getDbInstance().execute({
+    sql: "SELECT value FROM connection_state WHERE key = 'last_session_cleanup_date'",
+  });
+  const lastDate = (lastCleanup.rows as any[])[0]?.value;
+  if (lastDate === today) return;
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // 1. Archive trips with past scheduled_at that weren't completed
+  const expiredTrips = await getExpiredTrips();
+  for (const t of expiredTrips) {
+    console.log(`[CLEANUP] Archivando trip expirado ${t.trip_id}`);
+    await updateTripState(t.trip_id, "completado");
+  }
+
+  // 2. Close orphaned workflows (active but no activity >24h)
+  const staleCutoff = now - 86400;
+  const stale = await getDbInstance().execute({
+    sql: "SELECT conversation_id FROM workflows WHERE state != 'closed' AND last_message_at < ?",
+    args: [staleCutoff],
+  });
+  for (const w of stale.rows as any[]) {
+    console.log(`[CLEANUP] Cerrando workflow huérfano conv ${w.conversation_id}`);
+    await closeWorkflow(w.conversation_id);
+  }
+
+  await getDbInstance().execute({
+    sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES ('last_session_cleanup_date', ?, unixepoch())",
+    args: [today],
+  });
+
+  console.log(`[CLEANUP] Ejecutado para ${today}: ${expiredTrips.length} trips, ${stale.rows.length} workflows`);
 }
