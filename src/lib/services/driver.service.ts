@@ -195,9 +195,55 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
     { id: `enviaje_${convId}`, title: "🔄 En viaje" },
   ]);
 
-  const isAhora = workflow.state === "waiting_driver";
+  // Safety proforma for driver to copy-paste to client
+  const proforma = `📋 *Recomendación de seguridad* (copiá y pegá este mensaje al cliente)
 
-  if (isAhora) {
+Hola, buenas tardes. Le saluda ${driverName}, de TaxiGuazú. Veo en el sistema que solicita un traslado desde ${trip.origin || "No especificado"} hacia ${trip.destination || "No especificado"} y son ${trip.passengers || "—"} pasajeros, ¿es correcto todo? Por favor, indíqueme el nombre del hotel o dirección exacta para dejar todo coordinado de mi parte. Le avisaré en cuanto esté llegando para nuestro encuentro. Muchas gracias.`;
+  await sendWhatsAppMessage(driverPhone, proforma);
+
+  // Check if this is Trip A in a dual contingency (pending_B exists)
+  const pendingBCheck = await getDbInstance().execute({
+    sql: "SELECT value FROM connection_state WHERE key = ?",
+    args: [`contingency_pending_B_${convId}`],
+  });
+  const hasPendingB = (pendingBCheck.rows as any[]).length > 0;
+  const isContingencyTripA = hasPendingB;
+
+  // Check if this is Trip B in a dual contingency (contingency_dual key exists)
+  const dualRow = await getDbInstance().execute({
+    sql: "SELECT value FROM connection_state WHERE key = ?",
+    args: [`contingency_dual_${convId}`],
+  });
+  const hasDualActive = (dualRow.rows as any[]).length > 0;
+
+  // --- Send client message(s) ---
+  if (isContingencyTripA) {
+    // Dual contingency Trip A — skip client message, will send combined when both assigned
+    console.log(`[CONTINGENCIA] Trip A asignado (${driverName}), esperando Trip B para msg combinado`);
+  } else if (hasDualActive) {
+    // Dual contingency Trip B — both assigned, send combined message
+    const dual = JSON.parse((dualRow.rows as any[])[0].value);
+    const combinedMsg = `✅ *Tenemos los dos autos confirmados*
+
+${dual.driverA_name} ya lleva ${dual.paxA} pasajeros y ${driverName} lleva los ${dual.paxB} restantes. Ambos te escriben al WhatsApp en este instante para coordinar la puerta de salida. El pago lo arreglás directamente con cada uno en efectivo.`;
+    await sendWhatsAppMessage(workflow.phone, combinedMsg);
+
+    // Notify Trip A driver that both are confirmed
+    await sendWhatsAppMessage(dual.driverA_phone, `✅ El segundo auto se confirmó. ${driverName} (${driverPhone}) completa el equipo. Viaje compartido confirmado.`);
+
+    // Notify admin
+    await notifyAdmin(`✅ *Contingencia resuelta: 2 autos*
+
+Auto A: ${dual.driverA_name} (${dual.driverA_phone})
+Auto B: ${driverName} (${driverPhone})
+Cliente: ${workflow.phone}`);
+
+    // Clean up dual state
+    await getDbInstance().execute({
+      sql: "DELETE FROM connection_state WHERE key = ?",
+      args: [`contingency_dual_${convId}`],
+    });
+  } else if (workflow.state === "waiting_driver") {
     const clientMsg = `¡Listo! Mi colega ${driverName} ya te va a buscar y te va a escribir al WhatsApp en este instante para coordinar la puerta de salida. El pago de los $${price.toLocaleString("es-AR")} lo arreglás directamente con él en efectivo.\n\nNota: Si tu hotel llega a quedar muy alejado, él puede ajustar la tarifa antes de salir, pero lo manejás directo con él. ¡Buen viaje!`;
     await sendWhatsAppMessage(workflow.phone, clientMsg);
   } else {
@@ -214,12 +260,8 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
   await notifyOtherDriversTaken(driverPhone, dest);
 
   // Contingency sequel: if there's a pending Trip B, dispatch it now
-  const pendingB = await getDbInstance().execute({
-    sql: "SELECT value FROM connection_state WHERE key = ?",
-    args: [`contingency_pending_B_${convId}`],
-  });
-  if ((pendingB.rows as any[]).length > 0) {
-    const bData = JSON.parse((pendingB.rows as any[])[0].value);
+  if (hasPendingB) {
+    const bData = JSON.parse((pendingBCheck.rows as any[])[0].value);
     await getDbInstance().execute({
       sql: "DELETE FROM connection_state WHERE key = ?",
       args: [`contingency_pending_B_${convId}`],
@@ -233,6 +275,24 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
       if (bData.tariff_id) {
         await updateTripTariff(tripB.trip_id, bData.tariff_id, bData.piso || 0);
       }
+
+      // Store dual contingency tracking for Trip B phase
+      const dualState = {
+        driverA_name: driverName,
+        driverA_phone: driverPhone,
+        tripA_id: trip.trip_id,
+        tripB_id: tripB.trip_id,
+        paxA: bData.paxA || Math.min(bData.passengers, 4),
+        paxB: bData.passengers,
+      };
+      await getDbInstance().execute({
+        sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())",
+        args: [`contingency_dual_${convId}`, JSON.stringify(dualState)],
+      });
+
+      // Notify Trip A driver that Trip B is being dispatched
+      await sendWhatsAppMessage(driverPhone, `⏳ Buscando el segundo auto (${dualState.paxB} pasajeros). Si se confirma, te avisamos. Si no se consigue en los próximos minutos, se cancelará el viaje completo.`);
+
       await advanceToWaitingDriver(convId, workflow.phone);
       await sendWhatsAppMessage(workflow.phone, `Buscando el segundo auto para vos...`);
       await broadcastTripToDrivers(tripB, convId, workflow.phone, "ahora", bData.passengers);
@@ -410,6 +470,7 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
     destination: origData.destination,
     price: price4p,
     passengers: paxB,
+    paxA: paxA,
     flight_number: origData.flight_number || null,
     tariff_id: tariff?.id || null,
     piso: tariff?.piso || 0,

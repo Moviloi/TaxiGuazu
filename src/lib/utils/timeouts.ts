@@ -12,6 +12,8 @@ import {
   getTripsByScheduledAtWindow,
   getTripsPendingCloseOut,
   getDbInstance,
+  updateTripState,
+  findTariff,
 } from "../db/database";
 import { notifyAdmin, broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2 } from "../services/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "../whatsapp/sender";
@@ -118,15 +120,59 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
         args: [`contingency_offered_${ctx.conversationId}`],
       });
 
+      // Look up the 4p tariff for accurate pricing
+      const tariff4p = await findTariff(trip.origin || "", trip.destination || "ninguno", 4);
+      const price4p = tariff4p?.price || trip.price_base || 0;
+
       await closeWorkflow(ctx.conversationId);
 
       await sendInteractiveButtons(ctx.phone,
-        `Mirá, en este microsegundo no encuentro una minivan de hasta 6 plazas libre ahí mismo en la terminal. Pero para no hacerte esperar, te puedo buscar dos autos de hasta 4 pasajeros ya mismo. Te saldría el equivalente a dos tarifas de $${trip.price_base?.toLocaleString("es-AR") || " — "} cada uno. ¿Te sirve que intente buscártelos?`, [
+        `Mirá, en este microsegundo no encuentro una minivan de hasta 6 plazas disponible. Pero para no hacerte esperar, te puedo buscar dos autos de hasta 4 pasajeros ya mismo. Te saldría [$${price4p.toLocaleString("es-AR")}] × 2 en total (es decir, $${price4p.toLocaleString("es-AR")} cada uno). ¿Te sirve que intente buscártelos?`, [
         { id: `contingencia_si_${ctx.conversationId}`, title: "✅ Sí, buscá" },
         { id: `contingencia_no_${ctx.conversationId}`, title: "❌ No, gracias" },
       ]);
 
       console.log(`[CONTINGENCIA] Ofrecida para conv ${ctx.conversationId} (${trip.passengers} pax)`);
+      continue;
+    }
+
+    // Check if this is a dual contingency timeout (Trip B waiting after Trip A was assigned)
+    const dualRow2 = await getDbInstance().execute({
+      sql: "SELECT value FROM connection_state WHERE key = ?",
+      args: [`contingency_dual_${ctx.conversationId}`],
+    });
+    if ((dualRow2.rows as any[]).length > 0) {
+      console.log(`[TIMEOUT] Dual contingency — Trip B timeout para conv ${ctx.conversationId}`);
+      const dual = JSON.parse((dualRow2.rows as any[])[0].value);
+
+      // Cancel Trip B
+      if (trip) {
+        await updateTripState(trip.trip_id, "cancelado");
+      }
+
+      // Cancel Trip A
+      await updateTripState(dual.tripA_id, "cancelado");
+
+      // Notify Trip A driver
+      await sendWhatsAppMessage(dual.driverA_phone, `❌ El segundo auto no se confirmó a tiempo. El viaje compartido se cancela. Disculpá las molestias.`);
+
+      // Notify client
+      await sendWhatsAppMessage(ctx.phone, `Disculpá, no pudimos conseguir dos autos disponibles. Un operador se va a comunicar para ayudarte.`);
+
+      // Notify admin
+      await notifyAdmin(`⚠️ *Contingencia fallida — 2 autos no disponible*
+
+Cliente: ${ctx.phone}
+Auto A: ${dual.driverA_name} (${dual.driverA_phone}) — cancelado
+Ambos viajes cancelados. Contactar manualmente.`);
+
+      // Clean up
+      await getDbInstance().execute({
+        sql: "DELETE FROM connection_state WHERE key = ?",
+        args: [`contingency_dual_${ctx.conversationId}`],
+      });
+
+      await closeWorkflow(ctx.conversationId);
       continue;
     }
 
