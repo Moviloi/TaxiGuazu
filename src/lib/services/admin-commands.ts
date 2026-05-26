@@ -201,7 +201,7 @@ async function handleListSlots(phone: string): Promise<void> {
 async function handleAddChofer(phone: string, text: string): Promise<void> {
   const parts = text.split(/\s+/);
   if (parts.length < 3) {
-    await sendWhatsAppMessage(phone, "Usá: .add_chofer CODIGO NOMBRE [TELÉFONO] [TIPO SEDAN/SUV/VAN] [CAPACIDAD 4/6] [COLOR] [PATENTE] [PAIS AR/BR/PY]");
+    await sendWhatsAppMessage(phone, "Usá: .add_chofer CODIGO NOMBRE [TELÉFONO] [TIPO SEDAN/SUV/VAN] [CAPACIDAD 4/6] [COLOR] [PATENTE] [PAIS AR/BR/PY] [TURNO DIA/NOCHE]");
     return;
   }
 
@@ -213,6 +213,7 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
   const code = parts[1].toLowerCase();
   const knownCarTypes = ["sedan", "suv", "van", "pickup"];
   const knownCountries = ["ar", "br", "py"];
+  const knownShifts = ["dia", "noche"];
 
   let nameTokens: string[] = [];
   let phoneArg: string | undefined;
@@ -221,6 +222,7 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
   let color: string | undefined;
   let plate: string | undefined;
   let country: string | undefined;
+  let shift: string | undefined;
 
   let i = 2;
   while (i < parts.length) {
@@ -233,6 +235,8 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
       carType = p.toLowerCase();
     } else if (carCapacity === undefined && (p === "4" || p === "6")) {
       carCapacity = parseInt(p);
+    } else if (!shift && knownShifts.includes(p.toLowerCase())) {
+      shift = p.toLowerCase() === "dia" ? "day" : "night";
     } else if (!color && /^[a-záéíóúñü]+$/i.test(p) && !knownCountries.includes(p.toLowerCase())) {
       color = p;
     } else if (!plate && /^[a-z0-9]{4,7}$/i.test(p) && !knownCountries.includes(p.toLowerCase())) {
@@ -248,7 +252,7 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
   const name = nameTokens.join(" ") || "Sin nombre";
 
   const result = await createDriverCode(code, name, phone, phoneArg,
-    carType ? { carType, carCapacity, color, plate, country } : undefined
+    carType ? { carType, carCapacity, color, plate, country, shift } : undefined
   );
 
   if (result.ok) {
@@ -256,6 +260,7 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
     if (phoneArg) msg += ` Teléfono: ${phoneArg}.`;
     if (carType) msg += ` ${carType}${carCapacity ? " " + carCapacity + "p" : ""}.`;
     if (color) msg += ` ${color}.`;
+    if (shift) msg += ` Turno: ${shift}.`;
     if (country && country !== "AR") msg += ` (${country}).`;
     msg += ` Decile que envíe .registrar-${code} al bot.`;
     await sendWhatsAppMessage(phone, msg);
@@ -267,7 +272,7 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
 async function handleUpdateChofer(phone: string, text: string): Promise<void> {
   const parts = text.split(/\s+/);
   if (parts.length < 3) {
-    await sendWhatsAppMessage(phone, "Usá: .update_chofer CODIGO [NOMBRE] [TIPO SEDAN/SUV/VAN] [CAPACIDAD 4/6] [COLOR] [PATENTE] [PAIS AR/BR/PY]");
+    await sendWhatsAppMessage(phone, "Usá: .update_chofer CODIGO [NOMBRE] [TIPO SEDAN/SUV/VAN] [CAPACIDAD 4/6] [COLOR] [PATENTE] [PAIS AR/BR/PY] [TURNO DIA/NOCHE]");
     return;
   }
 
@@ -279,6 +284,7 @@ async function handleUpdateChofer(phone: string, text: string): Promise<void> {
   const code = parts[1].toLowerCase();
   const knownCarTypes = ["sedan", "suv", "van", "pickup"];
   const knownCountries = ["ar", "br", "py"];
+  const knownShifts = ["dia", "noche"];
 
   let nameTokens: string[] = [];
   let carType: string | undefined;
@@ -286,6 +292,7 @@ async function handleUpdateChofer(phone: string, text: string): Promise<void> {
   let color: string | undefined;
   let plate: string | undefined;
   let country: string | undefined;
+  let shift: string | undefined;
 
   let i = 2;
   while (i < parts.length) {
@@ -295,6 +302,8 @@ async function handleUpdateChofer(phone: string, text: string): Promise<void> {
       carType = p.toLowerCase();
     } else if (carCapacity === undefined && (p === "4" || p === "6")) {
       carCapacity = parseInt(p);
+    } else if (!shift && knownShifts.includes(p.toLowerCase())) {
+      shift = p.toLowerCase() === "dia" ? "day" : "night";
     } else if (!color && /^[a-záéíóúñü]+$/i.test(p) && !knownCountries.includes(p.toLowerCase())) {
       color = p;
     } else if (!plate && /^[a-z0-9]{4,7}$/i.test(p) && !knownCountries.includes(p.toLowerCase())) {
@@ -309,7 +318,7 @@ async function handleUpdateChofer(phone: string, text: string): Promise<void> {
 
   const name = nameTokens.join(" ") || undefined;
 
-  const result = await updateDriverByCode(code, { name, carType, carCapacity, color, plate, country });
+  const result = await updateDriverByCode(code, { name, carType, carCapacity, color, plate, country, shift });
 
   if (result.ok) {
     let msg = `✅ Chofer "${code}" actualizado.`;
@@ -317,6 +326,7 @@ async function handleUpdateChofer(phone: string, text: string): Promise<void> {
     if (carType) msg += ` ${carType}${carCapacity ? " " + carCapacity + "p" : ""}.`;
     if (color) msg += ` ${color}.`;
     if (plate) msg += ` Patente: ${plate}.`;
+    if (shift) msg += ` Turno: ${shift}.`;
     if (country && country !== "AR") msg += ` (${country}).`;
     await sendWhatsAppMessage(phone, msg);
   } else {

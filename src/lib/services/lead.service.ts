@@ -23,6 +23,7 @@ import {
   registerDriverByCode,
   getDriverExpiry,
   getPrincipalDriver,
+  updateDriverShiftIfNull,
   getActiveSlots,
   clearConversationHistory,
   createLead,
@@ -248,10 +249,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         console.log(`[DEBUG_REGISTRAR] getDriverByPhone found=${!!existing} name=${existing?.name}`);
         const conv = await getOrCreateConversation(phone);
         if (existing) {
+          const shift = await updateDriverShiftIfNull(phone);
           const expiry = await getDriverExpiry(phone);
           const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
           const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
-          const resp = `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${existing.name}!`;
+          const shiftLabel = shift === "day" ? "☀️ Turno día (6-18)" : shift === "night" ? "🌙 Turno noche (18-6)" : "";
+          const warn = buildExpiryWarning(expiry.expiresAt);
+          const resp = [`✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${existing.name}!`,
+            shiftLabel, warn].filter(Boolean).join("\n");
           await sendWhatsAppMessage(phone, resp);
           await insertMessage(conv.id, "assistant", resp);
         } else {
@@ -294,10 +299,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         return;
       }
 
+      const shift = await updateDriverShiftIfNull(phone);
       const expiry = await getDriverExpiry(phone);
       const h = expiry.expiresAt ? expiry.expiresAt.getHours().toString().padStart(2, "0") : "23";
       const m = expiry.expiresAt ? expiry.expiresAt.getMinutes().toString().padStart(2, "0") : "59";
-      const resp = `✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${codeEntry.name}!`;
+      const shiftLabel = shift === "day" ? "☀️ Turno día (6-18)" : shift === "night" ? "🌙 Turno noche (18-6)" : "";
+      const warn = buildExpiryWarning(expiry.expiresAt);
+      const resp = [`✅ Registrado hasta las ${h}:${m}hs de hoy. Buena jornada ${codeEntry.name}!`,
+        shiftLabel, warn].filter(Boolean).join("\n");
       await sendWhatsAppMessage(phone, resp);
       const conv2 = await getConversationByPhone(phone);
       if (conv2) await insertMessage(conv2.id, "assistant", resp);
@@ -678,4 +687,15 @@ async function escalateTrip(convId: number, phone: string, trip: TripRow, urgenc
   await advanceToGroup(convId, phone);
   await broadcastTripToDrivers(trip, convId, phone, urgency, passengers);
   console.log(`[DISPATCH] Consulta/otro → broadcast conv ${convId}`);
+}
+
+function buildExpiryWarning(expiresAt: Date | null): string | null {
+  if (!expiresAt) return null;
+  const remainingMs = expiresAt.getTime() - Date.now();
+  if (remainingMs <= 0) return "⚠️ Tu ventana expiró. Enviá .registrar para renovar.";
+  if (remainingMs <= 300000) {
+    const min = Math.ceil(remainingMs / 60000);
+    return `⚠️ Tu ventana expira en ${min} min. Enviá .registrar para renovar.`;
+  }
+  return null;
 }

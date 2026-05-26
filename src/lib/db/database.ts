@@ -347,6 +347,16 @@ async function initSchema(): Promise<void> {
       await getDbv().execute("ALTER TABLE chat_sessions ADD COLUMN clarify_field TEXT");
     }
   } catch (e) { console.error("[migration] chat_sessions workflow_state error:", e); }
+
+  // Migration: migrate shift='any' to NULL (shift must be explicitly 'day' or 'night')
+  try {
+    const result = await getDbv().execute(
+      "INSERT OR IGNORE INTO _migrations (name) VALUES ('drivers_shift_any_to_null')"
+    );
+    if ((result as any).rowsAffected > 0) {
+      await getDbv().execute("UPDATE drivers SET shift = NULL WHERE shift = 'any'");
+    }
+  } catch (e) { console.error("[migration] drivers shift any->null error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -529,7 +539,16 @@ export async function assignDriverToTrip(tripId: string, driverPhone: string): P
   if (!trip) return null;
 
   const price = trip.price_base || 0;
-  const payout = trip.garantizado_base ?? Math.round(price * 0.85);
+  let payout = trip.garantizado_base ?? Math.round(price * 0.85);
+
+  // Apply driver's voluntary promotional discount (driver opted to earn less)
+  if (trip.tariff_id) {
+    const discountPct = await getDriverDiscountForTariff(driverPhone, trip.tariff_id);
+    if (discountPct && discountPct > 0) {
+      payout = Math.round(payout * (1 - discountPct / 100));
+    }
+  }
+
   const commission = price - payout;
 
   await getDbv().execute({
@@ -596,7 +615,7 @@ export async function registerDriver(phone: string, name?: string): Promise<Driv
 
 export async function createDriverCode(
   code: string, name: string, createdBy: string, phone?: string,
-  opts?: { carType?: string; carCapacity?: number; color?: string; plate?: string; country?: string; tier?: string }
+  opts?: { carType?: string; carCapacity?: number; color?: string; plate?: string; country?: string; tier?: string; shift?: string | null }
 ): Promise<{ ok: boolean; error?: string }> {
   await ensureSchema();
   try {
@@ -609,11 +628,11 @@ export async function createDriverCode(
         args: [code.toLowerCase().trim(), name.trim(), createdBy, fullPhone],
       });
       await getDbv().execute({
-        sql: `INSERT OR IGNORE INTO drivers (driver_id, phone, name, active, car_type, car_capacity, color, plate, country, tier)
-            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT OR IGNORE INTO drivers (driver_id, phone, name, active, car_type, car_capacity, color, plate, country, tier, shift)
+            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
         args: [`driver_${Date.now()}`, fullPhone, name.trim(),
                opts?.carType || null, opts?.carCapacity || null, opts?.color || null, opts?.plate || null,
-               opts?.country || 'AR', opts?.tier || 'normal'],
+               opts?.country || 'AR', opts?.tier || 'normal', opts?.shift || null],
       });
     } else {
       await getDbv().execute({
@@ -626,6 +645,21 @@ export async function createDriverCode(
     console.error("[createDriverCode] error:", e);
     return { ok: false, error: "El código ya existe" };
   }
+}
+
+export async function updateDriverShiftIfNull(phone: string): Promise<string | null> {
+  await ensureSchema();
+  const driver = await getDriverByPhone(phone);
+  if (!driver) return null;
+  if (driver.shift && driver.shift !== "any") return driver.shift;
+
+  const hour = new Date().getHours();
+  const shift = hour >= 6 && hour < 18 ? "day" : "night";
+  await getDbv().execute({
+    sql: "UPDATE drivers SET shift = ? WHERE phone = ?",
+    args: [shift, phone],
+  });
+  return shift;
 }
 
 export async function deactivateDriverByCode(code: string): Promise<boolean> {
@@ -738,7 +772,7 @@ export async function updateDriverGuide(phone: string, isGuide: boolean): Promis
 
 export async function updateDriverByCode(
   code: string,
-  updates: { name?: string; carType?: string; carCapacity?: number | null; color?: string; plate?: string; country?: string }
+  updates: { name?: string; carType?: string; carCapacity?: number | null; color?: string; plate?: string; country?: string; shift?: string | null }
 ): Promise<{ ok: boolean; error?: string }> {
   await ensureSchema();
   const entry = await getDriverCodeByCode(code);
@@ -753,6 +787,7 @@ export async function updateDriverByCode(
   if (updates.color) { sets.push("color = ?"); args.push(updates.color); }
   if (updates.plate) { sets.push("plate = ?"); args.push(updates.plate); }
   if (updates.country) { sets.push("country = ?"); args.push(updates.country); }
+  if (updates.shift !== undefined) { sets.push("shift = ?"); args.push(updates.shift); }
 
   if (sets.length === 0) return { ok: true };
 
@@ -1435,6 +1470,15 @@ export async function getDiscountsForTariff(tariffId: number): Promise<DriverDis
   return query<DriverDiscountWithDriverRow>(`SELECT d.*, dr.name as driver_name FROM driver_discounts d
     LEFT JOIN drivers dr ON dr.phone = d.driver_phone
     WHERE d.tariff_id = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())`, [tariffId]);
+}
+
+export async function getDriverDiscountForTariff(driverPhone: string, tariffId: number): Promise<number | null> {
+  const rows = await getDbv().execute({
+    sql: "SELECT discount_pct FROM driver_discounts WHERE driver_phone = ? AND tariff_id = ? AND active = 1 AND (valid_until IS NULL OR valid_until > unixepoch())",
+    args: [driverPhone, tariffId],
+  });
+  const row = (rows.rows as any[])[0];
+  return row?.discount_pct ?? null;
 }
 
 export async function getDriverDiscounts(driverPhone: string): Promise<DriverDiscountWithTariff[]> {

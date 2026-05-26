@@ -190,10 +190,15 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
     } catch (e) { console.error("[broadcastTripToDrivers] load low piso error:", e); }
   }
 
-  let eligible: Array<DriverRow & { discount_pct: number }> = [];
+  let eligible: Array<DriverRow & { discount_pct: number; actual_payout: number }> = [];
   for (const d of drivers) {
     const discountPct = discountMap[d.phone] || 0;
     let floor = driverFloor(d, tripPiso, pisoLow, discountPct);
+
+    // Actual payout = full garantizado, reduced by driver's voluntary promo discount
+    const actualPayout = discountPct > 0
+      ? Math.round(effectivePayout * (1 - discountPct / 100))
+      : effectivePayout;
 
     // Package override: use package floor if lower
     if (packageType && d.min_payout) {
@@ -201,8 +206,8 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
       if (pkg && pkg.min_payout < floor) floor = pkg.min_payout;
     }
 
-    if (effectivePayout >= floor) {
-      eligible.push({ ...d, discount_pct: discountPct });
+    if (actualPayout >= floor) {
+      eligible.push({ ...d, discount_pct: discountPct, actual_payout: actualPayout });
     }
   }
 
@@ -279,23 +284,24 @@ Ningún chofer activo en este turno. Reenviá manualmente.`);
     return (b.acceptance_score || 0) - (a.acceptance_score || 0);
   });
 
+  // Personalized broadcast: each driver sees their actual payout
   const icon = urgencyIcon(urgency || "");
   const label = urgencyLabel(urgency || "");
   const shiftInfo = shiftClass ? `\n${shiftLabel(shiftClass)}` : "";
   const pkgInfo = packageLabel ? `\n${packageLabel}` : "";
   const schInfo = scheduledLabel(trip);
-  const body = `${icon} *${label}*${schInfo}${shiftInfo}${pkgInfo}
+
+  await Promise.all(eligible.map(driver => {
+    const body = `${icon} *${label}*${schInfo}${shiftInfo}${pkgInfo}
 
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
-Valor garantizado: $${effectivePayout.toLocaleString("es-AR")}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
-
-  await Promise.all(eligible.map(driver =>
-    sendInteractiveButtons(driver.phone, body, [
+Valor garantizado: $${driver.actual_payout.toLocaleString("es-AR")}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
+    return sendInteractiveButtons(driver.phone, body, [
       { id: `aceptar_${convId}`, title: "✅ Aceptar" },
     ]).then(() => incrementOfferReceived(driver.phone))
-      .catch(e => console.error(`[BROADCAST] Failed to send to ${driver.phone}:`, e))
-  ));
+      .catch(e => console.error(`[BROADCAST] Failed to send to ${driver.phone}:`, e));
+  }));
 
   const tierCounts = { low: 0, normal: 0, premium: 0 };
   for (const d of eligible) tierCounts[d.tier as keyof typeof tierCounts] = (tierCounts[d.tier as keyof typeof tierCounts] || 0) + 1;
