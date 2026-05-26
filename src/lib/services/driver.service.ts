@@ -34,7 +34,7 @@ import {
   getCustomerName,
 } from "@/lib/db/database";
 import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver, broadcastTripToDrivers } from "./admin.service";
-import { sendWhatsAppMessage, sendInteractiveButtons, sendContact } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 
 export function isGroupMessage(from: string): boolean {
   return from.endsWith("@g.us");
@@ -195,6 +195,7 @@ async function assignDriver(workflow: { conversation_id?: number; conversationId
 
   const clientPhone = workflow.phone;
   const customerName = await getCustomerName(clientPhone);
+  const clientCleanPhone = clientPhone.replace(/\D/g, "");
   const clientLabel = customerName
     ? `👤 *Cliente*: ${customerName} (${clientPhone})`
     : `👤 *Cliente*: ${clientPhone}`;
@@ -203,6 +204,7 @@ async function assignDriver(workflow: { conversation_id?: number; conversationId
   const summary = `✅ *Viaje aceptado*
 
 ${clientLabel}
+https://wa.me/${clientCleanPhone}
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination || "No especificado"}
 Tarifa pública: $${price.toLocaleString("es-AR")}
@@ -215,10 +217,6 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
     { id: `realizado_${convId}`, title: "✅ Realizado" },
     { id: `enviaje_${convId}`, title: "🔄 En viaje" },
   ]);
-
-  // Send client as a saveable contact (vCard)
-  const contactName = customerName || `Cliente ${clientPhone}`;
-  await sendContact(driverPhone, contactName, clientPhone);
 
   // Split proforma: instruction first, then standalone copiable text
   await sendWhatsAppMessage(driverPhone, `📋 *Recomendación de seguridad* — copiá y pegá este mensaje al cliente:`);
@@ -343,16 +341,13 @@ export async function handleDriverTakeLead(convId: number, driverPhone: string):
   const driverName = driver?.name || "El chofer";
 
   const leadCustomerName = await getCustomerName(lead.client_phone);
+  const leadCleanPhone = lead.client_phone.replace(/\D/g, "");
   const leadClientLabel = leadCustomerName
     ? `${leadCustomerName} (${lead.client_phone})`
     : lead.client_phone;
 
   // Notify driver
-  await sendWhatsAppMessage(driverPhone, `✅ *Lead tomado exitosamente*\n\n👤 Cliente: ${leadClientLabel}\nDestino: ${lead.destination}\n💰 *Recibís*: $${payout.toLocaleString("es-AR")}\n\nContactá al cliente para coordinar.`);
-
-  // Send client as a saveable contact
-  const leadContactName = leadCustomerName || `Cliente ${lead.client_phone}`;
-  await sendContact(driverPhone, leadContactName, lead.client_phone);
+  await sendWhatsAppMessage(driverPhone, `✅ *Lead tomado exitosamente*\n\n👤 Cliente: ${leadClientLabel}\nDestino: ${lead.destination}\n💰 *Recibís*: $${payout.toLocaleString("es-AR")}\n\nContactá al cliente:\nhttps://wa.me/${leadCleanPhone}`);
 
   // Notify client
   await sendWhatsAppMessage(lead.client_phone, `✅ *Viaje confirmado*\n\nTu chofer es ${driverName}. Te contactará en breve.`);
