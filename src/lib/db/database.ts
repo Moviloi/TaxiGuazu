@@ -1209,6 +1209,28 @@ export async function getCustomerName(phone: string): Promise<string | null> {
 
 // ========== DB INSTANCE ==========
 
+export async function getConnectionValue(key: string): Promise<string | null> {
+  const rs = await getDbv().execute({ sql: "SELECT value FROM connection_state WHERE key = ?", args: [key] });
+  return (rs.rows[0] as { value?: string } | undefined)?.value ?? null;
+}
+
+export async function getConnectionValueFlag(key: string): Promise<boolean> {
+  const val = await getConnectionValue(key);
+  return val !== null;
+}
+
+export async function setConnectionFlag(key: string): Promise<void> {
+  await getDbv().execute({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())", args: [key] });
+}
+
+export async function setConnectionValue(key: string, value: string): Promise<void> {
+  await getDbv().execute({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: [key, value] });
+}
+
+export async function deleteConnectionKey(key: string): Promise<void> {
+  await getDbv().execute({ sql: "DELETE FROM connection_state WHERE key = ?", args: [key] });
+}
+
 export function getDbInstance(): LibSqlClient {
   return getDbv();
 }

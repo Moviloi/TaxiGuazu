@@ -1,11 +1,12 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff, getDbInstance, getPrincipalDriver, getPrincipal2Driver, getDriverByPhone } from "@/lib/db/database";
-import type { DriverRow } from "@/lib/db/types";
+import type { DriverRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
 
-let ADMIN_PHONE: string;
-try { ADMIN_PHONE = getEnv().ADMIN_PHONE; } catch { ADMIN_PHONE = "+5493757613215"; }
+export const ADMIN_PHONE: string = (() => {
+  try { return getEnv().ADMIN_PHONE; } catch { return "+5493757613215"; }
+})();
 
 export async function notifyAdmin(message: string): Promise<void> {
   const phone = ADMIN_PHONE.replace(/\D/g, "");
@@ -72,13 +73,15 @@ function scheduledLabel(trip: any): string {
 export async function getPrincipal2(): Promise<DriverRow | null> {
   const p2 = await getPrincipal2Driver();
   if (p2) return p2;
-  const envPhone = process.env.PRINCIPAL_2_PHONE;
-  if (envPhone) return getDriverByPhone(envPhone);
+  try {
+    const envPhone = getEnv().PRINCIPAL_2_PHONE;
+    if (envPhone) return getDriverByPhone(envPhone);
+  } catch { /* not configured */ }
   return null;
 }
 
 export async function offerToSpecificDriver(
-  driverPhone: string, trip: any, convId: number,
+  driverPhone: string, trip: TripRow, convId: number,
   label: string, note?: string
 ): Promise<void> {
   const body = `${label}${scheduledLabel(trip)}
@@ -99,12 +102,12 @@ function tierFactor(tier: string): number {
   return 1.0;
 }
 
-function driverFloor(driver: any, tripPiso: number, pisoLow?: number | null): number {
+function driverFloor(driver: DriverRow, tripPiso: number, pisoLow?: number | null, discountPct?: number): number {
   const useLow = driver.tier === 'low' && pisoLow != null;
   const base = useLow ? pisoLow! : tripPiso;
   let floor = Math.round(base * tierFactor(driver.tier || 'normal'));
-  if (driver.discount_pct && driver.discount_pct > 0) {
-    floor = Math.round(floor * (1 - driver.discount_pct / 100));
+  if (discountPct && discountPct > 0) {
+    floor = Math.round(floor * (1 - discountPct / 100));
   }
   if (driver.min_payout && driver.min_payout > floor) {
     floor = driver.min_payout;
@@ -113,7 +116,7 @@ function driverFloor(driver: any, tripPiso: number, pisoLow?: number | null): nu
 }
 
 export async function broadcastTripToDrivers(
-  trip: any, convId: number, clientPhone: string,
+  trip: TripRow, convId: number, clientPhone: string,
   urgency?: string, passengers?: number | null
 ): Promise<void> {
   const country = detectCountry(trip.origin || "");
@@ -190,7 +193,7 @@ No hay choferes disponibles en ${country}. Reenviá manualmente.`);
   let eligible: Array<DriverRow & { discount_pct: number }> = [];
   for (const d of drivers) {
     const discountPct = discountMap[d.phone] || 0;
-    let floor = driverFloor(d, tripPiso, pisoLow);
+    let floor = driverFloor(d, tripPiso, pisoLow, discountPct);
 
     // Package override: use package floor if lower
     if (packageType && d.min_payout) {
@@ -233,7 +236,7 @@ Ningún chofer tiene un piso menor o igual a $${effectivePayout}. Reasigná manu
 
   if (shiftClass) {
     const before = eligible.length;
-    eligible = eligible.filter((d: any) => {
+    eligible = eligible.filter((d) => {
       if (!d.shift || d.shift === 'any') return true;
       if (d.shift === shiftClass) return true;
       if (pref && d.phone === pref.preferred_driver_phone) return true;
@@ -261,7 +264,7 @@ Ningún chofer activo en este turno. Reenviá manualmente.`);
 
   // Sort: preferred first, then principal (if no preferred), then by rating, then acceptance
   const principal = !pref ? await getPrincipalDriver() : null;
-  eligible.sort((a: any, b: any) => {
+  eligible.sort((a, b) => {
     const aPref = pref && a.phone === pref.preferred_driver_phone ? 1 : 0;
     const bPref = pref && b.phone === pref.preferred_driver_phone ? 1 : 0;
     if (aPref !== bPref) return bPref - aPref;
@@ -291,6 +294,7 @@ Valor garantizado: $${effectivePayout.toLocaleString("es-AR")}${passengers ? `\n
     sendInteractiveButtons(driver.phone, body, [
       { id: `aceptar_${convId}`, title: "✅ Aceptar" },
     ]).then(() => incrementOfferReceived(driver.phone))
+      .catch(e => console.error(`[BROADCAST] Failed to send to ${driver.phone}:`, e))
   ));
 
   const tierCounts = { low: 0, normal: 0, premium: 0 };
@@ -302,7 +306,9 @@ export async function notifyOtherDriversTaken(excludePhone: string, destination:
   const drivers = await getAvailableDrivers();
   await Promise.all(drivers
     .filter(d => d.phone !== excludePhone)
-    .map(d => sendWhatsAppMessage(d.phone, `⏰ El viaje a ${destination} ya fue tomado por otro chofer.`))
+    .map(d => sendWhatsAppMessage(d.phone, `⏰ El viaje a ${destination} ya fue tomado por otro chofer.`)
+      .catch(e => console.error(`[NOTIFY] Failed to notify ${d.phone}:`, e))
+    )
   );
 }
 
@@ -338,7 +344,7 @@ Precio ref: $${lead.price.toLocaleString("es-AR")}${passengers ? `\nPasajeros: $
   await Promise.all(drivers.map(driver =>
     sendInteractiveButtons(driver.phone, body, [
       { id: `tomar_lead_${convId}`, title: "Tomar lead" },
-    ])
+    ]).catch(e => console.error(`[LEAD] Failed to send lead to ${driver.phone}:`, e))
   ));
 
   console.log(`[LEAD] Broadcast a ${drivers.length} choferes: ${lead.destination} (${country})`);

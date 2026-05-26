@@ -29,6 +29,8 @@ import { generateGroqReply } from "@/lib/ai/groq";
 import { sendWhatsAppMessage, sendInteractiveList } from "@/lib/whatsapp/sender";
 import { broadcastTripToDrivers, broadcastLeadToDrivers, offerToSpecificDriver, getPrincipal2, notifyAdmin } from "./admin.service";
 import { handleAdminCommand } from "./admin-commands";
+import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
+import type { TripRow } from "@/lib/db/types";
 import {
   advanceToNivel1,
   advanceToNivel2,
@@ -242,7 +244,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     // Condition B: Sin reserva confirmada + >48h inactividad
     if (!sessionReset) {
       const lastMsgAt = freshConv.last_message_at || 0;
-      const inactive48h = (now - lastMsgAt) > 172800;
+      const inactive48h = (now - lastMsgAt) > SESSION_INACTIVITY_48H_S;
       if (inactive48h && !trip) {
         console.log(`[SESSION] Cond B: inactividad >48h sin reserva, reseteando`);
         sessionReset = true;
@@ -273,7 +275,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (trip?.tariff_id) {
       const discounts = await getDiscountsForTariff(trip.tariff_id);
       if (discounts.length > 0) {
-        const maxPct = Math.max(...discounts.map((d: any) => d.discount_pct));
+        const maxPct = Math.max(...discounts.map((d) => d.discount_pct));
         promoNote = `🔥 PROMO DEL DÍA: descuento de hasta ${maxPct}% en esta ruta por tiempo limitado. Solo ofrecela si el cliente duda, pregunta por promos, o pide más descuento del estándar. No menciones esta promo si el cliente ya aceptó el precio.`;
       }
     }
@@ -341,18 +343,23 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
   } catch (e) {
     console.error("[LEAD_ERROR]", e);
+    const errMsg = `⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`;
     try {
       await sendWhatsAppMessage(phone, "Disculpe, ocurrió un error. Un operador lo asistirá.");
       const conv = await getConversationByPhone(phone);
       if (conv) await insertMessage(conv.id, "assistant", "Error interno. Cliente derivado a operador.");
-      await notifyAdmin(`⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`);
     } catch (e2) {
-      console.error("[LEAD_ERROR] fallback también falló:", e2);
+      console.error("[LEAD_ERROR] fallback msg también falló:", e2);
+    }
+    try {
+      await notifyAdmin(errMsg);
+    } catch (e3) {
+      console.error("[LEAD_ERROR] fallback admin notify también falló:", e3);
     }
   }
 }
 
-async function handleReservationSlotSelection(convId: number, phone: string, trip: any): Promise<void> {
+async function handleReservationSlotSelection(convId: number, phone: string, trip: TripRow): Promise<void> {
   const slots = await getActiveSlots();
   if (slots.length === 0) {
     await sendWhatsAppMessage(phone, "📅 Gracias por tu reserva. Te contactaremos para coordinar el horario.");
@@ -441,7 +448,7 @@ export async function handleSlotResponse(phone: string, buttonId: string): Promi
   await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
 }
 
-async function escalateTrip(convId: number, phone: string, trip: any, urgency?: string, passengers?: number | null): Promise<void> {
+async function escalateTrip(convId: number, phone: string, trip: TripRow, urgency?: string, passengers?: number | null): Promise<void> {
   const u = (urgency || "").toLowerCase();
 
   if (u.includes("reserva")) {

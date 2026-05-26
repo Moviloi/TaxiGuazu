@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage, handleSlotResponse } from "@/lib/services/lead.service";
 import {
@@ -13,15 +14,38 @@ import {
   handleDriverReconfirmNo,
   handleComisionOk,
   handleComisionRevision,
+  handleContingenciaSi,
+  handleContingenciaNo,
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
 import { handleSurveyResponse, handleNewTripResponse } from "@/lib/services/survey.service";
-import { handleContingenciaSi, handleContingenciaNo } from "@/lib/services/driver.service";
 import { getEnv } from "@/config/env";
 
 function getBotPhone(): string {
   try { return getEnv().BOT_PHONE; } catch { return "+543757646645"; }
+}
+
+function getAppSecret(): string | null {
+  try { return getEnv().WHATSAPP_APP_SECRET || null; } catch { return null; }
+}
+
+function verifySignature(rawBody: string, signatureHeader: string | null): boolean {
+  const secret = getAppSecret();
+  if (!secret) {
+    console.warn("[WEBHOOK] WHATSAPP_APP_SECRET not set — skipping signature verification");
+    return true;
+  }
+  if (!signatureHeader) {
+    console.warn("[WEBHOOK] No signature header — rejecting");
+    return false;
+  }
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody, "utf-8")
+    .digest("hex");
+  const received = signatureHeader.replace(/^sha256=/, "");
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received));
 }
 
 function normalizePhone(raw: string): string {
@@ -49,9 +73,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const rawBody = await request.text();
+    const sig = request.headers.get("x-hub-signature-256");
+    if (!verifySignature(rawBody, sig)) {
+      console.warn("[WEBHOOK] Signature verification failed");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await checkTimeouts();
 
-    const body = await request.json();
+    const body = JSON.parse(rawBody);
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0];
     const message = change?.value?.messages?.[0];

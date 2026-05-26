@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import { getSystemPrompt } from "./system-prompt";
 import { getEnv } from "@/config/env";
 import type { TripRow } from "@/lib/db/types";
+import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TIMEOUT_MS } from "@/config/constants";
 
 type Trip = Pick<TripRow, "trip_id" | "destination" | "price_base" | "discount_explicit" | "status">;
 
@@ -96,12 +97,12 @@ export async function generateGroqReply(
   try {
     const completion = await groq.chat.completions.create(
       {
-        model: "llama-3.3-70b-versatile",
+        model: GROQ_MODEL,
         messages,
-        max_tokens: 512,
+        max_tokens: GROQ_MAX_TOKENS,
         temperature: 0.3,
       },
-      { timeout: 8000 }
+      { timeout: GROQ_TIMEOUT_MS }
     );
 
     return completion.choices[0]?.message?.content?.trim() || "Disculpe, no pude responder.";

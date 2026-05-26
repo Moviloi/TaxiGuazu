@@ -9,6 +9,19 @@ import {
 
 export type WorkflowState = "idle" | "awaiting_slot" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_group" | "waiting_driver" | "waiting_preferred" | "waiting_backup" | "closed";
 
+const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
+  idle: ["awaiting_slot", "nivel_1", "nivel_2", "nivel_3", "waiting_driver", "waiting_group"],
+  nivel_1: ["nivel_2", "nivel_3"],
+  nivel_2: ["nivel_3"],
+  nivel_3: ["closed"],
+  waiting_group: ["closed"],
+  waiting_driver: ["closed"],
+  awaiting_slot: ["closed"],
+  waiting_preferred: ["nivel_3"],
+  waiting_backup: ["nivel_3"],
+  closed: [],
+};
+
 export interface WorkflowContext {
   conversationId: number;
   phone: string;
@@ -31,33 +44,44 @@ function rowToContext(row: any): WorkflowContext {
   };
 }
 
+async function transitionTo(convId: number, phone: string, newState: WorkflowState): Promise<void> {
+  const workflow = await dbGetWorkflow(convId);
+  if (workflow) {
+    const allowed = VALID_TRANSITIONS[workflow.state as WorkflowState];
+    if (!allowed?.includes(newState)) {
+      console.warn(`[STATEMACHINE] Transición inválida: ${workflow.state} → ${newState} (conv ${convId})`);
+    }
+  }
+  await dbAdvanceState(convId, phone, newState);
+}
+
 export async function getWorkflow(convId: number): Promise<WorkflowContext | null> {
   const row = await dbGetWorkflow(convId);
   return row ? rowToContext(row) : null;
 }
 
 export async function advanceToSlotSelection(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "awaiting_slot");
+  await transitionTo(convId, phone, "awaiting_slot");
 }
 
 export async function advanceToNivel1(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "nivel_1");
+  await transitionTo(convId, phone, "nivel_1");
 }
 
 export async function advanceToNivel2(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "nivel_2");
+  await transitionTo(convId, phone, "nivel_2");
 }
 
 export async function advanceToNivel3(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "nivel_3");
+  await transitionTo(convId, phone, "nivel_3");
 }
 
 export async function advanceToWaitingDriver(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "waiting_driver");
+  await transitionTo(convId, phone, "waiting_driver");
 }
 
 export async function advanceToGroup(convId: number, phone: string): Promise<void> {
-  await dbAdvanceState(convId, phone, "waiting_group");
+  await transitionTo(convId, phone, "waiting_group");
 }
 
 export async function closeWorkflow(convId: number, driverPhone?: string): Promise<void> {

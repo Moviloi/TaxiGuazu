@@ -1,10 +1,7 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs, getDriverDiscounts, createDriverDiscount, deleteDriverDiscount } from "@/lib/db/database";
 import { TIERS } from "@/config/constants";
-import { getEnv } from "@/config/env";
-
-let ADMIN_PHONE: string;
-try { ADMIN_PHONE = getEnv().ADMIN_PHONE; } catch { ADMIN_PHONE = "+5493757613215"; }
+import { ADMIN_PHONE } from "./admin.service";
 
 export async function handleAdminCommand(phone: string, text: string): Promise<boolean> {
   const trimmed = text.trim();

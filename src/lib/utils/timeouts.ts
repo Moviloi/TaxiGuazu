@@ -15,6 +15,11 @@ import {
   updateTripState,
   findTariff,
   getExpiredTrips,
+  getConnectionValue,
+  getConnectionValueFlag,
+  setConnectionFlag,
+  setConnectionValue,
+  deleteConnectionKey,
 } from "../db/database";
 import { notifyAdmin, broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2 } from "../services/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "../whatsapp/sender";
@@ -24,6 +29,9 @@ import {
   TIMEOUT_NIVEL_2_MS,
   TIMEOUT_NIVEL_3_MS,
   TIMEOUT_WAITING_DRIVER_MS,
+  CRON_12H_S,
+  CRON_24H_S,
+  STALE_WORKFLOW_THRESHOLD_S,
 } from "@/config/constants";
 
 export async function checkTimeouts(): Promise<void> {
@@ -96,11 +104,7 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
     const destino = trip?.destination || "sin destino";
 
     // Check if contingency was already offered for this conv
-    const alreadyOffered = await getDbInstance().execute({
-      sql: "SELECT value FROM connection_state WHERE key = ?",
-      args: [`contingency_offered_${ctx.conversationId}`],
-    });
-    if ((alreadyOffered.rows as any[]).length > 0) continue;
+    if (await getConnectionValueFlag(`contingency_offered_${ctx.conversationId}`)) continue;
 
     if (trip && trip.passengers && trip.passengers > 4) {
       // Store original trip data for contingency handler
@@ -111,15 +115,8 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
         passengers: trip.passengers,
         flight_number: trip.flight_number || null,
       });
-      await getDbInstance().execute({
-        sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())",
-        args: [`contingency_data_${ctx.conversationId}`, tripData],
-      });
-
-      await getDbInstance().execute({
-        sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
-        args: [`contingency_offered_${ctx.conversationId}`],
-      });
+      await setConnectionValue(`contingency_data_${ctx.conversationId}`, tripData);
+      await setConnectionFlag(`contingency_offered_${ctx.conversationId}`);
 
       // Look up the 4p tariff for accurate pricing
       const tariff4p = await findTariff(trip.origin || "", trip.destination || "ninguno", 4);
@@ -138,13 +135,10 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
     }
 
     // Check if this is a dual contingency timeout (Trip B waiting after Trip A was assigned)
-    const dualRow2 = await getDbInstance().execute({
-      sql: "SELECT value FROM connection_state WHERE key = ?",
-      args: [`contingency_dual_${ctx.conversationId}`],
-    });
-    if ((dualRow2.rows as any[]).length > 0) {
+    const dualValue = await getConnectionValue(`contingency_dual_${ctx.conversationId}`);
+    if (dualValue) {
       console.log(`[TIMEOUT] Dual contingency — Trip B timeout para conv ${ctx.conversationId}`);
-      const dual = JSON.parse((dualRow2.rows as any[])[0].value);
+      const dual = JSON.parse(dualValue);
 
       // Cancel Trip B
       if (trip) {
@@ -168,10 +162,7 @@ Auto A: ${dual.driverA_name} (${dual.driverA_phone}) — cancelado
 Ambos viajes cancelados. Contactar manualmente.`);
 
       // Clean up
-      await getDbInstance().execute({
-        sql: "DELETE FROM connection_state WHERE key = ?",
-        args: [`contingency_dual_${ctx.conversationId}`],
-      });
+      await deleteConnectionKey(`contingency_dual_${ctx.conversationId}`);
 
       await closeWorkflow(ctx.conversationId);
       continue;
@@ -236,7 +227,7 @@ Ningún chofer tomó el servicio. Reasigná manualmente.`);
 // === RECONFIRMACIÓN 24HS ===
 async function checkReconfirmacion24hs(): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
-  const in24h = now + 86400;
+  const in24h = now + CRON_24H_S;
   const trips = await getTripsByScheduledAtWindow(now, in24h);
   const reconfKey = "last_reconfirm_24hs";
 
@@ -245,11 +236,7 @@ async function checkReconfirmacion24hs(): Promise<void> {
     if (trip.status === "completado" || trip.status === "cancelado") continue;
 
     // Check if already notified for this window
-    const lastNotified = await getDbInstance().execute({
-      sql: "SELECT value FROM connection_state WHERE key = ?",
-      args: [`${reconfKey}_${trip.trip_id}`],
-    });
-    if ((lastNotified.rows as any[]).length > 0) continue;
+    if (await getConnectionValueFlag(`${reconfKey}_${trip.trip_id}`)) continue;
 
     const driver = await getDriverByPhone(trip.assigned_driver_phone);
     if (!driver) continue;
@@ -269,10 +256,7 @@ Quedan 24hs para el viaje a *${trip.destination}*
       { id: `reconfirm_no_${trip.trip_id}`, title: "❌ No puedo" },
     ]);
 
-    await getDbInstance().execute({
-      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
-      args: [`${reconfKey}_${trip.trip_id}`],
-    });
+    await setConnectionFlag(`${reconfKey}_${trip.trip_id}`);
 
     console.log(`[CRON] Reconfirmación 24hs enviada a ${driver.phone} para trip ${trip.trip_id}`);
   }
@@ -281,18 +265,14 @@ Quedan 24hs para el viaje a *${trip.destination}*
 // === MENSAJE FELICIDAD 12HS ===
 async function checkMensajeFelicidad12hs(): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
-  const in12h = now + 43200;
+  const in12h = now + CRON_12H_S;
   const trips = await getTripsByScheduledAtWindow(now, in12h);
   const felizKey = "last_feliz_msg";
 
   for (const trip of trips) {
     if (trip.status === "completado" || trip.status === "cancelado") continue;
 
-    const lastNotified = await getDbInstance().execute({
-      sql: "SELECT value FROM connection_state WHERE key = ?",
-      args: [`${felizKey}_${trip.trip_id}`],
-    });
-    if ((lastNotified.rows as any[]).length > 0) continue;
+    if (await getConnectionValueFlag(`${felizKey}_${trip.trip_id}`)) continue;
 
     await sendWhatsAppMessage(trip.client_phone,
       `🌟 *Todo listo para tu viaje*
@@ -301,10 +281,7 @@ Recordá que tu chofer asignado se contactará con vos antes del servicio para c
 
 Cualquier cambio, avisanos por este chat.`);
 
-    await getDbInstance().execute({
-      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
-      args: [`${felizKey}_${trip.trip_id}`],
-    });
+    await setConnectionFlag(`${felizKey}_${trip.trip_id}`);
 
     console.log(`[CRON] Mensaje felicidad 12hs enviado a ${trip.client_phone} para trip ${trip.trip_id}`);
   }
@@ -318,11 +295,7 @@ async function checkCierreChofer(): Promise<void> {
   for (const trip of trips) {
     if (!trip.assigned_driver_phone) continue;
 
-    const lastNotified = await getDbInstance().execute({
-      sql: "SELECT value FROM connection_state WHERE key = ?",
-      args: [`${cierreKey}_${trip.trip_id}`],
-    });
-    if ((lastNotified.rows as any[]).length > 0) continue;
+    if (await getConnectionValueFlag(`${cierreKey}_${trip.trip_id}`)) continue;
 
     const commission = trip.commission_amount || Math.round((trip.price_base || 0) * 0.15);
 
@@ -337,10 +310,7 @@ Comisión: $${commission.toLocaleString("es-AR")}
       { id: `comision_revision_${trip.trip_id}`, title: "📝 Revisar" },
     ]);
 
-    await getDbInstance().execute({
-      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
-      args: [`${cierreKey}_${trip.trip_id}`],
-    });
+    await setConnectionFlag(`${cierreKey}_${trip.trip_id}`);
 
     console.log(`[CRON] Cierre chofer enviado a ${trip.assigned_driver_phone} para trip ${trip.trip_id}`);
   }
@@ -348,7 +318,7 @@ Comisión: $${commission.toLocaleString("es-AR")}
 
 // === DISCREPANCIA COMISIÓN (24H POST) ===
 async function checkDiscrepanciaComision(): Promise<void> {
-  const cutoff = Math.floor(Date.now() / 1000) - 86400;
+  const cutoff = Math.floor(Date.now() / 1000) - CRON_24H_S;
   const discreKey = "last_discre_msg";
 
   const trips = await getDbInstance().execute({
@@ -359,11 +329,7 @@ async function checkDiscrepanciaComision(): Promise<void> {
   for (const row of trips.rows as any[]) {
     const tripId = row.trip_id;
 
-    const lastNotified = await getDbInstance().execute({
-      sql: "SELECT value FROM connection_state WHERE key = ?",
-      args: [`${discreKey}_${tripId}`],
-    });
-    if ((lastNotified.rows as any[]).length > 0) continue;
+    if (await getConnectionValueFlag(`${discreKey}_${tripId}`)) continue;
 
     const trip = await getActiveTripByPhone(row.client_phone);
     const commission = trip?.commission_amount || Math.round((row.price_base || 0) * 0.15);
@@ -378,10 +344,7 @@ Chofer: ${row.assigned_driver_phone || "N/A"}
 
 Hace más de 24hs del viaje y el chofer no declaró la comisión.`);
 
-    await getDbInstance().execute({
-      sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())",
-      args: [`${discreKey}_${tripId}`],
-    });
+    await setConnectionFlag(`${discreKey}_${tripId}`);
 
     console.log(`[CRON] Discrepancia comisión notificada para trip ${tripId}`);
   }
@@ -390,10 +353,7 @@ Hace más de 24hs del viaje y el chofer no declaró la comisión.`);
 // === DOLARAPI DIARIO ===
 async function checkDolarApiNotification(): Promise<void> {
   const today = new Date().toISOString().split("T")[0];
-  const lastFetch = await getDbInstance().execute({
-    sql: "SELECT value FROM connection_state WHERE key = 'dolar_last_fetch_date'",
-  });
-  const lastDate = (lastFetch.rows as any[])[0]?.value;
+  const lastDate = await getConnectionValue("dolar_last_fetch_date");
   if (lastDate === today) return;
 
   let dolarBlue = "N/A";
@@ -424,10 +384,7 @@ async function checkDolarApiNotification(): Promise<void> {
 
 Usá .env: COTIZACION_DOLAR y COTIZACION_REAL`);
 
-  await getDbInstance().execute({
-    sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES ('dolar_last_fetch_date', ?, unixepoch())",
-    args: [today],
-  });
+  await setConnectionValue("dolar_last_fetch_date", today);
 
   console.log(`[DOLARAPI] Cotizaciones notificadas para ${today}`);
 }
@@ -435,10 +392,7 @@ Usá .env: COTIZACION_DOLAR y COTIZACION_REAL`);
 // === SESSION CLEANUP DIARIO ===
 async function checkSessionCleanup(): Promise<void> {
   const today = new Date().toISOString().split("T")[0];
-  const lastCleanup = await getDbInstance().execute({
-    sql: "SELECT value FROM connection_state WHERE key = 'last_session_cleanup_date'",
-  });
-  const lastDate = (lastCleanup.rows as any[])[0]?.value;
+  const lastDate = await getConnectionValue("last_session_cleanup_date");
   if (lastDate === today) return;
 
   const now = Math.floor(Date.now() / 1000);
@@ -451,7 +405,7 @@ async function checkSessionCleanup(): Promise<void> {
   }
 
   // 2. Close orphaned workflows (active but no activity >24h)
-  const staleCutoff = now - 86400;
+  const staleCutoff = now - STALE_WORKFLOW_THRESHOLD_S;
   const stale = await getDbInstance().execute({
     sql: "SELECT conversation_id FROM workflows WHERE state != 'closed' AND last_message_at < ?",
     args: [staleCutoff],
@@ -461,10 +415,7 @@ async function checkSessionCleanup(): Promise<void> {
     await closeWorkflow(w.conversation_id);
   }
 
-  await getDbInstance().execute({
-    sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES ('last_session_cleanup_date', ?, unixepoch())",
-    args: [today],
-  });
+  await setConnectionValue("last_session_cleanup_date", today);
 
   console.log(`[CLEANUP] Ejecutado para ${today}: ${expiredTrips.length} trips, ${stale.rows.length} workflows`);
 }
