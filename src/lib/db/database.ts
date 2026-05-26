@@ -17,6 +17,8 @@ import type {
   DriverDiscountRow,
   DriverDiscountWithDriverRow,
   LeadRow,
+  LocationAliasRow,
+  ChatSessionRow,
 } from "./types";
 
 type LibSqlClient = ReturnType<typeof createClient>;
@@ -195,6 +197,24 @@ async function initSchema(): Promise<void> {
       name TEXT PRIMARY KEY,
       applied_at INTEGER DEFAULT (unixepoch())
     )`,
+    `CREATE TABLE IF NOT EXISTS location_aliases (
+      alias TEXT PRIMARY KEY,
+      canonical_name TEXT NOT NULL,
+      location_code TEXT,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS chat_sessions (
+      phone TEXT PRIMARY KEY,
+      slots TEXT,
+      confidence TEXT,
+      confirmed_fields TEXT,
+      source_message_ids TEXT,
+      extraction_count INTEGER DEFAULT 0,
+      last_extracted_at INTEGER,
+      workflow_state TEXT DEFAULT 'idle',
+      clarify_field TEXT,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 
@@ -244,6 +264,14 @@ async function initSchema(): Promise<void> {
       await seedTariffs();
     }
   } catch (e) { console.error("[migration] seed tariffs error:", e); }
+
+  // Seed location_aliases if empty
+  try {
+    const count = await getDbv().execute("SELECT COUNT(*) as c FROM location_aliases");
+    if ((count.rows as any[])[0].c === 0) {
+      await seedLocationAliases();
+    }
+  } catch (e) { console.error("[migration] seed location_aliases error:", e); }
   for (const sql of migrations) {
     try { await getDbv().execute(sql); } catch (e) { console.error("[migration] error:", sql, e); }
   }
@@ -306,7 +334,18 @@ async function initSchema(): Promise<void> {
     if ((result as any).rowsAffected > 0) {
       await getDbv().execute("ALTER TABLE drivers RENAME COLUMN is_titular TO is_principal");
     }
-  } catch (e) { console.error("[migration] rename is_titular error:", e); }
+    } catch (e) { console.error("[migration] rename is_titular error:", e); }
+
+  // Migration: add workflow_state and clarify_field to chat_sessions
+  try {
+    const result = await getDbv().execute(
+      "INSERT OR IGNORE INTO _migrations (name) VALUES ('chat_sessions_workflow_state')"
+    );
+    if ((result as any).rowsAffected > 0) {
+      await getDbv().execute("ALTER TABLE chat_sessions ADD COLUMN workflow_state TEXT DEFAULT 'idle'");
+      await getDbv().execute("ALTER TABLE chat_sessions ADD COLUMN clarify_field TEXT");
+    }
+  } catch (e) { console.error("[migration] chat_sessions workflow_state error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -1169,6 +1208,180 @@ async function seedTariffs(): Promise<void> {
       });
     } catch (e) { console.error("[seedTariffs] error inserting row:", r, e); }
   }
+}
+
+async function seedLocationAliases(): Promise<void> {
+  const aliases: { alias: string; canonical: string; code?: string }[] = [
+    // Aeropuerto IGR
+    { alias: "aeropuerto", canonical: "Aeropuerto IGR" },
+    { alias: "aeropuerto iguazu", canonical: "Aeropuerto IGR" },
+    { alias: "aeropuerto igr", canonical: "Aeropuerto IGR" },
+    { alias: "aero igr", canonical: "Aeropuerto IGR" },
+    { alias: "igr", canonical: "Aeropuerto IGR", code: "IGR" },
+    { alias: "terminal aerea", canonical: "Aeropuerto IGR" },
+    { alias: "terminal aérea", canonical: "Aeropuerto IGR" },
+    // Aeropuerto Foz / IGU
+    { alias: "aeropuerto foz", canonical: "Aeropuerto IGU" },
+    { alias: "aeropuerto igu", canonical: "Aeropuerto IGU" },
+    { alias: "aero foz", canonical: "Aeropuerto IGU" },
+    { alias: "aero igu", canonical: "Aeropuerto IGU" },
+    { alias: "igu", canonical: "Aeropuerto IGU", code: "IGU" },
+    // Puerto Iguazú
+    { alias: "puerto iguazu", canonical: "Puerto Iguazú" },
+    { alias: "pto iguazu", canonical: "Puerto Iguazú" },
+    { alias: "ptoiguazu", canonical: "Puerto Iguazú" },
+    { alias: "puerto", canonical: "Puerto Iguazú" },
+    // Centro Urbano (Puerto Iguazú)
+    { alias: "centro", canonical: "Centro (Urbano)" },
+    { alias: "centro iguazu", canonical: "Centro (Urbano)" },
+    { alias: "centro puerto", canonical: "Centro (Urbano)" },
+    { alias: "urbano", canonical: "Centro (Urbano)" },
+    { alias: "microcentro", canonical: "Centro (Urbano)" },
+    // Centro de Foz
+    { alias: "centro foz", canonical: "Centro de Foz" },
+    { alias: "centro de foz", canonical: "Centro de Foz" },
+    { alias: "foz centro", canonical: "Centro de Foz" },
+    // Foz do Iguaçu
+    { alias: "foz", canonical: "Foz do Iguaçu" },
+    { alias: "foz do iguacu", canonical: "Foz do Iguaçu" },
+    { alias: "foz do iguazú", canonical: "Foz do Iguaçu" },
+    { alias: "foz de iguazu", canonical: "Foz do Iguaçu" },
+    // Duty Free
+    { alias: "duty free", canonical: "Duty Free Shop", code: "DFS" },
+    { alias: "duty free shop", canonical: "Duty Free Shop" },
+    { alias: "duty", canonical: "Duty Free Shop" },
+    // Hito 3 Fronteras
+    { alias: "hito", canonical: "Hito 3 Fronteras" },
+    { alias: "hito 3 fronteras", canonical: "Hito 3 Fronteras" },
+    { alias: "tres fronteras", canonical: "Hito 3 Fronteras" },
+    { alias: "3 fronteras", canonical: "Hito 3 Fronteras" },
+    { alias: "marco de las 3 fronteras", canonical: "Hito 3 Fronteras" },
+    // Cataratas AR
+    { alias: "cataratas argentinas", canonical: "Cataratas Argentinas" },
+    { alias: "cataratas lado argentino", canonical: "Cataratas Argentinas" },
+    { alias: "cataratas arg", canonical: "Cataratas Argentinas" },
+    { alias: "cataratas argentina", canonical: "Cataratas Argentinas" },
+    { alias: "cataratas ar", canonical: "Cataratas Argentinas" },
+    { alias: "parque nacional iguazu", canonical: "Cataratas Argentinas" },
+    { alias: "parque nacional", canonical: "Cataratas Argentinas" },
+    // Cataratas BR
+    { alias: "cataratas brasil", canonical: "Cataratas Brasil (Aves/Aqua)" },
+    { alias: "cataratas brasileñas", canonical: "Cataratas Brasil (Aves/Aqua)" },
+    { alias: "cataratas lado brasileño", canonical: "Cataratas Brasil (Aves/Aqua)" },
+    { alias: "cataratas br", canonical: "Cataratas Brasil (Aves/Aqua)" },
+    { alias: "cataratas brasil aves", canonical: "Cataratas Brasil (Aves/Aqua)" },
+    // Minas de Wanda
+    { alias: "wanda", canonical: "Minas de Wanda" },
+    { alias: "minas wanda", canonical: "Minas de Wanda" },
+    { alias: "minas de wanda", canonical: "Minas de Wanda" },
+    // CDE / Paraguay
+    { alias: "cde", canonical: "CDE hasta KM4 / Terminal", code: "CDE" },
+    { alias: "ciudad del este", canonical: "CDE hasta KM4 / Terminal" },
+    { alias: "paraguay compras", canonical: "Tour Compras CDE" },
+    { alias: "tour compras cde", canonical: "Tour Compras CDE" },
+    // Saltos del Monday
+    { alias: "saltos del monday", canonical: "Saltos del Monday" },
+    { alias: "monday", canonical: "Saltos del Monday" },
+    // San Ignacio
+    { alias: "san ignacio", canonical: "San Ignacio" },
+    { alias: "ruinas san ignacio", canonical: "San Ignacio" },
+    // Saltos del Mocona
+    { alias: "saltos del mocona", canonical: "Saltos del Moconá" },
+    { alias: "mocona", canonical: "Saltos del Moconá" },
+    { alias: "moconá", canonical: "Saltos del Moconá" },
+    // Itaipú
+    { alias: "itaipu", canonical: "Itaipú y Alrededores" },
+    { alias: "represa itaipu", canonical: "Itaipú y Alrededores" },
+    { alias: "itaipú", canonical: "Itaipú y Alrededores" },
+  ];
+  for (const a of aliases) {
+    try {
+      await getDbv().execute({
+        sql: "INSERT OR IGNORE INTO location_aliases (alias, canonical_name, location_code) VALUES (?, ?, ?)",
+        args: [a.alias, a.canonical, a.code || null],
+      });
+    } catch (e) { console.error("[seedLocationAliases] error:", a, e); }
+  }
+}
+
+export async function resolveAlias(text: string): Promise<string[]> {
+  if (!text) return [];
+  const lower = text.toLowerCase().trim();
+  const direct = await query<LocationAliasRow>(
+    "SELECT canonical_name FROM location_aliases WHERE LOWER(alias) = ? LIMIT 5",
+    [lower]
+  );
+  if (direct.length > 0) return [...new Set(direct.map(r => r.canonical_name))];
+  return [text];
+}
+
+export async function findTariffWithAlias(origin: string, destination: string, passengers: number): Promise<TariffWithPrice | null> {
+  const origins = await resolveAlias(origin);
+  const destinations = await resolveAlias(destination);
+  for (const o of origins) {
+    for (const d of destinations) {
+      const t = await findTariff(o, d, passengers);
+      if (t) return t;
+    }
+  }
+  return null;
+}
+
+// ========== CHAT SESSIONS (Slot-Filling) ==========
+
+export async function getChatSession(phone: string): Promise<ChatSessionRow | null> {
+  return queryOne<ChatSessionRow>("SELECT * FROM chat_sessions WHERE phone = ?", [phone]);
+}
+
+export async function upsertChatSession(
+  phone: string,
+  slots: Record<string, any>,
+  confidence?: Record<string, number>,
+  workflowState?: string,
+  clarifyField?: string,
+): Promise<void> {
+  await ensureSchema();
+  const existing = await getChatSession(phone);
+  const now = Math.floor(Date.now() / 1000);
+  if (existing) {
+    const oldSlots = JSON.parse(existing.slots || "{}");
+    const merged = { ...oldSlots, ...slots };
+    const mergedConfidence = confidence
+      ? { ...JSON.parse(existing.confidence || "{}"), ...confidence }
+      : existing.confidence;
+    await getDbv().execute({
+      sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, workflow_state = ?, clarify_field = ?, updated_at = ? WHERE phone = ?`,
+      args: [JSON.stringify(merged), JSON.stringify(mergedConfidence), now, workflowState || existing.workflow_state || "idle", clarifyField || existing.clarify_field || null, now, phone],
+    });
+  } else {
+    await getDbv().execute({
+      sql: `INSERT INTO chat_sessions (phone, slots, confidence, extraction_count, last_extracted_at, workflow_state, clarify_field, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
+      args: [phone, JSON.stringify(slots), JSON.stringify(confidence || {}), now, workflowState || "idle", clarifyField || null, now],
+    });
+  }
+}
+
+export async function updateChatSessionWorkflow(phone: string, workflowState: string, clarifyField?: string): Promise<void> {
+  await ensureSchema();
+  await getDbv().execute({
+    sql: "UPDATE chat_sessions SET workflow_state = ?, clarify_field = ?, updated_at = unixepoch() WHERE phone = ?",
+    args: [workflowState, clarifyField || null, phone],
+  });
+}
+
+export async function confirmChatSessionFields(phone: string, fields: string[]): Promise<void> {
+  await ensureSchema();
+  const existing = await getChatSession(phone);
+  const oldConfirmed = existing?.confirmed_fields ? JSON.parse(existing.confirmed_fields) : [];
+  const merged = [...new Set([...oldConfirmed, ...fields])];
+  await getDbv().execute({
+    sql: "UPDATE chat_sessions SET confirmed_fields = ?, updated_at = unixepoch() WHERE phone = ?",
+    args: [JSON.stringify(merged), phone],
+  });
+}
+
+export async function resetChatSession(phone: string): Promise<void> {
+  await getDbv().execute({ sql: "DELETE FROM chat_sessions WHERE phone = ?", args: [phone] });
 }
 
 interface DriverDiscountWithTariff extends DriverDiscountRow {

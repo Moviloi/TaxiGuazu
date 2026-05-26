@@ -30,3 +30,10 @@ export const STALE_WORKFLOW_THRESHOLD_S = 86400;
 export const GROQ_MAX_TOKENS = 512;
 export const GROQ_TIMEOUT_MS = 8000;
 export const GROQ_MODEL = "llama-3.3-70b-versatile";
+export const GROQ_EXTRACTION_MAX_TOKENS = 256;
+export const GROQ_EXTRACTION_TEMPERATURE = 0.1;
+
+// Feature flags — Confidence-Based Matching + Slot-Filling
+export const FEATURE_CONFIDENCE_MATCHING = true;
+export const CONFIDENCE_PROCEED = 0.7;
+export const CONFIDENCE_CLARIFY = 0.3;

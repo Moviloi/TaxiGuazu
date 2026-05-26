@@ -1,8 +1,9 @@
 import Groq from "groq-sdk";
 import { getSystemPrompt } from "./system-prompt";
+import { getExtractionPrompt } from "./extraction-prompt";
 import { getEnv } from "@/config/env";
 import type { TripRow } from "@/lib/db/types";
-import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TIMEOUT_MS } from "@/config/constants";
+import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS, GROQ_EXTRACTION_TEMPERATURE } from "@/config/constants";
 
 type Trip = Pick<TripRow, "trip_id" | "destination" | "price_base" | "discount_explicit" | "status">;
 
@@ -32,19 +33,71 @@ function detectLang(text: string): "es" | "en" | "pt" {
   return "es";
 }
 
+export async function generateGroqExtraction(
+  userText: string,
+  history: Message[],
+  customerName?: string
+): Promise<Record<string, any> | null> {
+  const groq = getGroq();
+  if (!groq) return null;
+
+  const lang = detectLang(userText);
+  const systemPrompt = getExtractionPrompt(lang);
+
+  const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "system", content: systemPrompt },
+    { role: "system", content: `IDIOMA_DETECTADO: ${lang.toUpperCase()}` },
+    { role: "system", content: customerName ? `NOMBRE_CLIENTE_CONOCIDO: ${customerName}` : "NOMBRE_CLIENTE_CONOCIDO: ninguno" },
+  ];
+
+  const nativeHistory = history
+    .filter((m) => m.role !== "system")
+    .slice(-6)
+    .map((m) => ({
+      role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+      content: m.content,
+    }));
+
+  messages.push(...nativeHistory);
+  messages.push({ role: "user", content: userText });
+
+  try {
+    const completion = await groq.chat.completions.create(
+      {
+        model: GROQ_MODEL,
+        messages,
+        response_format: { type: "json_object" },
+        max_tokens: GROQ_EXTRACTION_MAX_TOKENS,
+        temperature: GROQ_EXTRACTION_TEMPERATURE,
+      },
+      { timeout: GROQ_TIMEOUT_MS }
+    );
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) return null;
+
+    return JSON.parse(content);
+  } catch (e) {
+    console.error("[GROQ_EXTRACTION_ERROR]", e);
+    return null;
+  }
+}
+
 export async function generateGroqReply(
   userText: string,
   history: Message[],
   trip: Trip | null,
   clientPhone: string,
   promoNote?: string,
-  customerName?: string
+  customerName?: string,
+  extractionNote?: string,
+  skipMarkers = false,
 ): Promise<string> {
   const groq = getGroq();
   if (!groq) return "Disculpe, no pude responder. Un operador lo asistirá.";
 
   const lang = detectLang(userText);
-  const systemPromptBase = getSystemPrompt(lang);
+  const systemPromptBase = getSystemPrompt(lang, !skipMarkers);
 
   const dolar = process.env.COTIZACION_DOLAR || "1250";
   const real = process.env.COTIZACION_REAL || "250";
@@ -61,6 +114,9 @@ export async function generateGroqReply(
   dynamicContext += `[SESION_LIMPIA: ${!!customerName}]\n`;
   if (customerName) {
     dynamicContext += `[NOMBRE_CLIENTE: ${customerName}]\n`;
+  }
+  if (extractionNote) {
+    dynamicContext += `[EXTRACCION_CONFIANZA]\n${extractionNote}\n`;
   }
 
   if (trip) {

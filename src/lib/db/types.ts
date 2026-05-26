@@ -177,3 +177,23 @@ export interface SurveyRow {
   sent_at: number | null;
   response: string | null;
 }
+
+export interface LocationAliasRow {
+  alias: string;
+  canonical_name: string;
+  location_code: string | null;
+  created_at: number;
+}
+
+export interface ChatSessionRow {
+  phone: string;
+  slots: string | null;
+  confidence: string | null;
+  confirmed_fields: string | null;
+  source_message_ids: string | null;
+  extraction_count: number;
+  last_extracted_at: number | null;
+  workflow_state: string | null;
+  clarify_field: string | null;
+  updated_at: number;
+}

@@ -28,13 +28,23 @@ import {
   createLead,
   setCustomerName,
   getCustomerName,
+  upsertChatSession,
+  resetChatSession,
+  getChatSession,
 } from "@/lib/db/database";
-import { generateGroqReply } from "@/lib/ai/groq";
+import { generateGroqReply, generateGroqExtraction } from "@/lib/ai/groq";
+import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
+import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import { sendWhatsAppMessage, sendInteractiveList } from "@/lib/whatsapp/sender";
 import { broadcastTripToDrivers, broadcastLeadToDrivers, offerToSpecificDriver, getPrincipal2, notifyAdmin } from "./admin.service";
 import { handleAdminCommand } from "./admin-commands";
-import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
+import { FEATURE_CONFIDENCE_MATCHING, SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import type { TripRow } from "@/lib/db/types";
+import { calculateSlotConfidence } from "@/lib/services/confidence";
+import { evaluateWorkflowTransition } from "@/lib/services/state-machine";
+import type { SlotWorkflowContext } from "@/lib/services/state-machine";
+import { matchTariff } from "@/lib/services/tariff-matcher";
+import type { TariffMatchResult } from "@/lib/services/tariff-matcher";
 import {
   advanceToNivel1,
   advanceToNivel2,
@@ -90,6 +100,55 @@ function extractTripMarker(text: string): { code: string; origin: string; destin
 
 function stripTripMarker(text: string): string {
   return text.replace(TRIP_MARKER_REGEX, "").replace(LEAD_MARKER_REGEX, "").trim();
+}
+
+const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
+
+function isAffirmativeMessage(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (AFFIRMATIVE_RE.test(t)) return true;
+  const clean = t.replace(/[^a-záéíóúñ\s]/g, "").trim();
+  return /\b(s[ií]|ok|dale|confirmo|adelante)\b/.test(clean);
+}
+
+function formatConfidenceNote(
+  e: TripExtraction,
+  confidenceResult: ExtractionResult,
+  workflowResult: SlotWorkflowContext,
+  tariffMatch?: TariffMatchResult,
+): string {
+  const parts: string[] = [];
+  if (e.origin) parts.push(`Origen: "${e.origin}" (confianza: ${(confidenceResult.slots.origin?.score ?? 0) * 100}%)`);
+  if (e.destination) parts.push(`Destino: "${e.destination}" (confianza: ${(confidenceResult.slots.destination?.score ?? 0) * 100}%)`);
+  if (e.passengers) parts.push(`Pasajeros: ${e.passengers}`);
+  if (e.price) parts.push(`Precio: $${e.price}`);
+  if (e.urgency) parts.push(`Urgencia: ${e.urgency}`);
+  if (e.flight) parts.push(`Vuelo: ${e.flight}`);
+  if (e.scheduled_at) parts.push(`Fecha: ${e.scheduled_at}`);
+  if (e.customer_name) parts.push(`Nombre: ${e.customer_name}`);
+
+  // Backend-matched tariff info replaces LLM price calculation
+  if (tariffMatch?.matched) {
+    const pax = e.passengers || 1;
+    const priceLabel = pax > 4 ? "precio hasta 6 pasajeros" : "precio hasta 4 pasajeros";
+    parts.push(`PRECIO OFICIAL (calculado por backend): $${tariffMatch.price} ARS (${priceLabel}).`);
+    parts.push(`PRECIO_REFERENCIA_4P: $${tariffMatch.price4p}`);
+    parts.push(`PRECIO_REFERENCIA_6P: $${tariffMatch.price6p}`);
+    parts.push(`Ruta oficial: ${tariffMatch.canonicalOrigin} → ${tariffMatch.canonicalDestination}.`);
+    parts.push(`NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`);
+    if (tariffMatch.method === "fuzzy") {
+      parts.push(`(Match aproximado — el chofer confirmará el precio exacto.)`);
+    }
+  } else if (e.origin && e.destination) {
+    parts.push(`PRECIO: No hay tarifa exacta en la base de datos para esta ruta. Derivalo como lead de consulta. No inventes un precio.`);
+  }
+
+  const header = `Confianza general: ${confidenceResult.overall_confidence * 100}%. Estado: ${workflowResult.state}.` +
+    (workflowResult.clarifyField ? ` Campo a clarificar: ${workflowResult.clarifyField}.` : "") +
+    (workflowResult.askForConfirmation ? " El cliente debe confirmar los datos." : "");
+
+  if (parts.length === 0) return header;
+  return `${header}\n${parts.join("\n")}`;
 }
 
 const HABLAR_HUMANO = [
@@ -261,6 +320,9 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (sessionReset) {
       await clearConversationHistory(conversation.id);
       await resetToIdle(conversation.id);
+      if (FEATURE_CONFIDENCE_MATCHING) {
+        await resetChatSession(phone);
+      }
     }
     customerName = await getCustomerName(phone);
 
@@ -273,6 +335,37 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     await insertMessage(conversation.id, "user", text);
 
+    // === CONFIRMATION CHECK (Phase 5-6) ===
+    // If workflow_state is "awaiting_confirmation" and user affirms → dispatch directly
+    if (FEATURE_CONFIDENCE_MATCHING) {
+      const session = await getChatSession(phone);
+      if (session?.workflow_state === "awaiting_confirmation" && isAffirmativeMessage(text)) {
+        const slots = JSON.parse(session.slots || "{}");
+        const pax = slots.passengers || 1;
+        const origin = slots.origin || "";
+        const destination = slots.destination || "";
+        if (origin && destination) {
+          const tariffMatch = await matchTariff(origin, destination, pax);
+          const tripId = `trip_${Date.now()}`;
+          await createTrip(tripId, phone, origin, destination, tariffMatch.matched ? tariffMatch.price : (slots.price || undefined), pax, slots.scheduled_at ? Math.floor(new Date(slots.scheduled_at).getTime() / 1000) : undefined, slots.flight || undefined);
+          await setConversationTrip(conversation.id, tripId);
+          const trip = await getActiveTripByPhone(phone);
+          if (trip) {
+            if (tariffMatch.matched) {
+              await updateTripTariff(trip.trip_id, tariffMatch.tariffId, tariffMatch.piso);
+            }
+            const confirmMsg = "✅ ¡Viaje confirmado! Buscamos chofer para vos.";
+            await sendWhatsAppMessage(phone, confirmMsg);
+            await insertMessage(conversation.id, "assistant", confirmMsg);
+            const urgency = slots.urgency || "ahora";
+            await escalateTrip(conversation.id, phone, trip, urgency, pax);
+          }
+        }
+        await resetChatSession(phone);
+        return;
+      }
+    }
+
     const history = sessionReset ? [] : await getRecentHistory(conversation.id, 20);
 
     let promoNote: string | undefined;
@@ -284,68 +377,122 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
     }
 
-    let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined);
+    // === CONFIDENCE-BASED EXTRACTION + ENGINE (Phases 1-4) ===
+    let extractionNote: string | undefined;
+    let workflowResult: SlotWorkflowContext | undefined;
+    if (FEATURE_CONFIDENCE_MATCHING) {
+      try {
+        const raw = await generateGroqExtraction(text, history, customerName || undefined);
+        if (raw) {
+          const parsed = TripExtractionSchema.safeParse(raw);
+          if (parsed.success) {
+            const confidenceResult = await calculateSlotConfidence(parsed.data, phone, text);
 
-    let marker = extractTripMarker(response);
-    if (marker) {
-      // BACKEND GUARD: Reject markers with 0 passengers (prevents premature dispatch)
-      if (!marker.passengers || marker.passengers <= 0) {
-        console.log(`[GUARD] Marker con passengers=${marker.passengers}, eliminando: ${response.substring(0,80)}...`);
+            // Phase 4: Backend tariff matching — inject real price if origin + destination known
+            let tariffMatch: TariffMatchResult | undefined;
+            if (parsed.data.origin && parsed.data.destination) {
+              const pax = parsed.data.passengers || 1;
+              tariffMatch = await matchTariff(parsed.data.origin, parsed.data.destination, pax);
+              if (tariffMatch.matched) {
+                parsed.data.price = tariffMatch.price;
+                confidenceResult.slots.price = { value: tariffMatch.price, score: 1.0, reason: "backend_tariff_match" };
+              }
+            }
+
+            workflowResult = await evaluateWorkflowTransition(phone, confidenceResult);
+
+            const confByField: Record<string, number> = {};
+            for (const [k, v] of Object.entries(confidenceResult.slots)) {
+              confByField[k] = v.score;
+            }
+
+            await upsertChatSession(phone, parsed.data as Record<string, any>, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
+
+            extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, tariffMatch);
+          }
+        }
+      } catch (e) {
+        console.error("[EXTRACTION] error:", e);
+      }
+    }
+
+    const skipMarkers = FEATURE_CONFIDENCE_MATCHING && !!workflowResult;
+    let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined, extractionNote, skipMarkers);
+
+    if (FEATURE_CONFIDENCE_MATCHING && workflowResult) {
+      // === NEW FLOW (Phases 5-6): workflow-based routing, no marker parsing ===
+      response = stripTripMarker(response);
+      await insertMessage(conversation.id, "assistant", response);
+      await sendWhatsAppMessage(phone, response);
+
+      if (workflowResult.state === "awaiting_confirmation") {
+        // The reply already asked the user to confirm. Wait for next message.
+        // On next call, the confirmation check (above) will detect the affirmative.
+      } else if (workflowResult.state === "collecting_slots" && workflowResult.clarifyField) {
+        // The reply already asked for the missing field. Nothing to do — wait for user input.
+      }
+    } else {
+      // === LEGACY FLOW: marker-based parsing (fallback when FEATURE_CONFIDENCE_MATCHING is off) ===
+      let marker = extractTripMarker(response);
+      if (marker) {
+        if (!marker.passengers || marker.passengers <= 0) {
+          console.log(`[GUARD] Marker con passengers=${marker.passengers}, eliminando: ${response.substring(0,80)}...`);
+          response = stripTripMarker(response);
+          marker = null;
+        }
+      }
+      if (marker) {
         response = stripTripMarker(response);
-        marker = null;
-      }
-    }
-    if (marker) {
-      response = stripTripMarker(response);
-      if (!trip) {
-        const tripId = `trip_${Date.now()}`;
-        await createTrip(tripId, phone, marker.origin, marker.destination, marker.price, marker.passengers, marker.scheduledAt, marker.flightNumber);
-        await setConversationTrip(conversation.id, tripId);
-        trip = await getActiveTripByPhone(phone);
-        if (!trip) return;
-        const tariff = await findTariff(marker.origin, marker.destination, marker.passengers);
-        if (tariff) {
-          await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
-        }
-        if (marker.destination.toLowerCase().includes("pendiente hotel")) {
-          await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
-        }
-      } else {
-        if (marker.passengers && marker.passengers !== trip.passengers) await updateTripPassengers(trip.trip_id, marker.passengers);
-        if (marker.origin && marker.origin !== trip.origin) await updateTripOrigin(trip.trip_id, marker.origin);
-        if (marker.destination && marker.destination !== trip.destination) await updateTripDestination(trip.trip_id, marker.destination);
-        if (marker.price && marker.price !== trip.price_base) await updateTripPriceBase(trip.trip_id, marker.price);
-        if (marker.scheduledAt) await updateTripScheduledAt(trip.trip_id, marker.scheduledAt);
-        if (marker.flightNumber) await updateTripFlight(trip.trip_id, marker.flightNumber);
-        if (marker.destination.toLowerCase().includes("pendiente hotel")) {
-          await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
-        }
-        const tariff = await findTariff(trip.origin || marker.origin, trip.destination || marker.destination, trip.passengers || marker.passengers);
-        if (tariff && !trip.piso_base) {
-          await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
+        if (!trip) {
+          const tripId = `trip_${Date.now()}`;
+          await createTrip(tripId, phone, marker.origin, marker.destination, marker.price, marker.passengers, marker.scheduledAt, marker.flightNumber);
+          await setConversationTrip(conversation.id, tripId);
+          trip = await getActiveTripByPhone(phone);
+          if (!trip) return;
+          const tariff = await findTariff(marker.origin, marker.destination, marker.passengers);
+          if (tariff) {
+            await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
+          }
+          if (marker.destination.toLowerCase().includes("pendiente hotel")) {
+            await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
+          }
+        } else {
+          if (marker.passengers && marker.passengers !== trip.passengers) await updateTripPassengers(trip.trip_id, marker.passengers);
+          if (marker.origin && marker.origin !== trip.origin) await updateTripOrigin(trip.trip_id, marker.origin);
+          if (marker.destination && marker.destination !== trip.destination) await updateTripDestination(trip.trip_id, marker.destination);
+          if (marker.price && marker.price !== trip.price_base) await updateTripPriceBase(trip.trip_id, marker.price);
+          if (marker.scheduledAt) await updateTripScheduledAt(trip.trip_id, marker.scheduledAt);
+          if (marker.flightNumber) await updateTripFlight(trip.trip_id, marker.flightNumber);
+          if (marker.destination.toLowerCase().includes("pendiente hotel")) {
+            await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
+          }
+          const tariff = await findTariff(trip.origin || marker.origin, trip.destination || marker.destination, trip.passengers || marker.passengers);
+          if (tariff && !trip.piso_base) {
+            await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
+          }
         }
       }
-    }
 
-    const leadMarker = !marker ? extractLeadMarker(response) : null;
-    if (leadMarker) {
-      response = stripTripMarker(response);
-    }
+      const leadMarker = !marker ? extractLeadMarker(response) : null;
+      if (leadMarker) {
+        response = stripTripMarker(response);
+      }
 
-    await insertMessage(conversation.id, "assistant", response);
-    await sendWhatsAppMessage(phone, response);
+      await insertMessage(conversation.id, "assistant", response);
+      await sendWhatsAppMessage(phone, response);
 
-    if (leadMarker) {
-      await createLead(conversation.id, phone, leadMarker.origin, leadMarker.destination, leadMarker.price, leadMarker.passengers);
-      await broadcastLeadToDrivers(leadMarker, conversation.id, phone, leadMarker.urgency, leadMarker.passengers);
-    }
+      if (leadMarker) {
+        await createLead(conversation.id, phone, leadMarker.origin, leadMarker.destination, leadMarker.price, leadMarker.passengers);
+        await broadcastLeadToDrivers(leadMarker, conversation.id, phone, leadMarker.urgency, leadMarker.passengers);
+      }
 
-    if (marker && trip && trip.destination && trip.price_base) {
-      const u = (marker.urgency || "").toLowerCase();
-      if (u.includes("reserva")) {
-        await handleReservationSlotSelection(conversation.id, phone, trip);
-      } else {
-        await escalateTrip(conversation.id, phone, trip, marker.urgency, marker.passengers);
+      if (marker && trip && trip.destination && trip.price_base) {
+        const u = (marker.urgency || "").toLowerCase();
+        if (u.includes("reserva")) {
+          await handleReservationSlotSelection(conversation.id, phone, trip);
+        } else {
+          await escalateTrip(conversation.id, phone, trip, marker.urgency, marker.passengers);
+        }
       }
     }
   } catch (e) {
