@@ -1118,7 +1118,7 @@ export async function findTariff(origin: string, destination: string, passengers
 
 export async function searchTariffs(text: string): Promise<TariffRow[]> {
   const q = `%${text.toLowerCase()}%`;
-  return query<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) LIKE ? OR LOWER(destination) LIKE ? LIMIT 10", [q, q]);
+  return query<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) LIKE ? OR LOWER(destination) LIKE ?", [q, q]);
 }
 
 async function seedTariffs(): Promise<void> {

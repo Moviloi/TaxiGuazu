@@ -123,7 +123,11 @@ function formatConfidenceNote(
     if (confidenceResult.slots.origin?.reason === "unknown_location") {
       parts.push(`Origen desconocido: "${e.origin}". No está en mi tarifario. Preguntale al cliente qué lugar quiso decir.`);
     } else {
-      parts.push(`Origen: "${e.origin}" (confianza: ${originScore * 100}%)`);
+      const originCanonical = tariffMatch?.canonicalOrigin;
+      const originLabel = originCanonical && originCanonical !== e.origin
+        ? `"${e.origin}" → ${originCanonical}`
+        : `"${e.origin}"`;
+      parts.push(`Origen: ${originLabel} (Confianza: ${originScore * 100}%)`);
     }
   }
   if (e.destination) {
@@ -131,7 +135,11 @@ function formatConfidenceNote(
     if (confidenceResult.slots.destination?.reason === "unknown_location") {
       parts.push(`Destino desconocido: "${e.destination}". No está en mi tarifario. Preguntale al cliente qué lugar quiso decir.`);
     } else {
-      parts.push(`Destino: "${e.destination}" (confianza: ${destScore * 100}%)`);
+      const destCanonical = tariffMatch?.canonicalDestination;
+      const destLabel = destCanonical && destCanonical !== e.destination
+        ? `"${e.destination}" → ${destCanonical}`
+        : `"${e.destination}"`;
+      parts.push(`Destino: ${destLabel} (Confianza: ${destScore * 100}%)`);
     }
   }
   if (e.passengers) parts.push(`Pasajeros: ${e.passengers}`);
@@ -146,6 +154,7 @@ function formatConfidenceNote(
     const pax = e.passengers || 1;
     const priceLabel = pax > 4 ? "precio hasta 6 pasajeros" : "precio hasta 4 pasajeros";
     parts.push(`PRECIO OFICIAL (calculado por backend): $${tariffMatch.price} ARS (${priceLabel}).`);
+    parts.push(`VALOR_PRECIO: ${tariffMatch.price}`);
     parts.push(`PRECIO_REFERENCIA_4P: $${tariffMatch.price4p}`);
     parts.push(`PRECIO_REFERENCIA_6P: $${tariffMatch.price6p}`);
     parts.push(`Ruta oficial: ${tariffMatch.canonicalOrigin} → ${tariffMatch.canonicalDestination}.`);

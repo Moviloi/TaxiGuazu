@@ -97,7 +97,14 @@ export async function generateGroqReply(
   if (!groq) return "Disculpe, no pude responder. Un operador lo asistirá.";
 
   const lang = detectLang(userText);
-  const systemPromptBase = getSystemPrompt(lang, !skipMarkers);
+  let systemPrompt = getSystemPrompt(lang, !skipMarkers);
+  if (extractionNote) {
+    const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)
+      ?? extractionNote.match(/PRECIO OFICIAL.*?\$(\d+(?:\.\d+)?)/);
+    if (pm) {
+      systemPrompt = systemPrompt.replace('$[PRECIO]', `$${pm[1]}`);
+    }
+  }
 
   const dolar = process.env.COTIZACION_DOLAR || "1250";
   const real = process.env.COTIZACION_REAL || "250";
@@ -128,7 +135,7 @@ export async function generateGroqReply(
   const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: systemPromptBase
+      content: systemPrompt
     },
     {
       role: "system",
