@@ -31,9 +31,10 @@ import {
   getConnectionValueFlag,
   setConnectionValue,
   deleteConnectionKey,
+  getCustomerName,
 } from "@/lib/db/database";
 import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver, broadcastTripToDrivers } from "./admin.service";
-import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons, sendContact } from "@/lib/whatsapp/sender";
 
 export function isGroupMessage(from: string): boolean {
   return from.endsWith("@g.us");
@@ -115,6 +116,11 @@ export async function handleDriverCompleted(convId: number, driverPhone: string)
   const driver = await getDriverByPhone(driverPhone);
   const driverName = driver?.name || "El chofer";
 
+  const customerName = await getCustomerName(trip.client_phone);
+  const clientLabel = customerName
+    ? `${customerName} (${trip.client_phone})`
+    : trip.client_phone;
+
   // Send full breakdown to driver post-completion
   const existingPref2 = await getClientPreferredDriver(trip.client_phone);
   const isPreferred = existingPref2 && existingPref2.preferred_driver_phone === driverPhone;
@@ -142,7 +148,7 @@ ${roleLine ? roleLine.trimStart() : ""}
 💵 *Recibís*: $${garantizado.toLocaleString("es-AR")}
 💳 *Pago*: Al chofer
 
-👤 *Cliente*: ${trip.client_phone}`;
+👤 *Cliente*: ${clientLabel}`;
 
   await sendWhatsAppMessage(driverPhone, completedMsg);
   await notifyAdmin(`🎉 Viaje completado por ${driverName} (${driverPhone}). Destino: ${trip.destination}`);
@@ -187,9 +193,16 @@ async function assignDriver(workflow: { conversation_id?: number; conversationId
   const driver = await getDriverByPhone(driverPhone);
   const driverName = driver?.name || "El chofer";
 
+  const clientPhone = workflow.phone;
+  const customerName = await getCustomerName(clientPhone);
+  const clientLabel = customerName
+    ? `👤 *Cliente*: ${customerName} (${clientPhone})`
+    : `👤 *Cliente*: ${clientPhone}`;
+
   // Send clean post-acceptance message with actions
   const summary = `✅ *Viaje aceptado*
 
+${clientLabel}
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination || "No especificado"}
 Tarifa pública: $${price.toLocaleString("es-AR")}
@@ -203,11 +216,13 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
     { id: `enviaje_${convId}`, title: "🔄 En viaje" },
   ]);
 
-  // Safety proforma for driver to copy-paste to client
-  const proforma = `📋 *Recomendación de seguridad* (copiá y pegá este mensaje al cliente)
+  // Send client as a saveable contact (vCard)
+  const contactName = customerName || `Cliente ${clientPhone}`;
+  await sendContact(driverPhone, contactName, clientPhone);
 
-Hola, buenas tardes. Le saluda ${driverName}, de TaxiGuazú. Veo en el sistema que solicita un traslado desde ${trip.origin || "No especificado"} hacia ${trip.destination || "No especificado"} y son ${trip.passengers || "—"} pasajeros, ¿es correcto todo? Por favor, indíqueme el nombre del hotel o dirección exacta para dejar todo coordinado de mi parte. Le avisaré en cuanto esté llegando para nuestro encuentro. Muchas gracias.`;
-  await sendWhatsAppMessage(driverPhone, proforma);
+  // Split proforma: instruction first, then standalone copiable text
+  await sendWhatsAppMessage(driverPhone, `📋 *Recomendación de seguridad* — copiá y pegá este mensaje al cliente:`);
+  await sendWhatsAppMessage(driverPhone, `Hola, buenas tardes. Le saluda ${driverName}, de TaxiGuazú. Veo en el sistema que solicita un traslado desde ${trip.origin || "No especificado"} hacia ${trip.destination || "No especificado"} y son ${trip.passengers || "—"} pasajeros, ¿es correcto todo? Por favor, indíqueme el nombre del hotel o dirección exacta para dejar todo coordinado de mi parte. Le avisaré en cuanto esté llegando para nuestro encuentro. Muchas gracias.`);
 
   // Check if this is Trip A in a dual contingency (pending_B exists)
   const hasPendingB = await getConnectionValueFlag(`contingency_pending_B_${convId}`);
@@ -327,8 +342,17 @@ export async function handleDriverTakeLead(convId: number, driverPhone: string):
   const driver = await getDriverByPhone(driverPhone);
   const driverName = driver?.name || "El chofer";
 
+  const leadCustomerName = await getCustomerName(lead.client_phone);
+  const leadClientLabel = leadCustomerName
+    ? `${leadCustomerName} (${lead.client_phone})`
+    : lead.client_phone;
+
   // Notify driver
-  await sendWhatsAppMessage(driverPhone, `✅ *Lead tomado exitosamente*\n\nCliente: ${lead.client_phone}\nDestino: ${lead.destination}\n💰 *Recibís*: $${payout.toLocaleString("es-AR")}\n\nContactá al cliente para coordinar.`);
+  await sendWhatsAppMessage(driverPhone, `✅ *Lead tomado exitosamente*\n\n👤 Cliente: ${leadClientLabel}\nDestino: ${lead.destination}\n💰 *Recibís*: $${payout.toLocaleString("es-AR")}\n\nContactá al cliente para coordinar.`);
+
+  // Send client as a saveable contact
+  const leadContactName = leadCustomerName || `Cliente ${lead.client_phone}`;
+  await sendContact(driverPhone, leadContactName, lead.client_phone);
 
   // Notify client
   await sendWhatsAppMessage(lead.client_phone, `✅ *Viaje confirmado*\n\nTu chofer es ${driverName}. Te contactará en breve.`);
