@@ -430,17 +430,22 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     let workflowResult: SlotWorkflowContext | undefined;
     if (FEATURE_CONFIDENCE_MATCHING) {
       try {
+        console.log("[EXTRACTION] Iniciando extraction para:", text.substring(0, 80));
         const raw = await generateGroqExtraction(text, history, customerName || undefined);
         if (raw) {
+          console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
           const parsed = TripExtractionSchema.safeParse(raw);
           if (parsed.success) {
+            console.log("[EXTRACTION] Parse exitoso, calculando confidence...");
             const confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
             // Phase 4: Backend tariff matching — inject real price if origin + destination known
             let tariffMatch: TariffMatchResult | undefined;
             if (parsed.data.origin && parsed.data.destination) {
               const pax = parsed.data.passengers || 1;
+              console.log(`[EXTRACTION] Buscando tariff: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
               tariffMatch = await matchTariff(parsed.data.origin, parsed.data.destination, pax);
+              console.log(`[EXTRACTION] Tariff match: matched=${tariffMatch.matched} price=${tariffMatch.price} origin="${tariffMatch.canonicalOrigin}" dest="${tariffMatch.canonicalDestination}"`);
               if (tariffMatch.matched) {
                 parsed.data.price = tariffMatch.price;
                 confidenceResult.slots.price = { value: tariffMatch.price, score: 1.0, reason: "backend_tariff_match" };
@@ -457,10 +462,48 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             await upsertChatSession(phone, parsed.data as Record<string, any>, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
 
             extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, tariffMatch);
+            console.log("[EXTRACTION] extractionNote generado:", extractionNote.substring(0, 150));
+          } else {
+            console.log("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
           }
+        } else {
+          console.log("[EXTRACTION] generateGroqExtraction retornó null");
         }
       } catch (e) {
-        console.error("[EXTRACTION] error:", e);
+        console.error("[EXTRACTION] error:", e instanceof Error ? e.message : String(e));
+      }
+
+      // FALLBACK: si la extracción falló, intentar regex simple
+      if (!extractionNote) {
+        try {
+          console.log("[EXTRACTION] Intentando fallback regex...");
+          const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
+          const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+          const originMatch = text.match(originRx)?.[1];
+          const destMatch = text.match(destRx)?.[1];
+          if (originMatch && destMatch) {
+            console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
+            const ft = await matchTariff(originMatch, destMatch, 1);
+            if (ft.matched) {
+              extractionNote = [
+                `Confianza general: 100%. Estado: collecting_slots.`,
+                `Origen: "${originMatch}" → ${ft.canonicalOrigin} (Confianza: 100%)`,
+                `Destino: "${destMatch}" → ${ft.canonicalDestination} (Confianza: 100%)`,
+                `PRECIO OFICIAL (calculado por backend): $${ft.price} ARS (precio hasta 4 pasajeros).`,
+                `VALOR_PRECIO: ${ft.price}`,
+                `Ruta oficial: ${ft.canonicalOrigin} → ${ft.canonicalDestination}.`,
+                `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
+              ].join('\n');
+              console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.price);
+            } else {
+              console.log("[EXTRACTION] Fallback: tariff no encontrado");
+            }
+          } else {
+            console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto:", text.substring(0, 60));
+          }
+        } catch (e) {
+          console.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
+        }
       }
     }
 
