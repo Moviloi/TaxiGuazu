@@ -143,6 +143,10 @@ export async function generateGroqReply(
   dynamicContext += `Teléfono del Cliente: ${clientPhone}\n`;
   dynamicContext += `[CLIENTE_EXTRANJERO: ${isExtranjero}]\n`;
   dynamicContext += `[MONEDA_SUGERIDA: ${monedaSugerida}]\n`;
+
+  // REGLA ESTRICTA DE MONEDA PARA EL LLM
+  dynamicContext += `[REGLA_FORMATO_PRECIO]: Si vas a mostrar un precio al cliente y MONEDA_SUGERIDA es BRL o USD, calculá el valor aproximado usando las cotizaciones provistas y mostralo en ese formato, pero obligatoriamente agregá al lado el equivalente exacto en pesos argentinos (ARS) aclarando que se abona en base al precio oficial en ARS. Ejemplo para BRL: "R$ X BRL (aproximadamente $Y ARS)".\n`;
+
   dynamicContext += `[SESION_LIMPIA: ${!!customerName}]\n`;
   if (customerName) {
     dynamicContext += `[NOMBRE_CLIENTE: ${customerName}]\n`;
