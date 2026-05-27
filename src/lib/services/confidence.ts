@@ -6,14 +6,13 @@ type SlotKey = "origin" | "destination" | "passengers" | "price" | "scheduled_at
 
 const RELATIVE_DAY_RE = /\b(hoy|mañana|pasado\s*mañana|esta\s*semana|próximos?\s*días)\b/i;
 const AMBIGUOUS_PAX_RE = /\b(varios?|unas?|familia|grupo|compañía|tripulación|gente|personas?)\b/i;
+const AMBIGUOUS_LOCATION_TERMS = ["ciudad", "centro", "aeropuerto", "puerto", "microcentro", "la ciudad", "a la ciudad"];
 
 export async function calculateSlotConfidence(
   extractedData: TripExtraction,
-  phone: string,
   originalMessage: string,
 ): Promise<ExtractionResult> {
   const slots: Record<string, { value: string | number | null; score: number; reason: string }> = {};
-  const isForeign = !phone.startsWith("+54");
 
   // ── Passengers ──
   if (extractedData.passengers != null && extractedData.passengers > 0) {
@@ -31,21 +30,17 @@ export async function calculateSlotConfidence(
       slots.origin = { value: extractedData.origin, score: 0.0, reason: "unknown_location" };
     } else {
       const aliases = aliasResult.names;
-      const exactMatch = aliases.some(a => a.toLowerCase() === extractedData.origin!.toLowerCase());
-      if (exactMatch) {
-        slots.origin = { value: extractedData.origin, score: 1.0, reason: "exact_alias_match" };
-      } else if (aliases.length > 0 && aliases[0] !== extractedData.origin) {
-        const text = extractedData.origin.toLowerCase();
-        const isCentro = text === "centro" || text.includes("centro");
-        if (isCentro) {
-          const score = isForeign ? 0.5 : 0.85;
-          const reason = isForeign ? "centro_ambiguous_foreign" : "centro_asume_puerto_iguazu";
-          slots.origin = { value: aliases[0], score, reason };
+      const text = extractedData.origin.toLowerCase();
+      const isAmbiguous = AMBIGUOUS_LOCATION_TERMS.some(t => text === t || text.includes(t));
+      if (isAmbiguous) {
+        slots.origin = { value: aliases[0], score: 0.6, reason: "ambiguous_term" };
+      } else {
+        const exactMatch = aliases.some(a => a.toLowerCase() === text);
+        if (exactMatch) {
+          slots.origin = { value: extractedData.origin, score: 1.0, reason: "exact_alias_match" };
         } else {
           slots.origin = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
         }
-      } else {
-        slots.origin = { value: extractedData.origin, score: 0.6, reason: "approximate_match" };
       }
     }
   } else {
@@ -59,21 +54,17 @@ export async function calculateSlotConfidence(
       slots.destination = { value: extractedData.destination, score: 0.0, reason: "unknown_location" };
     } else {
       const aliases = aliasResult.names;
-      const exactMatch = aliases.some(a => a.toLowerCase() === extractedData.destination!.toLowerCase());
-      if (exactMatch) {
-        slots.destination = { value: extractedData.destination, score: 1.0, reason: "exact_alias_match" };
-      } else if (aliases.length > 0 && aliases[0] !== extractedData.destination) {
-        const text = extractedData.destination.toLowerCase();
-        const isCentro = text === "centro" || text.includes("centro");
-        if (isCentro) {
-          const score = isForeign ? 0.5 : 0.85;
-          const reason = isForeign ? "centro_ambiguous_foreign" : "centro_asume_puerto_iguazu";
-          slots.destination = { value: aliases[0], score, reason };
+      const text = extractedData.destination.toLowerCase();
+      const isAmbiguous = AMBIGUOUS_LOCATION_TERMS.some(t => text === t || text.includes(t));
+      if (isAmbiguous) {
+        slots.destination = { value: aliases[0], score: 0.6, reason: "ambiguous_term" };
+      } else {
+        const exactMatch = aliases.some(a => a.toLowerCase() === text);
+        if (exactMatch) {
+          slots.destination = { value: extractedData.destination, score: 1.0, reason: "exact_alias_match" };
         } else {
           slots.destination = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
         }
-      } else {
-        slots.destination = { value: extractedData.destination, score: 0.6, reason: "approximate_match" };
       }
     }
   } else {
@@ -141,16 +132,22 @@ export async function calculateSlotConfidence(
       : 0;
 
   // ── Find the lowest-confidence mandatory field ──
+  // Priority: ambiguous_term > missing > low-confidence
   let clarifyField: string | undefined;
   let clarifyQuestion: string | undefined;
 
   if (overallConfidence < CONFIDENCE_PROCEED) {
-    let minScore = Infinity;
-    for (const k of mandatoryFields) {
-      const s = slots[k]?.score ?? 0;
-      if (s < minScore) {
-        minScore = s;
-        clarifyField = k;
+    const ambiguousField = mandatoryFields.find(k => slots[k]?.reason === "ambiguous_term");
+    if (ambiguousField) {
+      clarifyField = ambiguousField;
+    } else {
+      let minScore = Infinity;
+      for (const k of mandatoryFields) {
+        const s = slots[k]?.score ?? 0;
+        if (s < minScore) {
+          minScore = s;
+          clarifyField = k;
+        }
       }
     }
     clarifyQuestion = buildClarifyQuestion(clarifyField, isAhora);

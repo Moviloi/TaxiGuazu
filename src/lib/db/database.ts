@@ -357,6 +357,16 @@ async function initSchema(): Promise<void> {
       await getDbv().execute("UPDATE drivers SET shift = NULL WHERE shift = 'any'");
     }
   } catch (e) { console.error("[migration] drivers shift any->null error:", e); }
+
+  // Migration: add payment_method column to drivers
+  try {
+    const result = await getDbv().execute(
+      "INSERT OR IGNORE INTO _migrations (name) VALUES ('drivers_payment_method')"
+    );
+    if ((result as any).rowsAffected > 0) {
+      await getDbv().execute("ALTER TABLE drivers ADD COLUMN payment_method TEXT");
+    }
+  } catch (e) { console.error("[migration] drivers payment_method error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -615,7 +625,7 @@ export async function registerDriver(phone: string, name?: string): Promise<Driv
 
 export async function createDriverCode(
   code: string, name: string, createdBy: string, phone?: string,
-  opts?: { carType?: string; carCapacity?: number; color?: string; plate?: string; country?: string; tier?: string; shift?: string | null }
+  opts?: { carType?: string; carCapacity?: number; color?: string; plate?: string; country?: string; tier?: string; shift?: string | null; paymentMethod?: string | null; idiom?: string | null }
 ): Promise<{ ok: boolean; error?: string }> {
   await ensureSchema();
   try {
@@ -628,11 +638,12 @@ export async function createDriverCode(
         args: [code.toLowerCase().trim(), name.trim(), createdBy, fullPhone],
       });
       await getDbv().execute({
-        sql: `INSERT OR IGNORE INTO drivers (driver_id, phone, name, active, car_type, car_capacity, color, plate, country, tier, shift)
-            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT OR IGNORE INTO drivers (driver_id, phone, name, active, car_type, car_capacity, color, plate, country, tier, shift, payment_method, idiom)
+            VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [`driver_${Date.now()}`, fullPhone, name.trim(),
                opts?.carType || null, opts?.carCapacity || null, opts?.color || null, opts?.plate || null,
-               opts?.country || 'AR', opts?.tier || 'normal', opts?.shift || null],
+               opts?.country || 'AR', opts?.tier || 'normal', opts?.shift || null,
+               opts?.paymentMethod || null, opts?.idiom || null],
       });
     } else {
       await getDbv().execute({
@@ -772,7 +783,7 @@ export async function updateDriverGuide(phone: string, isGuide: boolean): Promis
 
 export async function updateDriverByCode(
   code: string,
-  updates: { name?: string; carType?: string; carCapacity?: number | null; color?: string; plate?: string; country?: string; shift?: string | null }
+  updates: { name?: string; carType?: string; carCapacity?: number | null; color?: string; plate?: string; country?: string; shift?: string | null; paymentMethod?: string | null; idiom?: string | null }
 ): Promise<{ ok: boolean; error?: string }> {
   await ensureSchema();
   const entry = await getDriverCodeByCode(code);
@@ -788,6 +799,8 @@ export async function updateDriverByCode(
   if (updates.plate) { sets.push("plate = ?"); args.push(updates.plate); }
   if (updates.country) { sets.push("country = ?"); args.push(updates.country); }
   if (updates.shift !== undefined) { sets.push("shift = ?"); args.push(updates.shift); }
+  if (updates.paymentMethod !== undefined) { sets.push("payment_method = ?"); args.push(updates.paymentMethod); }
+  if (updates.idiom !== undefined) { sets.push("idiom = ?"); args.push(updates.idiom); }
 
   if (sets.length === 0) return { ok: true };
 
@@ -1336,6 +1349,10 @@ async function seedLocationAliases(): Promise<void> {
     { alias: "itaipu", canonical: "Itaipú y Alrededores" },
     { alias: "represa itaipu", canonical: "Itaipú y Alrededores" },
     { alias: "itaipú", canonical: "Itaipú y Alrededores" },
+    // Ciudad (término genérico → Puerto Iguazú por defecto)
+    { alias: "ciudad", canonical: "Puerto Iguazú" },
+    { alias: "la ciudad", canonical: "Puerto Iguazú" },
+    { alias: "a la ciudad", canonical: "Puerto Iguazú" },
   ];
   for (const a of aliases) {
     try {

@@ -19,8 +19,6 @@ import {
   findTariff,
   getDiscountsForTariff,
   getDriverByPhone,
-  getDriverCodeByCode,
-  registerDriverByCode,
   getDriverExpiry,
   getPrincipalDriver,
   updateDriverShiftIfNull,
@@ -119,28 +117,55 @@ function formatConfidenceNote(
   tariffMatch?: TariffMatchResult,
 ): string {
   const parts: string[] = [];
+
+  const DESCRIPTIVE_PREFIX: Record<string, string> = {
+    "Puerto Iguazú": "Ciudad de Puerto Iguazú",
+    "Foz do Iguaçu": "Ciudad de Foz do Iguaçu",
+    "Centro (Urbano)": "Centro de Puerto Iguazú",
+    "Centro de Foz": "Centro de Foz",
+    "Aeropuerto IGR": "Aeropuerto IGR",
+    "Aeropuerto IGU": "Aeropuerto IGU",
+  };
+
+  function formatFieldLabel(
+    raw: string,
+    canonical: string | undefined,
+    reason: string | undefined,
+  ): { label: string; suggestion: string | undefined } {
+    if (reason === "unknown_location") {
+      return { label: `"${raw}" (desconocido)`, suggestion: undefined };
+    }
+    if (reason === "ambiguous_term" && canonical) {
+      const display = DESCRIPTIVE_PREFIX[canonical] ?? canonical;
+      return {
+        label: `"${raw}" → *${display}*`,
+        suggestion: display,
+      };
+    }
+    if (canonical && canonical !== raw) {
+      return { label: `"${raw}" → ${canonical}`, suggestion: undefined };
+    }
+    return { label: `"${raw}"`, suggestion: undefined };
+  }
+
   if (e.origin) {
     const originScore = confidenceResult.slots.origin?.score ?? 0;
-    if (confidenceResult.slots.origin?.reason === "unknown_location") {
-      parts.push(`Origen desconocido: "${e.origin}". No está en mi tarifario. Preguntale al cliente qué lugar quiso decir.`);
-    } else {
-      const originCanonical = tariffMatch?.canonicalOrigin;
-      const originLabel = originCanonical && originCanonical !== e.origin
-        ? `"${e.origin}" → ${originCanonical}`
-        : `"${e.origin}"`;
-      parts.push(`Origen: ${originLabel} (Confianza: ${originScore * 100}%)`);
+    const originReason = confidenceResult.slots.origin?.reason;
+    const originCanonical = tariffMatch?.canonicalOrigin;
+    const { label: originLabel, suggestion: originSuggestion } = formatFieldLabel(e.origin, originCanonical, originReason);
+    parts.push(`Origen: ${originLabel} (Confianza: ${originScore * 100}%)`);
+    if (originSuggestion) {
+      parts.push(`SUGERENCIA_ORIGEN: "${originSuggestion}"`);
     }
   }
   if (e.destination) {
     const destScore = confidenceResult.slots.destination?.score ?? 0;
-    if (confidenceResult.slots.destination?.reason === "unknown_location") {
-      parts.push(`Destino desconocido: "${e.destination}". No está en mi tarifario. Preguntale al cliente qué lugar quiso decir.`);
-    } else {
-      const destCanonical = tariffMatch?.canonicalDestination;
-      const destLabel = destCanonical && destCanonical !== e.destination
-        ? `"${e.destination}" → ${destCanonical}`
-        : `"${e.destination}"`;
-      parts.push(`Destino: ${destLabel} (Confianza: ${destScore * 100}%)`);
+    const destReason = confidenceResult.slots.destination?.reason;
+    const destCanonical = tariffMatch?.canonicalDestination;
+    const { label: destLabel, suggestion: destSuggestion } = formatFieldLabel(e.destination, destCanonical, destReason);
+    parts.push(`Destino: ${destLabel} (Confianza: ${destScore * 100}%)`);
+    if (destSuggestion) {
+      parts.push(`SUGERENCIA_DESTINO: "${destSuggestion}"`);
     }
   }
   if (e.passengers) parts.push(`Pasajeros: ${e.passengers}`);
@@ -163,8 +188,20 @@ function formatConfidenceNote(
     if (tariffMatch.method === "fuzzy") {
       parts.push(`(Match aproximado — el chofer confirmará el precio exacto.)`);
     }
-  } else if (e.origin && e.destination) {
-    parts.push(`PRECIO: No hay tarifa exacta en la base de datos para esta ruta. Derivalo como lead de consulta. No inventes un precio.`);
+  } else {
+    parts.push(`VALOR_PRECIO: NO_DISPONIBLE`);
+    if (e.origin && e.destination) {
+      const originReason = confidenceResult.slots.origin?.reason;
+      const destReason = confidenceResult.slots.destination?.reason;
+      if (originReason === "unknown_location" && destReason !== "unknown_location") {
+        parts.push(`No hay tarifa para ESE ORIGEN: "${e.origin}".`);
+      } else if (destReason === "unknown_location" && originReason !== "unknown_location") {
+        parts.push(`No hay tarifa para ESE DESTINO: "${e.destination}".`);
+      } else {
+        parts.push(`No hay tarifa para esa combinación de origen y destino.`);
+      }
+    }
+    parts.push(`No inventes un precio. Si el cliente no puede aclarar, derivá con un colega humano.`);
   }
 
   const header = `Confianza general: ${confidenceResult.overall_confidence * 100}%. Estado: ${workflowResult.state}.` +
@@ -267,80 +304,29 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       return;
     }
 
-    const registrarMatch = lower.match(/^\.registrar[-\s]?(.*)$/);
+    const registrarMatch = lower.match(/^\.registrar\s*$/);
     if (registrarMatch) {
-      const code = registrarMatch[1].trim();
-      console.log(`[DEBUG_REGISTRAR] phone=${phone} code="${code}"`);
-
-      if (!code) {
-        // .registrar without code = alias for -activar (registered drivers)
-        const existing = await getDriverByPhone(phone);
-        if (existing) {
-          await getOrCreateConversation(phone);
-          const shift = await updateDriverShiftIfNull(phone);
-          const msg = buildShiftActivationMsg(shift || "day", existing.name || "Chofer");
-          await sendWhatsAppMessage(phone, msg || "✅ Activado!");
-          const conv = await getConversationByPhone(phone);
-          if (conv) await insertMessage(conv.id, "assistant", msg || "✅ Activado!");
-          if (shift) {
-            const prompt = buildShiftEndPrompt(shift);
-            if (prompt) {
-              await sendWhatsAppMessage(phone, prompt);
-              if (conv) await insertMessage(conv.id, "assistant", prompt);
-            }
-          }
-        } else {
-          const conv = await getOrCreateConversation(phone);
-          const resp = "❌ No tenés un código de registro. Pedile al administrador que te dé uno.";
-          await sendWhatsAppMessage(phone, resp);
-          await insertMessage(conv.id, "assistant", resp);
-        }
-        return;
-      }
-
-      const codeEntry = await getDriverCodeByCode(code);
-      console.log(`[DEBUG_REGISTRAR] getDriverCodeByCode found=${!!codeEntry}`);
-      if (!codeEntry) {
-        const conv = await getOrCreateConversation(phone);
-        const resp = "❌ Código inválido. Verificá con el administrador.";
-        console.log(`[DEBUG_REGISTRAR] sending: ${resp.substring(0, 50)}`);
-        await sendWhatsAppMessage(phone, resp);
-        await insertMessage(conv.id, "assistant", resp);
-        return;
-      }
-
-      if (codeEntry.phone && codeEntry.phone !== phone) {
-        const conv = await getOrCreateConversation(phone);
-        const resp = "❌ Este código ya está asignado a otro número.";
-        console.log(`[DEBUG_REGISTRAR] sending: ${resp.substring(0, 50)}`);
-        await sendWhatsAppMessage(phone, resp);
-        await insertMessage(conv.id, "assistant", resp);
-        return;
-      }
-
-      await getOrCreateConversation(phone);
-      const result = await registerDriverByCode(code, phone);
-      console.log(`[DEBUG_REGISTRAR] registerDriverByCode result=${!!result}`);
-      if (!result) {
-        const resp = "❌ Error al registrarte. Probá de nuevo.";
-        console.log(`[DEBUG_REGISTRAR] sending: ${resp.substring(0, 50)}`);
-        await sendWhatsAppMessage(phone, resp);
+      // .registrar = alias for -activar
+      const existing = await getDriverByPhone(phone);
+      if (existing) {
+        await getOrCreateConversation(phone);
+        const shift = await updateDriverShiftIfNull(phone);
+        const msg = buildShiftActivationMsg(shift || "day", existing.name || "Chofer");
+        await sendWhatsAppMessage(phone, msg || "✅ Activado!");
         const conv = await getConversationByPhone(phone);
-        if (conv) await insertMessage(conv.id, "assistant", resp);
-        return;
-      }
-
-      const shift = await updateDriverShiftIfNull(phone);
-      const msg = buildShiftActivationMsg(shift || "day", codeEntry.name || "Chofer");
-      await sendWhatsAppMessage(phone, msg || "✅ Activado!");
-      const conv2 = await getConversationByPhone(phone);
-      if (conv2) await insertMessage(conv2.id, "assistant", msg || "✅ Activado!");
-      if (shift) {
-        const prompt = buildShiftEndPrompt(shift);
-        if (prompt) {
-          await sendWhatsAppMessage(phone, prompt);
-          if (conv2) await insertMessage(conv2.id, "assistant", prompt);
+        if (conv) await insertMessage(conv.id, "assistant", msg || "✅ Activado!");
+        if (shift) {
+          const prompt = buildShiftEndPrompt(shift);
+          if (prompt) {
+            await sendWhatsAppMessage(phone, prompt);
+            if (conv) await insertMessage(conv.id, "assistant", prompt);
+          }
         }
+      } else {
+        const conv = await getOrCreateConversation(phone);
+        const resp = "❌ No estás registrado como chofer. Pedí al administrador que te dé de alta.";
+        await sendWhatsAppMessage(phone, resp);
+        await insertMessage(conv.id, "assistant", resp);
       }
       return;
     }
@@ -450,7 +436,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         if (raw) {
           const parsed = TripExtractionSchema.safeParse(raw);
           if (parsed.success) {
-            const confidenceResult = await calculateSlotConfidence(parsed.data, phone, text);
+            const confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
             // Phase 4: Backend tariff matching — inject real price if origin + destination known
             let tariffMatch: TariffMatchResult | undefined;

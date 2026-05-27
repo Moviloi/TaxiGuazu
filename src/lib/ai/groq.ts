@@ -99,10 +99,19 @@ export async function generateGroqReply(
   const lang = detectLang(userText);
   let systemPrompt = getSystemPrompt(lang, !skipMarkers);
   if (extractionNote) {
-    const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)
-      ?? extractionNote.match(/PRECIO OFICIAL.*?\$(\d+(?:\.\d+)?)/);
-    if (pm) {
-      systemPrompt = systemPrompt.replace('$[PRECIO]', `$${pm[1]}`);
+    const noPrice = extractionNote.includes("VALOR_PRECIO: NO_DISPONIBLE");
+    if (noPrice) {
+      // No tariff for this route — replace MODO AHORA template with clarification instruction
+      const templateRegex = /"¡Hola! Sí, el precio para ir desde \[Origen\] a \[Destino\] es de \$\[PRECIO\] \(para hasta 4 pasajeros\)\.[^"]*"/;
+      systemPrompt = systemPrompt.replace(templateRegex,
+        `"Informá al cliente qué campo (origen/destino) no tiene tarifa según [EXTRACCION_CONFIANZA]. Mencioná exactamente cuál lugar no está disponible y por qué. Si hay una sugerencia (SUGERENCIA_ORIGEN o SUGERENCIA_DESTINO), preguntá si quiso decir ese lugar. No inventes precio. Si no se resuelve, derivá con un colega humano."`
+      );
+    } else {
+      const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)
+        ?? extractionNote.match(/PRECIO OFICIAL.*?\$(\d+(?:\.\d+)?)/);
+      if (pm) {
+        systemPrompt = systemPrompt.replace('$[PRECIO]', `$${pm[1]}`);
+      }
     }
   }
 
