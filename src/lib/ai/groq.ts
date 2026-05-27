@@ -107,10 +107,26 @@ export async function generateGroqReply(
         `"Informá al cliente qué campo (origen/destino) no tiene tarifa según [EXTRACCION_CONFIANZA]. Mencioná exactamente cuál lugar no está disponible y por qué. Si hay una sugerencia (SUGERENCIA_ORIGEN o SUGERENCIA_DESTINO), preguntá si quiso decir ese lugar. No inventes precio. Si no se resuelve, derivá con un colega humano."`
       );
     } else {
+      // 1. Pre-sustitución de precio existente
       const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)
         ?? extractionNote.match(/PRECIO OFICIAL.*?\$(\d+(?:\.\d+)?)/);
       if (pm) {
         systemPrompt = systemPrompt.replace('$[PRECIO]', `$${pm[1]}`);
+      }
+
+      // 2. NUEVO: Pre-sustitución de Origen y Destino Canónicos
+      const routeMatch = extractionNote.match(/Ruta oficial:\s*(.*?)\s*→\s*(.*?)\./);
+      if (routeMatch) {
+        let canonicalOrigin = routeMatch[1].trim();
+        let canonicalDest = routeMatch[2].trim();
+
+        // Enriquecimiento de sinónimos para mayor claridad institucional si es el Centro
+        if (canonicalDest === "Centro (Urbano)") {
+          canonicalDest = "Centro de la Ciudad (Puerto Iguazú)";
+        }
+
+        systemPrompt = systemPrompt.replace('[Origen]', canonicalOrigin);
+        systemPrompt = systemPrompt.replace('[Destino]', canonicalDest);
       }
     }
   }
