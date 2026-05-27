@@ -177,7 +177,14 @@ export async function generateGroqReply(
       { timeout: GROQ_TIMEOUT_MS }
     );
 
-    return completion.choices[0]?.message?.content?.trim() || "Disculpe, no pude responder.";
+    let response = completion.choices[0]?.message?.content?.trim() || "Disculpe, no pude responder.";
+    if (extractionNote) {
+      const precioReal = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)?.[1];
+      if (precioReal) {
+        response = response.replace(/\$\s*[\d.,]+/g, `$${precioReal}`);
+      }
+    }
+    return response;
   } catch (e) {
     console.error("[GROQ_ERROR]", e);
     return "Disculpe, no pude responder. Un operador lo asistirá.";
