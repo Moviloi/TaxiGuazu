@@ -142,13 +142,15 @@ function formatConfidenceNote(
         suggestion: display,
       };
     }
-    if (canonical && canonical !== raw) {
-      return { label: `"${raw}" → ${canonical}`, suggestion: undefined };
+    // CAMBIO EMBUDO: Si existe nombre canónico en la DB, lo inyectamos explícitamente con la flecha
+    if (canonical) {
+      const display = DESCRIPTIVE_PREFIX[canonical] ?? canonical;
+      return { label: `"${raw}" → ${display}`, suggestion: undefined };
     }
     return { label: `"${raw}"`, suggestion: undefined };
   }
 
-  if (e.origin) {
+if (e.origin) {
     const originScore = confidenceResult.slots.origin?.score ?? 0;
     const originReason = confidenceResult.slots.origin?.reason;
     const originCanonical = tariffMatch?.canonicalOrigin;
@@ -169,20 +171,16 @@ function formatConfidenceNote(
     }
   }
   if (e.passengers) parts.push(`Pasajeros: ${e.passengers}`);
-  if (e.price) parts.push(`Precio: $${e.price}`);
   if (e.urgency) parts.push(`Urgencia: ${e.urgency}`);
   if (e.flight) parts.push(`Vuelo: ${e.flight}`);
   if (e.scheduled_at) parts.push(`Fecha: ${e.scheduled_at}`);
   if (e.customer_name) parts.push(`Nombre: ${e.customer_name}`);
 
-  // Backend-matched tariff info replaces LLM price calculation
   if (tariffMatch?.matched) {
     const pax = e.passengers || 1;
     const priceLabel = pax > 4 ? "precio hasta 6 pasajeros" : "precio hasta 4 pasajeros";
     parts.push(`PRECIO OFICIAL (calculado por backend): $${tariffMatch.price} ARS (${priceLabel}).`);
     parts.push(`VALOR_PRECIO: ${tariffMatch.price}`);
-    parts.push(`PRECIO_REFERENCIA_4P: $${tariffMatch.price4p}`);
-    parts.push(`PRECIO_REFERENCIA_6P: $${tariffMatch.price6p}`);
     parts.push(`Ruta oficial: ${tariffMatch.canonicalOrigin} → ${tariffMatch.canonicalDestination}.`);
     parts.push(`NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`);
     if (tariffMatch.method === "fuzzy") {

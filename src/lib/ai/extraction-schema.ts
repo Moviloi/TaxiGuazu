@@ -11,20 +11,11 @@ export const TripExtractionSchema = z.object({
   customer_name: z.string().nullable().optional(),
 });
 
-export const LeadExtractionSchema = z.object({
-  origin: z.string().min(1),
-  destination: z.string().min(1),
-  reference_price: z.number().positive().nullable().optional(),
-  passengers: z.number().int().positive().nullable().optional(),
-});
-
 export type TripExtraction = z.infer<typeof TripExtractionSchema>;
-export type LeadExtraction = z.infer<typeof LeadExtractionSchema>;
 
 export interface ExtractionResult {
   slots: Record<string, { value: string | number | null; score: number; reason: string }>;
   overall_confidence: number;
   action: "proceed" | "clarify" | "fallback_regex";
   clarify_field?: string;
-  clarify_question?: string;
 }

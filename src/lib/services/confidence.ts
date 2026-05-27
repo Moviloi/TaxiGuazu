@@ -134,7 +134,6 @@ export async function calculateSlotConfidence(
   // ── Find the lowest-confidence mandatory field ──
   // Priority: ambiguous_term > missing > low-confidence
   let clarifyField: string | undefined;
-  let clarifyQuestion: string | undefined;
 
   if (overallConfidence < CONFIDENCE_PROCEED) {
     const ambiguousField = mandatoryFields.find(k => slots[k]?.reason === "ambiguous_term");
@@ -150,7 +149,6 @@ export async function calculateSlotConfidence(
         }
       }
     }
-    clarifyQuestion = buildClarifyQuestion(clarifyField, isAhora);
   }
 
   const action =
@@ -165,18 +163,7 @@ export async function calculateSlotConfidence(
     overall_confidence: Math.round(overallConfidence * 100) / 100,
     action,
     clarify_field: clarifyField,
-    clarify_question: clarifyQuestion,
   };
-}
-
-function buildClarifyQuestion(field: string | undefined, isAhora: boolean): string | undefined {
-  switch (field) {
-    case "origin": return "¿Cuál es el punto de partida?";
-    case "destination": return "¿Cuál es el destino?";
-    case "passengers": return "¿Cuántos pasajeros son exactamente?";
-    case "scheduled_at": return isAhora ? undefined : "¿Para qué fecha y horario?";
-    default: return undefined;
-  }
 }
 
 function computeRelativeDate(text: string): string {

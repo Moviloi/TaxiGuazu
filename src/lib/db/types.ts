@@ -71,6 +71,7 @@ export interface DriverRow {
   min_payout: number | null;
   is_low_cost: number | null;
   shift: string | null;
+  payment_method: string | null;
   rating: number | null;
   rating_count: number | null;
   offers_received: number | null;

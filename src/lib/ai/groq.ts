@@ -5,7 +5,7 @@ import { getEnv } from "@/config/env";
 import type { TripRow } from "@/lib/db/types";
 import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS, GROQ_EXTRACTION_TEMPERATURE } from "@/config/constants";
 
-type Trip = Pick<TripRow, "trip_id" | "destination" | "price_base" | "discount_explicit" | "status">;
+type Trip = Pick<TripRow, "trip_id" | "destination" | "status">;
 
 interface Message {
   role: string;
@@ -108,8 +108,7 @@ export async function generateGroqReply(
       );
     } else {
       // 1. Pre-sustitución de precio existente
-      const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)
-        ?? extractionNote.match(/PRECIO OFICIAL.*?\$(\d+(?:\.\d+)?)/);
+      const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/);
       if (pm) {
         systemPrompt = systemPrompt.replace('$[PRECIO]', `$${pm[1]}`);
       }
