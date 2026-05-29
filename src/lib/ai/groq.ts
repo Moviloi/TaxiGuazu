@@ -101,25 +101,25 @@ export async function generateGroqReply(
   if (extractionNote) {
     const noPrice = extractionNote.includes("VALOR_PRECIO: NO_DISPONIBLE");
     if (noPrice) {
-      // No tariff for this route — replace MODO AHORA template with clarification instruction
-      const templateRegex = /"¡Hola! Sí, el precio para ir desde \*?\[Origen\]\*? a \*?\[Destino\]\*? es de \$\[PRECIO\] \(para hasta 4 pasajeros\)\.[^"]*"/;
+      // No tariff for this route — replace MODO AHORA template block with clarification instruction
+      const templateRegex = /Línea 1: "¡Hola! Sí, el precio para ir desde \*?\[Origen\]\*? a \*?\[Destino\]\*? es de \$\[PRECIO\] \(para hasta 4 pasajeros\)\."/;
       systemPrompt = systemPrompt.replace(templateRegex,
-        `"Informá al cliente qué campo (origen/destino) no tiene tarifa según [EXTRACCION_CONFIANZA]. Mencioná exactamente cuál lugar no está disponible y por qué. Si hay una sugerencia (SUGERENCIA_ORIGEN o SUGERENCIA_DESTINO), preguntá si quiso decir ese lugar. No inventes precio. Si no se resuelve, derivá con un colega humano."`
+        `Línea 1: "Informá al cliente qué campo (origen/destino) no tiene tarifa según [EXTRACCION_CONFIANZA]. Mencioná exactamente cuál lugar no está disponible y por qué. Si hay una sugerencia (SUGERENCIA_ORIGEN o SUGERENCIA_DESTINO), preguntá si quiso decir ese lugar. No inventes precio. Si no se resuelve, derivá con un colega humano."`
       );
     } else {
-      // 1. Pre-sustitución de precio existente
+      // 1. Pre-sustitución atómica de Precio
       const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/);
       if (pm) {
-        systemPrompt = systemPrompt.replace('$[PRECIO]', `$${pm[1]}`);
+        systemPrompt = systemPrompt.replace('$[PRECIO]', pm[1]);
       }
 
-      // 2. NUEVO: Pre-sustitución de Origen y Destino Canónicos
+      // 2. Pre-sustitución atómica de Origen y Destino Canónicos
       const routeMatch = extractionNote.match(/Ruta oficial:\s*(.*?)\s*→\s*(.*?)\./);
       if (routeMatch) {
         let canonicalOrigin = routeMatch[1].trim();
         let canonicalDest = routeMatch[2].trim();
 
-        // Enriquecimiento de sinónimos para mayor claridad institucional si es el Centro
+        // Enriquecimiento semántico institucional de sinónimos
         if (canonicalDest === "Centro (Urbano)") {
           canonicalDest = "Centro de la Ciudad (Puerto Iguazú)";
         }
@@ -203,7 +203,7 @@ export async function generateGroqReply(
     if (extractionNote) {
       const precioReal = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)?.[1];
       if (precioReal) {
-        response = response.replace(/\$\s*[\d.,]+/g, `$${precioReal}`);
+        response = response.replace(/\$?\s*\d[\d.,]+/g, `$${precioReal}`);
       }
     }
     return response;
