@@ -255,7 +255,6 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE trips ADD COLUMN flight_number TEXT",
     "ALTER TABLE trips ADD COLUMN hotel_destination TEXT DEFAULT 'A confirmar por el chofer'",
     "ALTER TABLE trips ADD COLUMN comision_declarada INTEGER DEFAULT 0",
-    "ALTER TABLE drivers ADD COLUMN is_principal2 INTEGER DEFAULT 0",
   ];
   // Seed tariffs if empty
   try {
@@ -273,6 +272,15 @@ async function initSchema(): Promise<void> {
     }
   } catch (e) { console.error("[migration] seed location_aliases error:", e); }
   await migrateCentroAlias();
+  try {
+    await getDbv().execute("ALTER TABLE drivers ADD COLUMN is_principal2 INTEGER DEFAULT 0");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      console.log("[MIGRATION] La columna is_principal2 ya existe. Continuando de forma segura.");
+    } else {
+      console.error("[MIGRATION_ERROR]", e);
+    }
+  }
   for (const sql of migrations) {
     try { await getDbv().execute(sql); } catch (e) { console.error("[migration] error:", sql, e); }
   }
