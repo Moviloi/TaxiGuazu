@@ -1369,6 +1369,69 @@ async function seedLocationAliases(): Promise<void> {
       });
     } catch (e) { console.error("[seedLocationAliases] error:", a, e); }
   }
+
+  // === Diccionario maestro de sinónimos (INSERT OR REPLACE para sobrescribir mapeos) ===
+  const maestroAliases: { canonical_name: string; alias: string }[] = [
+    // --- BLOQUE FOZ CIUDAD / CENTRO / BRASIL (Evita saltos a Aduana) ---
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "foz" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "ciudad de foz" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "foz ciudad" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "foz do iguazu" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "foz do iguacu" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "foz do iguazu ciudad" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "foz do iguacu centro" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "foz centro" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "centro de foz" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "rodoviaria de foz" },
+    { canonical_name: "Aero Foz / Rodoviaria / Cataratas BR", alias: "terminal de foz" },
+    { canonical_name: "Foz Centro / Hotel Belmond", alias: "hotel belmond" },
+    { canonical_name: "Foz Centro / Hotel Belmond", alias: "belmond das cataratas" },
+    // --- BLOQUE ADUANA ESTRICTO ---
+    { canonical_name: "Aduana de Foz", alias: "aduana" },
+    { canonical_name: "Aduana de Foz", alias: "aduana argentina" },
+    { canonical_name: "Aduana de Foz", alias: "aduana brasil" },
+    { canonical_name: "Aduana de Foz", alias: "aduana de foz" },
+    // --- BLOQUE CATARATAS BRASIL ---
+    { canonical_name: "Cataratas Brasil (Aves/Aqua)", alias: "cataratas brasil" },
+    { canonical_name: "Cataratas Brasil (Aves/Aqua)", alias: "cataratas brasileñas" },
+    { canonical_name: "Cataratas Brasil (Aves/Aqua)", alias: "parque das aves" },
+    { canonical_name: "Cataratas Brasil (Aves/Aqua)", alias: "parque nacional del iguacu" },
+    { canonical_name: "Cataratas Brasil (Aves/Aqua)", alias: "cataratas do iguacu" },
+    // --- BLOQUE COMPRAS / CIUDAD DEL ESTE ---
+    { canonical_name: "Duty Free Shop", alias: "duty free" },
+    { canonical_name: "Duty Free Shop", alias: "duty free shop" },
+    { canonical_name: "Duty Free Shop", alias: "dury free" },
+    { canonical_name: "Duty Free Shop", alias: "supermercado macro" },
+    { canonical_name: "Cabecera Puente Amistad", alias: "ciudad del este" },
+    { canonical_name: "Cabecera Puente Amistad", alias: "cde" },
+    { canonical_name: "Cabecera Puente Amistad", alias: "puente de la amistad" },
+    { canonical_name: "Cabecera Puente Amistad", alias: "paraguay" },
+    // --- BLOQUE HOTELES EN 600 HECTÁREAS ---
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "600 hectareas" },
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "loi suites" },
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "loi suites iguazu" },
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "hotel selvaje" },
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "oi pozos" },
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "yvy hotel" },
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "mercurio 600" },
+    { canonical_name: "Hoteles 600 Hectáreas", alias: "falls iguazu" },
+    // --- BLOQUE AEROPUERTOS ---
+    { canonical_name: "Aeropuerto IGR", alias: "aeropuerto iguazu" },
+    { canonical_name: "Aeropuerto IGR", alias: "aeropuerto misiones" },
+    { canonical_name: "Aeropuerto IGR", alias: "aeropuerto argentina" },
+    { canonical_name: "Aeropuerto IGR", alias: "igr" },
+    { canonical_name: "Aeropuerto Foz (IGU)", alias: "aeropuerto de foz" },
+    { canonical_name: "Aeropuerto Foz (IGU)", alias: "aeropuerto brasileño" },
+    { canonical_name: "Aeropuerto Foz (IGU)", alias: "igu" },
+  ];
+  for (const item of maestroAliases) {
+    try {
+      await getDbv().execute({
+        sql: "INSERT OR REPLACE INTO location_aliases (alias, canonical_name) VALUES (?, ?)",
+        args: [item.alias, item.canonical_name],
+      });
+    } catch (e) { console.error("[maestroAliases] error:", item, e); }
+  }
 }
 
 // ========== MIGRATION: update centro canonical to match tariffs table ==========
