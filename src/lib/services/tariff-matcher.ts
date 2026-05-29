@@ -38,11 +38,22 @@ export async function matchTariff(
 ): Promise<TariffMatchResult> {
   const paxNum = Math.max(1, Math.min(pax || 1, 6));
 
-  // Step A: Resolve via location_aliases
-  const origins = (await resolveAlias(origin)).names;
-  const destinations = (await resolveAlias(destination)).names;
-  const canonicalOrigin = origins[0] || origin;
-  const canonicalDestination = destinations[0] || destination;
+  // Normalización previa de strings conflictivos para asegurar coincidencia en DB
+  let cleanOrigin = origin;
+  let cleanDest = destination;
+
+  if (cleanOrigin.toLowerCase().includes("foz")) {
+    cleanOrigin = "Ciudad de Foz";
+  }
+  if (cleanDest.toLowerCase().includes("foz")) {
+    cleanDest = "Ciudad de Foz";
+  }
+
+  // Step A: Resolve via location_aliases usando los términos normalizados
+  const origins = (await resolveAlias(cleanOrigin)).names;
+  const destinations = (await resolveAlias(cleanDest)).names;
+  const canonicalOrigin = origins[0] || cleanOrigin;
+  const canonicalDestination = destinations[0] || cleanDest;
 
   // Step B: Exact match in tariffs
   for (const o of origins) {
