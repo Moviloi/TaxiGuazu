@@ -236,6 +236,9 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         await clearConversationHistory(conv.id);
         await resetToIdle(conv.id);
       }
+      if (FEATURE_CONFIDENCE_MATCHING) {
+        await resetChatSession(phone);
+      }
       const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
       const welcome = isStructured
         ? "Bienvenido a TaxiGuazú! Soy Cris Virtual (Asistente 24/7). ¿A dónde necesitas ir?"
@@ -397,7 +400,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           const tripId = `trip_${Date.now()}`;
           await createTrip(tripId, phone, origin, destination, tariffMatch.matched ? tariffMatch.price : (slots.price || undefined), pax, slots.scheduled_at ? Math.floor(new Date(slots.scheduled_at).getTime() / 1000) : undefined, slots.flight || undefined);
           await setConversationTrip(conversation.id, tripId);
-          const trip = await getActiveTripByPhone(phone);
+          trip = await getActiveTripByPhone(phone);
           if (trip) {
             if (tariffMatch.matched) {
               await updateTripTariff(trip.trip_id, tariffMatch.tariffId, tariffMatch.piso);
