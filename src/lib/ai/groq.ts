@@ -119,12 +119,15 @@ export async function generateGroqReply(
         let canonicalOrigin = routeMatch[1].trim();
         let canonicalDest = routeMatch[2].trim();
 
-        // Enriquecimiento semántico institucional de sinónimos
+        // Enriquecimiento semántico institucional de sinónimos y compatibilidad con tarifario
         if (canonicalDest === "Centro (Urbano)") {
           canonicalDest = "Centro de la Ciudad (Puerto Iguazú)";
         }
         if (canonicalDest === "Puerto Iguazú Centro") {
           canonicalDest = "Ciudad de Puerto Iguazú";
+        }
+        if (canonicalDest === "Ciudad de Foz do Iguaçu" || canonicalDest === "Foz do Iguaçu" || canonicalDest === "Foz") {
+          canonicalDest = "Ciudad de Foz";
         }
 
         systemPrompt = systemPrompt.replace('[Origen]', canonicalOrigin);
