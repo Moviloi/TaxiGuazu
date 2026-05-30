@@ -3,7 +3,7 @@ import { getSystemPrompt } from "./system-prompt";
 import { getExtractionPrompt } from "./extraction-prompt";
 import { getEnv } from "@/config/env";
 import type { TripRow } from "@/lib/db/types";
-import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS, GROQ_EXTRACTION_TEMPERATURE } from "@/config/constants";
+import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS } from "@/config/constants";
 
 type Trip = Pick<TripRow, "trip_id" | "destination" | "status">;
 
@@ -42,12 +42,16 @@ export async function generateGroqExtraction(
   if (!groq) return null;
 
   const lang = detectLang(userText);
-  const systemPrompt = getExtractionPrompt(lang);
 
   const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt },
-    { role: "system", content: `IDIOMA_DETECTADO: ${lang.toUpperCase()}` },
-    { role: "system", content: customerName ? `NOMBRE_CLIENTE_CONOCIDO: ${customerName}` : "NOMBRE_CLIENTE_CONOCIDO: ninguno" },
+    { role: "system", content: getExtractionPrompt() },
+    {
+      role: "system",
+      content: [
+        `IDIOMA_DETECTADO: ${lang.toUpperCase()}`,
+        `NOMBRE_CLIENTE_CONOCIDO: ${customerName || "ninguno"}`,
+      ].join(" | "),
+    },
   ];
 
   const nativeHistory = history
@@ -68,7 +72,7 @@ export async function generateGroqExtraction(
         messages,
         response_format: { type: "json_object" },
         max_tokens: GROQ_EXTRACTION_MAX_TOKENS,
-        temperature: GROQ_EXTRACTION_TEMPERATURE,
+        temperature: 0.3,
       },
       { timeout: GROQ_TIMEOUT_MS }
     );
@@ -97,44 +101,6 @@ export async function generateGroqReply(
   if (!groq) return "Disculpe, no pude responder. Un operador lo asistirá.";
 
   const lang = detectLang(userText);
-  let systemPrompt = getSystemPrompt(lang, !skipMarkers);
-  if (extractionNote) {
-    const noPrice = extractionNote.includes("VALOR_PRECIO: NO_DISPONIBLE");
-    if (noPrice) {
-      // No tariff for this route — replace MODO AHORA template block with clarification instruction
-      const templateRegex = /Línea 1: "¡Hola! Sí, el precio para ir desde \*?\[Origen\]\*? a \*?\[Destino\]\*? es de \$\[PRECIO\] \(para hasta 4 pasajeros\)\."/;
-      systemPrompt = systemPrompt.replace(templateRegex,
-        `Línea 1: "Informá al cliente qué campo (origen/destino) no tiene tarifa según [EXTRACCION_CONFIANZA]. Mencioná exactamente cuál lugar no está disponible y por qué. Si hay una sugerencia (SUGERENCIA_ORIGEN o SUGERENCIA_DESTINO), preguntá si quiso decir ese lugar. No inventes precio. Si no se resuelve, derivá con un colega humano."`
-      );
-    } else {
-      // 1. Pre-sustitución atómica de Precio
-      const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/);
-      if (pm) {
-        systemPrompt = systemPrompt.replace('$[PRECIO]', pm[1]);
-      }
-
-      // 2. Pre-sustitución atómica de Origen y Destino Canónicos
-      const routeMatch = extractionNote.match(/Ruta oficial:\s*(.*?)\s*→\s*(.*?)\./);
-      if (routeMatch) {
-        let canonicalOrigin = routeMatch[1].trim();
-        let canonicalDest = routeMatch[2].trim();
-
-        // Enriquecimiento semántico institucional de sinónimos y compatibilidad con tarifario
-        if (canonicalDest === "Centro (Urbano)") {
-          canonicalDest = "Centro de la Ciudad (Puerto Iguazú)";
-        }
-        if (canonicalDest === "Puerto Iguazú Centro") {
-          canonicalDest = "Ciudad de Puerto Iguazú";
-        }
-        if (canonicalDest === "Ciudad de Foz do Iguaçu" || canonicalDest === "Foz do Iguaçu" || canonicalDest === "Foz") {
-          canonicalDest = "Ciudad de Foz";
-        }
-
-        systemPrompt = systemPrompt.replace('[Origen]', canonicalOrigin);
-        systemPrompt = systemPrompt.replace('[Destino]', canonicalDest);
-      }
-    }
-  }
 
   const dolar = process.env.COTIZACION_DOLAR || "1250";
   const real = process.env.COTIZACION_REAL || "250";
@@ -142,22 +108,52 @@ export async function generateGroqReply(
   const isExtranjero = !clientPhone.startsWith('+54') || lang !== 'es';
   const monedaSugerida = isExtranjero ? (lang === 'pt' ? 'BRL' : 'USD') : 'ARS';
 
-  let dynamicContext = `[ESTADO_SISTEMA_DINÁMICO]\n`;
+  let dynamicContext = `[CONTEXTO_EJECUCIÓN_SESIÓN]\n`;
+  dynamicContext += `IDIOMA_SALIDA: ${lang.toUpperCase()}\n`;
   dynamicContext += `Cotización Dólar: $${dolar} ARS | Cotización Real: $${real} ARS\n`;
+  dynamicContext += `DESCUENTO_ESTANDAR: 10%\n`;
+  dynamicContext += `DESCUENTO_MAXIMO: 15%\n`;
   dynamicContext += `Nota Promocional Vigente del Traslado: ${promoNote || "Ninguna promoción activa"}\n`;
   dynamicContext += `Teléfono del Cliente: ${clientPhone}\n`;
   dynamicContext += `[CLIENTE_EXTRANJERO: ${isExtranjero}]\n`;
   dynamicContext += `[MONEDA_SUGERIDA: ${monedaSugerida}]\n`;
-
-  // REGLA ESTRICTA DE MONEDA PARA EL LLM
   dynamicContext += `[REGLA_FORMATO_PRECIO]: Si vas a mostrar un precio al cliente y MONEDA_SUGERIDA es BRL o USD, calculá el valor aproximado usando las cotizaciones provistas y mostralo en ese formato, pero obligatoriamente agregá al lado el equivalente exacto en pesos argentinos (ARS) aclarando que se abona en base al precio oficial en ARS. Ejemplo para BRL: "R$ X BRL (aproximadamente $Y ARS)".\n`;
 
   dynamicContext += `[SESION_LIMPIA: ${!!customerName}]\n`;
   if (customerName) {
     dynamicContext += `[NOMBRE_CLIENTE: ${customerName}]\n`;
   }
+
   if (extractionNote) {
     dynamicContext += `[EXTRACCION_CONFIANZA]\n${extractionNote}\n`;
+
+    const priceMatch = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/);
+    const routeMatch = extractionNote.match(/Ruta oficial:\s*(.*?)\s*→\s*(.*?)\./);
+
+    if (priceMatch) {
+      dynamicContext += `PRECIO: ${priceMatch[1]}\n`;
+      dynamicContext += `HAY_TARIFA: true\n`;
+    } else {
+      dynamicContext += `HAY_TARIFA: false\n`;
+    }
+
+    if (routeMatch) {
+      let canonicalOrigin = routeMatch[1].trim();
+      let canonicalDest = routeMatch[2].trim();
+
+      if (canonicalDest === "Centro (Urbano)") {
+        canonicalDest = "Centro de la Ciudad (Puerto Iguazú)";
+      }
+      if (canonicalDest === "Puerto Iguazú Centro") {
+        canonicalDest = "Ciudad de Puerto Iguazú";
+      }
+      if (canonicalDest === "Ciudad de Foz do Iguaçu" || canonicalDest === "Foz do Iguaçu" || canonicalDest === "Foz") {
+        canonicalDest = "Ciudad de Foz";
+      }
+
+      dynamicContext += `ORIGEN_CANONICO: ${canonicalOrigin}\n`;
+      dynamicContext += `DESTINO_CANONICO: ${canonicalDest}\n`;
+    }
   }
 
   if (trip) {
@@ -169,26 +165,26 @@ export async function generateGroqReply(
   const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: systemPrompt
+      content: getSystemPrompt(!skipMarkers),
     },
     {
       role: "system",
-      content: `[CONTEXTO_EJECUCIÓN_SESIÓN]\n${dynamicContext}\nIDIOMA_OBLIGATORIO_DE_RESPUESTA: ${lang.toUpperCase()}`
-    }
+      content: `[CONTEXTO_EJECUCIÓN_SESIÓN]\n${dynamicContext}`,
+    },
   ];
 
   const nativeHistory = history
     .filter((m) => m.role !== "system")
     .map((m) => ({
       role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
-      content: m.content
+      content: m.content,
     }));
 
   messages.push(...nativeHistory);
 
   messages.push({
     role: "user",
-    content: userText
+    content: userText,
   });
 
   try {

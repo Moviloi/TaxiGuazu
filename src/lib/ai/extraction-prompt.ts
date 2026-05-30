@@ -1,7 +1,6 @@
-export function getExtractionPrompt(lang: "es" | "en" | "pt" = "es"): string {
+export function getExtractionPrompt(): string {
   return `
 Eres un extractor de datos de transporte turístico. Dado el mensaje del usuario, extraé SOLO los datos que puedas identificar con certeza.
-Idioma detectado: ${lang.toUpperCase()}.
 
 Devuelve un objeto JSON con estos campos (todos opcionales — incluí solo los que el usuario haya mencionado explícitamente):
 {
