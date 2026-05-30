@@ -107,7 +107,7 @@ function isAffirmativeMessage(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (AFFIRMATIVE_RE.test(t)) return true;
   const clean = t.replace(/[^a-záéíóúñ\s]/g, "").trim();
-  return /\b(s[ií]|ok|dale|confirmo|adelante)\b/.test(clean);
+  return /\b(ok\b|dale\b|confirmo\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b)/.test(clean);
 }
 
 function formatConfidenceNote(
@@ -120,11 +120,14 @@ function formatConfidenceNote(
 
   const DESCRIPTIVE_PREFIX: Record<string, string> = {
     "Puerto Iguazú": "Ciudad de Puerto Iguazú",
-    "Foz do Iguaçu": "Ciudad de Foz do Iguaçu",
-    "Centro (Urbano)": "Centro de Puerto Iguazú",
-    "Centro de Foz": "Centro de Foz",
     "Aeropuerto IGR": "Aeropuerto IGR",
-    "Aeropuerto IGU": "Aeropuerto IGU",
+    "Aeropuerto Foz (IGU)": "Aeropuerto Foz (IGU)",
+    "Foz Centro / Hotel Belmond": "Foz Centro / Hotel Belmond",
+    "Centro Puerto Iguazú": "Centro de Puerto Iguazú",
+    "Aduana Brasil (Puente Tancredo Neves)": "Aduana de Foz",
+    "Aeropuerto Foz (IGU) / Rodoviaria Foz / Cataratas Brasil": "Foz / Rodoviaria / Cataratas Brasil",
+    "Cataratas Brasil (Parque das Aves)": "Cataratas Brasil (Parque das Aves)",
+    "Cataratas Argentinas / Hotel Meliá": "Cataratas Argentinas / Hotel Meliá",
   };
 
   function formatFieldLabel(

@@ -255,6 +255,7 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE trips ADD COLUMN flight_number TEXT",
     "ALTER TABLE trips ADD COLUMN hotel_destination TEXT DEFAULT 'A confirmar por el chofer'",
     "ALTER TABLE trips ADD COLUMN comision_declarada INTEGER DEFAULT 0",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(origin, destination)",
   ];
   // Seed tariffs if empty
   try {
@@ -272,6 +273,7 @@ async function initSchema(): Promise<void> {
     }
   } catch (e) { console.error("[migration] seed location_aliases error:", e); }
   await migrateCentroAlias();
+  await migrateTariffNames();
   try {
     await getDbv().execute("ALTER TABLE drivers ADD COLUMN is_principal2 INTEGER DEFAULT 0");
   } catch (e) {
@@ -1258,7 +1260,7 @@ async function seedTariffs(): Promise<void> {
   for (const r of data) {
     try {
       await getDbv().execute({
-        sql: "INSERT OR IGNORE INTO tariffs (origin, destination, modality, crosses_border, wait_included, price_4p, price_6p, piso_4p, piso_6p, piso_4p_low, piso_6p_low, garantizado_4p, garantizado_6p) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        sql: "INSERT OR REPLACE INTO tariffs (origin, destination, modality, crosses_border, wait_included, price_4p, price_6p, piso_4p, piso_6p, piso_4p_low, piso_6p_low, garantizado_4p, garantizado_6p) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         args: [r.origin, r.destination, r.modality, r.crosses, r.wait, r.price4, r.price6, r.piso4, r.piso6, Math.round(r.piso4 * 0.8), Math.round(r.piso6 * 0.8), r.garantizado4 ?? Math.round(r.price4 * 0.85), r.garantizado6 ?? Math.round(r.price6 * 0.85)],
       });
     } catch (e) { console.error("[seedTariffs] error inserting row:", r, e); }
@@ -1482,6 +1484,42 @@ async function migrateCentroAlias(): Promise<void> {
       args: ["Puerto Iguazú", "centro puerto", "centro (urbano)"],
     });
   } catch (e) { console.error("[migrateCentroAlias] error:", e); }
+}
+
+async function migrateTariffNames(): Promise<void> {
+  const renames: [string, string][] = [
+    ["Aero Foz / Rodoviaria / Cataratas BR", "Aeropuerto Foz (IGU) / Rodoviaria Foz / Cataratas Brasil"],
+    ["Aduana de Foz", "Aduana Brasil (Puente Tancredo Neves)"],
+    ["Itaipú y Alrededores", "Itaipú"],
+    ["Cataratas Brasil (Aves/Aqua)", "Cataratas Brasil (Parque das Aves)"],
+    ["Centro (Urbano)", "Centro Puerto Iguazú"],
+    ["Hora de espera (BR)", "Hora de Espera (Brasil)"],
+    ["Hora de espera (Arg)", "Hora de Espera (Argentina)"],
+    ["Hora de espera (PY)", "Hora de Espera (Paraguay)"],
+    ["Tour Compras CDE", "Tour de Compras (Ciudad del Este)"],
+    ["Tour Compras + Cataratas Brasil", "Tour de Compras CDE + Cataratas Brasil"],
+    ["Cabecera Puente Amistad", "Cabecera Puente de la Amistad"],
+    ["Marco de las 3 Fronteras (BR)", "Marco de las Tres Fronteras (Brasil)"],
+    ["Represa Itaipu + Templo Buda", "Represa Itaipú + Templo Budista"],
+    ["Cataratas AR y a Foz", "Cataratas Argentinas + Foz"],
+    ["Cataratas AR y Puerto Iguazú", "Cataratas Argentinas + Puerto Iguazú"],
+    ["Cataratas AR, BR y Pto Iguazú", "Cataratas Argentinas + Cataratas Brasil + Puerto Iguazú"],
+    ["Cataratas BR y Regreso Aero", "Cataratas Brasil + Regreso a Aeropuerto IGR"],
+    ["Cataratas AR / Hotel Melia", "Cataratas Argentinas / Hotel Meliá"],
+    ["Yup Star (Rueda)", "Yup Star (Rueda de la Fortuna)"],
+    ["Blue Park", "Blue Park (Parque Acuático)"],
+    ["Cataratas Argentinas solo ida", "Cataratas Argentinas (Solo Ida)"],
+    ["Terminal Foz/ Rodoviaria Foz", "Terminal Foz / Rodoviaria Foz"],
+    ["CDE hasta KM4 / Terminal", "Ciudad del Este (KM4) / Terminal Ciudad del Este"],
+  ];
+  for (const [oldDest, newDest] of renames) {
+    try {
+      await getDbv().execute({ sql: "UPDATE tariffs SET destination = ? WHERE destination = ?", args: [newDest, oldDest] });
+    } catch (e) { console.error("[migrateTariffNames] error renaming:", oldDest, "→", newDest, e); }
+  }
+  try {
+    await getDbv().execute({ sql: "DELETE FROM tariffs WHERE destination = ?", args: ["Cataratas AR / Hotel Meliá"] });
+  } catch (e) { console.error("[migrateTariffNames] error deleting duplicate:", e); }
 }
 
 function levenshtein(a: string, b: string): number {
