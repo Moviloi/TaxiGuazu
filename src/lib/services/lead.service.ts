@@ -457,10 +457,20 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
                 confidenceResult.slots.price = { value: tariffMatch.price, score: 1.0, reason: "backend_tariff_match" };
               } else if (parsed.data.origin || parsed.data.destination) {
                 // Fallback: re-intentar con regex sobre texto original si Groq extrajo valores no resolubles (ej. "el aeropuerto")
-                const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
-                const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-                const fbOrigin = text.match(originRx)?.[1];
-                const fbDest = text.match(destRx)?.[1];
+                // Primero intentar extracción dirección-aware: "de X a Y"
+                let fbOrigin: string | undefined;
+                let fbDest: string | undefined;
+                const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
+                if (dirMatch) {
+                  fbOrigin = dirMatch[1].trim();
+                  fbDest = dirMatch[2].trim();
+                }
+                if (!fbOrigin || !fbDest) {
+                  const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
+                  const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+                  fbOrigin = text.match(originRx)?.[1];
+                  fbDest = text.match(destRx)?.[1];
+                }
                 if (fbOrigin && fbDest) {
                   const fbMatch = await matchTariff(fbOrigin, fbDest, parsed.data.passengers || 1);
                   if (fbMatch.matched) {
@@ -502,10 +512,20 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       if (!extractionNote) {
         try {
           console.log("[EXTRACTION] Intentando fallback regex...");
-          const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
-          const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-          let originMatch = text.match(originRx)?.[1];
-          let destMatch = text.match(destRx)?.[1];
+          let originMatch: string | undefined;
+          let destMatch: string | undefined;
+          // Primero intentar dirección-aware
+          const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
+          if (dirMatch) {
+            originMatch = dirMatch[1].trim();
+            destMatch = dirMatch[2].trim();
+          }
+          if (!originMatch || !destMatch) {
+            const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
+            const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+            originMatch = text.match(originRx)?.[1];
+            destMatch = text.match(destRx)?.[1];
+          }
 
           // Si el texto actual no tiene palabra de origen, buscar en session.slots
           if (!originMatch) {

@@ -1475,18 +1475,14 @@ async function seedLocationAliases(): Promise<void> {
 // ========== MIGRATION: update centro canonical to match tariffs table ==========
 async function migrateCentroAlias(): Promise<void> {
   try {
-    await getDbv().execute({
-      sql: "UPDATE location_aliases SET canonical_name = ? WHERE LOWER(alias) = ? AND LOWER(canonical_name) = ?",
-      args: ["Puerto Iguazú", "centro", "centro (urbano)"],
-    });
-    await getDbv().execute({
-      sql: "UPDATE location_aliases SET canonical_name = ? WHERE LOWER(alias) = ? AND LOWER(canonical_name) = ?",
-      args: ["Puerto Iguazú", "centro iguazu", "centro (urbano)"],
-    });
-    await getDbv().execute({
-      sql: "UPDATE location_aliases SET canonical_name = ? WHERE LOWER(alias) = ? AND LOWER(canonical_name) = ?",
-      args: ["Puerto Iguazú", "centro puerto", "centro (urbano)"],
-    });
+    // Update aliases that currently point to "Centro Puerto Iguazú" (from maestro) → "Puerto Iguazú"
+    const affected = ["centro", "centro iguazu", "centro puerto", "microcentro"];
+    for (const a of affected) {
+      await getDbv().execute({
+        sql: "UPDATE location_aliases SET canonical_name = ? WHERE LOWER(alias) = ? AND LOWER(canonical_name) IN (?, ?)",
+        args: ["Puerto Iguazú", a, "centro (urbano)", "centro puerto iguazú"],
+      });
+    }
   } catch (e) { console.error("[migrateCentroAlias] error:", e); }
 }
 

@@ -42,10 +42,12 @@ export async function matchTariff(
   let cleanOrigin = origin;
   let cleanDest = destination;
 
-  if (cleanOrigin.toLowerCase().includes("foz")) {
+  // Solo normalizar si el input ES "foz" (o variante exacta), no "foz centro" / "aeropuerto foz"
+  const fozExact = new Set(["foz", "foz do iguacu", "foz do iguazú", "foz de iguazu", "ciudad de foz", "foz ciudad"]);
+  if (fozExact.has(cleanOrigin.toLowerCase().trim())) {
     cleanOrigin = "Ciudad de Foz";
   }
-  if (cleanDest.toLowerCase().includes("foz")) {
+  if (fozExact.has(cleanDest.toLowerCase().trim())) {
     cleanDest = "Ciudad de Foz";
   }
 

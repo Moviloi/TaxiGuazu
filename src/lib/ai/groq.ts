@@ -213,17 +213,22 @@ export async function generateGroqReply(
 
   // Pre-sustitución atómica del token $[PRECIO] en el prompt base
   let systemContent: string = typeof messages[0].content === 'string' ? messages[0].content : '';
+  const ALERTA_NO_PRECIO = `\n\n[ALERTA DE SEGURIDAD - NO INVENTES PRECIOS]\n`
+    + `NO hay un precio real verificado del backend disponible.\n`
+    + `Si el cliente pregunta por un precio, respondé: "Disculpá, no pude verificar la tarifa. Un operador te va a asistir."\n`
+    + `NO des ningún número ni inventes un precio bajo ninguna circunstancia.`;
+
   if (extractionNote) {
     const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/);
     if (pm) {
       systemContent = systemContent.replace('$[PRECIO]', pm[1]);
+    } else {
+      // extractionNote existe pero no tiene VALOR_PRECIO (ej: NO_DISPONIBLE)
+      systemContent += ALERTA_NO_PRECIO;
     }
   } else {
     // Sin extractionNote: instruir al LLM que NO invente precios
-    systemContent += `\n\n[ALERTA DE SEGURIDAD - NO INVENTES PRECIOS]\n`;
-    systemContent += `NO hay [EXTRACCION_CONFIANZA] disponible. NO tienes un precio real que cotizar.\n`;
-    systemContent += `Si el cliente pregunta por un precio, respondé: "Disculpá, no pude verificar la tarifa. Un operador te va a asistir."\n`;
-    systemContent += `NO des ningún número ni inventes un precio bajo ninguna circunstancia.`;
+    systemContent += ALERTA_NO_PRECIO;
   }
   messages[0].content = systemContent;
 
@@ -256,7 +261,11 @@ export async function generateGroqReply(
     if (extractionNote) {
       const precioReal = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)?.[1];
       if (precioReal) {
-        response = response.replace(/\$?\s*\d[\d.,]+/g, `$${precioReal}`);
+        // Solo reemplazar números con $ adelante y >= 1000 ARS (no fechas, horarios, pasajeros, teléfonos)
+        response = response.replace(/\$\s*(\d[\d.,]*)/g, (match, num) => {
+          const clean = parseInt(num.replace(/[.,]/g, ''), 10);
+          return clean >= 1000 ? `$${precioReal}` : match;
+        });
       }
     }
     return response;
