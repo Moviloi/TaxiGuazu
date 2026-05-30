@@ -455,6 +455,25 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
               if (tariffMatch.matched) {
                 parsed.data.price = tariffMatch.price;
                 confidenceResult.slots.price = { value: tariffMatch.price, score: 1.0, reason: "backend_tariff_match" };
+              } else if (parsed.data.origin || parsed.data.destination) {
+                // Fallback: re-intentar con regex sobre texto original si Groq extrajo valores no resolubles (ej. "el aeropuerto")
+                const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
+                const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+                const fbOrigin = text.match(originRx)?.[1];
+                const fbDest = text.match(destRx)?.[1];
+                if (fbOrigin && fbDest) {
+                  const fbMatch = await matchTariff(fbOrigin, fbDest, parsed.data.passengers || 1);
+                  if (fbMatch.matched) {
+                    console.log(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbMatch.price}`);
+                    tariffMatch = fbMatch;
+                    parsed.data.origin = fbOrigin;
+                    parsed.data.destination = fbDest;
+                    parsed.data.price = fbMatch.price;
+                    confidenceResult.slots.price = { value: fbMatch.price, score: 1.0, reason: "backend_tariff_match" };
+                    confidenceResult.slots.origin = { value: fbOrigin, score: 1.0, reason: "regex_fallback" };
+                    confidenceResult.slots.destination = { value: fbDest, score: 1.0, reason: "regex_fallback" };
+                  }
+                }
               }
             }
 

@@ -255,8 +255,12 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE trips ADD COLUMN flight_number TEXT",
     "ALTER TABLE trips ADD COLUMN hotel_destination TEXT DEFAULT 'A confirmar por el chofer'",
     "ALTER TABLE trips ADD COLUMN comision_declarada INTEGER DEFAULT 0",
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(origin, destination)",
   ];
+  // Limpiar duplicados y crear índice único sobre (origin, destination) en tariffs
+  try {
+    await getDbv().execute("DELETE FROM tariffs WHERE id NOT IN (SELECT MIN(id) FROM tariffs GROUP BY LOWER(origin), LOWER(destination))");
+    await getDbv().execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(LOWER(origin), LOWER(destination))");
+  } catch (e) { console.error("[migration] unique index error:", e); }
   // Seed tariffs if empty
   try {
     const count = await getDbv().execute("SELECT COUNT(*) as c FROM tariffs");
