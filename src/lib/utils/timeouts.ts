@@ -357,13 +357,17 @@ async function checkDolarApiNotification(): Promise<void> {
   if (lastDate === today) return;
 
   let dolarBlue = "N/A";
-  let realRate = "N/A";
+  let dolarVenta: number | null = null;
+  let realArs = "N/A";
 
   try {
     const resp = await fetch("https://dolarapi.com/v1/dolares", { signal: AbortSignal.timeout(5000) });
     const data = await resp.json() as any[];
     const blue = data.find((d: any) => d.nombre?.toLowerCase().includes("blue"));
-    if (blue) dolarBlue = `$${blue.compra}/${blue.venta}`;
+    if (blue) {
+      dolarBlue = `$${blue.compra}/${blue.venta}`;
+      dolarVenta = blue.venta;
+    }
   } catch (e) {
     console.error("[DOLARAPI] Error fetching USD:", e);
   }
@@ -372,7 +376,10 @@ async function checkDolarApiNotification(): Promise<void> {
     const resp = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", { signal: AbortSignal.timeout(5000) });
     const data = await resp.json() as any;
     const bid = data?.USDBRL?.bid;
-    if (bid) realRate = `R$${bid}`;
+    if (bid && dolarVenta) {
+      const brlToArs = Math.round(dolarVenta / parseFloat(bid));
+      realArs = `$${brlToArs}`;
+    }
   } catch (e) {
     console.error("[DOLARAPI] Error fetching BRL:", e);
   }
@@ -380,7 +387,7 @@ async function checkDolarApiNotification(): Promise<void> {
   await notifyAdmin(`📊 *Cotizaciones del día* (${today})
 
 💵 Dólar Blue: ${dolarBlue}
-💶 Real (USD→BRL): ${realRate}
+💶 Real (BRL→ARS): ${realArs}
 
 Usá .env: COTIZACION_DOLAR y COTIZACION_REAL`);
 
