@@ -261,11 +261,9 @@ export async function generateGroqReply(
     if (extractionNote) {
       const precioReal = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/)?.[1];
       if (precioReal) {
-        // Solo reemplazar números con $ adelante y >= 1000 ARS (no fechas, horarios, pasajeros, teléfonos)
-        response = response.replace(/\$\s*(\d[\d.,]*)/g, (match, num) => {
-          const clean = parseInt(num.replace(/[.,]/g, ''), 10);
-          return clean >= 1000 ? `$${precioReal}` : match;
-        });
+        // Reemplazar solo el PRIMER $+número (el precio principal). Sin /g así preserva
+        // precios convertidos ($45.000 ARS), pasajeros ($4), descuentos, etc.
+        response = response.replace(/\$\s*(\d[\d.,]*)/, `$${precioReal}`);
       }
     }
     return response;
