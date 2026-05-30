@@ -7,6 +7,43 @@ import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKEN
 
 type Trip = Pick<TripRow, "trip_id" | "destination" | "status">;
 
+// Cache de cotizaciones en memoria (TTL 5 minutos)
+let cotizacionesCache: { dolar: number; real: number; timestamp: number } | null = null;
+const COTIZACION_CACHE_TTL = 5 * 60 * 1000;
+
+async function fetchCotizaciones(): Promise<{ dolar: number; real: number } | null> {
+  const now = Date.now();
+  if (cotizacionesCache && (now - cotizacionesCache.timestamp) < COTIZACION_CACHE_TTL) {
+    return { dolar: cotizacionesCache.dolar, real: cotizacionesCache.real };
+  }
+  try {
+    const [dolarResp, brlResp] = await Promise.all([
+      fetch("https://dolarapi.com/v1/dolares", { signal: AbortSignal.timeout(5000) }).catch(() => null),
+      fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", { signal: AbortSignal.timeout(5000) }).catch(() => null),
+    ]);
+    let dolar = 0;
+    let realArs = 0;
+    if (dolarResp && dolarResp.ok) {
+      const data = await dolarResp.json() as any[];
+      const blue = data.find((d: any) => d.nombre?.toLowerCase().includes("blue"));
+      if (blue && blue.venta) dolar = blue.venta;
+    }
+    if (brlResp && brlResp.ok && dolar > 0) {
+      const data = await brlResp.json() as any;
+      const bid = data?.USDBRL?.bid;
+      if (bid) realArs = Math.round(dolar / parseFloat(bid));
+    }
+    if (dolar > 0) {
+      cotizacionesCache = { dolar, real: realArs || dolar, timestamp: now };
+      console.log(`[COTIZACIONES] API: Dólar=$${dolar} ARS, Real=$${realArs} ARS`);
+      return { dolar, real: realArs || dolar };
+    }
+  } catch (e) {
+    console.error("[COTIZACIONES] Error fetching:", e);
+  }
+  return null;
+}
+
 interface Message {
   role: string;
   content: string;
@@ -102,15 +139,16 @@ export async function generateGroqReply(
 
   const lang = detectLang(userText);
 
-  const dolar = process.env.COTIZACION_DOLAR || "1250";
-  const real = process.env.COTIZACION_REAL || "250";
+  const cotizaciones = await fetchCotizaciones();
+  const dolar = cotizaciones?.dolar ?? parseInt(process.env.COTIZACION_DOLAR || "1250");
+  const real = cotizaciones?.real ?? parseInt(process.env.COTIZACION_REAL || "250");
 
   const isExtranjero = !clientPhone.startsWith('+54') || lang !== 'es';
   const monedaSugerida = isExtranjero ? (lang === 'pt' ? 'BRL' : 'USD') : 'ARS';
 
   let dynamicContext = `[CONTEXTO_EJECUCIÓN_SESIÓN]\n`;
   dynamicContext += `IDIOMA_SALIDA: ${lang.toUpperCase()}\n`;
-  dynamicContext += `Cotización Dólar: $${dolar} ARS | Cotización Real: $${real} ARS\n`;
+  dynamicContext += `Cotización Dólar: $${dolar} ARS | Cotización Real: $${real} ARS (Valores actualizados vía API)\n`;
   dynamicContext += `DESCUENTO_ESTANDAR: 10%\n`;
   dynamicContext += `DESCUENTO_MAXIMO: 15%\n`;
   dynamicContext += `Nota Promocional Vigente del Traslado: ${promoNote || "Ninguna promoción activa"}\n`;
@@ -172,6 +210,22 @@ export async function generateGroqReply(
       content: `[CONTEXTO_EJECUCIÓN_SESIÓN]\n${dynamicContext}`,
     },
   ];
+
+  // Pre-sustitución atómica del token $[PRECIO] en el prompt base
+  let systemContent: string = typeof messages[0].content === 'string' ? messages[0].content : '';
+  if (extractionNote) {
+    const pm = extractionNote.match(/VALOR_PRECIO:\s*(\d+)/);
+    if (pm) {
+      systemContent = systemContent.replace('$[PRECIO]', pm[1]);
+    }
+  } else {
+    // Sin extractionNote: instruir al LLM que NO invente precios
+    systemContent += `\n\n[ALERTA DE SEGURIDAD - NO INVENTES PRECIOS]\n`;
+    systemContent += `NO hay [EXTRACCION_CONFIANZA] disponible. NO tienes un precio real que cotizar.\n`;
+    systemContent += `Si el cliente pregunta por un precio, respondé: "Disculpá, no pude verificar la tarifa. Un operador te va a asistir."\n`;
+    systemContent += `NO des ningún número ni inventes un precio bajo ninguna circunstancia.`;
+  }
+  messages[0].content = systemContent;
 
   const nativeHistory = history
     .filter((m) => m.role !== "system")

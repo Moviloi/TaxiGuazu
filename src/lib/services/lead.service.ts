@@ -485,8 +485,18 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           console.log("[EXTRACTION] Intentando fallback regex...");
           const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
           const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-          const originMatch = text.match(originRx)?.[1];
-          const destMatch = text.match(destRx)?.[1];
+          let originMatch = text.match(originRx)?.[1];
+          let destMatch = text.match(destRx)?.[1];
+
+          // Si el texto actual no tiene palabra de origen, buscar en session.slots
+          if (!originMatch) {
+            const session = await getChatSession(phone);
+            if (session?.slots) {
+              const slots = JSON.parse(session.slots);
+              if (slots.origin) originMatch = slots.origin;
+            }
+          }
+
           if (originMatch && destMatch) {
             console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
             const ft = await matchTariff(originMatch, destMatch, 1);
@@ -505,7 +515,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
               console.log("[EXTRACTION] Fallback: tariff no encontrado");
             }
           } else {
-            console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto:", text.substring(0, 60));
+            console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto ni de session. text:", text.substring(0, 60), "originMatch:", originMatch, "destMatch:", destMatch);
           }
         } catch (e) {
           console.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
