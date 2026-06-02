@@ -10,7 +10,6 @@ import {
   setConnectionFlag,
   deleteConnectionKey,
   getDriverByPhone,
-  logDebug,
 } from "@/lib/db/database";
 import { generateGroqExtraction } from "@/lib/ai/groq";
 import { calculateSlotConfidence } from "@/lib/services/confidence";
@@ -26,11 +25,7 @@ import {
   assignWorkflowAtomic,
   assignDriverToTrip,
   incrementOfferAccepted,
-  updateTripAssignmentSource,
-  updateTripDriverAvailable,
-  updateTripDriverCommitment,
 } from "@/lib/db/database";
-import { TITULAR_DELAY_MS, STALE_CANDIDATE_CLEANUP_MS } from "@/config/constants";
 import type { TripRow } from "@/lib/db/types";
 
 const AHORA_URGENCY_RE = /\b(ahora|ya mismo|urgente|inmediato|en este momento|estoy en el aeropuerto|acabamos? de llegar|llegamos ahora|reci[eé]n llegamos?|estamos en el aeropuerto)\b/i;
@@ -52,8 +47,6 @@ export async function handleAhoraMessage(
   convId: number,
   customerName: string | null,
 ): Promise<void> {
-  await logDebug("ahora", "05_ahora_handler_enter", JSON.stringify({ phone, text: text.substring(0, 100), convId }));
-
   const existingTrip = await getActiveTripByPhone(phone);
 
   if (existingTrip && existingTrip.status === "consulta") {
@@ -64,35 +57,26 @@ export async function handleAhoraMessage(
         return;
       }
     }
-    await logDebug("ahora", "06_exit_existing_trip_consulta", JSON.stringify({ convId }));
     return;
   }
 
   const history: any[] = [];
-  await logDebug("ahora", "07_calling_groq_extraction");
   const raw = await generateGroqExtraction(text, history, customerName || undefined);
-  await logDebug("ahora", "08_groq_extraction_returned", JSON.stringify({ raw }));
 
   if (!raw) {
-    await logDebug("ahora", "09_exit_raw_null");
     return;
   }
 
   const { TripExtractionSchema } = await import("@/lib/ai/extraction-schema");
   const parsed = TripExtractionSchema.safeParse(raw);
-  await logDebug("ahora", "10_safe_parse_result", JSON.stringify({ success: parsed.success, data: parsed.success ? parsed.data : (parsed.error as any)?.issues }));
 
   if (!parsed.success) {
-    await logDebug("ahora", "11_exit_parse_failed");
     return;
   }
 
-  await logDebug("ahora", "12_calling_calculate_slot_confidence");
   const confidenceResult = await calculateSlotConfidence(parsed.data, text);
-  await logDebug("ahora", "13_confidence_returned", JSON.stringify({ action: confidenceResult.action, overall: confidenceResult.overall_confidence, slots: confidenceResult.slots }));
 
   if (confidenceResult.action === "fallback_regex") {
-    await logDebug("ahora", "14_exit_action_fallback_regex", JSON.stringify({ extraction: parsed.data, confidence: confidenceResult }));
     await sendWhatsAppMessage(phone, "😅 No entendí bien el destino. Podés decirme \"desde [origen] hasta [destino]\"? Ej: \"desde el aeropuerto hasta el centro\".");
     return;
   }
@@ -100,22 +84,16 @@ export async function handleAhoraMessage(
   const origin = parsed.data.origin || "";
   const destination = parsed.data.destination || "";
   const pax = parsed.data.passengers || 1;
-  await logDebug("ahora", "15_post_confidence", JSON.stringify({ origin, destination, pax }));
 
   if (!origin || !destination) {
-    await logDebug("ahora", "16_exit_missing_origin_or_destination", JSON.stringify({ origin, destination, extraction: parsed.data }));
     return;
   }
 
-  await logDebug("ahora", "17_calling_match_tariff", JSON.stringify({ origin, destination, pax }));
   const tariffMatch = await matchTariff(origin, destination, pax);
   const price = tariffMatch.matched ? tariffMatch.price : 0;
   const tripId = `trip_${Date.now()}`;
-  await logDebug("ahora", "18_tariff_matched", JSON.stringify({ matched: tariffMatch.matched, price, method: tariffMatch.method, canonicalOrigin: tariffMatch.canonicalOrigin, canonicalDestination: tariffMatch.canonicalDestination }));
 
-  await logDebug("ahora", "19_before_create_trip", JSON.stringify({ tripId, origin, destination, price, pax }));
   await createTrip(tripId, phone, origin, destination, price, pax, undefined, undefined);
-  await logDebug("ahora", "20_after_create_trip", JSON.stringify({ tripId }));
   await setConversationTrip(convId, tripId);
 
   if (tariffMatch.matched) {
@@ -127,21 +105,17 @@ export async function handleAhoraMessage(
 
   const trip = await getActiveTripByPhone(phone);
   if (!trip) {
-    await logDebug("ahora", "21_exit_trip_not_found_after_create");
     return;
   }
 
   const priceMsg = `🚕 Viaje de *${origin}* a *${destination}*\nTarifa: $${price.toLocaleString("es-AR")} ARS (hasta ${pax > 4 ? "6" : "4"} pasajeros)\n\n¿Confirmás?`;
 
-  await logDebug("ahora", "22_before_send_whatsapp", JSON.stringify({ phone, priceMsg: priceMsg.substring(0, 200) }));
   await sendWhatsAppMessage(phone, priceMsg);
-  await logDebug("ahora", "23_after_send_whatsapp");
 
   await insertMessage(convId, "assistant", priceMsg);
 
   await sendDisponibleToTitular(trip, convId, phone);
   await scheduleFlotaDisponible(convId, trip, phone);
-  await logDebug("ahora", "24_handler_completed");
 }
 
 async function sendDisponibleToTitular(
@@ -174,6 +148,7 @@ async function scheduleFlotaDisponible(
   trip: TripRow,
   clientPhone: string,
 ): Promise<void> {
+  const TITULAR_DELAY_MS = 15 * 1000;
   const dueAt = Math.floor(Date.now() / 1000) + Math.floor(TITULAR_DELAY_MS / 1000);
   await setConnectionValue(`flota_disponible_at_${convId}`, String(dueAt));
 
@@ -196,7 +171,7 @@ export async function executeFlotaDisponible(
   const workflow = await getWorkflow(convId);
   if (!workflow || workflow.state !== "waiting_driver") return;
 
-  await broadcastTripToDrivers(trip, convId, clientPhone, "ahora", trip.passengers, "disponible");
+  await broadcastTripToDrivers(trip, convId, clientPhone, "ahora", trip.passengers);
   await setConnectionFlag(`flota_disponible_done_${convId}`);
 
   console.log(`[AHORA] Flota broadcast enviado conv ${convId}`);
@@ -215,7 +190,7 @@ export async function resolveDisponiblesAndAssign(
   if (availableKeys.length === 0) {
     console.log(`[AHORA] Sin disponibles conv ${convId}, degradando a broadcast`);
     await deleteConnectionKey(`ahora_caliente_${convId}`);
-    await broadcastTripToDrivers(trip, convId, clientPhone, "ahora", trip.passengers, "broadcast");
+    await broadcastTripToDrivers(trip, convId, clientPhone, "ahora", trip.passengers);
     return;
   }
 
@@ -261,7 +236,6 @@ export async function resolveDisponiblesAndAssign(
 
   const fin = await assignDriverToTrip(trip.trip_id, winnerPhone);
   await incrementOfferAccepted(winnerPhone);
-  await updateTripAssignmentSource(trip.trip_id, "AVAILABLE_POOL");
 
   const driver = await getDriverByPhone(winnerPhone);
   const driverName = driver?.name || "El chofer";
@@ -323,8 +297,6 @@ export async function handleDriverDisponible(
     JSON.stringify({ ts: Date.now(), name: driverName, phone: driverPhone }),
   );
 
-  await updateTripDriverAvailable(trip.trip_id, Math.floor(Date.now() / 1000));
-
   await sendWhatsAppMessage(
     driverPhone,
     `✅ Anotado. Si el cliente confirma, te avisamos para que confirmes con *Voy*.`,
@@ -343,13 +315,6 @@ export async function handleDriverVoy(
 
   const trip = await getActiveTripByPhone(workflow.phone);
   if (!trip) return;
-
-  const now = Math.floor(Date.now() / 1000);
-  await updateTripDriverCommitment(trip.trip_id, now);
-
-  if (!trip.assignment_source) {
-    await updateTripAssignmentSource(trip.trip_id, "AVAILABLE_POOL");
-  }
 
   const driver = await getDriverByPhone(driverPhone);
   const driverName = driver?.name || "El chofer";
@@ -383,6 +348,7 @@ async function getConnectionStateAll(): Promise<Record<string, string>> {
 export async function cleanupStaleCandidates(): Promise<void> {
   const { getDbInstance } = await import("@/lib/db/database");
   const db = getDbInstance();
+  const STALE_CANDIDATE_CLEANUP_MS = 30 * 60 * 1000;
   const cutoff = Math.floor(Date.now() / 1000) - Math.floor(STALE_CANDIDATE_CLEANUP_MS / 1000);
 
   const stale = await db.execute({
