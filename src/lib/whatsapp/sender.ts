@@ -79,20 +79,6 @@ export async function sendInteractiveList(
   await postToWhatsApp(payload);
 }
 
-export async function sendContact(to: string, name: string, phone: string): Promise<void> {
-  const payload = {
-    messaging_product: "whatsapp",
-    to: normalizeRecipient(to),
-    type: "contacts",
-    contacts: [{
-      name: { formatted_name: name, first_name: name },
-      phones: [{ phone: phone.replace(/\D/g, ""), type: "CELL" as const }],
-    }],
-  };
-  console.log(`[SEND CONTACT] → ${to}: ${name} (${phone})`);
-  await postToWhatsApp(payload);
-}
-
 export async function sendInteractiveButtons(
   to: string,
   bodyText: string,

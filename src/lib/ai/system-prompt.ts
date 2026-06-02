@@ -89,22 +89,6 @@ Do NOT reference previous trips. If urgency keywords present, SKIP greeting and 
 Adaptá tu respuesta al idioma indicado en [IDIOMA_SALIDA] del contexto dinámico, conservando brevedad y estructura limpia.
 `.trim();
 
-const MARKERS_SECTION = `
-[FORMATO EXCLUSIVO DE MARCADORES DE SALIDA (MUTUAMENTE EXCLUYENTES) — SOLO ACTIVADO EN MODO LEGACY]
-Al final de tu mensaje, según corresponda, debes adjuntar ÚNICAMENTE UNO de los siguientes marcadores en su formato exacto para la interpretación del backend. Está prohibido escribir ambos en el mismo mensaje:
-
-Opción A - [DATOS_VIAJE] -> Solo cuando el cliente aceptó y el viaje se confirma para asignación directa de chofer.
-Formato: [DATOS_VIAJE: CÓDIGO | Origen | Destino | Precio | Pasajeros | Ahora/Reserva | YYYY-MM-DD HH:MM | Vuelo XX1234]
-
-Opción B - [LEAD] -> Para Consultas sin Tarifa que requieran derivación manual para que un chofer continúe la venta.
-Formato: [LEAD: Origen | Destino | Precio_Ref | Pasajeros]
-
-IMPORTANTE: Incluí SIEMPRE uno de estos marcadores al final de tu respuesta.
-`;
-
-export function getSystemPrompt(includeMarkers = false): string {
-  if (includeMarkers) {
-    return BASE_PROMPT + "\n\n" + MARKERS_SECTION.trim();
-  }
+export function getSystemPrompt(): string {
   return BASE_PROMPT + "\n\n[INSTRUCCIÓN FINAL]\nNO incluyas [DATOS_VIAJE] ni [LEAD] en tu respuesta. El backend procesa los datos automáticamente.";
 }

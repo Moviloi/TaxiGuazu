@@ -7,7 +7,7 @@ import {
   advanceWorkflowState as dbAdvanceState,
 } from "@/lib/db/database";
 
-export type WorkflowState = "idle" | "awaiting_slot" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_group" | "waiting_driver" | "waiting_preferred" | "waiting_backup" | "closed";
+export type WorkflowState = "idle" | "awaiting_slot" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_group" | "waiting_driver" | "closed";
 
 const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   idle: ["awaiting_slot", "nivel_1", "nivel_2", "nivel_3", "waiting_driver", "waiting_group"],
@@ -17,8 +17,6 @@ const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   waiting_group: ["closed"],
   waiting_driver: ["closed"],
   awaiting_slot: ["closed"],
-  waiting_preferred: ["nivel_3"],
-  waiting_backup: ["nivel_3"],
   closed: [],
 };
 

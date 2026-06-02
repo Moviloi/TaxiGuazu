@@ -562,8 +562,9 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
     }
 
-    const skipMarkers = FEATURE_CONFIDENCE_MATCHING && !!workflowResult;
-    let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined, extractionNote, skipMarkers);
+    let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined, extractionNote);
+
+    console.log(JSON.stringify({ event: "workflow_result", conversationId: conversation.id, phone, workflowResultExists: !!workflowResult }));
 
     if (FEATURE_CONFIDENCE_MATCHING && workflowResult) {
       // === NEW FLOW (Phases 5-6): workflow-based routing, no marker parsing ===
@@ -579,8 +580,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
     } else {
       // === LEGACY FLOW: marker-based parsing (fallback when FEATURE_CONFIDENCE_MATCHING is off) ===
+      console.log(JSON.stringify({ event: "legacy_flow_entered", conversationId: conversation.id, phone, text, timestamp: Math.floor(Date.now() / 1000) }));
       let marker = extractTripMarker(response);
       if (marker) {
+        console.log(JSON.stringify({ event: "legacy_trip_marker_detected", conversationId: conversation.id, tripCode: marker.code, origin: marker.origin, destination: marker.destination }));
         if (!marker.passengers || marker.passengers <= 0) {
           console.log(`[GUARD] Marker con passengers=${marker.passengers}, eliminando: ${response.substring(0,80)}...`);
           response = stripTripMarker(response);
@@ -621,11 +624,16 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
       const leadMarker = !marker ? extractLeadMarker(response) : null;
       if (leadMarker) {
+        console.log(JSON.stringify({ event: "legacy_lead_marker_detected", conversationId: conversation.id, origin: leadMarker.origin, destination: leadMarker.destination }));
         response = stripTripMarker(response);
       }
 
       await insertMessage(conversation.id, "assistant", response);
       await sendWhatsAppMessage(phone, response);
+
+      if (!marker && !leadMarker) {
+        console.log(JSON.stringify({ event: "legacy_fallback_response_only", conversationId: conversation.id }));
+      }
 
       if (leadMarker) {
         await createLead(conversation.id, phone, leadMarker.origin, leadMarker.destination, leadMarker.price, leadMarker.passengers);

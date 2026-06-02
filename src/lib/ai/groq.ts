@@ -132,7 +132,6 @@ export async function generateGroqReply(
   promoNote?: string,
   customerName?: string,
   extractionNote?: string,
-  skipMarkers = false,
 ): Promise<string> {
   const groq = getGroq();
   if (!groq) return "Disculpe, no pude responder. Un operador lo asistirá.";
@@ -203,7 +202,7 @@ export async function generateGroqReply(
   const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: getSystemPrompt(!skipMarkers),
+      content: getSystemPrompt(),
     },
     {
       role: "system",

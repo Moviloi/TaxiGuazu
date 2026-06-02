@@ -179,25 +179,6 @@ Ningún chofer tomó el servicio AHORA. Reasigná manualmente.`);
     await closeWorkflow(ctx.conversationId);
   }
 
-  // === BACKWARD COMPAT: old waiting_preferred / waiting_backup ===
-  const oldPreferredExpired = await getExpiredByState("waiting_preferred", 3 * 60 * 1000);
-  for (const ctx of oldPreferredExpired) {
-    console.log(`[TIMEOUT] (old) waiting_preferred expiró para conv ${ctx.conversationId}`);
-    const trip = await getActiveTripByPhone(ctx.phone);
-    if (!trip) continue;
-    await advanceToNivel3(ctx.conversationId, ctx.phone);
-    await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
-  }
-
-  const oldBackupExpired = await getExpiredByState("waiting_backup", 3 * 60 * 1000);
-  for (const ctx of oldBackupExpired) {
-    console.log(`[TIMEOUT] (old) waiting_backup expiró para conv ${ctx.conversationId}`);
-    const trip = await getActiveTripByPhone(ctx.phone);
-    if (!trip) continue;
-    await advanceToNivel3(ctx.conversationId, ctx.phone);
-    await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
-  }
-
   // Old waiting_group → still works
   const groupExpired = await getExpiredGroupTimeouts(TIMEOUT_NIVEL_3_MS);
   for (const ctx of groupExpired) {
