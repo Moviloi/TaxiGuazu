@@ -10,6 +10,7 @@ import {
   setConnectionFlag,
   deleteConnectionKey,
   getDriverByPhone,
+  logDebug,
 } from "@/lib/db/database";
 import { generateGroqExtraction } from "@/lib/ai/groq";
 import { calculateSlotConfidence } from "@/lib/services/confidence";
@@ -51,7 +52,7 @@ export async function handleAhoraMessage(
   convId: number,
   customerName: string | null,
 ): Promise<void> {
-  console.log("[AHORA_START]", { phone, text, conversationId: convId });
+  await logDebug("ahora", "05_ahora_handler_enter", JSON.stringify({ phone, text: text.substring(0, 100), convId }));
 
   const existingTrip = await getActiveTripByPhone(phone);
 
@@ -63,51 +64,57 @@ export async function handleAhoraMessage(
         return;
       }
     }
+    await logDebug("ahora", "06_exit_existing_trip_consulta", JSON.stringify({ convId }));
     return;
   }
 
   const history: any[] = [];
+  await logDebug("ahora", "07_calling_groq_extraction");
   const raw = await generateGroqExtraction(text, history, customerName || undefined);
-  console.log("[AHORA_RAW]", JSON.stringify(raw));
+  await logDebug("ahora", "08_groq_extraction_returned", JSON.stringify({ raw }));
 
   if (!raw) {
-    console.log("[AHORA_EXIT_REASON]", { reason: "raw_null", text, extraction: null, confidence: null });
+    await logDebug("ahora", "09_exit_raw_null");
     return;
   }
 
   const { TripExtractionSchema } = await import("@/lib/ai/extraction-schema");
   const parsed = TripExtractionSchema.safeParse(raw);
-  console.log("[AHORA_PARSED]", { success: parsed.success, data: parsed.success ? parsed.data : parsed.error });
+  await logDebug("ahora", "10_safe_parse_result", JSON.stringify({ success: parsed.success, data: parsed.success ? parsed.data : (parsed.error as any)?.issues }));
 
   if (!parsed.success) {
-    console.log("[AHORA_EXIT_REASON]", { reason: "parse_failed", text, extraction: null, confidence: null });
+    await logDebug("ahora", "11_exit_parse_failed");
     return;
   }
 
+  await logDebug("ahora", "12_calling_calculate_slot_confidence");
   const confidenceResult = await calculateSlotConfidence(parsed.data, text);
-  console.log("[AHORA_CONFIDENCE]", JSON.stringify(confidenceResult));
+  await logDebug("ahora", "13_confidence_returned", JSON.stringify({ action: confidenceResult.action, overall: confidenceResult.overall_confidence, slots: confidenceResult.slots }));
 
   if (confidenceResult.action === "fallback_regex") {
-    console.log("[AHORA_EXIT_REASON]", { reason: "action_fallback_regex", text, extraction: parsed.data, confidence: confidenceResult });
+    await logDebug("ahora", "14_exit_action_fallback_regex", JSON.stringify({ extraction: parsed.data, confidence: confidenceResult }));
     return;
   }
 
   const origin = parsed.data.origin || "";
   const destination = parsed.data.destination || "";
   const pax = parsed.data.passengers || 1;
+  await logDebug("ahora", "15_post_confidence", JSON.stringify({ origin, destination, pax }));
 
   if (!origin || !destination) {
-    console.log("[AHORA_EXIT_REASON]", { reason: "missing_origin_or_destination", text, extraction: parsed.data, confidence: confidenceResult });
+    await logDebug("ahora", "16_exit_missing_origin_or_destination", JSON.stringify({ origin, destination, extraction: parsed.data }));
     return;
   }
 
+  await logDebug("ahora", "17_calling_match_tariff", JSON.stringify({ origin, destination, pax }));
   const tariffMatch = await matchTariff(origin, destination, pax);
   const price = tariffMatch.matched ? tariffMatch.price : 0;
   const tripId = `trip_${Date.now()}`;
+  await logDebug("ahora", "18_tariff_matched", JSON.stringify({ matched: tariffMatch.matched, price, method: tariffMatch.method, canonicalOrigin: tariffMatch.canonicalOrigin, canonicalDestination: tariffMatch.canonicalDestination }));
 
-  console.log("[AHORA_CREATING_TRIP]", { origin, destination, price, tariffMatch });
-
+  await logDebug("ahora", "19_before_create_trip", JSON.stringify({ tripId, origin, destination, price, pax }));
   await createTrip(tripId, phone, origin, destination, price, pax, undefined, undefined);
+  await logDebug("ahora", "20_after_create_trip", JSON.stringify({ tripId }));
   await setConversationTrip(convId, tripId);
 
   if (tariffMatch.matched) {
@@ -119,20 +126,21 @@ export async function handleAhoraMessage(
 
   const trip = await getActiveTripByPhone(phone);
   if (!trip) {
-    console.log("[AHORA_EXIT_REASON]", { reason: "trip_not_found_after_create", text, extraction: parsed.data, confidence: confidenceResult });
+    await logDebug("ahora", "21_exit_trip_not_found_after_create");
     return;
   }
 
   const priceMsg = `🚕 Viaje de *${origin}* a *${destination}*\nTarifa: $${price.toLocaleString("es-AR")} ARS (hasta ${pax > 4 ? "6" : "4"} pasajeros)\n\n¿Confirmás?`;
 
-  console.log("[AHORA_SENDING_PRICE]", { phone, priceMsg });
+  await logDebug("ahora", "22_before_send_whatsapp", JSON.stringify({ phone, priceMsg: priceMsg.substring(0, 200) }));
   await sendWhatsAppMessage(phone, priceMsg);
-  console.log("[AHORA_PRICE_SENT]");
+  await logDebug("ahora", "23_after_send_whatsapp");
 
   await insertMessage(convId, "assistant", priceMsg);
 
   await sendDisponibleToTitular(trip, convId, phone);
   await scheduleFlotaDisponible(convId, trip, phone);
+  await logDebug("ahora", "24_handler_completed");
 }
 
 async function sendDisponibleToTitular(

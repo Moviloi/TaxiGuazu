@@ -30,6 +30,7 @@ import {
   upsertChatSession,
   resetChatSession,
   getChatSession,
+  logDebug,
 } from "@/lib/db/database";
 import { generateGroqReply, generateGroqExtraction } from "@/lib/ai/groq";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
@@ -222,6 +223,7 @@ const HABLAR_HUMANO = [
 
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   try {
+    await logDebug("lead", "01_handle_lead_enter", JSON.stringify({ phone, text: text.substring(0, 100) }));
     console.log(`[DEBUG_LEAD] phone=${phone} text="${text.substring(0, 60)}"`);
     const trimmed = text.trim();
     const lower = trimmed.toLowerCase();
@@ -392,11 +394,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // === AHORA-CALIENTE FAST PATH ===
     if (FEATURE_CONFIDENCE_MATCHING && isAhoraUrgency(text)) {
-      console.log("[LEAD_AHORA_CHECK]", { text, isAhora: isAhoraUrgency(text) });
+      await logDebug("lead", "02_ahora_urgency_detected", JSON.stringify({ text: text.substring(0, 100) }));
       const { handleAhoraMessage } = await import("./ahora.service");
-      console.log("[LEAD_ENTER_AHORA]");
+      await logDebug("lead", "03_entering_ahora_handler");
       await handleAhoraMessage(phone, text, conversation.id, customerName);
-      console.log("[LEAD_EXIT_AHORA]");
+      await logDebug("lead", "04_returned_from_ahora");
       return;
     }
 

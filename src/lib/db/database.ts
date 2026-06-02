@@ -79,6 +79,15 @@ async function initSchema(): Promise<void> {
       value TEXT,
       updated_at INTEGER DEFAULT (unixepoch())
     )`,
+    `CREATE TABLE IF NOT EXISTS debug_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at INTEGER DEFAULT (unixepoch()),
+      source TEXT,
+      step TEXT,
+      payload TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_debug_log_created ON debug_log(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_debug_log_source ON debug_log(source, created_at)`,
     `CREATE TABLE IF NOT EXISTS conversations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       phone TEXT UNIQUE NOT NULL,
@@ -2261,4 +2270,39 @@ export async function deleteConnectionKey(key: string): Promise<void> {
 
 export function getDbInstance(): LibSqlClient {
   return getDbv();
+}
+
+// ========== DEBUG LOG (observability temporal AHORA-CALIENTE) ==========
+
+export interface DebugLogRow {
+  id: number;
+  created_at: number;
+  source: string;
+  step: string;
+  payload: string | null;
+}
+
+export async function logDebug(source: string, step: string, payload?: string): Promise<void> {
+  try {
+    await getDbv().execute({
+      sql: "INSERT INTO debug_log (source, step, payload) VALUES (?, ?, ?)",
+      args: [source, step, payload ?? null],
+    });
+  } catch (e) {
+    console.error("[logDebug] error:", e);
+  }
+}
+
+export async function getDebugLog(filterSource?: string, limit = 100): Promise<DebugLogRow[]> {
+  if (filterSource) {
+    return query<DebugLogRow>(
+      "SELECT * FROM debug_log WHERE source = ? ORDER BY id DESC LIMIT ?",
+      [filterSource, limit]
+    );
+  }
+  return query<DebugLogRow>("SELECT * FROM debug_log ORDER BY id DESC LIMIT ?", [limit]);
+}
+
+export async function clearDebugLog(): Promise<void> {
+  await getDbv().execute("DELETE FROM debug_log");
 }
