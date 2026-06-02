@@ -392,8 +392,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // === AHORA-CALIENTE FAST PATH ===
     if (FEATURE_CONFIDENCE_MATCHING && isAhoraUrgency(text)) {
+      console.log("[LEAD_AHORA_CHECK]", { text, isAhora: isAhoraUrgency(text) });
       const { handleAhoraMessage } = await import("./ahora.service");
+      console.log("[LEAD_ENTER_AHORA]");
       await handleAhoraMessage(phone, text, conversation.id, customerName);
+      console.log("[LEAD_EXIT_AHORA]");
       return;
     }
 
