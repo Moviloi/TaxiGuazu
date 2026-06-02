@@ -19,10 +19,6 @@ import type {
   LeadRow,
   LocationAliasRow,
   ChatSessionRow,
-  PlaceRow,
-  AliasRow,
-  TransferPriorityRow,
-  PlaceResolution,
 } from "./types";
 
 type LibSqlClient = ReturnType<typeof createClient>;
@@ -79,15 +75,6 @@ async function initSchema(): Promise<void> {
       value TEXT,
       updated_at INTEGER DEFAULT (unixepoch())
     )`,
-    `CREATE TABLE IF NOT EXISTS debug_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      created_at INTEGER DEFAULT (unixepoch()),
-      source TEXT,
-      step TEXT,
-      payload TEXT
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_debug_log_created ON debug_log(created_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_debug_log_source ON debug_log(source, created_at)`,
     `CREATE TABLE IF NOT EXISTS conversations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       phone TEXT UNIQUE NOT NULL,
@@ -228,32 +215,6 @@ async function initSchema(): Promise<void> {
       clarify_field TEXT,
       updated_at INTEGER NOT NULL DEFAULT (unixepoch())
     )`,
-    `CREATE TABLE IF NOT EXISTS places (
-      place_id TEXT PRIMARY KEY,
-      canonical_name TEXT NOT NULL,
-      official_name TEXT NOT NULL,
-      google_maps_name TEXT NOT NULL,
-      place_type TEXT NOT NULL CHECK(place_type IN ('airport','bus_terminal','border_crossing','attraction','shopping','hotel','resort','hostel','restaurant','casino','event_center','tourist_area','port','other')),
-      city TEXT NOT NULL CHECK(city IN ('Puerto Iguazú','Foz do Iguaçu','Ciudad del Este')),
-      country TEXT NOT NULL CHECK(country IN ('Argentina','Brasil','Paraguay')),
-      latitude REAL,
-      longitude REAL,
-      tourist_relevance_score INTEGER NOT NULL DEFAULT 5,
-      operational_zone TEXT,
-      active_status TEXT NOT NULL DEFAULT 'active' CHECK(active_status IN ('active','inactive'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS aliases (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      place_id TEXT NOT NULL,
-      alias TEXT NOT NULL,
-      language TEXT NOT NULL CHECK(language IN ('es','en','pt'))
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(LOWER(alias))`,
-    `CREATE INDEX IF NOT EXISTS idx_aliases_place ON aliases(place_id)`,
-    `CREATE TABLE IF NOT EXISTS transfer_priority (
-      place_id TEXT PRIMARY KEY,
-      priority INTEGER NOT NULL CHECK(priority BETWEEN 1 AND 4)
-    )`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 
@@ -308,38 +269,10 @@ async function initSchema(): Promise<void> {
     }
   } catch (e) { console.error("[migration] seed tariffs error:", e); }
 
-  // Seed location_aliases if empty
+  // Seed location_aliases (always runs: INSERT OR IGNORE so idempotent)
   try {
-    const count = await getDbv().execute("SELECT COUNT(*) as c FROM location_aliases");
-    if ((count.rows as any[])[0].c === 0) {
-      await seedLocationAliases();
-    }
+    await seedLocationAliases();
   } catch (e) { console.error("[migration] seed location_aliases error:", e); }
-
-  // Seed places if empty
-  try {
-    const count = await getDbv().execute("SELECT COUNT(*) as c FROM places");
-    if ((count.rows as any[])[0].c === 0) {
-      await seedPlaces();
-    }
-  } catch (e) { console.error("[migration] seed places error:", e); }
-
-  // Seed aliases if empty
-  try {
-    const count = await getDbv().execute("SELECT COUNT(*) as c FROM aliases");
-    if ((count.rows as any[])[0].c === 0) {
-      await seedAliases();
-    }
-  } catch (e) { console.error("[migration] seed aliases error:", e); }
-
-  // Seed transfer_priority if empty
-  try {
-    const count = await getDbv().execute("SELECT COUNT(*) as c FROM transfer_priority");
-    if ((count.rows as any[])[0].c === 0) {
-      await seedTransferPriority();
-    }
-  } catch (e) { console.error("[migration] seed transfer_priority error:", e); }
-
   await migrateCentroAlias();
   await migrateTariffNames();
   try {
@@ -445,27 +378,6 @@ async function initSchema(): Promise<void> {
       await getDbv().execute("ALTER TABLE drivers ADD COLUMN payment_method TEXT");
     }
   } catch (e) { console.error("[migration] drivers payment_method error:", e); }
-
-  // Migration: add assignment_source to trips
-  try {
-    const result = await getDbv().execute(
-      "INSERT OR IGNORE INTO _migrations (name) VALUES ('trips_assignment_source')"
-    );
-    if ((result as any).rowsAffected > 0) {
-      await getDbv().execute("ALTER TABLE trips ADD COLUMN assignment_source TEXT");
-    }
-  } catch (e) { console.error("[migration] trips assignment_source error:", e); }
-
-  // Migration: add driver_commitment_at and driver_available_at to trips
-  try {
-    const result = await getDbv().execute(
-      "INSERT OR IGNORE INTO _migrations (name) VALUES ('trips_driver_commitment_available')"
-    );
-    if ((result as any).rowsAffected > 0) {
-      await getDbv().execute("ALTER TABLE trips ADD COLUMN driver_commitment_at INTEGER");
-      await getDbv().execute("ALTER TABLE trips ADD COLUMN driver_available_at INTEGER");
-    }
-  } catch (e) { console.error("[migration] trips driver_commitment/available error:", e); }
 }
 
 // ========== CONNECTION STATE ==========
@@ -624,27 +536,7 @@ export async function getTripById(tripId: string): Promise<TripRow | null> {
 }
 
 export async function getActiveTripByPhone(clientPhone: string): Promise<TripRow | null> {
-  // Trips en estado 'consulta' solo se consideran activos si tienen menos de 1 hora
-  return queryOne<TripRow>(
-    `SELECT * FROM trips
-     WHERE client_phone = ?
-       AND status NOT IN ('completado', 'cancelado')
-       AND (status != 'consulta' OR created_at > unixepoch() - 3600)
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    [clientPhone]
-  );
-}
-
-export async function cancelConsultasByPhone(phone: string): Promise<number> {
-  const rows = await query<{trip_id: string}>(
-    "SELECT trip_id FROM trips WHERE client_phone = ? AND status = 'consulta'",
-    [phone]
-  );
-  for (const row of rows) {
-    await updateTripState(row.trip_id, "cancelado");
-  }
-  return rows.length;
+  return queryOne<TripRow>("SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado') ORDER BY created_at DESC LIMIT 1", [clientPhone]);
 }
 
 export async function getTripByAssignedDriver(driverPhone: string): Promise<TripRow | null> {
@@ -1198,30 +1090,6 @@ export async function setComisionDeclarada(tripId: string): Promise<void> {
   });
 }
 
-export async function updateTripAssignmentSource(tripId: string, source: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET assignment_source = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [source, tripId],
-  });
-}
-
-export async function updateTripDriverCommitment(tripId: string, ts: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET driver_commitment_at = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [ts, tripId],
-  });
-}
-
-export async function updateTripDriverAvailable(tripId: string, ts: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET driver_available_at = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [ts, tripId],
-  });
-}
-
 export async function getTripsByScheduledAtWindow(startTs: number, endTs: number): Promise<TripRow[]> {
   return query<TripRow>(
     "SELECT * FROM trips WHERE scheduled_at >= ? AND scheduled_at <= ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at",
@@ -1650,407 +1518,6 @@ async function migrateTariffNames(): Promise<void> {
   } catch (e) { console.error("[migrateTariffNames] error deleting duplicate:", e); }
 }
 
-// ========== PLACES CATALOG SEEDS ==========
-
-async function seedPlaces(): Promise<void> {
-  const data: {
-    place_id: string;
-    canonical_name: string;
-    official_name: string;
-    google_maps_name: string;
-    place_type: string;
-    city: string;
-    country: string;
-    tourist_relevance_score: number;
-  }[] = [
-    { place_id:"ar_igr_airport", canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", official_name:"Aeropuerto Internacional Mayor Carlos Eduardo Krause", google_maps_name:"Aeropuerto Internacional Cataratas del Iguazú (IGR)", place_type:"airport", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:10 },
-    { place_id:"br_igu_airport", canonical_name:"Aeroporto Internacional de Foz do Iguaçu", official_name:"Aeroporto Internacional de Foz do Iguaçu/Cataratas", google_maps_name:"Aeroporto Internacional de Foz do Iguaçu (IGU)", place_type:"airport", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"py_agt_airport", canonical_name:"Aeropuerto Internacional Guaraní", official_name:"Aeropuerto Internacional Guaraní", google_maps_name:"Aeropuerto Internacional Guaraní (AGT)", place_type:"airport", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:8 },
-    { place_id:"ar_bus_terminal", canonical_name:"Terminal de Ómnibus de Puerto Iguazú", official_name:"Terminal de Ómnibus de Puerto Iguazú", google_maps_name:"Terminal de Ómnibus de Puerto Iguazú", place_type:"bus_terminal", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"br_bus_terminal", canonical_name:"Terminal Rodoviário de Foz do Iguaçu", official_name:"Terminal Rodoviário Internacional de Foz do Iguaçu", google_maps_name:"Rodoviária Internacional de Foz do Iguaçu", place_type:"bus_terminal", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"py_bus_terminal", canonical_name:"Terminal de Ómnibus de Ciudad del Este", official_name:"Terminal de Ómnibus de Ciudad del Este", google_maps_name:"Terminal de Ómnibus de Ciudad del Este", place_type:"bus_terminal", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:8 },
-    { place_id:"ar_br_border", canonical_name:"Aduana Argentina-Brasil (Puente Tancredo Neves)", official_name:"Paso Fronterizo Iguazú - Foz de Iguazú", google_maps_name:"Control Migratorio Argentino - Puente Tancredo Neves", place_type:"border_crossing", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:10 },
-    { place_id:"br_ar_border", canonical_name:"Aduana Brasil-Argentina (Ponte Tancredo Neves)", official_name:"Inspetoria da Receita Federal em Foz do Iguaçu", google_maps_name:"Posto de Controle Migratório da Polícia Federal - Ponte Tancredo Neves", place_type:"border_crossing", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"br_py_border", canonical_name:"Aduana Brasil-Paraguay (Ponte da Amizade)", official_name:"Posto de Controle Fiscal - Receita Federal", google_maps_name:"Posto de Controle Migratório - Ponte da Amizade", place_type:"border_crossing", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"py_br_border", canonical_name:"Aduana Paraguay-Brasil (Puente de la Amistad)", official_name:"Administración de Aduana Ciudad del Este", google_maps_name:"Control Migratorio Paraguayo - Puente de la Amistad", place_type:"border_crossing", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:10 },
-    { place_id:"ar_cataratas_attraction", canonical_name:"Parque Nacional Iguazú - Cataratas Argentinas", official_name:"Parque Nacional Iguazú", google_maps_name:"Parque Nacional Iguazú", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:10 },
-    { place_id:"br_cataratas_attraction", canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", official_name:"Parque Nacional do Iguaçu", google_maps_name:"Parque Nacional do Iguaçu", place_type:"attraction", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"br_aves_attraction", canonical_name:"Parque das Aves", official_name:"Parque das Aves Ltda.", google_maps_name:"Parque das Aves", place_type:"attraction", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"br_itaipu_attraction", canonical_name:"Represa de Itaipú Binacional", official_name:"Itaipu Binacional - Usina Hidrelétrica", google_maps_name:"Itaipu Binacional", place_type:"attraction", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"py_itaipu_attraction", canonical_name:"Represa de Itaipú Binacional Paraguay", official_name:"Itaipu Binacional - Margen Derecha", google_maps_name:"Itaipu Binacional Paraguay", place_type:"attraction", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"ar_hito_attraction", canonical_name:"Hito Tres Fronteras - Argentina", official_name:"Hito Tres Fronteras Puerto Iguazú", google_maps_name:"Hito de las Tres Fronteras", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"br_marco_attraction", canonical_name:"Marco das Três Fronteiras - Brasil", official_name:"Marco das Três Fronteiras Foz do Iguaçu", google_maps_name:"Marco das Três Fronteiras", place_type:"attraction", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"py_hito_attraction", canonical_name:"Hito Tres Fronteras - Paraguay", official_name:"Hito Tres Fronteras Presidente Franco", google_maps_name:"Hito Tres Fronteras CDE", place_type:"attraction", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:8 },
-    { place_id:"py_monday_attraction", canonical_name:"Saltos del Monday", official_name:"Parque Municipal Monday", google_maps_name:"Saltos del Monday", place_type:"attraction", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"br_buddhist_attraction", canonical_name:"Templo Budista Chen Tien", official_name:"Templo Budista Chen Tien", google_maps_name:"Templo Budista Chen Tien", place_type:"attraction", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"ar_aripuca_attraction", canonical_name:"La Aripuca", official_name:"Complejo Turístico La Aripuca", google_maps_name:"La Aripuca", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_guira_attraction", canonical_name:"Güirá Oga", official_name:"Refugio de Animales Silvestres GüiráOga", google_maps_name:"GüiráOga", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_icebar_attraction", canonical_name:"Icebar Iguazú", official_name:"Icebar Iguazú", google_maps_name:"Icebar Iguazú", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_wanda_attraction", canonical_name:"Minas de Wanda", official_name:"Compañía Minera Wanda", google_maps_name:"Minas de Wanda", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_san_ignacio_attraction", canonical_name:"Ruinas de San Ignacio Miní", official_name:"Reducción Jesuítica de San Ignacio Miní", google_maps_name:"Ruinas Jesuíticas de San Ignacio Miní", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_mocona_attraction", canonical_name:"Saltos del Moconá", official_name:"Parque Provincial Moconá", google_maps_name:"Saltos del Moconá", place_type:"attraction", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:7 },
-    { place_id:"br_yupstar_attraction", canonical_name:"Yup Star Foz - Rueda Gigante", official_name:"Yup Star Foz Roda Gigante", google_maps_name:"Yup Star Foz", place_type:"attraction", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_dreams_attraction", canonical_name:"Dreams Park Show", official_name:"Complexo Dreams Park Show", google_maps_name:"Dreams Park Show Foz do Iguaçu", place_type:"attraction", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"ar_duty_free_shopping", canonical_name:"Duty Free Shop Puerto Iguazú", official_name:"Duty Free Shop Puerto Iguazú S.A.", google_maps_name:"Duty Free Shop Puerto Iguazú", place_type:"shopping", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_feria_shopping", canonical_name:"La Feirinha de Puerto Iguazú", official_name:"Feria de Puerto Iguazú", google_maps_name:"La Feirinha", place_type:"shopping", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"br_jl_shopping", canonical_name:"Cataratas JL Shopping", official_name:"Cataratas JL Shopping", google_maps_name:"Cataratas JL Shopping", place_type:"shopping", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_catuai_shopping", canonical_name:"Catuaí Palladium Shopping Center", official_name:"Catuaí Palladium", google_maps_name:"Catuaí Palladium Shopping Center", place_type:"shopping", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"py_del_este_shopping", canonical_name:"Shopping del Este", official_name:"Shopping del Este", google_maps_name:"Shopping del Este", place_type:"shopping", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"py_paris_shopping", canonical_name:"Shopping Paris", official_name:"Shopping Paris", google_maps_name:"Shopping Paris", place_type:"shopping", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"py_china_shopping", canonical_name:"Shopping China Importados", official_name:"Shopping China CDE", google_maps_name:"Shopping China Importados", place_type:"shopping", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:10 },
-    { place_id:"py_sax_shopping", canonical_name:"SAX Department Store", official_name:"S.A.X. S.A.", google_maps_name:"SAX Department Store", place_type:"shopping", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"py_monalisa_shopping", canonical_name:"Shopping Monalisa", official_name:"Monalisa Paraguay", google_maps_name:"Shopping Monalisa", place_type:"shopping", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"py_nissei_shopping", canonical_name:"Casa Nissei", official_name:"Casa Nissei CDE", google_maps_name:"Casa Nissei", place_type:"shopping", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"py_cellshop_shopping", canonical_name:"Cellshop Importados", official_name:"Cellshop Paraguay", google_maps_name:"Cellshop Importados", place_type:"shopping", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:10 },
-    { place_id:"ar_casino_iguazu", canonical_name:"Casino Iguazú", official_name:"Casino Iguazú / Grand Casino", google_maps_name:"Casino Iguazú", place_type:"casino", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_melia_hotel", canonical_name:"Gran Meliá Iguazú", official_name:"Gran Meliá Iguazú", google_maps_name:"Gran Meliá Iguazú", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:10 },
-    { place_id:"br_belmond_hotel", canonical_name:"Hotel das Cataratas, A Belmond Hotel", official_name:"Hotel das Cataratas", google_maps_name:"Hotel das Cataratas, A Belmond Hotel, Iguassu Falls", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"ar_loi_suites_hotel", canonical_name:"Loi Suites Iguazú Hotel", official_name:"Loi Suites Iguazú Hotel", google_maps_name:"Loi Suites Iguazú Hotel", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_iguazu_jungle_hotel", canonical_name:"Iguazú Jungle Lodge", official_name:"Iguazú Jungle Lodge", google_maps_name:"Iguazú Jungle Lodge", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_mercure_hotel", canonical_name:"Mercure Iguazu Hotel Iru", official_name:"Mercure Iguazu Hotel Iru", google_maps_name:"Mercure Iguazu Hotel Iru", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_o2_hotel", canonical_name:"O2 Hotel Iguazú", official_name:"O2 Hotel Iguazú", google_maps_name:"O2 Hotel Iguazú", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_grand_resort", canonical_name:"Iguazu Grand Resort Spa & Casino", official_name:"Iguazu Grand Resort", google_maps_name:"Iguazu Grand Resort Spa & Casino", place_type:"resort", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_saint_george_hotel", canonical_name:"Hotel Saint George", official_name:"Hotel Saint George", google_maps_name:"Hotel Saint George", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_amerian_portal", canonical_name:"Amérian Portal del Iguazú Hotel", official_name:"Amérian Portal del Iguazú", google_maps_name:"Amérian Portal del Iguazú Hotel", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_panoramic_grand", canonical_name:"Panoramic Grand Hotel", official_name:"Panoramic Grand", google_maps_name:"Panoramic Grand", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_aldea_selva_hotel", canonical_name:"La Aldea de la Selva Lodge", official_name:"La Aldea de la Selva Lodge", google_maps_name:"La Aldea de la Selva Lodge", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_falls_iguazu_hotel", canonical_name:"Falls Iguazú Hotel & Spa", official_name:"Falls Iguazú Hotel", google_maps_name:"Falls Iguazú Hotel & Spa", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"br_doubletree_hotel", canonical_name:"DoubleTree by Hilton Foz do Iguaçu", official_name:"DoubleTree by Hilton Resort", google_maps_name:"DoubleTree by Hilton Foz do Iguaçu", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_mabu_thermas", canonical_name:"Mabu Thermas Grand Resort", official_name:"Mabu Thermas Grand Resort", google_maps_name:"Mabu Thermas Grand Resort", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"br_recanto_cataratas", canonical_name:"Recanto Cataratas Thermas Resort & Convention", official_name:"Recanto Cataratas", google_maps_name:"Recanto Cataratas Thermas Resort & Convention", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_bourbon_thermas", canonical_name:"Bourbon Thermas Eco Resort Cataratas do Iguaçu", official_name:"Bourbon Cataratas", google_maps_name:"Bourbon Thermas Eco Resort Cataratas do Iguaçu", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:10 },
-    { place_id:"br_wish_foz", canonical_name:"Wish Foz do Iguaçu", official_name:"Wish Foz do Iguaçu Resort", google_maps_name:"Wish Foz do Iguaçu", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_vivaz_cataratas", canonical_name:"Vivaz Cataratas Hotel Resort", official_name:"Vivaz Cataratas", google_maps_name:"Vivaz Cataratas Hotel Resort", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_grand_carima", canonical_name:"Grand Carimã Resort & Convention Center", official_name:"Grand Carimã", google_maps_name:"Grand Carimã Resort & Convention Center", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_jl_bourbon", canonical_name:"JL Hotel by Bourbon", official_name:"JL Hotel by Bourbon", google_maps_name:"JL Hotel by Bourbon", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_sanma_hotel", canonical_name:"Sanma Hotel", official_name:"Sanma Hotel", google_maps_name:"Sanma Hotel", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_taroba_hotel", canonical_name:"Tarobá Hotel", official_name:"Tarobá Hotel", google_maps_name:"Tarobá Hotel", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_viale_cataratas", canonical_name:"Viale Cataratas Hotel & Eventos", official_name:"Viale Cataratas", google_maps_name:"Viale Cataratas Hotel & Eventos", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_rafain_palace", canonical_name:"Rafain Palace Hotel & Convention Center", official_name:"Rafain Palace", google_maps_name:"Rafain Palace Hotel & Convention Center", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_churrascaria_rafain", canonical_name:"Churrascaria Rafain Show", official_name:"Churrascaria Rafain Show", google_maps_name:"Churrascaria Rafain Show", place_type:"restaurant", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"ar_virgin_lodge", canonical_name:"La Reserva Virgin Lodge", official_name:"La Reserva Virgin Lodge", google_maps_name:"La Reserva Virgin Lodge", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_guamini_mision", canonical_name:"Guaminí Misión Hotel", official_name:"Guaminí Misión Hotel", google_maps_name:"Guaminí Misión Hotel", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_tucan_hostel", canonical_name:"Tucan Hostel", official_name:"Tucan Hostel", google_maps_name:"Tucan Hostel", place_type:"hostel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:7 },
-    { place_id:"br_concept_hostel", canonical_name:"Concept Design Hostel & Suites", official_name:"Concept Design Hostel", google_maps_name:"Concept Design Hostel & Suites", place_type:"hostel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:7 },
-    { place_id:"br_tetris_hostel", canonical_name:"Tetris Container Hostel", official_name:"Tetris Container Hostel", google_maps_name:"Tetris Container Hostel", place_type:"hostel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:7 },
-    { place_id:"br_wanderlust_hostel", canonical_name:"Hostel Wanderlust", official_name:"Hostel Wanderlust", google_maps_name:"Hostel Wanderlust", place_type:"hostel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:7 },
-    { place_id:"ar_selvaje_lodge", canonical_name:"Selvaje Lodge Iguazu", official_name:"Selvaje Lodge Iguazu", google_maps_name:"Selvaje Lodge Iguazu", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_overo_lodge", canonical_name:"Overo Lodge & Selva", official_name:"Overo Lodge & Selva", google_maps_name:"Overo Lodge & Selva", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"br_luz_hotel", canonical_name:"Luz Hotel by Castelo Itaipava", official_name:"Luz Hotel Foz", google_maps_name:"Luz Hotel by Castelo Itaipava", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_bella_italia", canonical_name:"Hotel Bella Italia", official_name:"Hotel Bella Italia", google_maps_name:"Hotel Bella Italia", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_mirante_hotel", canonical_name:"Mirante Hotel", official_name:"Mirante Hotel", google_maps_name:"Mirante Hotel", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_wyndham_foz", canonical_name:"Wyndham Foz do Iguaçu", official_name:"Wyndham Foz do Iguaçu", google_maps_name:"Wyndham Foz do Iguaçu", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_wyndham_golden", canonical_name:"Wyndham Golden Foz Suites", official_name:"Wyndham Golden Foz Suites", google_maps_name:"Wyndham Golden Foz Suites", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_colonial_iguacu", canonical_name:"Hotel Colonial Iguaçu", official_name:"Hotel Colonial Iguaçu", google_maps_name:"Hotel Colonial Iguaçu", place_type:"hotel", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"br_eco_cataratas", canonical_name:"Complexo Eco Cataratas Resort by SJ", official_name:"Complexo Eco Cataratas", google_maps_name:"Complexo Eco Cataratas Resort by SJ", place_type:"resort", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-    { place_id:"ar_grand_crucero", canonical_name:"Grand Crucero Iguazú Hotel", official_name:"Grand Crucero", google_maps_name:"Grand Crucero Iguazú Hotel", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_cantera_lodge", canonical_name:"La Cantera Jungle Lodge", official_name:"La Cantera Lodge", google_maps_name:"La Cantera Jungle Lodge", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_raices_esturion", canonical_name:"Raíces Esturión Hotel", official_name:"Raíces Esturión", google_maps_name:"Raíces Esturión Hotel", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_yvy_hotel", canonical_name:"Yvy Hotel de Selva", official_name:"Yvy Hotel de Selva", google_maps_name:"Yvy Hotel de Selva", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_palma_real", canonical_name:"Palma Real Posada", official_name:"Palma Real Posada", google_maps_name:"Palma Real Posada", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:8 },
-    { place_id:"ar_marcopolo_suites", canonical_name:"Marcopolo Suites Iguazu", official_name:"Marcopolo Suites", google_maps_name:"Marcopolo Suites Iguazu", place_type:"hotel", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:7 },
-    { place_id:"ar_pirayu_resort", canonical_name:"Pirayu Lodge Resort", official_name:"Pirayu Lodge Resort", google_maps_name:"Pirayu Lodge Resort", place_type:"resort", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:7 },
-    { place_id:"py_howard_johnson", canonical_name:"Howard Johnson Plaza Ciudad del Este", official_name:"Howard Johnson Plaza CDE", google_maps_name:"Howard Johnson Plaza Ciudad del Este", place_type:"hotel", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:8 },
-    { place_id:"py_casino_acaray_hotel", canonical_name:"Hotel Casino Acaray", official_name:"Hotel Casino Acaray", google_maps_name:"Hotel Casino Acaray", place_type:"hotel", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"py_rio_bourbon", canonical_name:"Rio Hotel by Bourbon Ciudad del Este", official_name:"Rio Hotel CDE", google_maps_name:"Rio Hotel by Bourbon Ciudad del Este", place_type:"hotel", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:8 },
-    { place_id:"py_convair_hotel", canonical_name:"Convair Hotel", official_name:"Convair Hotel CDE", google_maps_name:"Convair Hotel", place_type:"hotel", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:8 },
-    { place_id:"ar_port_iguazu", canonical_name:"Puerto de Puerto Iguazú", official_name:"Puerto de Puerto Iguazú", google_maps_name:"Puerto de Puerto Iguazú", place_type:"port", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:7 },
-    { place_id:"br_port_meira", canonical_name:"Porto Meira", official_name:"Porto Meira Foz", google_maps_name:"Porto Meira", place_type:"port", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:6 },
-    { place_id:"py_port_franco", canonical_name:"Puerto de Presidente Franco", official_name:"Puerto Histórico Presidente Franco", google_maps_name:"Puerto de Presidente Franco", place_type:"port", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:6 },
-    { place_id:"ar_600_hectareas_area", canonical_name:"Zona 600 Hectáreas", official_name:"Reserva Selva Iryapú - 600 Hectáreas", google_maps_name:"600 Hectáreas", place_type:"tourist_area", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"ar_centro_iguazu_area", canonical_name:"Centro de Puerto Iguazú", official_name:"Área Urbana Puerto Iguazú", google_maps_name:"Centro de Puerto Iguazú", place_type:"tourist_area", city:"Puerto Iguazú", country:"Argentina", tourist_relevance_score:9 },
-    { place_id:"br_av_cataratas_area", canonical_name:"Corredor Turístico Avenida das Cataratas", official_name:"Avenida das Cataratas Corredor", google_maps_name:"Avenida das Cataratas", place_type:"tourist_area", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"br_centro_foz_area", canonical_name:"Centro de Foz do Iguaçu", official_name:"Área Urbana Central de Foz do Iguaçu", google_maps_name:"Centro de Foz do Iguaçu", place_type:"tourist_area", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:9 },
-    { place_id:"py_centro_cde_area", canonical_name:"Microcentro de Ciudad del Este", official_name:"Área Comercial Ciudad del Este", google_maps_name:"Microcentro Ciudad del Este", place_type:"tourist_area", city:"Ciudad del Este", country:"Paraguay", tourist_relevance_score:9 },
-    { place_id:"br_rafain_convention", canonical_name:"Centro de Convenciones Rafain Palace", official_name:"Centro de Convenções Rafain", google_maps_name:"Rafain Palace Hotel & Convention Center", place_type:"event_center", city:"Foz do Iguaçu", country:"Brasil", tourist_relevance_score:8 },
-  ];
-  for (const r of data) {
-    try {
-      await getDbv().execute({
-        sql: "INSERT OR IGNORE INTO places (place_id, canonical_name, official_name, google_maps_name, place_type, city, country, tourist_relevance_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        args: [r.place_id, r.canonical_name, r.official_name, r.google_maps_name, r.place_type, r.city, r.country, r.tourist_relevance_score],
-      });
-    } catch (e) { console.error("[seedPlaces] error inserting:", r.place_id, e); }
-  }
-}
-
-async function seedAliases(): Promise<void> {
-  const aliasData: { canonical_name: string; alias: string; language: string }[] = [
-    { canonical_name:"Gran Meliá Iguazú", alias:"melia", language:"es" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"meliá", language:"es" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"gran melia", language:"es" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"gran meliá", language:"es" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"melia iguazu", language:"en" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"hotel melia", language:"es" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"hotel meliá", language:"es" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"gran melia iguazu", language:"en" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"gran meliá iguazú", language:"es" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"melia cataratas", language:"pt" },
-    { canonical_name:"Gran Meliá Iguazú", alias:"melia argentina", language:"pt" },
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", alias:"igr", language:"es" },
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", alias:"aeropuerto igr", language:"es" },
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", alias:"iguazu airport argentina", language:"en" },
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", alias:"argentina airport", language:"en" },
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", alias:"puerto iguazu airport", language:"en" },
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", alias:"aeropuerto de puerto iguazu", language:"es" },
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", alias:"aeroporto igr", language:"pt" },
-    { canonical_name:"Aeroporto Internacional de Foz do Iguaçu", alias:"igu", language:"pt" },
-    { canonical_name:"Aeroporto Internacional de Foz do Iguaçu", alias:"aeroporto foz", language:"pt" },
-    { canonical_name:"Aeroporto Internacional de Foz do Iguaçu", alias:"foz airport", language:"en" },
-    { canonical_name:"Aeroporto Internacional de Foz do Iguaçu", alias:"aeroporto de foz", language:"pt" },
-    { canonical_name:"Aeroporto Internacional de Foz do Iguaçu", alias:"foz do iguacu airport", language:"en" },
-    { canonical_name:"Aeroporto Internacional de Foz do Iguaçu", alias:"igu airport", language:"en" },
-    { canonical_name:"DoubleTree by Hilton Foz do Iguaçu", alias:"doubletree", language:"en" },
-    { canonical_name:"DoubleTree by Hilton Foz do Iguaçu", alias:"doubletree foz", language:"en" },
-    { canonical_name:"DoubleTree by Hilton Foz do Iguaçu", alias:"double tree", language:"en" },
-    { canonical_name:"DoubleTree by Hilton Foz do Iguaçu", alias:"doubletree hilton", language:"en" },
-    { canonical_name:"DoubleTree by Hilton Foz do Iguaçu", alias:"doubletree hilton foz", language:"en" },
-    { canonical_name:"DoubleTree by Hilton Foz do Iguaçu", alias:"hilton foz", language:"es" },
-    { canonical_name:"Churrascaria Rafain Show", alias:"rafain", language:"es" },
-    { canonical_name:"Churrascaria Rafain Show", alias:"rafain show", language:"es" },
-    { canonical_name:"Churrascaria Rafain Show", alias:"churrascaria rafain", language:"pt" },
-    { canonical_name:"Churrascaria Rafain Show", alias:"rafain foz", language:"pt" },
-    { canonical_name:"Churrascaria Rafain Show", alias:"vamos al rafain", language:"es" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"loi", language:"es" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"loi suites", language:"es" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"loi suites iguazu", language:"en" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"loi suites iguazú", language:"es" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"loi suites hotel", language:"en" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"hotel loi suites", language:"es" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"loi suites de la selva", language:"es" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"loy suites", language:"en" },
-    { canonical_name:"Loi Suites Iguazú Hotel", alias:"pick up at loy suites", language:"en" },
-    { canonical_name:"Hotel Saint George", alias:"saint george", language:"en" },
-    { canonical_name:"Hotel Saint George", alias:"saint george hotel", language:"en" },
-    { canonical_name:"Hotel Saint George", alias:"hotel saint george", language:"en" },
-    { canonical_name:"Hotel Saint George", alias:"saint jorge", language:"es" },
-    { canonical_name:"Hotel Saint George", alias:"san george", language:"es" },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", alias:"cataratas brasil", language:"es" },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", alias:"cataratas brasileñas", language:"es" },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", alias:"cataratas brasileiras", language:"pt" },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", alias:"cataratas br", language:"es" },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", alias:"lado brasileiro", language:"pt" },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", alias:"brazilian falls", language:"en" },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", alias:"falls brazil", language:"en" },
-    { canonical_name:"Parque Nacional Iguazú - Cataratas Argentinas", alias:"cataratas argentina", language:"es" },
-    { canonical_name:"Parque Nacional Iguazú - Cataratas Argentinas", alias:"cataratas argentinas", language:"es" },
-    { canonical_name:"Parque Nacional Iguazú - Cataratas Argentinas", alias:"cataratas ar", language:"es" },
-    { canonical_name:"Parque Nacional Iguazú - Cataratas Argentinas", alias:"lado argentino", language:"es" },
-    { canonical_name:"Parque Nacional Iguazú - Cataratas Argentinas", alias:"argentine falls", language:"en" },
-    { canonical_name:"Parque das Aves", alias:"parque de las aves", language:"es" },
-    { canonical_name:"Parque das Aves", alias:"parque das aves", language:"pt" },
-    { canonical_name:"Parque das Aves", alias:"bird park", language:"en" },
-    { canonical_name:"Parque das Aves", alias:"parque aves", language:"es" },
-    { canonical_name:"Duty Free Shop Puerto Iguazú", alias:"duty free", language:"en" },
-    { canonical_name:"Duty Free Shop Puerto Iguazú", alias:"duty free iguazu", language:"en" },
-    { canonical_name:"Duty Free Shop Puerto Iguazú", alias:"duty free puerto iguazu", language:"es" },
-    { canonical_name:"Duty Free Shop Puerto Iguazú", alias:"shop libre de impuestos", language:"es" },
-    { canonical_name:"Duty Free Shop Puerto Iguazú", alias:"duty free ar", language:"es" },
-    { canonical_name:"Represa de Itaipú Binacional", alias:"itaipu", language:"es" },
-    { canonical_name:"Represa de Itaipú Binacional", alias:"represa de itaipu", language:"pt" },
-    { canonical_name:"Represa de Itaipú Binacional", alias:"itaipu dam", language:"en" },
-    { canonical_name:"Represa de Itaipú Binacional", alias:"itaipu binacional", language:"pt" },
-    { canonical_name:"Saltos del Monday", alias:"saltos del monday", language:"es" },
-    { canonical_name:"Saltos del Monday", alias:"monday falls", language:"en" },
-    { canonical_name:"Saltos del Monday", alias:"saltos monday", language:"es" },
-    { canonical_name:"Shopping del Este", alias:"shopping del este", language:"es" },
-    { canonical_name:"Shopping del Este", alias:"compras paraguay", language:"es" },
-    { canonical_name:"Shopping del Este", alias:"compras cde", language:"es" },
-    { canonical_name:"Shopping China Importados", alias:"shopping china", language:"es" },
-    { canonical_name:"Shopping China Importados", alias:"china paraguay", language:"es" },
-    { canonical_name:"Shopping China Importados", alias:"china cde", language:"es" },
-    { canonical_name:"Cellshop Importados", alias:"cellshop", language:"en" },
-    { canonical_name:"Cellshop Importados", alias:"cell shop", language:"en" },
-    { canonical_name:"Cellshop Importados", alias:"cellshop paraguay", language:"en" },
-    { canonical_name:"Cellshop Importados", alias:"cellshop cde", language:"es" },
-    { canonical_name:"Hotel das Cataratas, A Belmond Hotel", alias:"belmond", language:"en" },
-    { canonical_name:"Hotel das Cataratas, A Belmond Hotel", alias:"belmond hotel", language:"en" },
-    { canonical_name:"Hotel das Cataratas, A Belmond Hotel", alias:"belmond cataratas", language:"pt" },
-    { canonical_name:"Hotel das Cataratas, A Belmond Hotel", alias:"das cataratas", language:"pt" },
-    { canonical_name:"Hotel das Cataratas, A Belmond Hotel", alias:"hotel das cataratas", language:"pt" },
-    { canonical_name:"Mabu Thermas Grand Resort", alias:"mabu", language:"pt" },
-    { canonical_name:"Mabu Thermas Grand Resort", alias:"mabu thermas", language:"pt" },
-    { canonical_name:"Mabu Thermas Grand Resort", alias:"mabu resort", language:"en" },
-    { canonical_name:"Bourbon Thermas Eco Resort Cataratas do Iguaçu", alias:"bourbon", language:"pt" },
-    { canonical_name:"Bourbon Thermas Eco Resort Cataratas do Iguaçu", alias:"bourbon cataratas", language:"pt" },
-    { canonical_name:"Bourbon Thermas Eco Resort Cataratas do Iguaçu", alias:"bourbon resort", language:"en" },
-    { canonical_name:"Iguazu Grand Resort Spa & Casino", alias:"iguazu grand", language:"en" },
-    { canonical_name:"Iguazu Grand Resort Spa & Casino", alias:"iguazú grand", language:"es" },
-    { canonical_name:"Hotel Bella Italia", alias:"bella italia", language:"pt" },
-    { canonical_name:"Hotel Bella Italia", alias:"hotel bella italia", language:"pt" },
-    { canonical_name:"Mercure Iguazu Hotel Iru", alias:"mercure", language:"es" },
-    { canonical_name:"Mercure Iguazu Hotel Iru", alias:"mercure iguazu", language:"en" },
-    { canonical_name:"Mercure Iguazu Hotel Iru", alias:"mercure iru", language:"es" },
-    { canonical_name:"O2 Hotel Iguazú", alias:"o2", language:"es" },
-    { canonical_name:"O2 Hotel Iguazú", alias:"o2 hotel", language:"en" },
-    { canonical_name:"O2 Hotel Iguazú", alias:"o2 iguazu", language:"en" },
-    { canonical_name:"Amérian Portal del Iguazú Hotel", alias:"amerian", language:"es" },
-    { canonical_name:"Amérian Portal del Iguazú Hotel", alias:"amérian", language:"es" },
-    { canonical_name:"Amérian Portal del Iguazú Hotel", alias:"amerian portal", language:"es" },
-    { canonical_name:"Falls Iguazú Hotel & Spa", alias:"falls hotel", language:"en" },
-    { canonical_name:"Falls Iguazú Hotel & Spa", alias:"falls iguazu", language:"en" },
-    { canonical_name:"Panoramic Grand Hotel", alias:"panoramic", language:"es" },
-    { canonical_name:"Panoramic Grand Hotel", alias:"panoramic grand", language:"en" },
-    { canonical_name:"Hito Tres Fronteras - Argentina", alias:"hito", language:"es" },
-    { canonical_name:"Hito Tres Fronteras - Argentina", alias:"hito de las tres fronteras", language:"es" },
-    { canonical_name:"Hito Tres Fronteras - Argentina", alias:"hito ar", language:"es" },
-    { canonical_name:"Marco das Três Fronteiras - Brasil", alias:"marco", language:"pt" },
-    { canonical_name:"Marco das Três Fronteiras - Brasil", alias:"marco das tres fronteiras", language:"pt" },
-    { canonical_name:"Yup Star Foz - Rueda Gigante", alias:"rueda gigante", language:"es" },
-    { canonical_name:"Yup Star Foz - Rueda Gigante", alias:"yup star", language:"en" },
-    { canonical_name:"La Feirinha de Puerto Iguazú", alias:"la feirinha", language:"es" },
-    { canonical_name:"La Feirinha de Puerto Iguazú", alias:"feirinha", language:"pt" },
-    { canonical_name:"Minas de Wanda", alias:"wanda", language:"es" },
-    { canonical_name:"Minas de Wanda", alias:"minas de wanda", language:"es" },
-    { canonical_name:"Ruinas de San Ignacio Miní", alias:"san ignacio", language:"es" },
-    { canonical_name:"Ruinas de San Ignacio Miní", alias:"ruinas de san ignacio", language:"es" },
-    { canonical_name:"Represa de Itaipú Binacional Paraguay", alias:"itaipu paraguay", language:"es" },
-    { canonical_name:"Templo Budista Chen Tien", alias:"templo budista", language:"es" },
-    { canonical_name:"La Aripuca", alias:"aripuca", language:"es" },
-    { canonical_name:"La Aripuca", alias:"la aripuca", language:"es" },
-    { canonical_name:"Güirá Oga", alias:"guira oga", language:"es" },
-    { canonical_name:"Icebar Iguazú", alias:"icebar", language:"en" },
-    { canonical_name:"Icebar Iguazú", alias:"bar de hielo", language:"es" },
-    { canonical_name:"Shopping Paris", alias:"shopping paris", language:"es" },
-    { canonical_name:"SAX Department Store", alias:"sax", language:"en" },
-    { canonical_name:"SAX Department Store", alias:"sax paraguay", language:"en" },
-    { canonical_name:"Shopping Monalisa", alias:"monalisa", language:"es" },
-    { canonical_name:"Casa Nissei", alias:"nissei", language:"es" },
-    { canonical_name:"Hotel Casino Acaray", alias:"casino acaray", language:"es" },
-    { canonical_name:"Hotel Casino Acaray", alias:"acaray hotel", language:"es" },
-    { canonical_name:"Rio Hotel by Bourbon Ciudad del Este", alias:"rio bourbon", language:"pt" },
-    { canonical_name:"Rio Hotel by Bourbon Ciudad del Este", alias:"rio hotel cde", language:"es" },
-  ];
-  const nameToId = new Map<string, string>();
-  const places = await getDbv().execute("SELECT place_id, canonical_name FROM places");
-  for (const row of places.rows as any[]) {
-    nameToId.set(row.canonical_name, row.place_id);
-  }
-  for (const a of aliasData) {
-    const pid = nameToId.get(a.canonical_name);
-    if (!pid) { console.error("[seedAliases] place_id not found for canonical_name:", a.canonical_name); continue; }
-    try {
-      await getDbv().execute({
-        sql: "INSERT OR IGNORE INTO aliases (place_id, alias, language) VALUES (?, ?, ?)",
-        args: [pid, a.alias, a.language],
-      });
-    } catch (e) { console.error("[seedAliases] error inserting:", a, e); }
-  }
-}
-
-async function seedTransferPriority(): Promise<void> {
-  const priorityData: { canonical_name: string; priority: number }[] = [
-    { canonical_name:"Aeropuerto Internacional Cataratas del Iguazú", priority:1 },
-    { canonical_name:"Aeroporto Internacional de Foz do Iguaçu", priority:1 },
-    { canonical_name:"Parque Nacional Iguazú - Cataratas Argentinas", priority:1 },
-    { canonical_name:"Parque Nacional do Iguaçu - Cataratas Brasileñas", priority:1 },
-    { canonical_name:"Gran Meliá Iguazú", priority:1 },
-    { canonical_name:"Hotel das Cataratas, A Belmond Hotel", priority:1 },
-    { canonical_name:"Shopping del Este", priority:1 },
-    { canonical_name:"Shopping China Importados", priority:1 },
-    { canonical_name:"Cellshop Importados", priority:1 },
-    { canonical_name:"Duty Free Shop Puerto Iguazú", priority:1 },
-    { canonical_name:"Loi Suites Iguazú Hotel", priority:2 },
-    { canonical_name:"Iguazu Grand Resort Spa & Casino", priority:2 },
-    { canonical_name:"Hotel Saint George", priority:2 },
-    { canonical_name:"Terminal de Ómnibus de Puerto Iguazú", priority:2 },
-    { canonical_name:"Terminal Rodoviário de Foz do Iguaçu", priority:2 },
-    { canonical_name:"Parque das Aves", priority:2 },
-    { canonical_name:"Represa de Itaipú Binacional", priority:2 },
-    { canonical_name:"Amérian Portal del Iguazú Hotel", priority:2 },
-    { canonical_name:"Panoramic Grand Hotel", priority:2 },
-    { canonical_name:"Iguazú Jungle Lodge", priority:2 },
-    { canonical_name:"Mercure Iguazu Hotel Iru", priority:2 },
-    { canonical_name:"Falls Iguazú Hotel & Spa", priority:2 },
-    { canonical_name:"DoubleTree by Hilton Foz do Iguaçu", priority:2 },
-    { canonical_name:"Mabu Thermas Grand Resort", priority:2 },
-    { canonical_name:"Recanto Cataratas Thermas Resort & Convention", priority:2 },
-    { canonical_name:"Bourbon Thermas Eco Resort Cataratas do Iguaçu", priority:2 },
-    { canonical_name:"JL Hotel by Bourbon", priority:2 },
-    { canonical_name:"Casino Iguazú", priority:2 },
-    { canonical_name:"Aduana Argentina-Brasil (Puente Tancredo Neves)", priority:2 },
-    { canonical_name:"Aduana Brasil-Argentina (Ponte Tancredo Neves)", priority:2 },
-    { canonical_name:"Aduana Brasil-Paraguay (Ponte da Amizade)", priority:2 },
-    { canonical_name:"Aduana Paraguay-Brasil (Puente de la Amistad)", priority:2 },
-    { canonical_name:"Aeropuerto Internacional Guaraní", priority:3 },
-    { canonical_name:"Terminal de Ómnibus de Ciudad del Este", priority:3 },
-    { canonical_name:"Hito Tres Fronteras - Argentina", priority:3 },
-    { canonical_name:"Marco das Três Fronteiras - Brasil", priority:3 },
-    { canonical_name:"Saltos del Monday", priority:3 },
-    { canonical_name:"Templo Budista Chen Tien", priority:3 },
-    { canonical_name:"La Aripuca", priority:3 },
-    { canonical_name:"Güirá Oga", priority:3 },
-    { canonical_name:"Icebar Iguazú", priority:3 },
-    { canonical_name:"Minas de Wanda", priority:3 },
-    { canonical_name:"Yup Star Foz - Rueda Gigante", priority:3 },
-    { canonical_name:"Dreams Park Show", priority:3 },
-    { canonical_name:"Catuaí Palladium Shopping Center", priority:3 },
-    { canonical_name:"Cataratas JL Shopping", priority:3 },
-    { canonical_name:"Shopping Paris", priority:3 },
-    { canonical_name:"SAX Department Store", priority:3 },
-    { canonical_name:"Shopping Monalisa", priority:3 },
-    { canonical_name:"Casa Nissei", priority:3 },
-    { canonical_name:"Sanma Hotel", priority:3 },
-    { canonical_name:"Tarobá Hotel", priority:3 },
-    { canonical_name:"Viale Cataratas Hotel & Eventos", priority:3 },
-    { canonical_name:"Rafain Palace Hotel & Convention Center", priority:3 },
-    { canonical_name:"Churrascaria Rafain Show", priority:3 },
-    { canonical_name:"La Reserva Virgin Lodge", priority:3 },
-    { canonical_name:"Guaminí Misión Hotel", priority:3 },
-    { canonical_name:"Selvaje Lodge Iguazu", priority:3 },
-    { canonical_name:"Raíces Esturión Hotel", priority:3 },
-    { canonical_name:"Grand Crucero Iguazú Hotel", priority:3 },
-    { canonical_name:"Hotel Casino Acaray", priority:3 },
-    { canonical_name:"Ruinas de San Ignacio Miní", priority:4 },
-    { canonical_name:"Saltos del Moconá", priority:4 },
-    { canonical_name:"Hito Tres Fronteras - Paraguay", priority:4 },
-    { canonical_name:"Tucan Hostel", priority:4 },
-    { canonical_name:"Concept Design Hostel & Suites", priority:4 },
-    { canonical_name:"Tetris Container Hostel", priority:4 },
-    { canonical_name:"Hostel Wanderlust", priority:4 },
-    { canonical_name:"Overo Lodge & Selva", priority:4 },
-    { canonical_name:"Luz Hotel by Castelo Itaipava", priority:4 },
-    { canonical_name:"Hotel Bella Italia", priority:4 },
-    { canonical_name:"Mirante Hotel", priority:4 },
-    { canonical_name:"Wyndham Foz do Iguaçu", priority:4 },
-    { canonical_name:"Wyndham Golden Foz Suites", priority:4 },
-    { canonical_name:"Hotel Colonial Iguaçu", priority:4 },
-    { canonical_name:"Complexo Eco Cataratas Resort by SJ", priority:4 },
-    { canonical_name:"La Cantera Jungle Lodge", priority:4 },
-    { canonical_name:"Yvy Hotel de Selva", priority:4 },
-    { canonical_name:"Palma Real Posada", priority:4 },
-    { canonical_name:"Marcopolo Suites Iguazu", priority:4 },
-    { canonical_name:"Pirayu Lodge Resort", priority:4 },
-    { canonical_name:"Howard Johnson Plaza Ciudad del Este", priority:4 },
-    { canonical_name:"Rio Hotel by Bourbon Ciudad del Este", priority:4 },
-    { canonical_name:"Convair Hotel", priority:4 },
-    { canonical_name:"Puerto de Puerto Iguazú", priority:4 },
-    { canonical_name:"Porto Meira", priority:4 },
-    { canonical_name:"Puerto de Presidente Franco", priority:4 },
-    { canonical_name:"Zona 600 Hectáreas", priority:4 },
-    { canonical_name:"Centro de Puerto Iguazú", priority:4 },
-    { canonical_name:"Corredor Turístico Avenida das Cataratas", priority:4 },
-    { canonical_name:"Centro de Foz do Iguaçu", priority:4 },
-    { canonical_name:"Microcentro de Ciudad del Este", priority:4 },
-    { canonical_name:"Centro de Convenciones Rafain Palace", priority:4 },
-  ];
-  const nameToId = new Map<string, string>();
-  const places = await getDbv().execute("SELECT place_id, canonical_name FROM places");
-  for (const row of places.rows as any[]) {
-    nameToId.set(row.canonical_name, row.place_id);
-  }
-  for (const p of priorityData) {
-    const pid = nameToId.get(p.canonical_name);
-    if (!pid) { console.error("[seedTransferPriority] place_id not found for canonical_name:", p.canonical_name); continue; }
-    try {
-      await getDbv().execute({
-        sql: "INSERT OR IGNORE INTO transfer_priority (place_id, priority) VALUES (?, ?)",
-        args: [pid, p.priority],
-      });
-    } catch (e) { console.error("[seedTransferPriority] error inserting:", p, e); }
-  }
-}
-
 function levenshtein(a: string, b: string): number {
   const m = a.length, n = b.length;
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
@@ -2099,46 +1566,6 @@ export async function resolveAlias(text: string): Promise<{ resolved: boolean; n
     return { resolved: true, names: [bestCanonical] };
   }
   return { resolved: false, names: [text] };
-}
-
-// ========== PLACES CATALOG QUERIES ==========
-
-export async function getPlaceById(placeId: string): Promise<PlaceRow | null> {
-  return queryOne<PlaceRow>("SELECT * FROM places WHERE place_id = ?", [placeId]);
-}
-
-export async function getAliasesForPlace(placeId: string): Promise<AliasRow[]> {
-  return query<AliasRow>("SELECT * FROM aliases WHERE place_id = ?", [placeId]);
-}
-
-export async function getPlacesByType(placeType: string): Promise<PlaceRow[]> {
-  return query<PlaceRow>("SELECT * FROM places WHERE place_type = ? AND active_status = 'active'", [placeType]);
-}
-
-export async function resolvePlaceByAlias(text: string): Promise<PlaceResolution | null> {
-  if (!text) return null;
-  const lower = text.toLowerCase().trim();
-  const aliasRow = await queryOne<AliasRow & { canonical_name?: string; place_type?: string }>(
-    `SELECT a.*, p.canonical_name, p.place_type
-     FROM aliases a
-     JOIN places p ON p.place_id = a.place_id
-     WHERE LOWER(a.alias) = ?
-     LIMIT 1`,
-    [lower]
-  );
-  if (!aliasRow) return null;
-  const place = await getPlaceById(aliasRow.place_id);
-  if (!place) return null;
-  const aliases = await getAliasesForPlace(aliasRow.place_id);
-  const priorityRow = await queryOne<TransferPriorityRow>(
-    "SELECT * FROM transfer_priority WHERE place_id = ?",
-    [aliasRow.place_id]
-  );
-  return {
-    place,
-    aliases,
-    priority: priorityRow?.priority ?? null,
-  };
 }
 
 // ========== CHAT SESSIONS (Slot-Filling) ==========
@@ -2290,39 +1717,4 @@ export async function deleteConnectionKey(key: string): Promise<void> {
 
 export function getDbInstance(): LibSqlClient {
   return getDbv();
-}
-
-// ========== DEBUG LOG (observability temporal AHORA-CALIENTE) ==========
-
-export interface DebugLogRow {
-  id: number;
-  created_at: number;
-  source: string;
-  step: string;
-  payload: string | null;
-}
-
-export async function logDebug(source: string, step: string, payload?: string): Promise<void> {
-  try {
-    await getDbv().execute({
-      sql: "INSERT INTO debug_log (source, step, payload) VALUES (?, ?, ?)",
-      args: [source, step, payload ?? null],
-    });
-  } catch (e) {
-    console.error("[logDebug] error:", e);
-  }
-}
-
-export async function getDebugLog(filterSource?: string, limit = 100): Promise<DebugLogRow[]> {
-  if (filterSource) {
-    return query<DebugLogRow>(
-      "SELECT * FROM debug_log WHERE source = ? ORDER BY id DESC LIMIT ?",
-      [filterSource, limit]
-    );
-  }
-  return query<DebugLogRow>("SELECT * FROM debug_log ORDER BY id DESC LIMIT ?", [limit]);
-}
-
-export async function clearDebugLog(): Promise<void> {
-  await getDbv().execute("DELETE FROM debug_log");
 }

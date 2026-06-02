@@ -30,8 +30,6 @@ import {
   upsertChatSession,
   resetChatSession,
   getChatSession,
-  logDebug,
-  cancelConsultasByPhone,
 } from "@/lib/db/database";
 import { generateGroqReply, generateGroqExtraction } from "@/lib/ai/groq";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
@@ -56,7 +54,6 @@ import {
   getWorkflow,
   advanceToSlotSelection,
 } from "@/lib/utils/conversation-workflow";
-import { isAhoraUrgency } from "./ahora.service";
 
 const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?(?:\s*\|\s*([^|\]]+?))?\]/i;
 
@@ -224,7 +221,6 @@ const HABLAR_HUMANO = [
 
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   try {
-    await logDebug("lead", "01_handle_lead_enter", JSON.stringify({ phone, text: text.substring(0, 100) }));
     console.log(`[DEBUG_LEAD] phone=${phone} text="${text.substring(0, 60)}"`);
     const trimmed = text.trim();
     const lower = trimmed.toLowerCase();
@@ -245,10 +241,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
       if (FEATURE_CONFIDENCE_MATCHING) {
         await resetChatSession(phone);
-      }
-      const canceladas = await cancelConsultasByPhone(phone);
-      if (canceladas > 0) {
-        console.log(`[LIMPIAR] Canceladas ${canceladas} consulta(s) previas para ${phone}`);
       }
       const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
       const welcome = isStructured
@@ -396,16 +388,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
 
     await insertMessage(conversation.id, "user", text);
-
-    // === AHORA-CALIENTE FAST PATH ===
-    if (FEATURE_CONFIDENCE_MATCHING && isAhoraUrgency(text)) {
-      await logDebug("lead", "02_ahora_urgency_detected", JSON.stringify({ text: text.substring(0, 100) }));
-      const { handleAhoraMessage } = await import("./ahora.service");
-      await logDebug("lead", "03_entering_ahora_handler");
-      await handleAhoraMessage(phone, text, conversation.id, customerName);
-      await logDebug("lead", "04_returned_from_ahora");
-      return;
-    }
 
     // === CONFIRMATION CHECK (Phase 5-6) ===
     // If workflow_state is "awaiting_confirmation" and user affirms → dispatch directly
@@ -779,7 +761,7 @@ export async function handleSlotResponse(phone: string, buttonId: string): Promi
   await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
 }
 
-export async function escalateTrip(convId: number, phone: string, trip: TripRow, urgency?: string, passengers?: number | null): Promise<void> {
+async function escalateTrip(convId: number, phone: string, trip: TripRow, urgency?: string, passengers?: number | null): Promise<void> {
   const u = (urgency || "").toLowerCase();
 
   if (u.includes("reserva")) {

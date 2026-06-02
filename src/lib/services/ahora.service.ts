@@ -93,6 +93,7 @@ export async function handleAhoraMessage(
 
   if (confidenceResult.action === "fallback_regex") {
     await logDebug("ahora", "14_exit_action_fallback_regex", JSON.stringify({ extraction: parsed.data, confidence: confidenceResult }));
+    await sendWhatsAppMessage(phone, "😅 No entendí bien el destino. Podés decirme \"desde [origen] hasta [destino]\"? Ej: \"desde el aeropuerto hasta el centro\".");
     return;
   }
 

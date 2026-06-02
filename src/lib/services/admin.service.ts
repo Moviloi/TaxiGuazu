@@ -117,8 +117,7 @@ function driverFloor(driver: DriverRow, tripPiso: number, pisoLow?: number | nul
 
 export async function broadcastTripToDrivers(
   trip: TripRow, convId: number, clientPhone: string,
-  urgency?: string, passengers?: number | null,
-  mode: 'broadcast' | 'disponible' = 'broadcast'
+  urgency?: string, passengers?: number | null
 ): Promise<void> {
   const country = detectCountry(trip.origin || "");
   const filters: { country?: string; minCapacity?: number; strictMinCapacity?: boolean } = {};
@@ -293,18 +292,13 @@ Ningún chofer activo en este turno. Reenviá manualmente.`);
   const schInfo = scheduledLabel(trip);
 
   await Promise.all(eligible.map(driver => {
-    const prefix = mode === 'disponible'
-      ? '⏳ El cliente está consultando disponibilidad.\n\n'
-      : '';
-    const body = `${prefix}${icon} *${label}*${schInfo}${shiftInfo}${pkgInfo}
+    const body = `${icon} *${label}*${schInfo}${shiftInfo}${pkgInfo}
 
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
 Valor garantizado: $${driver.actual_payout.toLocaleString("es-AR")}${passengers ? `\nPasajeros: ${passengers}` : ""}`;
-    const buttonId = mode === 'disponible' ? `disponible_${convId}` : `aceptar_${convId}`;
-    const buttonTitle = mode === 'disponible' ? "Disponible" : "✅ Aceptar";
     return sendInteractiveButtons(driver.phone, body, [
-      { id: buttonId, title: buttonTitle },
+      { id: `aceptar_${convId}`, title: "✅ Aceptar" },
     ]).then(() => incrementOfferReceived(driver.phone))
       .catch(e => console.error(`[BROADCAST] Failed to send to ${driver.phone}:`, e));
   }));

@@ -20,7 +20,6 @@ import {
   setConnectionFlag,
   setConnectionValue,
   deleteConnectionKey,
-  updateTripAssignmentSource,
 } from "../db/database";
 import { notifyAdmin, broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2 } from "../services/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "../whatsapp/sender";
@@ -37,10 +36,6 @@ import {
 
 export async function checkTimeouts(): Promise<void> {
   await sendPendingSurveys();
-
-  const { checkPendingFlotaBroadcasts, cleanupStaleCandidates } = await import("../services/ahora.service");
-  await checkPendingFlotaBroadcasts();
-  await cleanupStaleCandidates();
 
   // === DISPATCH LEVELS ===
 
@@ -110,17 +105,6 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
 
     // Check if contingency was already offered for this conv
     if (await getConnectionValueFlag(`contingency_offered_${ctx.conversationId}`)) continue;
-
-    // Check if this is AHORA-CALIENTE (pre-broadcast mode)
-    if (await getConnectionValueFlag(`ahora_caliente_${ctx.conversationId}`)) {
-      console.log(`[TIMEOUT] AHORA-CALIENTE waiting_driver expirado conv ${ctx.conversationId}, degradando a broadcast`);
-      await deleteConnectionKey(`ahora_caliente_${ctx.conversationId}`);
-      if (trip) {
-        await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone, "ahora", trip.passengers, "broadcast");
-        await updateTripAssignmentSource(trip.trip_id, "BROADCAST");
-      }
-      continue;
-    }
 
     if (trip && trip.passengers && trip.passengers > 4) {
       // Store original trip data for contingency handler
