@@ -624,7 +624,27 @@ export async function getTripById(tripId: string): Promise<TripRow | null> {
 }
 
 export async function getActiveTripByPhone(clientPhone: string): Promise<TripRow | null> {
-  return queryOne<TripRow>("SELECT * FROM trips WHERE client_phone = ? AND status NOT IN ('completado', 'cancelado') ORDER BY created_at DESC LIMIT 1", [clientPhone]);
+  // Trips en estado 'consulta' solo se consideran activos si tienen menos de 1 hora
+  return queryOne<TripRow>(
+    `SELECT * FROM trips
+     WHERE client_phone = ?
+       AND status NOT IN ('completado', 'cancelado')
+       AND (status != 'consulta' OR created_at > unixepoch() - 3600)
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [clientPhone]
+  );
+}
+
+export async function cancelConsultasByPhone(phone: string): Promise<number> {
+  const rows = await query<{trip_id: string}>(
+    "SELECT trip_id FROM trips WHERE client_phone = ? AND status = 'consulta'",
+    [phone]
+  );
+  for (const row of rows) {
+    await updateTripState(row.trip_id, "cancelado");
+  }
+  return rows.length;
 }
 
 export async function getTripByAssignedDriver(driverPhone: string): Promise<TripRow | null> {

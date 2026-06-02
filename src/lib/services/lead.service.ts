@@ -31,6 +31,7 @@ import {
   resetChatSession,
   getChatSession,
   logDebug,
+  cancelConsultasByPhone,
 } from "@/lib/db/database";
 import { generateGroqReply, generateGroqExtraction } from "@/lib/ai/groq";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
@@ -244,6 +245,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
       if (FEATURE_CONFIDENCE_MATCHING) {
         await resetChatSession(phone);
+      }
+      const canceladas = await cancelConsultasByPhone(phone);
+      if (canceladas > 0) {
+        console.log(`[LIMPIAR] Canceladas ${canceladas} consulta(s) previas para ${phone}`);
       }
       const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
       const welcome = isStructured
