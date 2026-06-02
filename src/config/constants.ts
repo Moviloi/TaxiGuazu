@@ -36,3 +36,7 @@ export const GROQ_EXTRACTION_TEMPERATURE = 0.1;
 export const FEATURE_CONFIDENCE_MATCHING = true;
 export const CONFIDENCE_PROCEED = 0.7;
 export const CONFIDENCE_CLARIFY = 0.3;
+
+// AHORA-CALIENTE
+export const TITULAR_DELAY_MS = 15 * 1000;
+export const STALE_CANDIDATE_CLEANUP_MS = 30 * 60 * 1000;

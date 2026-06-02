@@ -40,8 +40,8 @@ import { handleAdminCommand } from "./admin-commands";
 import { FEATURE_CONFIDENCE_MATCHING, SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import type { TripRow } from "@/lib/db/types";
 import { calculateSlotConfidence } from "@/lib/services/confidence";
-import { evaluateWorkflowTransition } from "@/lib/services/state-machine";
-import type { SlotWorkflowContext } from "@/lib/services/state-machine";
+import { evaluateWorkflowTransition } from "@/lib/services/slot-workflow";
+import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
 import { matchTariff } from "@/lib/services/tariff-matcher";
 import type { TariffMatchResult } from "@/lib/services/tariff-matcher";
 import {
@@ -53,7 +53,8 @@ import {
   resetToIdle,
   getWorkflow,
   advanceToSlotSelection,
-} from "@/lib/utils/state-machine";
+} from "@/lib/utils/conversation-workflow";
+import { isAhoraUrgency } from "./ahora.service";
 
 const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?(?:\s*\|\s*([^|\]]+?))?\]/i;
 
@@ -388,6 +389,13 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
 
     await insertMessage(conversation.id, "user", text);
+
+    // === AHORA-CALIENTE FAST PATH ===
+    if (FEATURE_CONFIDENCE_MATCHING && isAhoraUrgency(text)) {
+      const { handleAhoraMessage } = await import("./ahora.service");
+      await handleAhoraMessage(phone, text, conversation.id, customerName);
+      return;
+    }
 
     // === CONFIRMATION CHECK (Phase 5-6) ===
     // If workflow_state is "awaiting_confirmation" and user affirms → dispatch directly
@@ -761,7 +769,7 @@ export async function handleSlotResponse(phone: string, buttonId: string): Promi
   await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
 }
 
-async function escalateTrip(convId: number, phone: string, trip: TripRow, urgency?: string, passengers?: number | null): Promise<void> {
+export async function escalateTrip(convId: number, phone: string, trip: TripRow, urgency?: string, passengers?: number | null): Promise<void> {
   const u = (urgency || "").toLowerCase();
 
   if (u.includes("reserva")) {

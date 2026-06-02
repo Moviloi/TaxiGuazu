@@ -16,6 +16,8 @@ import {
   handleComisionRevision,
   handleContingenciaSi,
   handleContingenciaNo,
+  handleDriverDisponible,
+  handleDriverVoy,
 } from "@/lib/services/driver.service";
 import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
@@ -101,6 +103,22 @@ export async function POST(request: NextRequest) {
         const convId = parseInt(buttonId.split("_")[1]);
         if (convId) {
           await handleDriverButtonAccept(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
+      }
+
+      if (buttonId.startsWith("disponible_")) {
+        const convId = parseInt(buttonId.split("_")[1]);
+        if (convId) {
+          await handleDriverDisponible(convId, phone);
+          return NextResponse.json({ status: "ok" }, { status: 200 });
+        }
+      }
+
+      if (buttonId.startsWith("voy_")) {
+        const convId = parseInt(buttonId.split("_")[1]);
+        if (convId) {
+          await handleDriverVoy(convId, phone);
           return NextResponse.json({ status: "ok" }, { status: 200 });
         }
       }

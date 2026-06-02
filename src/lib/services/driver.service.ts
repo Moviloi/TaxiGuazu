@@ -3,7 +3,7 @@ import {
   getWorkflow,
   advanceToNivel1,
   advanceToWaitingDriver,
-} from "@/lib/utils/state-machine";
+} from "@/lib/utils/conversation-workflow";
 import {
   getActiveTripByPhone,
   getDriverByPhone,
@@ -210,7 +210,6 @@ async function assignDriver(workflow: { conversation_id?: number; conversationId
     ? `👤 *Cliente*: ${customerName} (${clientPhone})`
     : `👤 *Cliente*: ${clientPhone}`;
 
-  // Send clean post-acceptance message with actions
   const summary = `✅ *Viaje aceptado*
 
 ${clientLabel}
@@ -223,10 +222,17 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
 📊 *TG*: $${commission.toLocaleString("es-AR")}
 💵 *Recibís*: $${payout.toLocaleString("es-AR")}`;
 
-  await sendInteractiveButtons(driverPhone, summary, [
-    { id: `realizado_${convId}`, title: "✅ Realizado" },
-    { id: `enviaje_${convId}`, title: "🔄 En viaje" },
-  ]);
+  const isAhoraCaliente = await getConnectionValueFlag(`ahora_caliente_${convId}`);
+  if (isAhoraCaliente) {
+    await sendInteractiveButtons(driverPhone, summary, [
+      { id: `voy_${convId}`, title: "🚗 Voy" },
+    ]);
+  } else {
+    await sendInteractiveButtons(driverPhone, summary, [
+      { id: `realizado_${convId}`, title: "✅ Realizado" },
+      { id: `enviaje_${convId}`, title: "🔄 En viaje" },
+    ]);
+  }
 
   // Split proforma: instruction first, then standalone copiable text
   await sendWhatsAppMessage(driverPhone, `📋 *Recomendación de seguridad* — copiá y pegá este mensaje al cliente:`);
@@ -508,4 +514,14 @@ Conversación: ${convId}
 
 El cliente rechazó la opción de dos autos. Contactarlo manualmente.`);
   console.log(`[CONTINGENCIA] Rechazada para conv ${convId}`);
+}
+
+export async function handleDriverDisponible(convId: number, driverPhone: string): Promise<void> {
+  const { handleDriverDisponible: impl } = await import("./ahora.service");
+  await impl(convId, driverPhone);
+}
+
+export async function handleDriverVoy(convId: number, driverPhone: string): Promise<void> {
+  const { handleDriverVoy: impl } = await import("./ahora.service");
+  await impl(convId, driverPhone);
 }
