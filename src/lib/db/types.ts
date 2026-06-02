@@ -52,6 +52,9 @@ export interface TripRow {
   tariff_id: number | null;
   piso_base: number | null;
   garantizado_base: number | null;
+  assignment_source: string | null;
+  driver_commitment_at: number | null;
+  driver_available_at: number | null;
 }
 
 export interface DriverRow {
@@ -197,4 +200,37 @@ export interface ChatSessionRow {
   workflow_state: string | null;
   clarify_field: string | null;
   updated_at: number;
+}
+
+export interface PlaceRow {
+  place_id: string;
+  canonical_name: string;
+  official_name: string;
+  google_maps_name: string;
+  place_type: "airport" | "bus_terminal" | "border_crossing" | "attraction" | "shopping" | "hotel" | "resort" | "hostel" | "restaurant" | "casino" | "event_center" | "tourist_area" | "port" | "other";
+  city: "Puerto Iguazú" | "Foz do Iguaçu" | "Ciudad del Este";
+  country: "Argentina" | "Brasil" | "Paraguay";
+  latitude: number | null;
+  longitude: number | null;
+  tourist_relevance_score: number;
+  operational_zone: string | null;
+  active_status: "active" | "inactive";
+}
+
+export interface AliasRow {
+  id: number;
+  place_id: string;
+  alias: string;
+  language: "es" | "en" | "pt";
+}
+
+export interface TransferPriorityRow {
+  place_id: string;
+  priority: number;
+}
+
+export interface PlaceResolution {
+  place: PlaceRow;
+  aliases: AliasRow[];
+  priority: number | null;
 }
