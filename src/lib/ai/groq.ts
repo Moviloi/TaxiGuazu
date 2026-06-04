@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import { getExtractionPrompt } from "./extraction-prompt";
+import { getExtractionPrompt, getExtractionContextMessage, type ExtractionContext } from "./extraction-prompt";
 import { getEnv } from "@/config/env";
 import { GROQ_MODEL, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS } from "@/config/constants";
 
@@ -33,13 +33,20 @@ function detectLang(text: string): "es" | "en" | "pt" {
 // generateGroqExtraction es el ÚNICO call al LLM permitido. Se usa solo para
 // extracción de slots (rol CORE). Cualquier uso fuera de eso es bypass.
 //
+// v5.0 FASE 5B.4: acepta `extractionContext` (roleLock + slotStability +
+// prevSlots) de CORE para que el LLM no contradiga decisiones sintácticas.
+// El contexto se inyecta como system message adicional, después del prompt
+// base y antes del system de idioma/nombre. Así el LLM ve primero las
+// reglas, luego las约束 (constraints) de CORE, luego el metadata.
+//
 // generateGroqReply() fue ELIMINADO del output final. El handler (handler.ts)
 // es la única fuente del texto que se envía al cliente. Esta función queda
 // compilable por backward-compat pero debe considerarse LEGACY.
 export async function generateGroqExtraction(
   userText: string,
   history: Message[],
-  customerName?: string
+  customerName?: string,
+  extractionContext?: ExtractionContext,
 ): Promise<Record<string, any> | null> {
   const groq = getGroq();
   if (!groq) return null;
@@ -48,14 +55,22 @@ export async function generateGroqExtraction(
 
   const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: getExtractionPrompt() },
-    {
-      role: "system",
-      content: [
-        `IDIOMA_DETECTADO: ${lang.toUpperCase()}`,
-        `NOMBRE_CLIENTE_CONOCIDO: ${customerName || "ninguno"}`,
-      ].join(" | "),
-    },
   ];
+
+  // v5.0 FASE 5B.4: inyectar contexto de CORE (role lock + prev slots) como
+  // system message adicional. El LLM debe respetarlo, no contradecirlo.
+  const coreContext = getExtractionContextMessage(extractionContext);
+  if (coreContext) {
+    messages.push({ role: "system", content: coreContext });
+  }
+
+  messages.push({
+    role: "system",
+    content: [
+      `IDIOMA_DETECTADO: ${lang.toUpperCase()}`,
+      `NOMBRE_CLIENTE_CONOCIDO: ${customerName || "ninguno"}`,
+    ].join(" | "),
+  });
 
   const nativeHistory = history
     .filter((m) => m.role !== "system")

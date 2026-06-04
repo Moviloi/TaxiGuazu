@@ -1,3 +1,19 @@
+import type { RoleLock, SlotStabilityMap } from "./types";
+
+// v5.0 FASE 5B.4: el prompt base se complementa con contexto dinámico sobre
+// lo que CORE ya detectó. Si CORE fijó role lock para origin/destination, el
+// LLM NO debe contradecir (ni re-extraer ese rol). Si hay prev slots de turnos
+// anteriores, el LLM debe enfocarse solo en info NUEVA del mensaje actual.
+//
+// Esto reduce alucinaciones y costos de tokens, y mejora consistencia entre
+// la capa sintáctica (CORE) y la capa semántica (LLM).
+
+export interface ExtractionContext {
+  roleLock?: RoleLock;
+  slotStability?: SlotStabilityMap;
+  prevSlots?: Record<string, string | number>;
+}
+
 export function getExtractionPrompt(): string {
   return `
 Eres un extractor de datos de transporte turístico. Dado el mensaje del usuario, extraé SOLO los datos que puedas identificar con certeza.
@@ -27,4 +43,36 @@ Reglas:
 NO inventes datos que no estén explícitamente en el mensaje del usuario ni en el historial reciente.
 Respuesta SOLO JSON, sin texto adicional.
 `.trim();
+}
+
+// v5.0 FASE 5B.4: genera un system message adicional con el contexto que CORE
+// ya detectó. El LLM usa esto como约束 (constraint) y NO contradice roles fijos.
+export function getExtractionContextMessage(ctx: ExtractionContext | undefined): string {
+  if (!ctx) return "";
+
+  const lines: string[] = [];
+  lines.push("CONTEXTO_CORE (FASE 5B.4):");
+
+  if (ctx.roleLock?.origin) {
+    lines.push(`- ROLE_LOCK_ORIGIN: "${ctx.roleLock.origin}" (CORE detectó "estoy en"/"desde"). NO contradecir.`);
+  }
+  if (ctx.roleLock?.destination) {
+    lines.push(`- ROLE_LOCK_DESTINATION: "${ctx.roleLock.destination}" (CORE detectó "voy a"/"ir a"). NO contradecir.`);
+  }
+  if (ctx.slotStability?.origin && ctx.slotStability.origin !== "open") {
+    lines.push(`- ORIGIN_STABILITY: ${ctx.slotStability.origin}`);
+  }
+  if (ctx.slotStability?.destination && ctx.slotStability.destination !== "open") {
+    lines.push(`- DESTINATION_STABILITY: ${ctx.slotStability.destination}`);
+  }
+  if (ctx.prevSlots) {
+    const entries = Object.entries(ctx.prevSlots).filter(([, v]) => v != null && String(v).trim() !== "");
+    if (entries.length > 0) {
+      lines.push(`- PREV_SLOTS_PERSISTIDOS: ${entries.map(([k, v]) => `${k}="${v}"`).join(", ")}`);
+      lines.push("  → NO re-extraer valores ya persistidos. Solo agregar info NUEVA del mensaje actual.");
+    }
+  }
+
+  if (lines.length === 1) return "";
+  return lines.join("\n");
 }

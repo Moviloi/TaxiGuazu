@@ -398,7 +398,16 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         console.log("[LEGACY BLOCKED] generateGroqExtraction", extractionGuard);
         return;
       }
-      const raw = await generateGroqExtraction(text, history, customerName || undefined);
+      // v5.0 FASE 5B.4: detectar role lock + prev slots ANTES del LLM call
+      // para inyectar el约束 (constraint) de CORE en el prompt. El LLM
+      // debe respetar role lock y no contradecir prev slots persistidos.
+      coreDecisionEarly = core(text);
+      prevSlotsEarly = await loadPreviousSlots(phone);
+      const raw = await generateGroqExtraction(text, history, customerName || undefined, {
+        roleLock: coreDecisionEarly.roleLock,
+        slotStability: coreDecisionEarly.slotStability,
+        prevSlots: prevSlotsEarly,
+      });
       if (raw) {
         console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
         parsed = TripExtractionSchema.safeParse(raw);
@@ -447,12 +456,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             }
           }
 
-          // v5.0 FASE 5B.3: detectar role lock + cargar prev slots ANTES del
-          // upsert para que el merge completo (role lock > LLM > prev) se guarde
-          // en `chat_sessions.slots`. Si no, los prev slots no persisten entre
-          // turnos (e.g., user dice "a las 15hs" → prev origin/destination se pierden).
-          coreDecisionEarly = core(text);
-          prevSlotsEarly = await loadPreviousSlots(phone);
+          // v5.0 FASE 5B.3: aplicar merge sobre confidenceResult.slots
+          // (formato value/score/reason) usando la cadena de prioridad
+          // role lock > LLM > prev. coreDecisionEarly y prevSlotsEarly ya
+          // fueron computados antes del LLM call (FASE 5B.4 los necesita
+          // para inyectar约束 en el prompt del LLM).
           // Aplicar merge sobre confidenceResult.slots (formato value/score/reason)
           // usando la misma cadena de prioridad que buildExtractionContext.
           for (const [k, v] of Object.entries(prevSlotsEarly)) {
