@@ -385,6 +385,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
     let confidenceResult: ExtractionResult | undefined;
     let tariffMatch: TariffMatchResult | undefined;
+    // v5.0 FASE 5B.3: declarados en scope externo para reuso entre LLM extraction
+    // y policy handler. Garantiza que prev slots + role lock se persisten en
+    // chat_sessions Y se propagan al extractionCtx del handler.
+    let coreDecisionEarly: ReturnType<typeof core> | undefined;
+    let prevSlotsEarly: Record<string, string> = {};
     try {
       console.log("[EXTRACTION] Iniciando extraction para:", text.substring(0, 80));
       // GUARD: assert CORE → ROUTER → POLICY state before LLM extraction.
@@ -442,14 +447,51 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             }
           }
 
+          // v5.0 FASE 5B.3: detectar role lock + cargar prev slots ANTES del
+          // upsert para que el merge completo (role lock > LLM > prev) se guarde
+          // en `chat_sessions.slots`. Si no, los prev slots no persisten entre
+          // turnos (e.g., user dice "a las 15hs" → prev origin/destination se pierden).
+          coreDecisionEarly = core(text);
+          prevSlotsEarly = await loadPreviousSlots(phone);
+          // Aplicar merge sobre confidenceResult.slots (formato value/score/reason)
+          // usando la misma cadena de prioridad que buildExtractionContext.
+          for (const [k, v] of Object.entries(prevSlotsEarly)) {
+            if (v != null && String(v).trim() !== "") {
+              if (!confidenceResult.slots[k]) {
+                confidenceResult.slots[k] = { value: String(v), score: 0.8, reason: "previous_turn" };
+              }
+            }
+          }
+          if (coreDecisionEarly.roleLock?.origin) {
+            confidenceResult.slots.origin = {
+              value: coreDecisionEarly.roleLock.origin,
+              score: 1.0,
+              reason: "core_role_lock",
+            };
+          }
+          if (coreDecisionEarly.roleLock?.destination) {
+            confidenceResult.slots.destination = {
+              value: coreDecisionEarly.roleLock.destination,
+              score: 1.0,
+              reason: "core_role_lock",
+            };
+          }
+
           workflowResult = await evaluateWorkflowTransition(phone, confidenceResult);
 
+          // Persistir slots mergeados en `chat_sessions.slots` (formato plano).
+          const mergedSlotsForDb: Record<string, any> = {};
+          for (const [k, v] of Object.entries(confidenceResult.slots)) {
+            if (v && v.value != null && String(v.value).trim() !== "") {
+              mergedSlotsForDb[k] = v.value;
+            }
+          }
           const confByField: Record<string, number> = {};
           for (const [k, v] of Object.entries(confidenceResult.slots)) {
             confByField[k] = v.score;
           }
 
-          await upsertChatSession(phone, parsed.data as Record<string, any>, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
+          await upsertChatSession(phone, mergedSlotsForDb, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
 
           extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, tariffMatch);
           console.log("[EXTRACTION] extractionNote generado:", extractionNote.substring(0, 150));
@@ -533,17 +575,17 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     // con la ExtractionContext (slots confirmados, confidence, workflow state, tariff).
     const lang = detectLeadLang(text);
     const parsedData: TripExtraction | undefined = parsed && parsed.success ? parsed.data : undefined;
-    // v5.0 FASE 5B.2: detectar role lock + slot stability con CORE antes de
-    // pasar al handler. CORE ya fue invocado al inicio de este request (L173)
-    // y la respuesta del primer handleMessage tiene el roleLock en `decision.core`.
-    const coreDecision = core(text);
+    // v5.0 FASE 5B.2/5B.3: coreDecision + prevSlots ya fueron computados arriba
+    // (antes del upsertChatSession) para que el merge se persista en chat_sessions.
+    // Aquí reusamos los mismos valores para no duplicar el cálculo.
     const extractionCtx = buildExtractionContext(
       parsedData,
       confidenceResult,
       workflowResult,
       tariffMatch,
-      coreDecision.roleLock,
-      coreDecision.slotStability,
+      coreDecisionEarly?.roleLock,
+      coreDecisionEarly?.slotStability,
+      prevSlotsEarly,
     );
     const handlerResult = handleMessage(text, "RESERVA", {
       history,
@@ -699,6 +741,12 @@ function detectLeadLang(text: string): Lang {
 // v5.0 FASE 5B.2: si el CORE detectó role lock para origin/destination, esos
 // slots sobrescriben los del LLM. La sintaxis del input es la fuente de verdad
 // para el rol; el LLM solo completa valores cuando no hay role lock.
+//
+// v5.0 FASE 5B.3: además del role lock, se hace merge con prev slots de
+// `chat_sessions.slots` (multi-turn persistence). Cadena de prioridad:
+//   1. role lock de CORE (score 1.0, más fuerte)
+//   2. LLM extraction del turno actual (score 0.9)
+//   3. prev slots de turnos anteriores (score 0.8, base)
 function buildExtractionContext(
   _parsedData: TripExtraction | undefined,
   confidenceResult: ExtractionResult | undefined,
@@ -706,14 +754,30 @@ function buildExtractionContext(
   tariffMatch: TariffMatchResult | undefined,
   roleLock?: RoleLock,
   slotStability?: SlotStabilityMap,
+  prevSlots?: Record<string, string>,
 ): ExtractionContext | undefined {
   if (!workflowResult) return undefined;
 
-  // Base slots: lo que vino del LLM (o regex fallback).
-  const baseSlots = confidenceResult?.slots ?? {};
-  const slots: Record<string, any> = { ...baseSlots };
+  // Cadena de prioridad: role lock > LLM > prev slots.
+  // 1. Empezar con prev slots (base).
+  const slots: Record<string, { value: string | number | null; score: number; reason: string }> = {};
+  if (prevSlots) {
+    for (const [k, v] of Object.entries(prevSlots)) {
+      if (v != null && String(v).trim() !== "") {
+        slots[k] = { value: String(v), score: 0.8, reason: "previous_turn" };
+      }
+    }
+  }
 
-  // Aplicar role lock de CORE: sobrescribe lo del LLM si hay conflicto.
+  // 2. Sobrescribir con LLM (mayor score).
+  const baseSlots = confidenceResult?.slots ?? {};
+  for (const [k, v] of Object.entries(baseSlots)) {
+    if (v && v.value != null && String(v.value).trim() !== "") {
+      slots[k] = v;
+    }
+  }
+
+  // 3. Sobrescribir con role lock (más fuerte).
   if (roleLock?.origin) {
     slots.origin = {
       value: roleLock.origin,
@@ -747,4 +811,24 @@ function buildExtractionContext(
     roleLock: roleLock ?? { origin: null, destination: null },
     slotStability: slotStability ?? { origin: "open", destination: "open" },
   };
+}
+
+// v5.0 FASE 5B.3: carga prev slots de `chat_sessions.slots` (multi-turn).
+// Retorna JSON plano parseado, o {} si no hay session. Tolerante a JSON inválido.
+async function loadPreviousSlots(phone: string): Promise<Record<string, string>> {
+  try {
+    const session = await getChatSession(phone);
+    if (!session?.slots) return {};
+    const parsed = JSON.parse(session.slots);
+    if (!parsed || typeof parsed !== "object") return {};
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (v != null && String(v).trim() !== "") {
+        result[k] = String(v);
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
 }
