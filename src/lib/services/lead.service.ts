@@ -8,23 +8,13 @@ import {
   createTrip,
   setConversationTrip,
   updateTripState,
-  updateTripScheduledAt,
   updateTripTariff,
-  updateTripFlight,
-  updateTripHotel,
-  updateTripPassengers,
-  updateTripOrigin,
-  updateTripDestination,
-  updateTripPriceBase,
-  findTariff,
   getDiscountsForTariff,
   getDriverByPhone,
   getDriverExpiry,
   getPrincipalDriver,
   updateDriverShiftIfNull,
-  getActiveSlots,
   clearConversationHistory,
-  createLead,
   setCustomerName,
   getCustomerName,
   upsertChatSession,
@@ -33,11 +23,12 @@ import {
 } from "@/lib/db/database";
 import { generateGroqReply, generateGroqExtraction } from "@/lib/ai/groq";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
+import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import { sendWhatsAppMessage, sendInteractiveList } from "@/lib/whatsapp/sender";
-import { broadcastTripToDrivers, broadcastLeadToDrivers, offerToSpecificDriver, getPrincipal2, notifyAdmin } from "./admin.service";
+import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2, notifyAdmin } from "./admin.service";
 import { handleAdminCommand } from "./admin-commands";
-import { FEATURE_CONFIDENCE_MATCHING, SESSION_INACTIVITY_48H_S } from "@/config/constants";
+import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import type { TripRow } from "@/lib/db/types";
 import { calculateSlotConfidence } from "@/lib/services/confidence";
 import { evaluateWorkflowTransition } from "@/lib/services/slot-workflow";
@@ -49,57 +40,9 @@ import {
   advanceToNivel2,
   advanceToNivel3,
   advanceToWaitingDriver,
-  advanceToGroup,
   resetToIdle,
   getWorkflow,
-  advanceToSlotSelection,
 } from "@/lib/utils/conversation-workflow";
-
-const TRIP_MARKER_REGEX = /\[DATOS_VIAJE:\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?(?:\s*\|\s*([^|\]]+?))?\]/i;
-
-const LEAD_MARKER_REGEX = /\[LEAD:\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)\s*\|\s*([^\]]+?)\s*(?:\|\s*([^\]]+?))?\]/i;
-
-function extractLeadMarker(text: string): { origin: string; destination: string; price: number; passengers: number; urgency?: string } | null {
-  const match = text.match(LEAD_MARKER_REGEX);
-  if (!match) return null;
-  return {
-    origin: match[1].trim(),
-    destination: match[2].trim(),
-    price: parseInt(match[3].replace(/[^0-9]/g, "")) || 0,
-    passengers: parseInt(match[4].replace(/[^0-9]/g, "")) || 0,
-    urgency: match[5]?.trim(),
-  };
-}
-
-function extractTripMarker(text: string): { code: string; origin: string; destination: string; price: number; passengers: number; urgency: string; scheduledAt?: number; flightNumber?: string } | null {
-  const match = text.match(TRIP_MARKER_REGEX);
-  if (!match) return null;
-  const result: any = {
-    code: match[1].trim(),
-    origin: match[2].trim(),
-    destination: match[3].trim(),
-    price: parseInt(match[4].replace(/[^0-9]/g, "")) || 0,
-    passengers: parseInt(match[5].replace(/[^0-9]/g, "")) || 0,
-    urgency: match[6].trim(),
-  };
-  if (match[7]) {
-    const dateStr = match[7].trim();
-    const ts = Date.parse(dateStr);
-    if (!isNaN(ts)) {
-      result.scheduledAt = Math.floor(ts / 1000);
-    } else {
-      result.flightNumber = dateStr;
-    }
-  }
-  if (match[8]) {
-    result.flightNumber = match[8].trim();
-  }
-  return result;
-}
-
-function stripTripMarker(text: string): string {
-  return text.replace(TRIP_MARKER_REGEX, "").replace(LEAD_MARKER_REGEX, "").trim();
-}
 
 const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
 
@@ -239,9 +182,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         await clearConversationHistory(conv.id);
         await resetToIdle(conv.id);
       }
-      if (FEATURE_CONFIDENCE_MATCHING) {
-        await resetChatSession(phone);
-      }
+      await resetChatSession(phone);
       const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
       const welcome = isStructured
         ? "Bienvenido a TaxiGuazú! Soy Cris Virtual (Asistente 24/7). ¿A dónde necesitas ir?"
@@ -374,9 +315,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (sessionReset) {
       await clearConversationHistory(conversation.id);
       await resetToIdle(conversation.id);
-      if (FEATURE_CONFIDENCE_MATCHING) {
-        await resetChatSession(phone);
-      }
+      await resetChatSession(phone);
     }
     customerName = await getCustomerName(phone);
 
@@ -391,7 +330,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // === CONFIRMATION CHECK (Phase 5-6) ===
     // If workflow_state is "awaiting_confirmation" and user affirms → dispatch directly
-    if (FEATURE_CONFIDENCE_MATCHING) {
+    {
       const session = await getChatSession(phone);
       if (session?.workflow_state === "awaiting_confirmation" && isAffirmativeMessage(text)) {
         const slots = JSON.parse(session.slots || "{}");
@@ -399,6 +338,17 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         const origin = slots.origin || "";
         const destination = slots.destination || "";
         if (origin && destination) {
+          const fleetCheck = await ensureFleetCanHandle(pax, {
+            phone,
+            convId: conversation.id,
+            origin,
+            destination,
+            source: "lead.confirmation.new_flow",
+          });
+          if (!fleetCheck.ok) {
+            await resetChatSession(phone);
+            return;
+          }
           const tariffMatch = await matchTariff(origin, destination, pax);
           const tripId = `trip_${Date.now()}`;
           await createTrip(tripId, phone, origin, destination, tariffMatch.matched ? tariffMatch.price : (slots.price || undefined), pax, slots.scheduled_at ? Math.floor(new Date(slots.scheduled_at).getTime() / 1000) : undefined, slots.flight || undefined);
@@ -431,223 +381,146 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
     }
 
-    // === CONFIDENCE-BASED EXTRACTION + ENGINE (Phases 1-4) ===
+    // === CONFIDENCE-BASED EXTRACTION + ENGINE ===
     let extractionNote: string | undefined;
     let workflowResult: SlotWorkflowContext | undefined;
-    if (FEATURE_CONFIDENCE_MATCHING) {
-      try {
-        console.log("[EXTRACTION] Iniciando extraction para:", text.substring(0, 80));
-        const raw = await generateGroqExtraction(text, history, customerName || undefined);
-        if (raw) {
-          console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
-          const parsed = TripExtractionSchema.safeParse(raw);
-          if (parsed.success) {
-            console.log("[EXTRACTION] Parse exitoso, calculando confidence...");
-            const confidenceResult = await calculateSlotConfidence(parsed.data, text);
+    try {
+      console.log("[EXTRACTION] Iniciando extraction para:", text.substring(0, 80));
+      const raw = await generateGroqExtraction(text, history, customerName || undefined);
+      if (raw) {
+        console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
+        const parsed = TripExtractionSchema.safeParse(raw);
+        if (parsed.success) {
+          console.log("[EXTRACTION] Parse exitoso, calculando confidence...");
+          const confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
-            // Phase 4: Backend tariff matching — inject real price if origin + destination known
-            let tariffMatch: TariffMatchResult | undefined;
-            if (parsed.data.origin && parsed.data.destination) {
-              const pax = parsed.data.passengers || 1;
-              console.log(`[EXTRACTION] Buscando tariff: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
-              tariffMatch = await matchTariff(parsed.data.origin, parsed.data.destination, pax);
-              console.log(`[EXTRACTION] Tariff match: matched=${tariffMatch.matched} price=${tariffMatch.price} origin="${tariffMatch.canonicalOrigin}" dest="${tariffMatch.canonicalDestination}"`);
-              if (tariffMatch.matched) {
-                parsed.data.price = tariffMatch.price;
-                confidenceResult.slots.price = { value: tariffMatch.price, score: 1.0, reason: "backend_tariff_match" };
-              } else if (parsed.data.origin || parsed.data.destination) {
-                // Fallback: re-intentar con regex sobre texto original si Groq extrajo valores no resolubles (ej. "el aeropuerto")
-                // Primero intentar extracción dirección-aware: "de X a Y"
-                let fbOrigin: string | undefined;
-                let fbDest: string | undefined;
-                const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
-                if (dirMatch) {
-                  fbOrigin = dirMatch[1].trim();
-                  fbDest = dirMatch[2].trim();
-                }
-                if (!fbOrigin || !fbDest) {
-                  const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
-                  const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-                  fbOrigin = text.match(originRx)?.[1];
-                  fbDest = text.match(destRx)?.[1];
-                }
-                if (fbOrigin && fbDest) {
-                  const fbMatch = await matchTariff(fbOrigin, fbDest, parsed.data.passengers || 1);
-                  if (fbMatch.matched) {
-                    console.log(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbMatch.price}`);
-                    tariffMatch = fbMatch;
-                    parsed.data.origin = fbOrigin;
-                    parsed.data.destination = fbDest;
-                    parsed.data.price = fbMatch.price;
-                    confidenceResult.slots.price = { value: fbMatch.price, score: 1.0, reason: "backend_tariff_match" };
-                    confidenceResult.slots.origin = { value: fbOrigin, score: 1.0, reason: "regex_fallback" };
-                    confidenceResult.slots.destination = { value: fbDest, score: 1.0, reason: "regex_fallback" };
-                  }
+          // Backend tariff matching — inject real price if origin + destination known
+          let tariffMatch: TariffMatchResult | undefined;
+          if (parsed.data.origin && parsed.data.destination) {
+            const pax = parsed.data.passengers || 1;
+            console.log(`[EXTRACTION] Buscando tariff: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
+            tariffMatch = await matchTariff(parsed.data.origin, parsed.data.destination, pax);
+            console.log(`[EXTRACTION] Tariff match: matched=${tariffMatch.matched} price=${tariffMatch.price} origin="${tariffMatch.canonicalOrigin}" dest="${tariffMatch.canonicalDestination}"`);
+            if (tariffMatch.matched) {
+              parsed.data.price = tariffMatch.price;
+              confidenceResult.slots.price = { value: tariffMatch.price, score: 1.0, reason: "backend_tariff_match" };
+            } else if (parsed.data.origin || parsed.data.destination) {
+              // Fallback: re-intentar con regex sobre texto original si Groq extrajo valores no resolubles (ej. "el aeropuerto")
+              // Primero intentar extracción dirección-aware: "de X a Y"
+              let fbOrigin: string | undefined;
+              let fbDest: string | undefined;
+              const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
+              if (dirMatch) {
+                fbOrigin = dirMatch[1].trim();
+                fbDest = dirMatch[2].trim();
+              }
+              if (!fbOrigin || !fbDest) {
+                const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
+                const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+                fbOrigin = text.match(originRx)?.[1];
+                fbDest = text.match(destRx)?.[1];
+              }
+              if (fbOrigin && fbDest) {
+                const fbMatch = await matchTariff(fbOrigin, fbDest, parsed.data.passengers || 1);
+                if (fbMatch.matched) {
+                  console.log(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbMatch.price}`);
+                  tariffMatch = fbMatch;
+                  parsed.data.origin = fbOrigin;
+                  parsed.data.destination = fbDest;
+                  parsed.data.price = fbMatch.price;
+                  confidenceResult.slots.price = { value: fbMatch.price, score: 1.0, reason: "backend_tariff_match" };
+                  confidenceResult.slots.origin = { value: fbOrigin, score: 1.0, reason: "regex_fallback" };
+                  confidenceResult.slots.destination = { value: fbDest, score: 1.0, reason: "regex_fallback" };
                 }
               }
             }
+          }
 
-            workflowResult = await evaluateWorkflowTransition(phone, confidenceResult);
+          workflowResult = await evaluateWorkflowTransition(phone, confidenceResult);
 
-            const confByField: Record<string, number> = {};
-            for (const [k, v] of Object.entries(confidenceResult.slots)) {
-              confByField[k] = v.score;
-            }
+          const confByField: Record<string, number> = {};
+          for (const [k, v] of Object.entries(confidenceResult.slots)) {
+            confByField[k] = v.score;
+          }
 
-            await upsertChatSession(phone, parsed.data as Record<string, any>, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
+          await upsertChatSession(phone, parsed.data as Record<string, any>, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
 
-            extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, tariffMatch);
-            console.log("[EXTRACTION] extractionNote generado:", extractionNote.substring(0, 150));
+          extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, tariffMatch);
+          console.log("[EXTRACTION] extractionNote generado:", extractionNote.substring(0, 150));
+        } else {
+          console.log("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
+        }
+      } else {
+        console.log("[EXTRACTION] generateGroqExtraction retornó null");
+      }
+    } catch (e) {
+      console.error("[EXTRACTION] error:", e instanceof Error ? e.message : String(e));
+    }
+
+    // FALLBACK: si la extracción falló, intentar regex simple
+    if (!extractionNote) {
+      try {
+        console.log("[EXTRACTION] Intentando fallback regex...");
+        let originMatch: string | undefined;
+        let destMatch: string | undefined;
+        // Primero intentar dirección-aware
+        const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
+        if (dirMatch) {
+          originMatch = dirMatch[1].trim();
+          destMatch = dirMatch[2].trim();
+        }
+        if (!originMatch || !destMatch) {
+          const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
+          const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+          originMatch = text.match(originRx)?.[1];
+          destMatch = text.match(destRx)?.[1];
+        }
+
+        // Si el texto actual no tiene palabra de origen, buscar en session.slots
+        if (!originMatch) {
+          const session = await getChatSession(phone);
+          if (session?.slots) {
+            const slots = JSON.parse(session.slots);
+            if (slots.origin) originMatch = slots.origin;
+          }
+        }
+
+        if (originMatch && destMatch) {
+          console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
+          const ft = await matchTariff(originMatch, destMatch, 1);
+          if (ft.matched) {
+            extractionNote = [
+              `Confianza general: 100%. Estado: collecting_slots.`,
+              `Origen: "${originMatch}" → ${ft.canonicalOrigin} (Confianza: 100%)`,
+              `Destino: "${destMatch}" → ${ft.canonicalDestination} (Confianza: 100%)`,
+              `PRECIO OFICIAL (calculado por backend): $${ft.price} ARS (precio hasta 4 pasajeros).`,
+              `VALOR_PRECIO: ${ft.price}`,
+              `Ruta oficial: ${ft.canonicalOrigin} → ${ft.canonicalDestination}.`,
+              `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
+            ].join('\n');
+            console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.price);
           } else {
-            console.log("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
+            console.log("[EXTRACTION] Fallback: tariff no encontrado");
           }
         } else {
-          console.log("[EXTRACTION] generateGroqExtraction retornó null");
+          console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto ni de session. text:", text.substring(0, 60), "originMatch:", originMatch, "destMatch:", destMatch);
         }
       } catch (e) {
-        console.error("[EXTRACTION] error:", e instanceof Error ? e.message : String(e));
-      }
-
-      // FALLBACK: si la extracción falló, intentar regex simple
-      if (!extractionNote) {
-        try {
-          console.log("[EXTRACTION] Intentando fallback regex...");
-          let originMatch: string | undefined;
-          let destMatch: string | undefined;
-          // Primero intentar dirección-aware
-          const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
-          if (dirMatch) {
-            originMatch = dirMatch[1].trim();
-            destMatch = dirMatch[2].trim();
-          }
-          if (!originMatch || !destMatch) {
-            const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
-            const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-            originMatch = text.match(originRx)?.[1];
-            destMatch = text.match(destRx)?.[1];
-          }
-
-          // Si el texto actual no tiene palabra de origen, buscar en session.slots
-          if (!originMatch) {
-            const session = await getChatSession(phone);
-            if (session?.slots) {
-              const slots = JSON.parse(session.slots);
-              if (slots.origin) originMatch = slots.origin;
-            }
-          }
-
-          if (originMatch && destMatch) {
-            console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
-            const ft = await matchTariff(originMatch, destMatch, 1);
-            if (ft.matched) {
-              extractionNote = [
-                `Confianza general: 100%. Estado: collecting_slots.`,
-                `Origen: "${originMatch}" → ${ft.canonicalOrigin} (Confianza: 100%)`,
-                `Destino: "${destMatch}" → ${ft.canonicalDestination} (Confianza: 100%)`,
-                `PRECIO OFICIAL (calculado por backend): $${ft.price} ARS (precio hasta 4 pasajeros).`,
-                `VALOR_PRECIO: ${ft.price}`,
-                `Ruta oficial: ${ft.canonicalOrigin} → ${ft.canonicalDestination}.`,
-                `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
-              ].join('\n');
-              console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.price);
-            } else {
-              console.log("[EXTRACTION] Fallback: tariff no encontrado");
-            }
-          } else {
-            console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto ni de session. text:", text.substring(0, 60), "originMatch:", originMatch, "destMatch:", destMatch);
-          }
-        } catch (e) {
-          console.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
-        }
+        console.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
       }
     }
 
     let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined, extractionNote);
 
-    console.log(JSON.stringify({ event: "workflow_result", conversationId: conversation.id, phone, workflowResultExists: !!workflowResult }));
+    // === NEW FLOW: workflow-based routing, no marker parsing ===
+    await insertMessage(conversation.id, "assistant", response);
+    await sendWhatsAppMessage(phone, response);
 
-    if (FEATURE_CONFIDENCE_MATCHING && workflowResult) {
-      // === NEW FLOW (Phases 5-6): workflow-based routing, no marker parsing ===
-      response = stripTripMarker(response);
-      await insertMessage(conversation.id, "assistant", response);
-      await sendWhatsAppMessage(phone, response);
-
-      if (workflowResult.state === "awaiting_confirmation") {
-        // The reply already asked the user to confirm. Wait for next message.
-        // On next call, the confirmation check (above) will detect the affirmative.
-      } else if (workflowResult.state === "collecting_slots" && workflowResult.clarifyField) {
-        // The reply already asked for the missing field. Nothing to do — wait for user input.
-      }
-    } else {
-      // === LEGACY FLOW: marker-based parsing (fallback when FEATURE_CONFIDENCE_MATCHING is off) ===
-      console.log(JSON.stringify({ event: "legacy_flow_entered", conversationId: conversation.id, phone, text, timestamp: Math.floor(Date.now() / 1000) }));
-      let marker = extractTripMarker(response);
-      if (marker) {
-        console.log(JSON.stringify({ event: "legacy_trip_marker_detected", conversationId: conversation.id, tripCode: marker.code, origin: marker.origin, destination: marker.destination }));
-        if (!marker.passengers || marker.passengers <= 0) {
-          console.log(`[GUARD] Marker con passengers=${marker.passengers}, eliminando: ${response.substring(0,80)}...`);
-          response = stripTripMarker(response);
-          marker = null;
-        }
-      }
-      if (marker) {
-        response = stripTripMarker(response);
-        if (!trip) {
-          const tripId = `trip_${Date.now()}`;
-          await createTrip(tripId, phone, marker.origin, marker.destination, marker.price, marker.passengers, marker.scheduledAt, marker.flightNumber);
-          await setConversationTrip(conversation.id, tripId);
-          trip = await getActiveTripByPhone(phone);
-          if (!trip) return;
-          const tariff = await findTariff(marker.origin, marker.destination, marker.passengers);
-          if (tariff) {
-            await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
-          }
-          if (marker.destination.toLowerCase().includes("pendiente hotel")) {
-            await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
-          }
-        } else {
-          if (marker.passengers && marker.passengers !== trip.passengers) await updateTripPassengers(trip.trip_id, marker.passengers);
-          if (marker.origin && marker.origin !== trip.origin) await updateTripOrigin(trip.trip_id, marker.origin);
-          if (marker.destination && marker.destination !== trip.destination) await updateTripDestination(trip.trip_id, marker.destination);
-          if (marker.price && marker.price !== trip.price_base) await updateTripPriceBase(trip.trip_id, marker.price);
-          if (marker.scheduledAt) await updateTripScheduledAt(trip.trip_id, marker.scheduledAt);
-          if (marker.flightNumber) await updateTripFlight(trip.trip_id, marker.flightNumber);
-          if (marker.destination.toLowerCase().includes("pendiente hotel")) {
-            await updateTripHotel(trip.trip_id, "A confirmar por el chofer");
-          }
-          const tariff = await findTariff(trip.origin || marker.origin, trip.destination || marker.destination, trip.passengers || marker.passengers);
-          if (tariff && !trip.piso_base) {
-            await updateTripTariff(trip.trip_id, tariff.id, tariff.piso);
-          }
-        }
-      }
-
-      const leadMarker = !marker ? extractLeadMarker(response) : null;
-      if (leadMarker) {
-        console.log(JSON.stringify({ event: "legacy_lead_marker_detected", conversationId: conversation.id, origin: leadMarker.origin, destination: leadMarker.destination }));
-        response = stripTripMarker(response);
-      }
-
-      await insertMessage(conversation.id, "assistant", response);
-      await sendWhatsAppMessage(phone, response);
-
-      if (!marker && !leadMarker) {
-        console.log(JSON.stringify({ event: "legacy_fallback_response_only", conversationId: conversation.id }));
-      }
-
-      if (leadMarker) {
-        await createLead(conversation.id, phone, leadMarker.origin, leadMarker.destination, leadMarker.price, leadMarker.passengers);
-        await broadcastLeadToDrivers(leadMarker, conversation.id, phone, leadMarker.urgency, leadMarker.passengers);
-      }
-
-      if (marker && trip && trip.destination && trip.price_base) {
-        const u = (marker.urgency || "").toLowerCase();
-        if (u.includes("reserva")) {
-          await handleReservationSlotSelection(conversation.id, phone, trip);
-        } else {
-          await escalateTrip(conversation.id, phone, trip, marker.urgency, marker.passengers);
-        }
-      }
+    if (workflowResult?.state === "awaiting_confirmation") {
+      // The reply already asked the user to confirm. Wait for next message.
+      // On next call, the confirmation check (above) will detect the affirmative.
+    } else if (workflowResult?.state === "collecting_slots" && workflowResult?.clarifyField) {
+      // The reply already asked for the missing field. Nothing to do — wait for user input.
     }
 
     // ── Shift-end auto-prompt for drivers ──
@@ -680,102 +553,13 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   }
 }
 
-async function handleReservationSlotSelection(convId: number, phone: string, trip: TripRow): Promise<void> {
-  const slots = await getActiveSlots();
-  if (slots.length === 0) {
-    await sendWhatsAppMessage(phone, "📅 Gracias por tu reserva. Te contactaremos para coordinar el horario.");
-    await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
-    return;
-  }
-
-  await advanceToSlotSelection(convId, phone);
-
-  const today = new Date();
-  const sections: { title: string; rows: { id: string; title: string; description: string }[] }[] = [];
-  const nowTs = Math.floor(Date.now() / 1000);
-
-  for (let dayOffset = 0; dayOffset < 7 && sections.length < 3; dayOffset++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + dayOffset);
-    const dow = date.getDay();
-    const daySlots = slots.filter((s: any) => s.day_of_week === dow);
-    if (daySlots.length === 0) continue;
-
-    const dateStr = date.toISOString().split("T")[0];
-    const title = dayOffset === 0 ? "Hoy" : dayOffset === 1 ? "Mañana" : date.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "short" });
-    const rows: { id: string; title: string; description: string }[] = [];
-
-    for (const s of daySlots) {
-      const [sh, sm] = s.start_time.split(":").map(Number);
-      const slotDate = new Date(date);
-      slotDate.setHours(sh, sm, 0, 0);
-      const slotTs = Math.floor(slotDate.getTime() / 1000);
-      if (slotTs <= nowTs) continue;
-
-      const label = s.label || `${s.start_time}-${s.end_time}`;
-      rows.push({
-        id: `slot_${convId}_${slotTs}`,
-        title: label.substring(0, 24),
-        description: `${dateStr} ${s.start_time} a ${s.end_time}`.substring(0, 72),
-      });
-    }
-
-    if (rows.length > 0) {
-      sections.push({ title, rows: rows.slice(0, 10) });
-    }
-  }
-
-  if (sections.length === 0) {
-    await sendWhatsAppMessage(phone, "📅 No hay horarios disponibles en los próximos días. Te contactaremos para coordinar.");
-    await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
-    return;
-  }
-
-  await sendInteractiveList(
-    phone,
-    "📅 Elegí el día y horario para tu reserva:",
-    "Ver horarios",
-    sections
-  );
-}
-
-export async function handleSlotResponse(phone: string, buttonId: string): Promise<void> {
-  const prefix = "slot_";
-  if (!buttonId.startsWith(prefix)) return;
-
-  const parts = buttonId.split("_");
-  if (parts.length < 3) return;
-
-  const convId = parseInt(parts[1]);
-  const scheduledAt = parseInt(parts[2]);
-  if (isNaN(convId) || isNaN(scheduledAt)) return;
-
-  const workflow = await getWorkflow(convId);
-  if (!workflow || workflow.state !== "awaiting_slot") return;
-
-  const conv = await getConversationById(convId);
-  if (!conv) return;
-
-  const trip = await getActiveTripByPhone(phone);
-  if (!trip) return;
-
-  await updateTripScheduledAt(trip.trip_id, scheduledAt);
-
-  const dateStr = new Date(scheduledAt * 1000).toLocaleString("es-AR", {
-    weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
-  });
-  await sendWhatsAppMessage(phone, `✅ Reserva confirmada para el ${dateStr}. Buscamos chofer para vos.`);
-
-  await escalateTrip(convId, phone, trip, "reserva", trip.passengers);
-}
-
 async function escalateTrip(convId: number, phone: string, trip: TripRow, urgency?: string, passengers?: number | null): Promise<void> {
   const u = (urgency || "").toLowerCase();
 
   if (u.includes("reserva")) {
     // Nivel 1: Principal (Cristian, 1h timeout)
     const principal = await getPrincipalDriver();
-    if (principal && principal.active) {
+    if (principal && principal.status === "active") {
       const expiry = await getDriverExpiry(principal.phone);
       if (expiry.active) {
         await advanceToNivel1(convId, phone);
@@ -790,7 +574,7 @@ async function escalateTrip(convId: number, phone: string, trip: TripRow, urgenc
     }
     // Nivel 2: Principal2 (30min timeout)
     const principal2 = await getPrincipal2();
-    if (principal2 && principal2.active) {
+    if (principal2 && principal2.status === "active") {
       const expiry = await getDriverExpiry(principal2.phone);
       if (expiry.active) {
         await advanceToNivel2(convId, phone);
@@ -818,10 +602,9 @@ async function escalateTrip(convId: number, phone: string, trip: TripRow, urgenc
     return;
   }
 
-  // Consulta/otro → broadcast directo
-  await advanceToGroup(convId, phone);
+  // Cualquier otro urgency (incluyendo vacío o no reconocido) → broadcast directo
   await broadcastTripToDrivers(trip, convId, phone, urgency, passengers);
-  console.log(`[DISPATCH] Consulta/otro → broadcast conv ${convId}`);
+  console.log(`[DISPATCH] Urgency="${urgency}" → broadcast conv ${convId}`);
 }
 
 function computeShiftEnd(shift: string): Date | null {

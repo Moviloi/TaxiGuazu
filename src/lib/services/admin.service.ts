@@ -122,8 +122,8 @@ export async function broadcastTripToDrivers(
   const country = detectCountry(trip.origin || "");
   const filters: { country?: string; minCapacity?: number; strictMinCapacity?: boolean } = {};
   if (country) filters.country = country;
-  if (passengers && passengers > 4) {
-    filters.minCapacity = 6;
+  if (passengers && passengers > 0) {
+    filters.minCapacity = passengers;
     filters.strictMinCapacity = true;
   }
 
@@ -136,7 +136,7 @@ export async function broadcastTripToDrivers(
   if (drivers.length === 0) {
     // Debug: dump all drivers with conversation state
     try {
-      const all = await getDbInstance().execute(`SELECT d.phone, d.name, d.active, d.tier, d.country,
+      const all = await getDbInstance().execute(`SELECT d.phone, d.name, d.status, d.tier, d.country,
         c.phone as conv_phone, c.last_message_at,
         CASE WHEN c.phone IS NULL THEN 'no_join'
              WHEN c.last_message_at IS NULL THEN 'no_msg'
@@ -144,7 +144,7 @@ export async function broadcastTripToDrivers(
              ELSE 'ok' END as conv_status
         FROM drivers d
         LEFT JOIN conversations c ON c.phone = d.phone
-        WHERE d.active = 1`);
+        WHERE d.status = 'active'`);
       console.log("[BROADCAST_DEBUG] No drivers found via getAvailableDrivers. All active drivers:", JSON.stringify(all.rows));
     } catch (e) { console.error("[BROADCAST_DEBUG] error:", e); }
 
@@ -153,12 +153,13 @@ export async function broadcastTripToDrivers(
 Cliente: ${clientPhone}
 Origen: ${trip.origin || "No especificado"}
 Destino: ${trip.destination}
+Pasajeros: ${passengers ?? trip.passengers ?? "?"}
 Tarifa pública: $${trip.price_base}
 Valor garantizado: $${effectivePayout.toLocaleString("es-AR")}
 TG: $${margin.toLocaleString("es-AR")}
 País: ${country}
 
-No hay choferes disponibles en ${country}. Reenviá manualmente.`);
+No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. Reenviá manualmente.`);
     return;
   }
 
@@ -326,8 +327,8 @@ export async function broadcastLeadToDrivers(
   const country = detectCountry(lead.origin || "");
   const filters: { country?: string; minCapacity?: number; strictMinCapacity?: boolean } = {};
   if (country) filters.country = country;
-  if (passengers && passengers > 4) {
-    filters.minCapacity = 6;
+  if (passengers && passengers > 0) {
+    filters.minCapacity = passengers;
     filters.strictMinCapacity = true;
   }
 

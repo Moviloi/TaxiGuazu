@@ -1,22 +1,30 @@
 import {
-  getWorkflow as dbGetWorkflow,
-  deleteWorkflow,
-  getExpiredWorkflows as dbGetExpiredWorkflows,
-  getExpiredWorkflowsByState as dbGetExpiredByState,
-  closeWorkflow as dbCloseWorkflow,
-  advanceWorkflowState as dbAdvanceState,
+  getChatSession,
+  getConversationById,
+  setChatSessionWorkflowState,
+  getDbInstance,
 } from "@/lib/db/database";
 
-export type WorkflowState = "idle" | "awaiting_slot" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_group" | "waiting_driver" | "closed";
+export type WorkflowState =
+  | "idle"
+  | "collecting_slots"
+  | "awaiting_confirmation"
+  | "nivel_1"
+  | "nivel_2"
+  | "nivel_3"
+  | "waiting_driver"
+  | "closed";
 
+// Source of truth: chat_sessions.workflow_state (Fase 3 v5.0)
+// La tabla `workflows` quedó sin callers activos y es candidata a DROP en Fase 6.
 const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
-  idle: ["awaiting_slot", "nivel_1", "nivel_2", "nivel_3", "waiting_driver", "waiting_group"],
-  nivel_1: ["nivel_2", "nivel_3"],
-  nivel_2: ["nivel_3"],
+  idle: ["collecting_slots", "awaiting_confirmation", "nivel_1", "waiting_driver"],
+  collecting_slots: ["awaiting_confirmation", "nivel_1", "waiting_driver"],
+  awaiting_confirmation: ["nivel_1", "waiting_driver", "closed"],
+  nivel_1: ["nivel_2", "closed"],
+  nivel_2: ["nivel_3", "closed"],
   nivel_3: ["closed"],
-  waiting_group: ["closed"],
   waiting_driver: ["closed"],
-  awaiting_slot: ["closed"],
   closed: [],
 };
 
@@ -24,83 +32,111 @@ export interface WorkflowContext {
   conversationId: number;
   phone: string;
   state: WorkflowState;
-  tripId: string | null;
-  assignedDriverPhone: string | null;
-  groupAskedAt: number | null;
-  lastMessageAt: number;
 }
 
-function rowToContext(row: any): WorkflowContext {
+function rowToContext(phone: string, convId: number, state: string | null): WorkflowContext {
   return {
-    conversationId: row.conversation_id,
-    phone: row.phone,
-    state: row.state,
-    tripId: row.trip_id || null,
-    assignedDriverPhone: row.assigned_driver_phone || null,
-    groupAskedAt: row.group_asked_at ? row.group_asked_at * 1000 : null,
-    lastMessageAt: row.last_message_at * 1000,
+    conversationId: convId,
+    phone,
+    state: (state || "idle") as WorkflowState,
   };
 }
 
-async function transitionTo(convId: number, phone: string, newState: WorkflowState): Promise<void> {
-  const workflow = await dbGetWorkflow(convId);
-  if (workflow) {
-    const allowed = VALID_TRANSITIONS[workflow.state as WorkflowState];
-    if (!allowed?.includes(newState)) {
-      console.warn(`[STATEMACHINE] Transición inválida: ${workflow.state} → ${newState} (conv ${convId})`);
-    }
+async function transitionTo(phone: string, newState: WorkflowState): Promise<void> {
+  const session = await getChatSession(phone);
+  const current = (session?.workflow_state || "idle") as WorkflowState;
+  const allowed = VALID_TRANSITIONS[current];
+  if (allowed && !allowed.includes(newState)) {
+    console.warn(`[STATEMACHINE] Transición inválida: ${current} → ${newState} (phone ${phone})`);
   }
-  await dbAdvanceState(convId, phone, newState);
+  await setChatSessionWorkflowState(phone, newState);
 }
 
 export async function getWorkflow(convId: number): Promise<WorkflowContext | null> {
-  const row = await dbGetWorkflow(convId);
-  return row ? rowToContext(row) : null;
+  const conv = await getConversationById(convId);
+  if (!conv) return null;
+  const session = await getChatSession(conv.phone);
+  if (!session) return null;
+  return rowToContext(conv.phone, convId, session.workflow_state);
 }
 
-export async function advanceToSlotSelection(convId: number, phone: string): Promise<void> {
-  await transitionTo(convId, phone, "awaiting_slot");
+export async function advanceToNivel1(_convId: number, phone: string): Promise<void> {
+  await transitionTo(phone, "nivel_1");
 }
 
-export async function advanceToNivel1(convId: number, phone: string): Promise<void> {
-  await transitionTo(convId, phone, "nivel_1");
+export async function advanceToNivel2(_convId: number, phone: string): Promise<void> {
+  await transitionTo(phone, "nivel_2");
 }
 
-export async function advanceToNivel2(convId: number, phone: string): Promise<void> {
-  await transitionTo(convId, phone, "nivel_2");
+export async function advanceToNivel3(_convId: number, phone: string): Promise<void> {
+  await transitionTo(phone, "nivel_3");
 }
 
-export async function advanceToNivel3(convId: number, phone: string): Promise<void> {
-  await transitionTo(convId, phone, "nivel_3");
+export async function advanceToWaitingDriver(_convId: number, phone: string): Promise<void> {
+  await transitionTo(phone, "waiting_driver");
 }
 
-export async function advanceToWaitingDriver(convId: number, phone: string): Promise<void> {
-  await transitionTo(convId, phone, "waiting_driver");
-}
-
-export async function advanceToGroup(convId: number, phone: string): Promise<void> {
-  await transitionTo(convId, phone, "waiting_group");
-}
-
-export async function closeWorkflow(convId: number, driverPhone?: string): Promise<void> {
-  await dbCloseWorkflow(convId, driverPhone);
+export async function closeWorkflow(convId: number): Promise<void> {
+  const conv = await getConversationById(convId);
+  if (!conv) return;
+  await transitionTo(conv.phone, "closed");
 }
 
 export async function resetToIdle(convId: number): Promise<void> {
-  await deleteWorkflow(convId);
+  const conv = await getConversationById(convId);
+  if (!conv) return;
+  await transitionTo(conv.phone, "idle");
 }
 
 export async function isWorkflowActive(convId: number): Promise<boolean> {
   const ctx = await getWorkflow(convId);
-  return ctx !== null && ctx.state !== "closed";
-}
-
-export async function getExpiredGroupTimeouts(timeoutMs: number): Promise<WorkflowContext[]> {
-  const rows = await dbGetExpiredWorkflows(timeoutMs);
-  return rows.map(rowToContext);
+  if (!ctx) return false;
+  return ctx.state !== "idle" && ctx.state !== "closed";
 }
 
 export async function getExpiredByState(state: WorkflowState, timeoutMs: number): Promise<WorkflowContext[]> {
-  const rows = await dbGetExpiredByState(state, timeoutMs);
-  return rows.map(rowToContext);
+  const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
+  const db = getDbInstance();
+  const rs = await db.execute({
+    sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
+          FROM chat_sessions cs
+          JOIN conversations c ON c.phone = cs.phone
+          WHERE cs.workflow_state = ? AND cs.updated_at < ?`,
+    args: [state, cutoff],
+  });
+  return (rs.rows as any[]).map((row) => ({
+    conversationId: row.conversation_id,
+    phone: row.phone,
+    state: row.workflow_state as WorkflowState,
+  }));
+}
+
+export async function getStaleWorkflows(timeoutMs: number): Promise<WorkflowContext[]> {
+  const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
+  const db = getDbInstance();
+  const rs = await db.execute({
+    sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
+          FROM chat_sessions cs
+          JOIN conversations c ON c.phone = cs.phone
+          WHERE cs.workflow_state != 'closed' AND cs.updated_at < ?`,
+    args: [cutoff],
+  });
+  return (rs.rows as any[]).map((row) => ({
+    conversationId: row.conversation_id,
+    phone: row.phone,
+    state: row.workflow_state as WorkflowState,
+  }));
+}
+
+export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
+  const db = getDbInstance();
+  const rs = await db.execute({
+    sql: `UPDATE chat_sessions
+          SET workflow_state = 'closed', updated_at = unixepoch()
+          WHERE phone = ? AND workflow_state IN ('nivel_1','nivel_2','nivel_3','waiting_driver')`,
+    args: [phone],
+  });
+  const ok = rs.rowsAffected > 0;
+  console.log(`[ASSIGN] phone=${phone} rowsAffected=${rs.rowsAffected} ok=${ok}`);
+  return ok;
 }

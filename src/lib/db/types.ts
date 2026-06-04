@@ -25,6 +25,24 @@ export interface MessageRow {
   created_at: number;
 }
 
+export type TripPhase =
+  | "DRAFT"
+  | "QUOTED"
+  | "CONFIRMED"
+  | "ASSIGNED"
+  | "IN_PROGRESS"
+  | "CLOSED";
+
+export type TripClosureReason =
+  | "completed"
+  | "cancelled"
+  | "cancelled_client"
+  | "cancelled_driver"
+  | "expired"
+  | "failed"
+  | "reassigned"
+  | "system_cleanup";
+
 export interface TripRow {
   trip_id: string;
   client_phone: string;
@@ -52,6 +70,22 @@ export interface TripRow {
   tariff_id: number | null;
   piso_base: number | null;
   garantizado_base: number | null;
+  trip_phase: TripPhase | null;
+  closure_reason: TripClosureReason | null;
+}
+
+export type DriverStatus = "pending" | "active" | "inactive" | "blocked";
+
+export interface DriverInvitationRow {
+  id: number;
+  code: string;
+  phone: string | null;
+  created_by: string;
+  created_at: number | null;
+  expires_at: number | null;
+  used_at: number | null;
+  driver_id: string | null;
+  status: "pending" | "accepted" | "expired" | "revoked";
 }
 
 export interface DriverRow {
@@ -82,18 +116,13 @@ export interface DriverRow {
   is_guide: number | null;
   car_model: string | null;
   car_year: number | null;
+  status: DriverStatus | null;
+  approved_at: number | null;
+  approved_by: string | null;
 }
 
-export interface WorkflowRow {
-  conversation_id: number;
-  phone: string;
-  state: string;
-  trip_id: string | null;
-  assigned_driver_phone: string | null;
-  group_asked_at: number | null;
-  last_message_at: number;
-  created_at: number;
-}
+// Nota Fase 3 v5.0: WorkflowRow ya no se usa en código activo. La tabla `workflows`
+// se conserva por ahora (DROP planeado para Fase 6).
 
 export interface DriverCodeRow {
   code: string;
@@ -197,4 +226,12 @@ export interface ChatSessionRow {
   workflow_state: string | null;
   clarify_field: string | null;
   updated_at: number;
+}
+
+export interface ProcessedMessageRow {
+  message_id: string;
+  phone: string | null;
+  message_type: string | null;
+  processed_at: number;
+  payload_hash: string | null;
 }

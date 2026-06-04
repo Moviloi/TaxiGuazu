@@ -3,13 +3,12 @@ import {
   getWorkflow,
   advanceToNivel1,
   advanceToWaitingDriver,
+  assignWorkflowAtomic,
 } from "@/lib/utils/conversation-workflow";
 import {
   getActiveTripByPhone,
   getDriverByPhone,
-  getFirstWaitingWorkflow,
   getTripByAssignedDriver,
-  assignWorkflowAtomic,
   assignDriverToTrip,
   completeTrip,
   getClientPreferredDriver,
@@ -36,6 +35,7 @@ import {
 } from "@/lib/db/database";
 import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver, broadcastTripToDrivers } from "./admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
+import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
 
 export function isGroupMessage(from: string): boolean {
   return from.endsWith("@g.us");
@@ -57,7 +57,7 @@ export async function handleDriverResponse(
 
   const workflow = await getWorkflow(convId);
   if (!workflow) return;
-  const validStates = ["waiting_group", "nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
+  const validStates = ["nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
   if (!validStates.includes(workflow.state)) return;
 
   await assignDriver(workflow, driverPhone);
@@ -66,10 +66,12 @@ export async function handleDriverResponse(
 export async function handleDriverAccept(driverPhone: string, text: string): Promise<void> {
   if (!isAccepting(text)) return;
 
-  const workflow = await getFirstWaitingWorkflow();
-  if (!workflow) return;
-
-  await assignDriver(workflow, driverPhone);
+  // TODO FASE 6 / LEGACY: la mecánica "driver acepta por texto en el grupo" dependía
+  // del estado workflows.state='waiting_group' (getFirstWaitingWorkflow) que fue
+  // eliminado en Fase 1 y consolidado en chat_sessions en Fase 3. El flujo actual
+  // de aceptación es exclusivamente por botón interactivo (handleDriverButtonAccept).
+  console.log(`[LEGACY-ACCEPT] Chofer ${driverPhone} intentó aceptar por texto — flujo deshabilitado`);
+  return;
 }
 
 export async function handleDriverArrived(driverPhone: string): Promise<void> {
@@ -167,23 +169,24 @@ ${roleLine ? roleLine.trimStart() : ""}
 export async function handleDriverButtonAccept(convId: number, driverPhone: string): Promise<void> {
   const workflow = await getWorkflow(convId);
   if (!workflow) return;
-  const validStates = ["waiting_group", "nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
+  const validStates = ["nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
   if (!validStates.includes(workflow.state)) return;
 
   await assignDriver(workflow, driverPhone);
 }
 
-async function assignDriver(workflow: { conversation_id?: number; conversationId?: number; phone: string; state: string }, driverPhone: string): Promise<void> {
-  const convId = workflow.conversation_id || workflow.conversationId;
+async function assignDriver(workflow: { conversationId: number; phone: string; state: string }, driverPhone: string): Promise<void> {
+  const convId = workflow.conversationId;
   if (!convId) {
     console.error(`[ASSIGN] No convId for driver ${driverPhone}`);
     return;
   }
 
-  const assigned = await assignWorkflowAtomic(convId, driverPhone);
+  const trip = await getActiveTripByPhone(workflow.phone);
+
+  const assigned = await assignWorkflowAtomic(workflow.phone);
   if (!assigned) {
-    const updated = await getWorkflow(convId);
-    if (updated?.assignedDriverPhone === driverPhone) {
+    if (trip?.assigned_driver_phone === driverPhone) {
       console.log(`[ASSIGN] Recuperado: ${driverPhone} ya estaba asignado a conv ${convId}`);
     } else {
       await sendWhatsAppMessage(driverPhone, "⚠️ El viaje ya fue asignado a otro chofer.");
@@ -191,7 +194,6 @@ async function assignDriver(workflow: { conversation_id?: number; conversationId
     }
   }
 
-  const trip = await getActiveTripByPhone(workflow.phone);
   if (!trip) return;
 
   const fin = await assignDriverToTrip(trip.trip_id, driverPhone);
@@ -284,6 +286,20 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
     const bData = JSON.parse(await getConnectionValue(`contingency_pending_B_${convId}`) || "{}");
     await deleteConnectionKey(`contingency_pending_B_${convId}`);
 
+    const tripBConv = await getConversationByPhone(workflow.phone);
+    if (tripBConv) {
+      const bFleetCheck = await ensureFleetCanHandle(bData.passengers, {
+        phone: workflow.phone,
+        convId: tripBConv.id,
+        origin: bData.origin,
+        destination: bData.destination,
+        source: "driver.contingency_trip_b",
+      });
+      if (!bFleetCheck.ok) {
+        return;
+      }
+    }
+
     const tripIdB = `trip_contingency_${convId}_b_${Date.now()}`;
     await createTrip(tripIdB, workflow.phone, bData.origin, bData.destination, bData.price, bData.passengers, undefined, bData.flight_number || undefined);
     await setConversationTrip(convId, tripIdB);
@@ -338,8 +354,19 @@ export async function handleDriverTakeLead(convId: number, driverPhone: string):
 
   // Create trip from lead
   const tripId = `trip_${Date.now()}`;
+  const leadConv = await getOrCreateConversation(lead.client_phone);
+  const leadConvId = leadConv.id;
+  const leadFleetCheck = await ensureFleetCanHandle(lead.passengers ?? 1, {
+    phone: lead.client_phone,
+    convId: leadConvId,
+    origin: lead.origin,
+    destination: lead.destination,
+    source: "driver.take_lead",
+  });
+  if (!leadFleetCheck.ok) {
+    return;
+  }
   await createTrip(tripId, lead.client_phone, lead.origin || "", lead.destination, lead.price || undefined, lead.passengers || undefined);
-  await getOrCreateConversation(lead.client_phone);
   const conv = await getConversationByPhone(lead.client_phone);
   if (conv) await setConversationTrip(conv.id, tripId);
 
@@ -463,6 +490,17 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
   // Calculate passengers split
   const paxA = Math.min(origData.passengers, 4);
   const paxB = origData.passengers - paxA;
+
+  const aFleetCheck = await ensureFleetCanHandle(paxA, {
+    phone: clientPhone,
+    convId,
+    origin: origData.origin,
+    destination: origData.destination,
+    source: "driver.contingency_trip_a",
+  });
+  if (!aFleetCheck.ok) {
+    return;
+  }
 
   // --- Trip A ---
   const tripIdA = `trip_contingency_${convId}_a_${Date.now()}`;

@@ -1,5 +1,4 @@
 import {
-  getExpiredGroupTimeouts,
   getExpiredByState,
   advanceToNivel2,
   advanceToNivel3,
@@ -47,7 +46,7 @@ export async function checkTimeouts(): Promise<void> {
     if (!trip) continue;
 
     const principal2 = await getPrincipal2();
-    if (principal2 && principal2.active) {
+    if (principal2 && principal2.status === "active") {
       const expiry = await getDriverExpiry(principal2.phone);
       if (expiry.active) {
         await advanceToNivel2(ctx.conversationId, ctx.phone);
@@ -107,6 +106,9 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
     if (await getConnectionValueFlag(`contingency_offered_${ctx.conversationId}`)) continue;
 
     if (trip && trip.passengers && trip.passengers > 4) {
+      // FIXME: La lógica de contingencia de 2 vehículos fue diseñada para una flota 4p/6p.
+      // Al incorporar vehículos de mayor capacidad debe revisarse o reemplazarse por una
+      // estrategia configurable basada en car_capacity.
       // Store original trip data for contingency handler
       const tripData = JSON.stringify({
         origin: trip.origin,
@@ -175,23 +177,6 @@ Cliente: ${ctx.phone}
 Destino: ${destino}
 
 Ningún chofer tomó el servicio AHORA. Reasigná manualmente.`);
-
-    await closeWorkflow(ctx.conversationId);
-  }
-
-  // Old waiting_group → still works
-  const groupExpired = await getExpiredGroupTimeouts(TIMEOUT_NIVEL_3_MS);
-  for (const ctx of groupExpired) {
-    console.log(`[TIMEOUT] (old) waiting_group expiró para conv ${ctx.conversationId}`);
-    const trip = await getActiveTripByPhone(ctx.phone);
-    const destino = trip?.destination || "sin destino";
-
-    await notifyAdmin(`⚠️ *Viaje sin asignar*
-
-Cliente: ${ctx.phone}
-Destino: ${destino}
-
-Ningún chofer tomó el servicio. Reasigná manualmente.`);
 
     await closeWorkflow(ctx.conversationId);
   }
@@ -393,9 +378,13 @@ async function checkSessionCleanup(): Promise<void> {
   }
 
   // 2. Close orphaned workflows (active but no activity >24h)
+  // Fase 3 v5.0: ahora consulta chat_sessions (SoT) con JOIN a conversations.
   const staleCutoff = now - STALE_WORKFLOW_THRESHOLD_S;
   const stale = await getDbInstance().execute({
-    sql: "SELECT conversation_id FROM workflows WHERE state != 'closed' AND last_message_at < ?",
+    sql: `SELECT c.id as conversation_id
+          FROM chat_sessions cs
+          JOIN conversations c ON c.phone = cs.phone
+          WHERE cs.workflow_state != 'closed' AND cs.updated_at < ?`,
     args: [staleCutoff],
   });
   for (const w of stale.rows as any[]) {

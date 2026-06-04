@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { handleLeadMessage, handleSlotResponse } from "@/lib/services/lead.service";
+import { handleLeadMessage } from "@/lib/services/lead.service";
 import {
   isGroupMessage,
   handleDriverResponse,
@@ -17,7 +17,7 @@ import {
   handleContingenciaSi,
   handleContingenciaNo,
 } from "@/lib/services/driver.service";
-import { getConversationByPhone, getDriverByPhone } from "@/lib/db/database";
+import { getConversationByPhone, getDriverByPhone, tryRegisterMessage } from "@/lib/db/database";
 import { checkTimeouts } from "@/lib/utils/timeouts";
 import { handleSurveyResponse, handleNewTripResponse } from "@/lib/services/survey.service";
 import { getEnv } from "@/config/env";
@@ -54,6 +54,10 @@ function normalizePhone(raw: string): string {
   return "+" + digits;
 }
 
+function hashPayload(rawBody: string): string {
+  return crypto.createHash("sha256").update(rawBody, "utf-8").digest("hex").slice(0, 32);
+}
+
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const mode = params.get("hub.mode");
@@ -80,8 +84,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await checkTimeouts();
-
     const body = JSON.parse(rawBody);
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0];
@@ -92,6 +94,46 @@ export async function POST(request: NextRequest) {
     }
 
     const phone = normalizePhone(message.from);
+    const messageId: string | undefined = message.id;
+    const messageType: string = message.type || "unknown";
+    const payloadHash = hashPayload(rawBody);
+
+    // === IDEMPOTENCY (atomic UNIQUE-based, Fase 2 v5.0) ===
+    // La unicidad es el mecanismo de sincronización. Si Meta reintenta o dos
+    // webhooks concurrentes llegan con el mismo message_id, el primer INSERT
+    // gana y el segundo ve rowsAffected=0. Sin check-then-act, sin races.
+    if (messageId) {
+      const registered = await tryRegisterMessage(messageId, phone, messageType, payloadHash);
+      if (!registered) {
+        console.log(JSON.stringify({
+          event: "duplicate_message_ignored",
+          message_id: messageId,
+          phone,
+          timestamp: Math.floor(Date.now() / 1000),
+        }));
+        return NextResponse.json({ status: "ok" }, { status: 200 });
+      }
+      console.log(JSON.stringify({
+        event: "message_registered",
+        message_id: messageId,
+        phone,
+        timestamp: Math.floor(Date.now() / 1000),
+      }));
+    } else {
+      console.warn(JSON.stringify({
+        event: "webhook_no_message_id",
+        phone,
+        message_type: messageType,
+        timestamp: Math.floor(Date.now() / 1000),
+      }));
+    }
+
+    // TODO FASE 7: mover checkTimeouts() a cron exclusivo (R29).
+    // Por ahora se ejecuta una sola vez por mensaje único gracias a la
+    // idempotencia, pero el objetivo es desacoplarlo completamente del
+    // webhook para evitar que retries de Meta lo disparen múltiples veces
+    // y para que la cascada de timeouts corra con cadencia propia.
+    await checkTimeouts();
 
     if (message.type === "interactive") {
       const buttonId = message.interactive?.button_reply?.id || "";
@@ -177,11 +219,6 @@ export async function POST(request: NextRequest) {
 
       if (buttonId.startsWith("newtrip_")) {
         await handleNewTripResponse(phone, buttonId);
-        return NextResponse.json({ status: "ok" }, { status: 200 });
-      }
-
-      if (buttonId.startsWith("slot_")) {
-        await handleSlotResponse(phone, buttonId);
         return NextResponse.json({ status: "ok" }, { status: 200 });
       }
 

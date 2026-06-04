@@ -21,7 +21,7 @@ npm run lint     # ESLint
 
 ## Variables de Entorno
 
-Ver `.env.local.example` para la lista completa. Variables requeridas:
+Variables requeridas:
 
 | Variable | Descripción |
 |---|---|
