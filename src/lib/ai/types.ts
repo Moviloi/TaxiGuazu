@@ -14,10 +14,31 @@ export type OutputSource = "POLICY";
 
 export type Lang = "es" | "en" | "pt";
 
+// v5.0 FASE 5B.2 (slot stability + role lock):
+// "locked" = el slot fue fijado por la estructura sintáctica del input
+//   (ej. "estoy en X" → origin locked a X). No se reinterpreta en turnos
+//   posteriores.
+// "ambiguous" = el slot tiene un valor genérico (centro, hotel) que requiere
+//   refinamiento, pero su rol (origin/destination) ya está fijado.
+// "open" = el slot no fue detectado; está disponible para asignación.
+export type SlotStability = "locked" | "ambiguous" | "open";
+
+export interface RoleLock {
+  origin: string | null;
+  destination: string | null;
+}
+
+export interface SlotStabilityMap {
+  origin: SlotStability;
+  destination: SlotStability;
+}
+
 export interface CoreDecision {
   intent: Intent;
   facts: string[];
   confidence: number;
+  slotStability: SlotStabilityMap;
+  roleLock: RoleLock;
 }
 
 export interface FinalDecision {
@@ -47,6 +68,11 @@ export interface ExtractionContext {
     canonicalDestination?: string;
     method?: string;
   };
+  // v5.0 FASE 5B.2: role lock + slot stability detectados por CORE.
+  // POLICY usa esto para decidir entre "Perfecto, tengo origen en X..."
+  // (cuando slots están locked) vs CLARIFY.
+  roleLock?: RoleLock;
+  slotStability?: SlotStabilityMap;
 }
 
 export interface HandlerContext {

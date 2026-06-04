@@ -44,7 +44,8 @@ import {
 } from "@/lib/utils/conversation-workflow";
 import { handleMessage } from "@/lib/ai/handler";
 import { assertCoreRouterPolicy, assertOutputSource, resetRequestState } from "@/lib/ai/guard";
-import type { ExtractionContext, Lang } from "@/lib/ai/types";
+import { core } from "@/lib/ai/core";
+import type { ExtractionContext, Lang, RoleLock, SlotStabilityMap } from "@/lib/ai/types";
 
 const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
 
@@ -532,7 +533,18 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     // con la ExtractionContext (slots confirmados, confidence, workflow state, tariff).
     const lang = detectLeadLang(text);
     const parsedData: TripExtraction | undefined = parsed && parsed.success ? parsed.data : undefined;
-    const extractionCtx = buildExtractionContext(parsedData, confidenceResult, workflowResult, tariffMatch);
+    // v5.0 FASE 5B.2: detectar role lock + slot stability con CORE antes de
+    // pasar al handler. CORE ya fue invocado al inicio de este request (L173)
+    // y la respuesta del primer handleMessage tiene el roleLock en `decision.core`.
+    const coreDecision = core(text);
+    const extractionCtx = buildExtractionContext(
+      parsedData,
+      confidenceResult,
+      workflowResult,
+      tariffMatch,
+      coreDecision.roleLock,
+      coreDecision.slotStability,
+    );
     const handlerResult = handleMessage(text, "RESERVA", {
       history,
       customerName: customerName || undefined,
@@ -683,15 +695,42 @@ function detectLeadLang(text: string): Lang {
 // v5.0 FASE 5B: buildExtractionContext arma el input rico para la policy RESERVA.
 // La policy usa esto para redactar el finalResponse (confirmación, clarificación
 // o fallback) sin LLM y sin inferencia geográfica.
+//
+// v5.0 FASE 5B.2: si el CORE detectó role lock para origin/destination, esos
+// slots sobrescriben los del LLM. La sintaxis del input es la fuente de verdad
+// para el rol; el LLM solo completa valores cuando no hay role lock.
 function buildExtractionContext(
   _parsedData: TripExtraction | undefined,
   confidenceResult: ExtractionResult | undefined,
   workflowResult: SlotWorkflowContext | undefined,
   tariffMatch: TariffMatchResult | undefined,
+  roleLock?: RoleLock,
+  slotStability?: SlotStabilityMap,
 ): ExtractionContext | undefined {
   if (!workflowResult) return undefined;
+
+  // Base slots: lo que vino del LLM (o regex fallback).
+  const baseSlots = confidenceResult?.slots ?? {};
+  const slots: Record<string, any> = { ...baseSlots };
+
+  // Aplicar role lock de CORE: sobrescribe lo del LLM si hay conflicto.
+  if (roleLock?.origin) {
+    slots.origin = {
+      value: roleLock.origin,
+      score: 1.0,
+      reason: "core_role_lock",
+    };
+  }
+  if (roleLock?.destination) {
+    slots.destination = {
+      value: roleLock.destination,
+      score: 1.0,
+      reason: "core_role_lock",
+    };
+  }
+
   return {
-    slots: confidenceResult?.slots ?? {},
+    slots,
     overallConfidence: confidenceResult?.overall_confidence ?? 0,
     workflowState: workflowResult.state,
     clarifyField: workflowResult.clarifyField ?? null,
@@ -705,5 +744,7 @@ function buildExtractionContext(
           method: tariffMatch.method,
         }
       : undefined,
+    roleLock: roleLock ?? { origin: null, destination: null },
+    slotStability: slotStability ?? { origin: "open", destination: "open" },
   };
 }

@@ -121,6 +121,16 @@ function buildReservaFinalResponse(
   lang: Lang,
 ): BuiltResponse {
   if (extraction) {
+    // v5.0 FASE 5B.2: SAFE RESPONSE FALLBACK.
+    // Si el role lock fijó origin y destination (ambos roles estables) y NO
+    // hay scheduled_at → acknowledge lo que ya tenemos y pedir refinamiento
+    // (hora + dirección si destination es ambiguo). NO resetear, NO pedir todo
+    // de nuevo. Esta ruta tiene PRIORIDAD sobre la clarificación estándar.
+    const stableAck = buildStableAcknowledge(extraction, lang);
+    if (stableAck) {
+      return { finalResponse: stableAck, nextExpectedFields: ["scheduled_at"] };
+    }
+
     if (extraction.askForConfirmation && extraction.tariff?.matched && extraction.tariff.price != null) {
       return {
         finalResponse: buildConfirmationMessage(extraction, lang),
@@ -327,6 +337,66 @@ function buildGenericSafeFallback(lang: Lang): string {
   if (lang === "en") return `I couldn't process that. An operator will assist you shortly.`;
   if (lang === "pt") return `Não consegui processar isso. Um operador vai te atender em breve.`;
   return `No pude procesar eso. Un operador te va a asistir en breve.`;
+}
+
+// v5.0 FASE 5B.2: SAFE RESPONSE FALLBACK.
+// Retorna el acknowledge ("Perfecto, tengo origen en X y destino hacia Y...")
+// si se cumplen las condiciones:
+//   1. roleLock fija ambos roles (origin y destination), aunque los valores
+//      sean ambiguos ("centro" está OK como destination locked).
+//   2. NO hay scheduled_at confirmado → la pregunta es por hora.
+//   3. NO está en estado awaiting_confirmation (ese flujo tiene su propio
+//      acknowledgement más rico con precio).
+// Si destination es ambiguo, también pregunta por la dirección exacta en
+// el destination (no resetea, no pide todo de nuevo).
+function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): string | null {
+  const origin = extraction.slots.origin?.value;
+  const destination = extraction.slots.destination?.value;
+  if (origin == null || destination == null) return null;
+  if (String(origin).trim() === "" || String(destination).trim() === "") return null;
+
+  // Si ya tiene hora → no es el caso del fallback, el policy elige otra ruta.
+  if (extraction.slots.scheduled_at?.value) return null;
+
+  // Si el workflow ya está pidiendo confirmación → no superponer acknowledge.
+  if (extraction.workflowState === "awaiting_confirmation") return null;
+
+  const originStr = withDefiniteArticle(String(origin), lang);
+  const destStr = withDefiniteArticle(String(destination), lang);
+  const destStrRaw = String(destination).trim();
+  const destReason = extraction.slots.destination?.reason;
+  const destIsAmbiguous =
+    destReason === "ambiguous_term" || GENERIC_AMBIGUOUS_LOCATION_RE.test(destStrRaw);
+
+  if (lang === "en") {
+    const askAddress = destIsAmbiguous ? `, and what's the exact address in ${destStrRaw}` : "";
+    return `Got it. Origin: ${originStr}. Destination: ${destStr}. What time do you need the ride${askAddress}?`;
+  }
+  if (lang === "pt") {
+    const askAddress = destIsAmbiguous ? ` e qual o endereço exato em ${destStrRaw}` : "";
+    return `Certo. Origem: ${originStr}. Destino: ${destStr}. A que horas você precisa da corrida${askAddress}?`;
+  }
+  const askAddress = destIsAmbiguous ? ` y a qué dirección del ${destStrRaw} vas` : "";
+  return `Perfecto. Tengo origen en ${originStr} y destino hacia ${destStr}. ¿A qué hora necesitás el traslado${askAddress}?`;
+}
+
+// v5.0 FASE 5B.2: prepend artículo definido cuando el value es un sustantivo
+// común sin artículo ("aeropuerto" → "el aeropuerto", "centro" → "el centro").
+// No agrega nada si el value ya tiene artículo o es un nombre propio.
+function withDefiniteArticle(value: string, lang: Lang): string {
+  const v = value.trim();
+  if (!v) return v;
+  if (/^(el|la|los|las|al|del)\s+/i.test(v)) return v;
+  if (/^[A-ZÁÉÍÓÚÑ]/.test(v)) return v;
+  if (lang === "en") {
+    if (/^(the)\s+/i.test(v)) return v;
+    return `the ${v}`;
+  }
+  if (lang === "pt") {
+    if (/^(o|a|os|as)\s+/i.test(v)) return v;
+    return `o ${v}`;
+  }
+  return `el ${v}`;
 }
 
 function inferMissingFieldFromCore(decision: FinalDecision): string | null {
