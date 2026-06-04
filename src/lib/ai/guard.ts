@@ -1,19 +1,20 @@
-// GUARD — Hard enforcement del flujo CORE → ROUTER → POLICY → LLM.
-// Cualquier intento de invocar LLM sin pasar por el flujo se BLOQUEA.
+// GUARD — Hard enforcement del flujo CORE → ROUTER → POLICY → OUTPUT.
+// v5.0 FASE 5B: cualquier intento de emitir output fuera de POLICY se BLOQUEA.
 //
 // Reglas:
 // - handleMessage() setea el state (CORE, FinalDecision, PolicyOutput).
-// - Cualquier llamada a Groq/LLM debe pasar assertCoreRouterPolicy().
-// - Si el state falta → retorna block con log [LEGACY BLOCKED].
+// - Cualquier LLM call (CORE/extraction) debe pasar assertCoreRouterPolicy().
+// - Cualquier output final al usuario debe pasar assertOutputSource("POLICY").
+// - El pipeline completo debe estar armado antes de emitir (assertPipelineComplete).
 //
 // El state es module-level. Cada request debe llamar resetRequestState() al inicio
-// y handleMessage() antes de cualquier LLM call.
+// y handleMessage() antes de cualquier LLM call o send al usuario.
 
-import type { CoreDecision, FinalDecision, PolicyOutput } from "./types";
+import type { CoreDecision, FinalDecision, OutputSource, PolicyOutput } from "./types";
 
 export interface BlockResult {
   status: "BLOCKED_LEGACY_FLOW";
-  reason: "CORE_ROUTER_REQUIRED";
+  reason: "CORE_ROUTER_REQUIRED" | "OUTPUT_SOURCE_NOT_POLICY" | "PIPELINE_INCOMPLETE";
   context: string;
 }
 
@@ -45,6 +46,38 @@ export function assertCoreRouterPolicy(): true | BlockResult {
       status: "BLOCKED_LEGACY_FLOW",
       reason: "CORE_ROUTER_REQUIRED",
       context: `core=${!!coreState} router=${!!finalState} policy=${!!policyState}`,
+    };
+    console.log("[LEGACY BLOCKED]", block);
+    return block;
+  }
+  return true;
+}
+
+// v5.0 FASE 5B: hard guardrail para outputs no-POLICY.
+// Lanza OUTPUT_VIOLATION. Uso: assertOutputSource(policy.outputSource).
+export function assertOutputSource(source: OutputSource | string): true {
+  if (source !== "POLICY") {
+    const err = new Error(
+      `OUTPUT_VIOLATION: NON_POLICY_RESPONSE_BLOCKED (source=${source ?? "undefined"})`,
+    );
+    console.error("[OUTPUT_VIOLATION]", err.message);
+    throw err;
+  }
+  return true;
+}
+
+// v5.0 FASE 5B: assert runtime que el pipeline CORE+ROUTER+POLICY está armado.
+// Uso: assertPipelineComplete(decision.core, decision, policy).
+export function assertPipelineComplete(
+  core: CoreDecision | null | undefined,
+  decision: FinalDecision | null | undefined,
+  policy: PolicyOutput | null | undefined,
+): true | BlockResult {
+  if (!core || !decision || !policy) {
+    const block: BlockResult = {
+      status: "BLOCKED_LEGACY_FLOW",
+      reason: "PIPELINE_INCOMPLETE",
+      context: `core=${!!core} router=${!!decision} policy=${!!policy}`,
     };
     console.log("[LEGACY BLOCKED]", block);
     return block;

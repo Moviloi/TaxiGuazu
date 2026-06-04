@@ -72,10 +72,16 @@ export function core(input: string): CoreDecision {
 
 function classifyIntent(facts: string[]): Intent {
   const has = (prefix: string) => facts.some((f) => f.startsWith(prefix));
+  const hasLocationAmbiguous = has("location_ambiguous:");
 
   if (has("affirmation:") || has("date:") || has("time:")) {
     if (has("action:") || has("urgency:")) return "ACTION";
     return "STATEFUL";
+  }
+  // Si hay location_ambiguous y NO hay slots concretos de origen/destino,
+  // downgradear a AMBIGUOUS para forzar clarificación en la policy.
+  if (hasLocationAmbiguous && !has("origin:") && !has("destination:")) {
+    return "AMBIGUOUS";
   }
   if (has("action:") || has("urgency:")) return "ACTION";
   if (has("query:")) return "QUERY";

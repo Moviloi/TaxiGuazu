@@ -9,7 +9,6 @@ import {
   setConversationTrip,
   updateTripState,
   updateTripTariff,
-  getDiscountsForTariff,
   getDriverByPhone,
   getDriverExpiry,
   getPrincipalDriver,
@@ -21,7 +20,7 @@ import {
   resetChatSession,
   getChatSession,
 } from "@/lib/db/database";
-import { generateGroqReply, generateGroqExtraction } from "@/lib/ai/groq";
+import { generateGroqExtraction } from "@/lib/ai/groq";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
 import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
@@ -44,7 +43,8 @@ import {
   getWorkflow,
 } from "@/lib/utils/conversation-workflow";
 import { handleMessage } from "@/lib/ai/handler";
-import { assertCoreRouterPolicy, resetRequestState } from "@/lib/ai/guard";
+import { assertCoreRouterPolicy, assertOutputSource, resetRequestState } from "@/lib/ai/guard";
+import type { ExtractionContext, Lang } from "@/lib/ai/types";
 
 const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
 
@@ -378,18 +378,12 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     const history = sessionReset ? [] : await getRecentHistory(conversation.id, 20);
 
-    let promoNote: string | undefined;
-    if (trip?.tariff_id) {
-      const discounts = await getDiscountsForTariff(trip.tariff_id);
-      if (discounts.length > 0) {
-        const maxPct = Math.max(...discounts.map((d) => d.discount_pct));
-        promoNote = `🔥 PROMO DEL DÍA: descuento de hasta ${maxPct}% en esta ruta por tiempo limitado. Solo ofrecela si el cliente duda, pregunta por promos, o pide más descuento del estándar. No menciones esta promo si el cliente ya aceptó el precio.`;
-      }
-    }
-
     // === CONFIDENCE-BASED EXTRACTION + ENGINE ===
     let extractionNote: string | undefined;
     let workflowResult: SlotWorkflowContext | undefined;
+    let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
+    let confidenceResult: ExtractionResult | undefined;
+    let tariffMatch: TariffMatchResult | undefined;
     try {
       console.log("[EXTRACTION] Iniciando extraction para:", text.substring(0, 80));
       // GUARD: assert CORE → ROUTER → POLICY state before LLM extraction.
@@ -401,13 +395,12 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       const raw = await generateGroqExtraction(text, history, customerName || undefined);
       if (raw) {
         console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
-        const parsed = TripExtractionSchema.safeParse(raw);
+        parsed = TripExtractionSchema.safeParse(raw);
         if (parsed.success) {
           console.log("[EXTRACTION] Parse exitoso, calculando confidence...");
-          const confidenceResult = await calculateSlotConfidence(parsed.data, text);
+          confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
           // Backend tariff matching — inject real price if origin + destination known
-          let tariffMatch: TariffMatchResult | undefined;
           if (parsed.data.origin && parsed.data.destination) {
             const pax = parsed.data.passengers || 1;
             console.log(`[EXTRACTION] Buscando tariff: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
@@ -501,6 +494,17 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
           const ft = await matchTariff(originMatch, destMatch, 1);
           if (ft.matched) {
+            tariffMatch = ft;
+            if (confidenceResult) {
+              confidenceResult.slots.origin = { value: ft.canonicalOrigin, score: 1.0, reason: "regex_fallback" };
+              confidenceResult.slots.destination = { value: ft.canonicalDestination, score: 1.0, reason: "regex_fallback" };
+              confidenceResult.slots.price = { value: ft.price, score: 1.0, reason: "backend_tariff_match" };
+            }
+            workflowResult = await evaluateWorkflowTransition(phone, {
+              slots: confidenceResult?.slots ?? {},
+              overall_confidence: 1.0,
+              action: "proceed",
+            });
             extractionNote = [
               `Confianza general: 100%. Estado: collecting_slots.`,
               `Origen: "${originMatch}" → ${ft.canonicalOrigin} (Confianza: 100%)`,
@@ -522,13 +526,22 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       }
     }
 
-    // GUARD: assert CORE → ROUTER → POLICY state before LLM reply.
-    const replyGuard = assertCoreRouterPolicy();
-    if (replyGuard !== true) {
-      console.log("[LEGACY BLOCKED] generateGroqReply", replyGuard);
-      return;
-    }
-    let response = await generateGroqReply(text, history, trip, phone, promoNote, customerName || undefined, extractionNote);
+    // v5.0 FASE 5B OUTPUT LOCK:
+    // El output final viene de POLICY via handleMessage(). El LLM ya no redacta
+    // respuestas; solo extrae slots (CORE). La policy RESERVA arma el finalResponse
+    // con la ExtractionContext (slots confirmados, confidence, workflow state, tariff).
+    const lang = detectLeadLang(text);
+    const parsedData: TripExtraction | undefined = parsed && parsed.success ? parsed.data : undefined;
+    const extractionCtx = buildExtractionContext(parsedData, confidenceResult, workflowResult, tariffMatch);
+    const handlerResult = handleMessage(text, "RESERVA", {
+      history,
+      customerName: customerName || undefined,
+      extraction: extractionCtx,
+      lang,
+    });
+    // Hard guardrail: cualquier output fuera de POLICY se BLOQUEA.
+    assertOutputSource(handlerResult.policy.outputSource);
+    const response = handlerResult.policy.finalResponse;
 
     // === NEW FLOW: workflow-based routing, no marker parsing ===
     await insertMessage(conversation.id, "assistant", response);
@@ -654,4 +667,43 @@ function buildShiftEndPrompt(driverShift: string): string | null {
   if (remainingMs <= 0 || remainingMs > 1800000) return null; // only within 30min of shift end
   const min = Math.ceil(remainingMs / 60000);
   return `⚠️ Tu turno termina en ${min} min. Mandá -activar mañana para renovar.`;
+}
+
+// v5.0 FASE 5B: detectLeadLang es un helper local para no importar detectLang
+// desde groq.ts (legacy). Mantiene el comportamiento anterior.
+function detectLeadLang(text: string): Lang {
+  const lower = text.toLowerCase();
+  const ptMarkers = ["você", "obrigado", "bom dia", "boa tarde", "boa noite", "quanto custa", "valor", "por favor"];
+  const enMarkers = ["hello", "hi", "how much", "price", "airport", "booking", "tomorrow", "today", "please"];
+  if (ptMarkers.some((m) => lower.includes(m))) return "pt";
+  if (enMarkers.some((m) => lower.includes(m))) return "en";
+  return "es";
+}
+
+// v5.0 FASE 5B: buildExtractionContext arma el input rico para la policy RESERVA.
+// La policy usa esto para redactar el finalResponse (confirmación, clarificación
+// o fallback) sin LLM y sin inferencia geográfica.
+function buildExtractionContext(
+  _parsedData: TripExtraction | undefined,
+  confidenceResult: ExtractionResult | undefined,
+  workflowResult: SlotWorkflowContext | undefined,
+  tariffMatch: TariffMatchResult | undefined,
+): ExtractionContext | undefined {
+  if (!workflowResult) return undefined;
+  return {
+    slots: confidenceResult?.slots ?? {},
+    overallConfidence: confidenceResult?.overall_confidence ?? 0,
+    workflowState: workflowResult.state,
+    clarifyField: workflowResult.clarifyField ?? null,
+    askForConfirmation: workflowResult.askForConfirmation ?? false,
+    tariff: tariffMatch
+      ? {
+          matched: tariffMatch.matched,
+          price: tariffMatch.matched ? tariffMatch.price : undefined,
+          canonicalOrigin: tariffMatch.canonicalOrigin,
+          canonicalDestination: tariffMatch.canonicalDestination,
+          method: tariffMatch.method,
+        }
+      : undefined,
+  };
 }
