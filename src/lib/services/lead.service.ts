@@ -43,6 +43,7 @@ import {
   resetToIdle,
   getWorkflow,
 } from "@/lib/utils/conversation-workflow";
+import { handleMessage } from "@/lib/ai/handler";
 
 const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
 
@@ -165,6 +166,14 @@ const HABLAR_HUMANO = [
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   try {
     console.log(`[DEBUG_LEAD] phone=${phone} text="${text.substring(0, 60)}"`);
+    // CORE+ROUTER+POLICY: decisión arquitectónica. Mode=RESERVA por default;
+    // se refinará con trip state en una fase posterior.
+    const ai = handleMessage(text, "RESERVA");
+    console.log(
+      `[AI_HANDLER] mode=${ai.decision.mode} intent=${ai.decision.core.intent} ` +
+        `decision=${ai.decision.decision} confidence=${ai.decision.core.confidence.toFixed(2)} ` +
+        `facts=[${ai.decision.core.facts.join(",")}] hint="${ai.policy.policyHint}"`,
+    );
     const trimmed = text.trim();
     const lower = trimmed.toLowerCase();
 
