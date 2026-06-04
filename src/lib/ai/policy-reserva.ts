@@ -1,8 +1,70 @@
 // POLICY RESERVA — flujos multi-step, STATEFUL, confirmación obligatoria en EXECUTE.
 // v5.0 FASE 5B: policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic nueva, inferencia geográfica, generación libre.
+//
+// v5.0 FASE 5B.1 (patch): se eliminó la heurística "centro = origin" que
+// invertía slots. La policy ya NO asigna automáticamente "centro" a origin.
+// Cualquier ambigüedad → CLARIFY explícito. La detección de hoteles/landmarks
+// ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
+// estructura de ruta turística.
 
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
+
+// Hotel/landmark names que requieren clarificación: el LLM puede extraerlos
+// pero la policy no puede inferir a qué dirección específica se refieren.
+const AMBIGUOUS_HOTEL_LANDMARKS_RE =
+  /\b(amerian|meli[áa]|panoramic|gran\s+hotel|falls\s+hotel|iguaz[uú]\s+grand|lo\s+de\s+ramona|hotel\s+\w+)\b/i;
+
+// Términos genéricos de ubicación que el LLM o el regex extrae como "ambiguous_term"
+// pero que la policy no debe asociar automáticamente a un campo (origin/destination).
+const GENERIC_AMBIGUOUS_LOCATION_RE = /\b(centro|microcentro|hotel|iguaz[uú]|cerca|zona|alrededores)\b/i;
+
+function isAmbiguous(value: string | number | null | undefined): boolean {
+  if (value == null) return true;
+  const v = String(value).trim();
+  if (!v) return true;
+  return GENERIC_AMBIGUOUS_LOCATION_RE.test(v) || AMBIGUOUS_HOTEL_LANDMARKS_RE.test(v);
+}
+
+// v5.0 FASE 5B.1: safeSlotResolution NO infiere ni reordena. Solo respeta lo
+// que el extractor (LLM o regex) ya asignó a cada slot.
+function safeSlotResolution(extraction: ExtractionContext | undefined): {
+  origin: string | null;
+  destination: string | null;
+  ambiguityFlags: string[];
+} {
+  if (!extraction) {
+    return { origin: null, destination: null, ambiguityFlags: ["no_extraction"] };
+  }
+  const origin = extraction.slots.origin?.value != null ? String(extraction.slots.origin.value) : null;
+  const destination =
+    extraction.slots.destination?.value != null ? String(extraction.slots.destination.value) : null;
+  const ambiguityFlags: string[] = [];
+  if (extraction.slots.origin?.reason === "ambiguous_term") ambiguityFlags.push("origin:ambiguous_term");
+  if (extraction.slots.destination?.reason === "ambiguous_term") ambiguityFlags.push("destination:ambiguous_term");
+  if (origin && isAmbiguous(origin)) ambiguityFlags.push("origin:generic_ambiguous");
+  if (destination && isAmbiguous(destination)) ambiguityFlags.push("destination:generic_ambiguous");
+  if (destination && AMBIGUOUS_HOTEL_LANDMARKS_RE.test(destination)) {
+    ambiguityFlags.push("destination:hotel_landmark");
+  }
+  return { origin, destination, ambiguityFlags };
+}
+
+// v5.0 FASE 5B.1: formatHotelLandmarkLabel agrega "Hotel " como prefijo
+// cosmético cuando el usuario mencionó un nombre de hotel suelto (ej. "amerian"
+// → "Hotel Amerian"). Si el value ya contiene "centro", no agrega "en el centro"
+// al final (sería redundante). NO infiere dirección ni ubicación: solo label.
+function formatHotelLandmarkLabel(value: string): string {
+  const v = value.trim();
+  if (!v) return v;
+  const hasHotelPrefix = /^\s*hotel\b/i.test(v);
+  const hasCentro = /\bcentro\b/i.test(v);
+  const capital = v.charAt(0).toUpperCase() + v.slice(1);
+  if (hasHotelPrefix) {
+    return hasCentro ? capital : `${capital} en el centro`;
+  }
+  return hasCentro ? `Hotel ${v}` : `Hotel ${capital} en el centro`;
+}
 
 export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): PolicyOutput {
   const lang = ctx?.lang ?? "es";
@@ -167,20 +229,26 @@ function buildNoTariffConfirmation(extraction: ExtractionContext, lang: Lang): s
 
 function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string {
   const field = extraction.clarifyField!;
-  const hasAmbiguousLocation = extraction.slots.origin?.reason === "ambiguous_term" || extraction.slots.destination?.reason === "ambiguous_term";
+  const slots = extraction.slots;
+  const safe = safeSlotResolution(extraction);
+  const destValue = safe.destination;
+  const originValue = safe.origin;
 
-  if (field === "origin") {
-    if (hasAmbiguousLocation) {
-      if (lang === "en") return `From which specific place in the city centre are you leaving?`;
-      if (lang === "pt") return `De qual ponto específico do centro você sai?`;
-      return `¿Desde qué lugar específico del centro salís?`;
-    }
-    if (lang === "en") return `Where are you leaving from?`;
-    if (lang === "pt") return `De onde você está saindo?`;
-    return `¿Desde dónde salís?`;
-  }
   if (field === "destination") {
-    if (hasAmbiguousLocation) {
+    // Caso especial: destination es un hotel/landmark ambiguo (amerian, meliá, etc.)
+    // → la policy NO asume estructura de ruta, pregunta si es ese hotel en el centro
+    //   o alguna dirección específica.
+    if (destValue && AMBIGUOUS_HOTEL_LANDMARKS_RE.test(destValue)) {
+      const label = formatHotelLandmarkLabel(destValue);
+      if (lang === "en") {
+        return `Do you mean ${label} in the city centre or a specific address?`;
+      }
+      if (lang === "pt") {
+        return `Você se refere a ${label} no centro ou a outro endereço específico?`;
+      }
+      return `¿Te referís a ${label} o a otra dirección específica?`;
+    }
+    if (slots.destination?.reason === "ambiguous_term") {
       if (lang === "en") return `To which specific place are you going?`;
       if (lang === "pt") return `Para qual local específico você vai?`;
       return `¿A qué lugar específico vas?`;
@@ -189,6 +257,21 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
     if (lang === "pt") return `Para onde você precisa ir?`;
     return `¿A dónde necesitás ir?`;
   }
+
+  if (field === "origin") {
+    // v5.0 FASE 5B.1: NO preguntar "desde qué lugar del centro" hardcodeado.
+    // El policy respeta lo que el extractor ya asignó. Si origin es ambiguo,
+    // pregunta genéricamente sin asumir "centro" como referencia.
+    if (slots.origin?.reason === "ambiguous_term" || (originValue && isAmbiguous(originValue))) {
+      if (lang === "en") return `Could you give a more specific origin (street, hotel name, reference)?`;
+      if (lang === "pt") return `Pode indicar um local de origem mais específico (rua, hotel, referência)?`;
+      return `¿Podés indicarme un origen más específico (calle, nombre de hotel, referencia)?`;
+    }
+    if (lang === "en") return `Where are you leaving from?`;
+    if (lang === "pt") return `De onde você está saindo?`;
+    return `¿Desde dónde salís?`;
+  }
+
   if (field === "passengers") {
     if (lang === "en") return `How many passengers?`;
     if (lang === "pt") return `Quantos passageiros?`;
