@@ -6,11 +6,17 @@
 //   - route() mapea PolicyAction → handler name (pure function)
 //   - router() legacy mantiene backward compat con handler.ts / policies
 //     (internamente usa core + applyPolicy, NUNCA intent)
+//
+// v5.0 FASE 6.7: router() incluye observabilidad side-channel
+//   - logDecision async, non-blocking, fail-safe
 
 import { core } from "./core";
 import { applyPolicy } from "./policy";
 import type { PolicyAction, PolicyDecision } from "./policy/types";
 import type { CoreDecision, FinalDecision, Mode, OutputType } from "./types";
+import { logDecision, generateCorrelationId } from "./observability";
+import type { DecisionTrace } from "./trace/types";
+import type { DecisionLog } from "./observability/types";
 
 // ── RouteResult: descriptor de ejecución ──
 export interface RouteResult {
@@ -62,11 +68,32 @@ function actionToOutputType(action: PolicyAction): OutputType {
 // Internamente usa core() + applyPolicy().
 // NO contiene switch sobre intent, NO contiene switch sobre keywords.
 // Solo llama al pipeline y mapea el PolicyDecision.action → OutputType.
+// FASE 6.7: observabilidad side-channel non-blocking.
 export function router(input: string, mode: Mode): FinalDecision {
+  const correlationId = generateCorrelationId();
+  const start = performance.now();
   const c: CoreDecision = core(input);
   // lateral ya viene de core() (FASE 6.2)
   const policy: PolicyDecision = applyPolicy(c);
   const outputType = actionToOutputType(policy.action);
+  const end = performance.now();
+
+  // FASE 6.7: observabilidad side-channel (non-blocking)
+  const trace = (policy as PolicyDecision & { trace?: DecisionTrace }).trace;
+  const log: DecisionLog = {
+    correlationId,
+    timestamp: Date.now(),
+    intent: c.intent,
+    confidence: policy.confidence,
+    selectedRule: trace?.selectedRule ?? "unknown",
+    selectedAction: policy.action,
+    latencyMs: end - start,
+    lateralSnapshot: c.lateral,
+    trace,
+    metadata: {},
+  };
+  logDecision(log);
+
   return {
     decision: outputType,
     mode,
