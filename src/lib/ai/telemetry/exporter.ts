@@ -1,7 +1,6 @@
 // FASE 6.8: Trace Export + Safe Exporter
 // Exporta DecisionTrace via OTEL spans. Fail-safe wrapper.
 
-import { trace, SpanStatusCode } from "@opentelemetry/api";
 import type { DecisionTrace } from "../trace/types";
 import type { DecisionEvent } from "./events";
 import { getTracer } from "./tracer";

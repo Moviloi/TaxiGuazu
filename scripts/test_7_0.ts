@@ -4,7 +4,7 @@
 import { core } from "../src/lib/ai/core";
 import { router, route } from "../src/lib/ai/router";
 import { applyPolicy } from "../src/lib/ai/policy";
-import { evaluateBusiness, computeLeadMaturity, computeCustomerValue, computeFunnelState } from "../src/lib/ai/business";
+import { evaluateBusiness } from "../src/lib/ai/business";
 import type { BusinessInput } from "../src/lib/ai/business/types";
 
 let pass = 0;

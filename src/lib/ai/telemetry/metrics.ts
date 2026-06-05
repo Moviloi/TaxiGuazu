@@ -2,20 +2,13 @@
 // Counters and histograms per rule, action, and pipeline phase.
 
 import { metrics } from "@opentelemetry/api";
-import { MeterProvider } from "@opentelemetry/sdk-metrics";
 
 let initialized = false;
 let meter: ReturnType<typeof metrics.getMeter>;
 
 function ensureMeter() {
   if (initialized) return;
-  try {
-    const provider = new MeterProvider();
-    provider.register();
-    initialized = true;
-  } catch {
-    // silent fallback
-  }
+  initialized = true;
   meter = metrics.getMeter("decision-engine");
 }
 

@@ -19,6 +19,10 @@ import {
   upsertChatSession,
   resetChatSession,
   getChatSession,
+  clearPendingOpportunity,
+  updateOpportunityLogResponse,
+  setChatSessionWorkflowState,
+  getDbInstance,
 } from "@/lib/db/database";
 import { generateGroqExtraction } from "@/lib/ai/groq";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
@@ -45,6 +49,23 @@ import {
 import { handleMessage } from "@/lib/ai/handler";
 import { assertCoreRouterPolicy, assertOutputSource, resetRequestState } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
+import { opportunityEngine } from "@/lib/services/opportunity-engine";
+import { buildF4Signals, computeComprehensionScore, getF4State, getF4RecoveryMessage } from "@/lib/services/comprehension";
+import { buildMemory } from "@/lib/services/memory";
+import { buildPredictedContext, enrichF4Signals, computeMemoryBoost } from "@/lib/services/predictive-routing";
+import { logIntentDetected, logEntityDetected, logOpportunityShown, logUserResponse, logEscalation } from "@/lib/services/f6-events";
+import { recordF4Outcome, getF4ThresholdAdjustment } from "@/lib/services/f6-learning";
+import { loadObjectiveWeights } from "@/lib/services/f7-objectives";
+import { adjustOpportunityRanking } from "@/lib/services/f7-routing";
+import { getSystemLoad } from "@/lib/services/f7-load";
+import { runF8 } from "@/lib/services/f8-index";
+import { seedPolicies } from "@/lib/services/f8-policy";
+import { computeGlobalMetrics } from "@/lib/services/f8-global";
+import { runF9 } from "@/lib/services/f9-index";
+import { logF9Error } from "@/lib/services/f9-error";
+import { isAdminCommand, parseAdminCommand, executeAdminCommand } from "@/lib/services/f9-admin";
+import { logDecision } from "@/lib/services/decision-log";
+import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 import type { ExtractionContext, Lang, RoleLock, SlotStabilityMap } from "@/lib/ai/types";
 
 const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
@@ -54,6 +75,11 @@ function isAffirmativeMessage(text: string): boolean {
   if (AFFIRMATIVE_RE.test(t)) return true;
   const clean = t.replace(/[^a-záéíóúñ\s]/g, "").trim();
   return /\b(ok\b|dale\b|confirmo\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b)/.test(clean);
+}
+
+const NEGATIVE_RE = /^(no\b|no gracias|no, gracias|no me interesa|no quiero|nop|nah)/i;
+function isNegativeMessage(text: string): boolean {
+  return NEGATIVE_RE.test(text.trim().toLowerCase());
 }
 
 function formatConfidenceNote(
@@ -285,12 +311,96 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     if (await handleAdminCommand(phone, trimmed)) return;
 
+    // F9 Admin Command Interface
+    if (isAdminCommand(trimmed)) {
+      const parsed = parseAdminCommand(trimmed);
+      if (parsed) {
+        const result = await executeAdminCommand(parsed, phone);
+        await sendWhatsAppMessage(phone, result.message);
+        const conv = await getOrCreateConversation(phone);
+        await insertMessage(conv.id, "assistant", result.message);
+      }
+      return;
+    }
+
+    // FASE 6.1: detección temprana de intents laterales
+    const lateralIntent = core(text).intent;
+    if (lateralIntent === "EMERGENCY") {
+      console.log("[LATERAL] EMERGENCY detected for", phone);
+      const resp = "🚨 Estamos notificando a nuestro equipo. Un operador te va a contactar urgente.";
+      await sendWhatsAppMessage(phone, resp);
+      const conv = await getOrCreateConversation(phone);
+      await insertMessage(conv.id, "assistant", resp);
+      await notifyAdmin(`🚨 *EMERGENCIA — Cliente pide ayuda urgente*\n\nTeléfono: ${phone}\nMensaje: "${trimmed.substring(0, 200)}"`);
+      return;
+    }
+    if (lateralIntent === "RESCHEDULE") {
+      console.log("[LATERAL] RESCHEDULE detected for", phone);
+      const resp = "Entendido. Un operador va a revisar tu reserva y te contacta para reprogramar.";
+      await sendWhatsAppMessage(phone, resp);
+      const conv = await getOrCreateConversation(phone);
+      await insertMessage(conv.id, "assistant", resp);
+      await notifyAdmin(`🔄 *REPROGRAMACIÓN — Cliente quiere modificar su viaje*\n\nTeléfono: ${phone}\nMensaje: "${trimmed.substring(0, 200)}"`);
+      return;
+    }
+    if (lateralIntent === "POST_SERVICE") {
+      console.log("[LATERAL] POST_SERVICE detected for", phone);
+      const resp = "Gracias por tu mensaje. Si necesitás ayuda con facturación o tenés algún reclamo, un operador te va a contactar.";
+      await sendWhatsAppMessage(phone, resp);
+      const conv = await getOrCreateConversation(phone);
+      await insertMessage(conv.id, "assistant", resp);
+      return;
+    }
+
     const conversation = await getOrCreateConversation(phone, undefined);
     const freshConv = await getConversationById(conversation.id);
     if (!freshConv || freshConv.taken_by_human) return;
 
     const workflow = await getWorkflow(conversation.id);
-    if (workflow && workflow.state !== "idle" && workflow.state !== "closed") return;
+    if (workflow && workflow.state !== "idle" && workflow.state !== "closed" && workflow.state !== "post_trip_opportunity") return;
+
+    // === OPPORTUNITY RESPONSE HANDLER ===
+    if (workflow?.state === "post_trip_opportunity") {
+      const session = await getChatSession(phone);
+      if (session?.pending_opportunity) {
+        const pending = JSON.parse(session.pending_opportunity);
+        const now = Math.floor(Date.now() / 1000);
+
+        if (now > pending.expires_at) {
+          console.log(`[OPPORTUNITY] expired for ${phone} rule="${pending.label}"`);
+          await updateOpportunityLogResponse(pending.logId, "expired", now);
+          await clearPendingOpportunity(phone);
+          await resetToIdle(conversation.id);
+          logUserResponse(String(conversation.id), "ignored", pending.label);
+        } else if (isAffirmativeMessage(text)) {
+          console.log(`[OPPORTUNITY] accepted by ${phone} rule="${pending.label}"`);
+          await updateOpportunityLogResponse(pending.logId, "accepted", now);
+          const infoMsg = `Perfecto. Te comparto información sobre ${pending.label}.`;
+          await sendWhatsAppMessage(phone, infoMsg);
+          await insertMessage(conversation.id, "assistant", infoMsg);
+          await clearPendingOpportunity(phone);
+          await resetToIdle(conversation.id);
+          logUserResponse(String(conversation.id), "accepted", pending.label);
+          return;
+        } else if (isNegativeMessage(text)) {
+          console.log(`[OPPORTUNITY] declined by ${phone} rule="${pending.label}"`);
+          await updateOpportunityLogResponse(pending.logId, "declined", now);
+          const declineMsg = "Entendido. Quedamos a disposición.";
+          await sendWhatsAppMessage(phone, declineMsg);
+          await insertMessage(conversation.id, "assistant", declineMsg);
+          await clearPendingOpportunity(phone);
+          await resetToIdle(conversation.id);
+          logUserResponse(String(conversation.id), "declined", pending.label);
+          return;
+        } else {
+          console.log(`[OPPORTUNITY] ignored for ${phone} rule="${pending.label}" — unrelated message`);
+          await updateOpportunityLogResponse(pending.logId, "ignored", now);
+          await clearPendingOpportunity(phone);
+          await resetToIdle(conversation.id);
+          logUserResponse(String(conversation.id), "ignored", pending.label);
+        }
+      }
+    }
 
     // === SESSION RESET CHECK ===
     const now = Math.floor(Date.now() / 1000);
@@ -335,6 +445,16 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     await insertMessage(conversation.id, "user", text);
 
+    // === F5 MEMORY + PREDICTIVE ROUTING (hoisted before confirmation) ===
+    const history = sessionReset ? [] : await getRecentHistory(conversation.id, 20);
+    const f5Session = await getChatSession(phone);
+    const f5Core = core(text);
+    const f5Memory = buildMemory(f5Session, history);
+    const f5Context = buildPredictedContext(text, f5Core.intent, f5Memory);
+    logIntentDetected(String(conversation.id), f5Core.intent, f5Context.intentPrediction.confidence);
+    const detectedEntities = f5Context.entityPrediction.candidates;
+    if (detectedEntities.length > 0) logEntityDetected(String(conversation.id), detectedEntities);
+
     // === CONFIRMATION CHECK (Phase 5-6) ===
     // If workflow_state is "awaiting_confirmation" and user affirms → dispatch directly
     {
@@ -370,14 +490,181 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             await insertMessage(conversation.id, "assistant", confirmMsg);
             const urgency = slots.urgency || "ahora";
             await escalateTrip(conversation.id, phone, trip, urgency, pax);
+
+            const AIRPORT_RE = /aeropuerto|iguazú|iguacu|airport|aeroparque/i;
+            const HOTEL_RE = /hotel|centro/i;
+            const INTENT_KW_RE = /city tour|cena( show)?|tour|excursión/i;
+            const ENTITY_RE = getAllDomainPatterns().length > 0
+              ? new RegExp(getAllDomainPatterns().map((p) => `(?:${p.source})`).join("|"), "i")
+              : /(?!)/i;
+            const originLower = origin.toLowerCase();
+            const destLower = destination.toLowerCase();
+            const oAir = AIRPORT_RE.test(originLower);
+            const dAir = AIRPORT_RE.test(destLower);
+            const oHotel = HOTEL_RE.test(originLower);
+            const dHotel = HOTEL_RE.test(destLower);
+            const tripLegType: "airport_to_hotel" | "hotel_to_airport" | "airport_to_airport" | "hotel_to_hotel" | "other" = oAir && dHotel ? "airport_to_hotel" : oHotel && dAir ? "hotel_to_airport" : oAir && dAir ? "airport_to_airport" : oHotel && dHotel ? "hotel_to_hotel" : "other";
+            const hotelZone = HOTEL_RE.test(originLower) || HOTEL_RE.test(destLower);
+            const intentKeywords: string[] = [];
+            const intentMatch = text.match(INTENT_KW_RE);
+            if (intentMatch) intentKeywords.push(intentMatch[0].toLowerCase());
+            const entityMatches: string[] = [];
+            const entityMatch = text.match(ENTITY_RE);
+            if (entityMatch) entityMatches.push(entityMatch[0].toLowerCase());
+
+            const opportunityContext = {
+              tripId: trip.trip_id,
+              clientPhone: phone,
+              origin: origin,
+              destination: destination,
+              passengers: pax,
+              tariffId: tariffMatch.matched ? tariffMatch.tariffId : null,
+              price: tariffMatch.matched ? tariffMatch.price : (slots.price || 0),
+              piso: tariffMatch.matched ? tariffMatch.piso : 0,
+              urgency,
+              conversationId: conversation.id,
+              tripLegType,
+              hotelZone,
+              intentKeywords,
+              entityMatches,
+              hasPendingOpportunity: !!session?.pending_opportunity,
+              memoryBoost: f5Context ? computeMemoryBoost(f5Memory.sessionMemory, entityMatches) : 0,
+            };
+            const rawOpportunities = await opportunityEngine.evaluate(opportunityContext);
+            const f7Weights = await loadObjectiveWeights();
+            const f7Load = await getSystemLoad();
+            const f7Decision = adjustOpportunityRanking(
+              rawOpportunities,
+              f7Weights,
+              f7Load,
+              [opportunityContext.memoryBoost ?? 0],
+              0.3,
+              0.5,
+            );
+            if (f7Decision.loadAdjusted && f7Decision.ranked.length > 0) {
+              console.log(`[F7] Load-adjusted routing: highLoad=${f7Load.driversAvailable < 3} queue=${f7Load.queueLength}`);
+            }
+
+            seedPolicies().catch((e) => logF9Error("seed-policies", e));
+
+            const f8Result = await runF8(
+              f7Decision, f7Load, f5Core.intent, 0, phone, String(conversation.id),
+            );
+            console.log(`[F8] policies=${f8Result.policyResults.length} blocked=${f8Result.blocked} guardrails=${f8Result.activeGuardrails.length} experiment=${f8Result.experimentVariant}`);
+
+            if (f8Result.blocked) {
+              console.log(`[F8] Oportunidad bloqueada por policy/guardrail`);
+              await resetChatSession(phone);
+              return;
+            }
+
+            computeGlobalMetrics().catch((e) => logF9Error("global-metrics", e));
+
+            logDecision(String(conversation.id), f7Decision, f8Result).catch((e) => logF9Error("decision-log", e));
+
+            runF9(f7Decision, f8Result, String(conversation.id), f5Core.intent).catch((e) => logF9Error("f9-orchestrator", e));
+
+            const finalOpportunities = f8Result.finalOverride?.ranked ?? f7Decision.ranked;
+
+            const db = getDbInstance();
+            const tx = await db.transaction();
+            try {
+              for (const opp of finalOpportunities) {
+                const oppMsg = opp.description + " ¿Te interesa recibir información?";
+                const now = Math.floor(Date.now() / 1000);
+                const pendingData = JSON.stringify({
+                  id: String(opp.ruleId),
+                  tipo: opp.type,
+                  presented_at: now,
+                  expires_at: now + 86400,
+                  logId: opp.logId,
+                  label: opp.label,
+                  f7EconomicScore: opp.economicScore,
+                  f7Utility: opp.utilityScore,
+                });
+                await insertMessage(conversation.id, "assistant", oppMsg, tx);
+                await setChatSessionWorkflowState(phone, "post_trip_opportunity", tx);
+                await tx.execute({
+                  sql: "UPDATE chat_sessions SET pending_opportunity = ?, updated_at = unixepoch() WHERE phone = ?",
+                  args: [pendingData, phone],
+                });
+                await logOpportunityShown(String(conversation.id), opp.label, opp.utilityScore, tx);
+              }
+              await tx.commit();
+            } catch (e) {
+              await tx.rollback();
+              console.error(`[OPPORTUNITY_ENGINE] Error en transacción, rolling back:`, e);
+              return;
+            }
+
+            for (const opp of finalOpportunities) {
+              const oppMsg = opp.description + " ¿Te interesa recibir información?";
+              await sendWhatsAppMessage(phone, oppMsg);
+              console.log(`[OPPORTUNITY_ENGINE] F7 optimized: label="${opp.label}" economicScore=${opp.economicScore} utility=${opp.utilityScore}`);
+              console.log(`[OPPORTUNITY_ENGINE] pending_opportunity set for ${phone} rule="${opp.label}"`);
+            }
+            if (finalOpportunities.length === 0) {
+              await resetChatSession(phone);
+            }
+          } else {
+            await resetChatSession(phone);
           }
+        } else {
+          await resetChatSession(phone);
         }
-        await resetChatSession(phone);
         return;
       }
     }
 
-    const history = sessionReset ? [] : await getRecentHistory(conversation.id, 20);
+    // === COMPREHENSION CHECK (F4) ===
+    {
+      const f4Signals = enrichF4Signals(
+        buildF4Signals({
+          text,
+          coreIntent: f5Core.intent,
+          slotStability: f5Core.slotStability,
+          session: f5Session,
+        }),
+        f5Context.entityPrediction,
+        f5Context.intentPrediction,
+      );
+      const f4Score = computeComprehensionScore(f4Signals);
+      const f4ThresholdAdj = await getF4ThresholdAdjustment();
+      const f4State = getF4State(f4Score, f4ThresholdAdj);
+
+      await getDbInstance().execute({
+        sql: "UPDATE chat_sessions SET f4_state = ?, comprehension_score = ?, updated_at = unixepoch() WHERE phone = ?",
+        args: [f4State, f4Score, phone],
+      });
+
+      await getDbInstance().execute({
+        sql: "INSERT INTO conversation_f4_log (session_id, score, state, reason) VALUES (?, ?, ?, ?)",
+        args: [String(conversation.id), f4Score, f4State, null],
+      });
+
+      recordF4Outcome(f4State === "ESCALATION");
+
+      if (f4State === "ESCALATION") {
+        const reason = `comprehension_score=${f4Score.toFixed(2)} state=${f4State}`;
+        await getDbInstance().execute({
+          sql: "UPDATE chat_sessions SET escalation_reason = ?, updated_at = unixepoch() WHERE phone = ?",
+          args: [reason, phone],
+        });
+        logEscalation(String(conversation.id), reason, f4Score);
+        await notifyAdmin(`⚠️ *ESCALACIÓN F4 — Bajo nivel de comprensión*\n\nTeléfono: ${phone}\nScore: ${f4Score.toFixed(2)}\nMensaje: "${text.substring(0, 200)}"`);
+        const escMsg = "No entendí bien tu consulta. Un operador humano te va a contactar para ayudarte.";
+        await sendWhatsAppMessage(phone, escMsg);
+        await insertMessage(conversation.id, "assistant", escMsg);
+        return;
+      }
+
+      if (f4State !== "FULL_CONTROL") {
+        const recoveryMsg = getF4RecoveryMessage(f4State, f5Session);
+        await sendWhatsAppMessage(phone, recoveryMsg);
+        await insertMessage(conversation.id, "assistant", recoveryMsg);
+        return;
+      }
+    }
 
     // === CONFIDENCE-BASED EXTRACTION + ENGINE ===
     let extractionNote: string | undefined;
@@ -385,9 +672,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
     let confidenceResult: ExtractionResult | undefined;
     let tariffMatch: TariffMatchResult | undefined;
-    // v5.0 FASE 5B.3: declarados en scope externo para reuso entre LLM extraction
-    // y policy handler. Garantiza que prev slots + role lock se persisten en
-    // chat_sessions Y se propagan al extractionCtx del handler.
     let coreDecisionEarly: ReturnType<typeof core> | undefined;
     let prevSlotsEarly: Record<string, string> = {};
     try {

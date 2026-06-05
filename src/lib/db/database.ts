@@ -23,9 +23,14 @@ import type {
   LocationAliasRow,
   ChatSessionRow,
   ProcessedMessageRow,
+  OpportunityRuleRow,
 } from "./types";
 
 type LibSqlClient = ReturnType<typeof createClient>;
+
+export type DbExecutor = {
+  execute(stmt: { sql: string; args?: InValue[] }): Promise<{ lastInsertRowid?: number | bigint; rowsAffected?: number }>;
+};
 
 async function query<T>(sql: string, args?: InValue[]): Promise<T[]> {
   await ensureSchema();
@@ -238,6 +243,184 @@ async function initSchema(): Promise<void> {
       processed_at INTEGER NOT NULL DEFAULT (unixepoch()),
       payload_hash TEXT
     )`,
+    `CREATE TABLE IF NOT EXISTS opportunity_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      opportunity_type TEXT NOT NULL,
+      label TEXT NOT NULL,
+      description TEXT,
+      active INTEGER DEFAULT 1,
+      priority INTEGER DEFAULT 0,
+      trigger_type TEXT NOT NULL DEFAULT 'post_confirmation',
+      tariff_id INTEGER,
+      config_json TEXT,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS opportunity_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      client_phone TEXT NOT NULL,
+      trip_id TEXT NOT NULL,
+      rule_id INTEGER,
+      opportunity_type TEXT NOT NULL,
+      label TEXT NOT NULL,
+      original_price REAL NOT NULL,
+      offered_price REAL NOT NULL,
+      presented_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      client_response TEXT,
+      phase TEXT NOT NULL DEFAULT 'post_confirmation'
+    )`,
+    `CREATE TABLE IF NOT EXISTS conversation_f4_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      score REAL,
+      state TEXT,
+      timestamp INTEGER DEFAULT (unixepoch()),
+      reason TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS conversation_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      event_type TEXT NOT NULL,
+      metadata TEXT,
+      timestamp INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS learning_weights (
+      key TEXT PRIMARY KEY,
+      value REAL NOT NULL DEFAULT 0,
+      updated_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS conversion_outcomes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      entity TEXT,
+      intent TEXT,
+      success_score REAL,
+      opportunity_type TEXT,
+      timestamp INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS opportunity_economics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      estimated_revenue REAL NOT NULL DEFAULT 0,
+      conversion_probability REAL NOT NULL DEFAULT 0.5,
+      margin REAL NOT NULL DEFAULT 0.2,
+      operational_cost REAL NOT NULL DEFAULT 0,
+      updated_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS human_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      feedback_type TEXT NOT NULL,
+      entity TEXT,
+      operator_id TEXT NOT NULL,
+      timestamp INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS system_metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      revenue_total REAL DEFAULT 0,
+      conversion_rate REAL DEFAULT 0,
+      load_factor REAL DEFAULT 0,
+      escalation_rate REAL DEFAULT 0,
+      recorded_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS policies (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      priority INTEGER DEFAULT 0,
+      condition TEXT NOT NULL DEFAULT '[]',
+      action TEXT NOT NULL DEFAULT 'allow',
+      params TEXT DEFAULT '{}',
+      active INTEGER DEFAULT 1,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS policy_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      policy_id TEXT NOT NULL,
+      variant TEXT,
+      revenue REAL DEFAULT 0,
+      conversion INTEGER DEFAULT 0,
+      timestamp INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS simulations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      opportunity_id TEXT,
+      predicted_conversion REAL DEFAULT 0,
+      predicted_revenue REAL DEFAULT 0,
+      risk TEXT DEFAULT 'low',
+      timestamp INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS f9_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      type TEXT NOT NULL,
+      entity TEXT,
+      intent TEXT,
+      predicted_value REAL,
+      actual_value REAL,
+      revenue REAL,
+      timestamp INTEGER DEFAULT (unixepoch()),
+      source TEXT NOT NULL DEFAULT 'HUMAN'
+    )`,
+    `CREATE TABLE IF NOT EXISTS f9_admin_commands (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      command_text TEXT NOT NULL,
+      parsed_action TEXT,
+      author TEXT,
+      timestamp INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS f9_drift_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      metric TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      drift_value REAL NOT NULL DEFAULT 0,
+      severity TEXT NOT NULL DEFAULT 'low',
+      session_id TEXT,
+      policy_id TEXT,
+      timestamp INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS f9_error_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      component TEXT NOT NULL,
+      error TEXT NOT NULL,
+      stack TEXT,
+      created_at INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS housekeeping_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job TEXT NOT NULL,
+      rows_deleted INTEGER DEFAULT 0,
+      duration_ms INTEGER DEFAULT 0,
+      ran_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS decision_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      selected_opportunity TEXT,
+      candidate_opportunities TEXT NOT NULL DEFAULT '[]',
+      utility_score REAL DEFAULT 0,
+      load_adjusted INTEGER DEFAULT 0,
+      policy_override INTEGER DEFAULT 0,
+      guardrails TEXT DEFAULT '[]',
+      policies TEXT DEFAULT '[]',
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_decision_log_session ON decision_log(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_f9_events_session ON f9_events(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_f9_events_timestamp ON f9_events(timestamp)`,
+    `CREATE INDEX IF NOT EXISTS idx_f9_drift_log_session ON f9_drift_log(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_f9_drift_log_timestamp ON f9_drift_log(timestamp)`,
+    `CREATE INDEX IF NOT EXISTS idx_f9_error_log_created ON f9_error_log(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_simulations_session ON simulations(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_simulations_timestamp ON simulations(timestamp)`,
+    `CREATE INDEX IF NOT EXISTS idx_policy_results_policy ON policy_results(policy_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_policy_results_timestamp ON policy_results(timestamp)`,
+    `CREATE INDEX IF NOT EXISTS idx_human_feedback_session ON human_feedback(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_human_feedback_timestamp ON human_feedback(timestamp)`,
+    `CREATE INDEX IF NOT EXISTS idx_opportunity_economics_type ON opportunity_economics(type)`,
+    `CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(recorded_at)`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 
@@ -302,6 +485,13 @@ async function initSchema(): Promise<void> {
   try {
     await seedLocationAliases();
   } catch (e) { console.error("[migration] seed location_aliases error:", e); }
+  // Seed opportunity_rules if empty
+  try {
+    const count = await getDbv().execute("SELECT COUNT(*) as c FROM opportunity_rules");
+    if ((count.rows as any[])[0].c === 0) {
+      await seedOpportunityRules();
+    }
+  } catch (e) { console.error("[migration] seed opportunity_rules error:", e); }
   await migrateCentroAlias();
   await migrateTariffNames();
   try {
@@ -312,6 +502,65 @@ async function initSchema(): Promise<void> {
     } else {
       console.error("[MIGRATION_ERROR]", e);
     }
+  }
+  try {
+    await getDbv().execute("ALTER TABLE chat_sessions ADD COLUMN pending_opportunity TEXT");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      console.log("[MIGRATION] pending_opportunity ya existe.");
+    } else {
+      console.error("[MIGRATION_ERROR]", e);
+    }
+  }
+  try {
+    await getDbv().execute("ALTER TABLE opportunity_log ADD COLUMN responded_at INTEGER");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      console.log("[MIGRATION] responded_at ya existe.");
+    } else {
+      console.error("[MIGRATION_ERROR]", e);
+    }
+  }
+  try {
+    await getDbv().execute("ALTER TABLE chat_sessions ADD COLUMN f4_state TEXT");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      console.log("[MIGRATION] f4_state ya existe.");
+    } else {
+      console.error("[MIGRATION_ERROR]", e);
+    }
+  }
+  try {
+    await getDbv().execute("ALTER TABLE chat_sessions ADD COLUMN comprehension_score REAL");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      console.log("[MIGRATION] comprehension_score ya existe.");
+    } else {
+      console.error("[MIGRATION_ERROR]", e);
+    }
+  }
+  try {
+    await getDbv().execute("ALTER TABLE chat_sessions ADD COLUMN escalation_reason TEXT");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      console.log("[MIGRATION] escalation_reason ya existe.");
+    } else {
+      console.error("[MIGRATION_ERROR]", e);
+    }
+  }
+  try {
+    await getDbv().execute("ALTER TABLE f9_drift_log ADD COLUMN session_id TEXT");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      // ya existe
+    } else { console.error("[MIGRATION_ERROR] f9_drift_log.session_id", e); }
+  }
+  try {
+    await getDbv().execute("ALTER TABLE f9_drift_log ADD COLUMN policy_id TEXT");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("duplicate column name")) {
+      // ya existe
+    } else { console.error("[MIGRATION_ERROR] f9_drift_log.policy_id", e); }
   }
   for (const sql of migrations) {
     try { await getDbv().execute(sql); } catch (e) { console.error("[migration] error:", sql, e); }
@@ -579,9 +828,10 @@ export async function setConversationTrip(conversationId: number, tripId: string
 
 
 
-export async function insertMessage(conversationId: number, role: string, content: string): Promise<number> {
-  const result = await getDbv().execute({ sql: "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)", args: [conversationId, role, content] });
-  await getDbv().execute({ sql: "UPDATE conversations SET last_message_at = unixepoch() WHERE id = ?", args: [conversationId] });
+export async function insertMessage(conversationId: number, role: string, content: string, executor?: DbExecutor): Promise<number> {
+  const db = executor ?? getDbv();
+  const result = await db.execute({ sql: "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)", args: [conversationId, role, content] });
+  await db.execute({ sql: "UPDATE conversations SET last_message_at = unixepoch() WHERE id = ?", args: [conversationId] });
   return Number(result.lastInsertRowid);
 }
 
@@ -1993,9 +2243,9 @@ export async function updateChatSessionWorkflow(phone: string, workflowState: st
 
 // Fase 3 v5.0: setter dedicado para transiciones de despacho.
 // NO toca clarify_field/slots/confidence — sólo workflow_state y updated_at.
-export async function setChatSessionWorkflowState(phone: string, state: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
+export async function setChatSessionWorkflowState(phone: string, state: string, executor?: DbExecutor): Promise<void> {
+  const db = executor ?? getDbv();
+  await db.execute({
     sql: "UPDATE chat_sessions SET workflow_state = ?, updated_at = unixepoch() WHERE phone = ?",
     args: [state, phone],
   });
@@ -2149,4 +2399,65 @@ export async function countProcessedMessages(): Promise<number> {
 
 export function getDbInstance(): LibSqlClient {
   return getDbv();
+}
+
+async function seedOpportunityRules(): Promise<void> {
+  const rules = [
+    { type: "complement", label: "Cataratas Argentinas", description: "También ofrecemos traslados a Cataratas Argentinas.", priority: 100 },
+    { type: "complement", label: "Cataratas Brasileras", description: "También ofrecemos traslados a Cataratas Brasileras.", priority: 90 },
+    { type: "complement", label: "City Tour", description: "También ofrecemos City Tour por Foz do Iguaçu.", priority: 80 },
+    { type: "complement", label: "Cena Show", description: "También ofrecemos Cena Show con típica parrillada.", priority: 70 },
+    { type: "complement", label: "Traslado Aeropuerto Retorno", description: "También ofrecemos traslado de regreso al aeropuerto.", priority: 60 },
+  ];
+  for (const r of rules) {
+    await getDbv().execute({
+      sql: `INSERT INTO opportunity_rules (opportunity_type, label, description, priority) VALUES (?, ?, ?, ?)`,
+      args: [r.type, r.label, r.description, r.priority],
+    });
+  }
+  console.log("[SEED] Inserted", rules.length, "opportunity rules");
+}
+
+export async function getActiveComplementRules(): Promise<OpportunityRuleRow[]> {
+  return query<OpportunityRuleRow>(
+    "SELECT * FROM opportunity_rules WHERE opportunity_type = 'complement' AND active = 1 ORDER BY priority DESC"
+  );
+}
+
+export async function insertOpportunityLog(
+  conversationId: number,
+  clientPhone: string,
+  tripId: string,
+  ruleId: number | null,
+  opportunityType: string,
+  label: string,
+  originalPrice: number,
+  offeredPrice: number,
+  phase: string,
+  executor?: DbExecutor,
+): Promise<number> {
+  const db = executor ?? getDbv();
+  const rs = await db.execute({
+    sql: `INSERT INTO opportunity_log (conversation_id, client_phone, trip_id, rule_id, opportunity_type, label, original_price, offered_price, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [conversationId, clientPhone, tripId, ruleId, opportunityType, label, originalPrice, offeredPrice, phase],
+  });
+  return Number(rs.lastInsertRowid ?? 0);
+}
+
+export async function updateOpportunityLogResponse(
+  logId: number,
+  clientResponse: string,
+  respondedAt: number,
+): Promise<void> {
+  await getDbv().execute({
+    sql: "UPDATE opportunity_log SET client_response = ?, responded_at = ? WHERE id = ?",
+    args: [clientResponse, respondedAt, logId],
+  });
+}
+
+export async function clearPendingOpportunity(phone: string): Promise<void> {
+  await getDbv().execute({
+    sql: "UPDATE chat_sessions SET pending_opportunity = NULL, updated_at = unixepoch() WHERE phone = ?",
+    args: [phone],
+  });
 }

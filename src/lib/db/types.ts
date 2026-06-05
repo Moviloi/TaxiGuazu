@@ -225,6 +225,10 @@ export interface ChatSessionRow {
   last_extracted_at: number | null;
   workflow_state: string | null;
   clarify_field: string | null;
+  pending_opportunity: string | null;
+  f4_state: string | null;
+  comprehension_score: number | null;
+  escalation_reason: string | null;
   updated_at: number;
 }
 
@@ -234,4 +238,74 @@ export interface ProcessedMessageRow {
   message_type: string | null;
   processed_at: number;
   payload_hash: string | null;
+}
+
+export type OpportunityType =
+  | "bundle_in_out"
+  | "complement"
+  | "capacity_ociosa"
+  | "promo_driver"
+  | "campaign_tg"
+  | "live_bid";
+
+export interface OpportunityContext {
+  tripId: string;
+  clientPhone: string;
+  origin: string;
+  destination: string;
+  passengers: number;
+  tariffId: number | null;
+  price: number;
+  piso: number;
+  urgency: string;
+  conversationId: number;
+  tripLegType: "airport_to_hotel" | "hotel_to_airport" | "airport_to_airport" | "hotel_to_hotel" | "other";
+  hotelZone: boolean;
+  intentKeywords: string[];
+  entityMatches: string[];
+  hasPendingOpportunity: boolean;
+  memoryBoost?: number;
+}
+
+export interface Opportunity {
+  type: OpportunityType;
+  ruleId: number | null;
+  label: string;
+  description: string;
+  originalPrice: number;
+  offeredPrice: number;
+  savings: number;
+  priority: number;
+  logId: number;
+}
+
+export interface OpportunityRuleRow {
+  id: number;
+  opportunity_type: OpportunityType;
+  label: string;
+  description: string;
+  active: number;
+  priority: number;
+  trigger_type: string;
+  tariff_id: number | null;
+  config_json: string | null;
+  valid_from: number | null;
+  valid_until: number | null;
+  created_at: number;
+}
+
+export interface OpportunityLogRow {
+  id: number;
+  conversation_id: number;
+  client_phone: string;
+  trip_id: string;
+  rule_id: number | null;
+  opportunity_type: string;
+  label: string;
+  original_price: number;
+  offered_price: number;
+  presented_at: number;
+  client_response: string | null;
+  phase: string;
+  responded_at: number | null;
 }

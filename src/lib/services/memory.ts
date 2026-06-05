@@ -1,0 +1,94 @@
+import type { ChatSessionRow, MessageRow } from "@/lib/db/types";
+import { ENTITY_CATALOG, extractEntitiesFromCatalog } from "@/lib/config/entity-catalog";
+
+export interface ShortTermMessage {
+  role: string;
+  content: string;
+}
+
+export interface SessionMemory {
+  lastIntent: string | null;
+  lastEntities: string[];
+  lastOrigin: string | null;
+  lastDestination: string | null;
+  lastOpportunity: string | null;
+  f4StateHistory: string[];
+}
+
+export interface ShortTermBuffer {
+  messages: ShortTermMessage[];
+}
+
+export interface SemanticMemory {
+  entityAssociations: Record<string, string[]>;
+}
+
+export interface Memory {
+  sessionMemory: SessionMemory;
+  shortTermMemory: ShortTermBuffer;
+  semanticMemory: SemanticMemory;
+}
+
+const DEFAULT_SEMANTIC_MEMORY: SemanticMemory = {
+  entityAssociations: Object.fromEntries(
+    ENTITY_CATALOG.map((e) => [e.key, e.semanticAssociations]),
+  ),
+};
+
+export function extractEntities(text: string): string[] {
+  return extractEntitiesFromCatalog(text);
+}
+
+export function buildShortTermBuffer(history: MessageRow[], limit = 5): ShortTermBuffer {
+  const recent = history.slice(-limit);
+  return { messages: recent.map((m) => ({ role: m.role, content: m.content })) };
+}
+
+export function buildSessionMemory(session: ChatSessionRow | null, history: MessageRow[]): SessionMemory {
+  const userMessages = history.filter((m) => m.role === "user");
+  const allUserContent = userMessages.map((m) => m.content).join(" ");
+
+  let lastIntent: string | null = null;
+  let lastEntities: string[] = extractEntities(allUserContent);
+
+  let lastOrigin: string | null = null;
+  let lastDestination: string | null = null;
+  if (session?.slots) {
+    try {
+      const slots = JSON.parse(session.slots);
+      lastOrigin = slots.origin ?? null;
+      lastDestination = slots.destination ?? null;
+    } catch {}
+  }
+
+  const lastOpportunity: string | null = session?.pending_opportunity
+    ? (() => { try { const p = JSON.parse(session.pending_opportunity); return p.label ?? null; } catch { return null; } })()
+    : null;
+
+  const f4StateHistory: string[] = session?.f4_state ? [session.f4_state] : [];
+
+  return { lastIntent, lastEntities, lastOrigin, lastDestination, lastOpportunity, f4StateHistory };
+}
+
+export function buildMemory(session: ChatSessionRow | null, history: MessageRow[]): Memory {
+  return {
+    sessionMemory: buildSessionMemory(session, history),
+    shortTermMemory: buildShortTermBuffer(history),
+    semanticMemory: DEFAULT_SEMANTIC_MEMORY,
+  };
+}
+
+export function getEntityBias(memory: Memory): string[] {
+  const fromSession = memory.sessionMemory.lastEntities;
+  const fromAssociations: string[] = [];
+  for (const entity of fromSession) {
+    const assocs = memory.semanticMemory.entityAssociations[entity];
+    if (assocs) fromAssociations.push(...assocs);
+  }
+  return [...new Set([...fromSession, ...fromAssociations])];
+}
+
+export function getRecentEntityMentions(memory: Memory): string[] {
+  const recentText = memory.shortTermMemory.messages.map((m) => m.content).join(" ");
+  return extractEntities(recentText);
+}

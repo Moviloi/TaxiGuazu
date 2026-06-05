@@ -9,6 +9,7 @@ export type WorkflowState =
   | "idle"
   | "collecting_slots"
   | "awaiting_confirmation"
+  | "post_trip_opportunity"
   | "nivel_1"
   | "nivel_2"
   | "nivel_3"
@@ -20,7 +21,8 @@ export type WorkflowState =
 const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   idle: ["collecting_slots", "awaiting_confirmation", "nivel_1", "waiting_driver"],
   collecting_slots: ["awaiting_confirmation", "nivel_1", "waiting_driver"],
-  awaiting_confirmation: ["nivel_1", "waiting_driver", "closed"],
+  awaiting_confirmation: ["nivel_1", "waiting_driver", "closed", "post_trip_opportunity"],
+  post_trip_opportunity: ["idle", "closed"],
   nivel_1: ["nivel_2", "closed"],
   nivel_2: ["nivel_3", "closed"],
   nivel_3: ["closed"],

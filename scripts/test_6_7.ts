@@ -8,7 +8,6 @@ import { generateCorrelationId } from "../src/lib/ai/observability/correlation";
 import { shouldSample, hashId } from "../src/lib/ai/observability/sampler";
 import { logDecision, replayDecision } from "../src/lib/ai/observability/logger";
 import type { DecisionLog } from "../src/lib/ai/observability/types";
-import type { DecisionTrace } from "../src/lib/ai/trace/types";
 
 let pass = 0;
 let fail = 0;

@@ -1,7 +1,7 @@
 // FASE 8: Experimentation Types
 
 import type { Intent } from "../types";
-import type { PolicyAction, PolicyInput, PolicyDecision } from "../policy/types";
+import type { PolicyAction, PolicyDecision } from "../policy/types";
 import type { CoreLateral } from "../laterals/types";
 
 export type PolicyVariant = "CONTROL" | "EXPERIMENT_A" | "EXPERIMENT_B";
