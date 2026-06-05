@@ -9,10 +9,11 @@
 //
 // v5.0 FASE 5B.2 (slot stability + role lock):
 // CORE detecta la estructura sintáctica del input ("estoy en X", "ir a Y",
-// "desde X") y produce roleLock + slotStability. Esto es stateful
-// semánticamente: una vez que un slot tiene rol fijo, no se reinterpreta.
+// "desde X", "origen X y destino Y") y produce roleLock + slotStability.
+// Esto es stateful semánticamente: una vez que un slot tiene rol fijo, no se reinterpreta.
 // - "estoy en X" / "desde X" → origin = X (locked)
 // - "ir a Y" / "voy a Y" → destination = Y (locked)
+// - "origen X y|, destino Y" / "origen: X destino: Y" → ambos slots (locked)
 // - Si el valor matchea términos ambiguos (centro, hotel) → stability = "ambiguous"
 //   (el rol está fijo pero el valor necesita refinamiento).
 
@@ -52,6 +53,9 @@ const ESTOY_EN_RE = /(?:estoy\s+en(?:\s+(?:el|la|los|las|al|del))?|estoy\s+ac[á
 const IR_A_RE = /\b(?:voy|ir|quiero\s+ir|vamos)\s+(?:a\s+(?:el|la|los|las)\s+|a\s+|al\s+|del\s+)?([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:desde|hasta|\bestoy\b|pero|\by\b|[,;.!?]|$))/i;
 const DESDE_RE = /(?:desde|partiendo\s+de|saliendo\s+de)\s+(?:el\s+|la\s+|los\s+|las\s+|al\s+|del\s+)?([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:hasta|a\s+(?:el|la|los|las)|\bvoy\b|\bir\b|\bquiero\b|\bvamos\b|\bnecesito\b|pero|\by\b|[,;.!?]|$))/i;
 
+// v5.x: patrón "origen X y|, destino Y" / "origen: X destino: Y"
+const ORIGEN_DESTINO_RE = /origen\s*:?\s*([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)\s*(?:,|\by\b)?\s*destino\s*:?\s*([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:\bpor\b|\bpara\b|\bgracias\b|\by\b|$|[.,!?]))/i;
+
 function detectStructure(input: string): { roleLock: RoleLock; slotStability: SlotStabilityMap } {
   const roleLock: RoleLock = { origin: null, destination: null };
   const slotStability: SlotStabilityMap = { origin: "open", destination: "open" };
@@ -80,6 +84,22 @@ function detectStructure(input: string): { roleLock: RoleLock; slotStability: Sl
     const value = cleanExtractedValue(desdeX[1]);
     roleLock.origin = value;
     slotStability.origin = isValueAmbiguous(value) ? "ambiguous" : "locked";
+  }
+
+  // v5.x: "origen X y|, destino Y" / "origen: X destino: Y"
+  // Llenar slots que sigan vacíos — no sobreescribe si ESTOY_EN/IR_A/DESDE ya fijaron.
+  const origenDestino = input.match(ORIGEN_DESTINO_RE);
+  if (origenDestino) {
+    const originValue = cleanExtractedValue(origenDestino[1]);
+    const destValue = cleanExtractedValue(origenDestino[2]);
+    if (!roleLock.origin) {
+      roleLock.origin = originValue;
+      slotStability.origin = isValueAmbiguous(originValue) ? "ambiguous" : "locked";
+    }
+    if (!roleLock.destination) {
+      roleLock.destination = destValue;
+      slotStability.destination = isValueAmbiguous(destValue) ? "ambiguous" : "locked";
+    }
   }
 
   return { roleLock, slotStability };
