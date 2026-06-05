@@ -659,7 +659,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         return;
       }
 
-      if (f4State !== "FULL_CONTROL") {
+      if (f4State === "RECOVERY") {
         const recoveryMsg = getF4RecoveryMessage(f4State, f5Session);
         await sendWhatsAppMessage(phone, recoveryMsg);
         await insertMessage(conversation.id, "assistant", recoveryMsg);
