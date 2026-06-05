@@ -67,7 +67,8 @@ function computeConversationStability(stabilityMap: SlotStabilityMap): number {
   if (vals.length === 0) return 0.7;
   const locked = vals.filter((v) => v === "locked").length;
   const ambiguous = vals.filter((v) => v === "ambiguous").length;
-  if (ambiguous > 0) return 0.3;
+  if (ambiguous === vals.length) return 0.5;
+  if (ambiguous > 0 && locked > 0) return 0.6;
   if (locked === vals.length) return 1.0;
   if (locked === 0) return 0.5;
   return 0.7;
