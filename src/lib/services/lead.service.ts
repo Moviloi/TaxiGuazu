@@ -623,6 +623,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           text,
           coreIntent: f5Core.intent,
           slotStability: f5Core.slotStability,
+          roleLock: f5Core.roleLock,
           session: f5Session,
         }),
         f5Context.entityPrediction,

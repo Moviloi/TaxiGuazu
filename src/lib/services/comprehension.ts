@@ -1,5 +1,5 @@
 import type { ChatSessionRow } from "@/lib/db/types";
-import type { SlotStabilityMap } from "@/lib/ai/types";
+import type { RoleLock, SlotStabilityMap } from "@/lib/ai/types";
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 
@@ -17,6 +17,27 @@ export interface F4Result {
   score: number;
   state: F4State;
   signals: F4Signals;
+}
+
+export interface EffectiveSlots {
+  origin: string | null;
+  destination: string | null;
+}
+
+export function buildEffectiveSlots(session: ChatSessionRow | null, roleLock: RoleLock): EffectiveSlots {
+  let sessionOrigin: string | null = null;
+  let sessionDest: string | null = null;
+  if (session?.slots) {
+    try {
+      const s = JSON.parse(session.slots);
+      sessionOrigin = s.origin ?? null;
+      sessionDest = s.destination ?? null;
+    } catch {}
+  }
+  return {
+    origin: sessionOrigin ?? roleLock.origin ?? null,
+    destination: sessionDest ?? roleLock.destination ?? null,
+  };
 }
 
 const ENTITY_SCAN_RE = getAllDomainPatterns().length > 0
@@ -37,29 +58,27 @@ function scanEntities(text: string): number {
   return ENTITY_SCAN_RE.test(text) ? 0.9 : 0.3;
 }
 
-function computeSlotCompleteness(session: ChatSessionRow | null): number {
-  if (!session?.slots) return 0.2;
-  try {
-    const slots = JSON.parse(session.slots);
-    const hasOrigin = !!slots.origin;
-    const hasDest = !!slots.destination;
-    if (hasOrigin && hasDest) return 1.0;
-    if (hasOrigin || hasDest) return 0.6;
-    return 0.2;
-  } catch {
-    return 0.2;
-  }
+function computeSlotCompleteness(effective: EffectiveSlots): number {
+  const hasOrigin = !!effective.origin;
+  const hasDest = !!effective.destination;
+  if (hasOrigin && hasDest) return 1.0;
+  if (hasOrigin || hasDest) return 0.6;
+  return 0.2;
 }
 
-function computeExtractionConfidence(session: ChatSessionRow | null): number {
-  if (!session?.confidence) return 0.5;
-  try {
-    const conf = JSON.parse(session.confidence);
-    const vals = Object.values(conf).filter((v): v is number => typeof v === "number");
-    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0.5;
-  } catch {
+function computeExtractionConfidence(session: ChatSessionRow | null, effective: EffectiveSlots): number {
+  if (session?.confidence) {
+    try {
+      const conf = JSON.parse(session.confidence);
+      const vals = Object.values(conf).filter((v): v is number => typeof v === "number");
+      if (vals.length > 0) return vals.reduce((a, b) => a + b, 0) / vals.length;
+    } catch {}
     return 0.5;
   }
+  const coreDetected = [effective.origin, effective.destination].filter(Boolean).length;
+  if (coreDetected === 2) return 0.7;
+  if (coreDetected === 1) return 0.6;
+  return 0.5;
 }
 
 function computeConversationStability(stabilityMap: SlotStabilityMap): number {
@@ -78,12 +97,14 @@ export function buildF4Signals(params: {
   text: string;
   coreIntent: string;
   slotStability: SlotStabilityMap;
+  roleLock?: RoleLock;
   session: ChatSessionRow | null;
 }): F4Signals {
   const intentConfidence = clamp01(INTENT_CONFIDENCE_MAP[params.coreIntent] ?? 0.3);
   const entityConfidence = clamp01(scanEntities(params.text));
-  const slotCompleteness = clamp01(computeSlotCompleteness(params.session));
-  const extractionConfidence = clamp01(computeExtractionConfidence(params.session));
+  const effective = buildEffectiveSlots(params.session, params.roleLock ?? { origin: null, destination: null });
+  const slotCompleteness = clamp01(computeSlotCompleteness(effective));
+  const extractionConfidence = clamp01(computeExtractionConfidence(params.session, effective));
   const conversationStability = clamp01(computeConversationStability(params.slotStability));
 
   return { intentConfidence, entityConfidence, slotCompleteness, extractionConfidence, conversationStability };
