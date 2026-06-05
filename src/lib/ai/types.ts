@@ -4,7 +4,9 @@
 // v5.0 FASE 5B: PolicyOutput es la ÚNICA fuente del finalResponse.
 // outputSource es un discriminante que el guardrail enforce.
 
-export type Intent = "ACTION" | "QUERY" | "STATEFUL" | "AMBIGUOUS";
+export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "AMBIGUOUS"
+  // Legacy value kept for backward compat with policy-reserva.ts
+  | "STATEFUL";
 
 export type Mode = "AHORA" | "RESERVA";
 
@@ -33,12 +35,16 @@ export interface SlotStabilityMap {
   destination: SlotStability;
 }
 
+import type { CoreLateral } from "./laterals/types";
+
 export interface CoreDecision {
   intent: Intent;
   facts: string[];
   confidence: number;
   slotStability: SlotStabilityMap;
   roleLock: RoleLock;
+  // FASE 6.2: lateral metadata (optional for backward compat)
+  lateral?: CoreLateral;
 }
 
 export interface FinalDecision {
