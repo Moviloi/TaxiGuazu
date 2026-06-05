@@ -193,6 +193,7 @@ const HABLAR_HUMANO = [
 
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   try {
+    console.log("[TRACE WEBHOOK MESSAGE]", { phone, text });
     console.log(`[DEBUG_LEAD] phone=${phone} text="${text.substring(0, 60)}"`);
     // Reset guard state al inicio de cada request para evitar contaminación entre requests.
     resetRequestState();
@@ -618,6 +619,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // === COMPREHENSION CHECK (F4) ===
     {
+      console.log("[TRACE INPUT]", { phone, text });
       const f4Signals = enrichF4Signals(
         buildF4Signals({
           text,
@@ -632,6 +634,15 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       const f4Score = computeComprehensionScore(f4Signals);
       const f4ThresholdAdj = await getF4ThresholdAdjustment();
       const f4State = getF4State(f4Score, f4ThresholdAdj);
+
+      console.log("[TRACE F4]", {
+        state: f4State,
+        score: f4Score,
+        thresholdAdj: f4ThresholdAdj,
+        intent: f5Core.intent,
+        roleLock: f5Core.roleLock,
+        slotStability: f5Core.slotStability,
+      });
 
       await getDbInstance().execute({
         sql: "UPDATE chat_sessions SET f4_state = ?, comprehension_score = ?, updated_at = unixepoch() WHERE phone = ?",
@@ -654,13 +665,21 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         logEscalation(String(conversation.id), reason, f4Score);
         await notifyAdmin(`⚠️ *ESCALACIÓN F4 — Bajo nivel de comprensión*\n\nTeléfono: ${phone}\nScore: ${f4Score.toFixed(2)}\nMensaje: "${text.substring(0, 200)}"`);
         const escMsg = "No entendí bien tu consulta. Un operador humano te va a contactar para ayudarte.";
+        console.log("[TRACE RESPONSE]", { source: "F4_ESCALATION", text: escMsg });
         await sendWhatsAppMessage(phone, escMsg);
         await insertMessage(conversation.id, "assistant", escMsg);
         return;
       }
 
       if (f4State === "RECOVERY") {
+        console.log("[TRACE RECOVERY]", {
+          state: f4State,
+          score: f4Score,
+          phone,
+          text,
+        });
         const recoveryMsg = getF4RecoveryMessage(f4State, f5Session);
+        console.log("[TRACE RESPONSE]", { source: "F4_RECOVERY", text: recoveryMsg });
         await sendWhatsAppMessage(phone, recoveryMsg);
         await insertMessage(conversation.id, "assistant", recoveryMsg);
         return;
@@ -688,10 +707,19 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // debe respetar role lock y no contradecir prev slots persistidos.
       coreDecisionEarly = core(text);
       prevSlotsEarly = await loadPreviousSlots(phone);
+      console.log("[TRACE EXTRACTION START]", {
+        roleLock: coreDecisionEarly?.roleLock,
+        slotStability: coreDecisionEarly?.slotStability,
+        prevSlots: prevSlotsEarly,
+      });
       const raw = await generateGroqExtraction(text, history, customerName || undefined, {
         roleLock: coreDecisionEarly.roleLock,
         slotStability: coreDecisionEarly.slotStability,
         prevSlots: prevSlotsEarly,
+      });
+      console.log("[TRACE EXTRACTION RESULT]", {
+        success: raw != null,
+        raw: raw ? JSON.stringify(raw).substring(0, 200) : null,
       });
       if (raw) {
         console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
@@ -892,6 +920,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // === NEW FLOW: workflow-based routing, no marker parsing ===
     await insertMessage(conversation.id, "assistant", response);
+    console.log("[TRACE RESPONSE]", { source: "POLICY_RESPONSE", text: response });
     await sendWhatsAppMessage(phone, response);
 
     if (workflowResult?.state === "awaiting_confirmation") {
@@ -917,7 +946,9 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     console.error("[LEAD_ERROR]", e);
     const errMsg = `⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`;
     try {
-      await sendWhatsAppMessage(phone, "Disculpe, ocurrió un error. Un operador lo asistirá.");
+      const errResp = "Disculpe, ocurrió un error. Un operador lo asistirá.";
+      console.log("[TRACE RESPONSE]", { source: "GLOBAL_ERROR", text: errResp });
+      await sendWhatsAppMessage(phone, errResp);
       const conv = await getConversationByPhone(phone);
       if (conv) await insertMessage(conv.id, "assistant", "Error interno. Cliente derivado a operador.");
     } catch (e2) {
