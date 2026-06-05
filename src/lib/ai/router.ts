@@ -9,6 +9,8 @@
 //
 // v5.0 FASE 6.7: router() incluye observabilidad side-channel
 //   - logDecision async, non-blocking, fail-safe
+// v5.0 FASE 6.8: router() emite eventos de fase (core, lateral, policy, router)
+//   y span decision_trace via OpenTelemetry.
 
 import { core } from "./core";
 import { applyPolicy } from "./policy";
@@ -17,6 +19,7 @@ import type { CoreDecision, FinalDecision, Mode, OutputType } from "./types";
 import { logDecision, generateCorrelationId } from "./observability";
 import type { DecisionTrace } from "./trace/types";
 import type { DecisionLog } from "./observability/types";
+import { recordEvent, exportEvent } from "./telemetry";
 
 // ── RouteResult: descriptor de ejecución ──
 export interface RouteResult {
@@ -72,11 +75,20 @@ function actionToOutputType(action: PolicyAction): OutputType {
 export function router(input: string, mode: Mode): FinalDecision {
   const correlationId = generateCorrelationId();
   const start = performance.now();
+
+  // FASE 6.2/6.8: Core + Lateral phases
   const c: CoreDecision = core(input);
-  // lateral ya viene de core() (FASE 6.2)
+  recordEvent({ correlationId, phase: "core", intent: c.intent, latencyMs: performance.now() - start, success: true, metadata: {} });
+  recordEvent({ correlationId, phase: "lateral", intent: c.intent, latencyMs: 0, success: true, metadata: {} });
+
+  // Policy phase (metrics inside applyPolicy)
   const policy: PolicyDecision = applyPolicy(c);
   const outputType = actionToOutputType(policy.action);
   const end = performance.now();
+  recordEvent({ correlationId, phase: "policy", intent: c.intent, latencyMs: end - start, success: true, metadata: {} });
+
+  // Router phase
+  recordEvent({ correlationId, phase: "router", intent: c.intent, action: policy.action, latencyMs: end - start, success: true, metadata: {} });
 
   // FASE 6.7: observabilidad side-channel (non-blocking)
   const trace = (policy as PolicyDecision & { trace?: DecisionTrace }).trace;
@@ -93,6 +105,14 @@ export function router(input: string, mode: Mode): FinalDecision {
     metadata: {},
   };
   logDecision(log);
+
+  // FASE 6.8: export each phase event via telemetry
+  if (trace) {
+    exportEvent({ correlationId, phase: "core", intent: c.intent, latencyMs: 0, success: true, metadata: {} });
+    exportEvent({ correlationId, phase: "lateral", intent: c.intent, latencyMs: 0, success: true, metadata: {} });
+    exportEvent({ correlationId, phase: "policy", intent: c.intent, latencyMs: end - start, success: true, metadata: {} });
+    exportEvent({ correlationId, phase: "router", intent: c.intent, action: policy.action, latencyMs: end - start, success: true, metadata: {} });
+  }
 
   return {
     decision: outputType,
