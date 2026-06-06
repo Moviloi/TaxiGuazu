@@ -24,7 +24,16 @@ import {
   setChatSessionWorkflowState,
   getDbInstance,
 } from "@/lib/db/database";
-import { generateGroqExtraction } from "@/lib/ai/groq";
+import { extractSlots } from "@/lib/services/extractSlots";
+import { evaluateCompleteness } from "@/lib/services/completenessEngine";
+import { processLead } from "@/lib/core/pipeline";
+import { classifyIntent } from "@/lib/services/semanticCoreEngine";
+import type { ExecutionContext, ExecutionDeps } from "@/lib/services/executionEngine";
+import { resolveGeoRoute, resolveZones, expandZones, computeProximityScore } from "@/lib/services/geoEngine";
+import { calculateFare } from "@/lib/services/fareEngine";
+import { loadContext, mergeContext, saveContext } from "@/lib/services/contextMemory";
+import { observe as observeLearning } from "@/lib/services/fareLearningEngine";
+import { buildRouteKey } from "@/lib/services/fareLearningEngine";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
 import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
@@ -480,6 +489,13 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           const tariffMatch = await matchTariff(origin, destination, pax);
           const tripId = `trip_${Date.now()}`;
           await createTrip(tripId, phone, origin, destination, tariffMatch.matched ? tariffMatch.price : (slots.price || undefined), pax, slots.scheduled_at ? Math.floor(new Date(slots.scheduled_at).getTime() / 1000) : undefined, slots.flight || undefined);
+
+          // LEARNING FEEDBACK: observar resultado real vs estimado
+          const estimatedFare = slots.fareEstimate ?? slots.price ?? tariffMatch.price;
+          const finalFare = tariffMatch.matched ? tariffMatch.price : (slots.price || 0);
+          const routeKey = buildRouteKey(slots.originZone ?? origin, slots.destinationZone ?? destination);
+          observeLearning(Number(estimatedFare), Number(finalFare), routeKey, false);
+          console.log("[LEARNING] observado:", { routeKey, estimatedFare, finalFare });
           await setConversationTrip(conversation.id, tripId);
           trip = await getActiveTripByPhone(phone);
           if (trip) {
@@ -707,12 +723,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // debe respetar role lock y no contradecir prev slots persistidos.
       coreDecisionEarly = core(text);
       prevSlotsEarly = await loadPreviousSlots(phone);
+      const ctxMemory = await loadContext(phone);
+      console.log("[CONTEXT] cargado:", { origin: ctxMemory.origin, destination: ctxMemory.destination, intent: ctxMemory.intent });
       console.log("[TRACE EXTRACTION START]", {
         roleLock: coreDecisionEarly?.roleLock,
         slotStability: coreDecisionEarly?.slotStability,
         prevSlots: prevSlotsEarly,
       });
-      const raw = await generateGroqExtraction(text, history, customerName || undefined, {
+      const raw = await extractSlots(text, history, customerName || undefined, {
         roleLock: coreDecisionEarly.roleLock,
         slotStability: coreDecisionEarly.slotStability,
         prevSlots: prevSlotsEarly,
@@ -721,6 +739,16 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         success: raw != null,
         raw: raw ? JSON.stringify(raw).substring(0, 200) : null,
       });
+
+      // COMPLETENESS GATE → decide if we have enough to proceed
+      const completeness = evaluateCompleteness(raw);
+      if (completeness.status === "ASK") {
+        console.log("[COMPLETENESS] bloqueado", { field: completeness.field, message: completeness.message });
+        await sendWhatsAppMessage(phone, completeness.message);
+        await insertMessage(conversation.id, "assistant", completeness.message);
+        return;
+      }
+
       if (raw) {
         console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
         parsed = TripExtractionSchema.safeParse(raw);
@@ -812,7 +840,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             confByField[k] = v.score;
           }
 
-          await upsertChatSession(phone, mergedSlotsForDb, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
+          // CONTEXT MEMORY: merge extracted slots with previous context (confidence-aware)
+          const mergedWithMemory = mergeContext(mergedSlotsForDb, ctxMemory, confidenceResult.overall_confidence);
+          console.log("[CONTEXT] merge completado:", Object.keys(mergedWithMemory).join(", "));
+
+          await upsertChatSession(phone, mergedWithMemory, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
 
           extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, tariffMatch);
           console.log("[EXTRACTION] extractionNote generado:", extractionNote.substring(0, 150));
@@ -908,40 +940,38 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       coreDecisionEarly?.slotStability,
       prevSlotsEarly,
     );
-    const handlerResult = handleMessage(text, "RESERVA", {
+
+    // CORE PIPELINE — decision → execution (Fase 10)
+    const ctxSlots = extractionCtx?.slots ?? {};
+    const execCtx: ExecutionContext = {
+      phone,
+      conversationId: conversation.id,
+      text,
       history,
       customerName: customerName || undefined,
-      extraction: extractionCtx,
+      extractionCtx,
+      tariffMatch,
       lang,
-    });
-    // Hard guardrail: cualquier output fuera de POLICY se BLOQUEA.
-    assertOutputSource(handlerResult.policy.outputSource);
-    const response = handlerResult.policy.finalResponse;
-
-    // === NEW FLOW: workflow-based routing, no marker parsing ===
-    await insertMessage(conversation.id, "assistant", response);
-    console.log("[TRACE RESPONSE]", { source: "POLICY_RESPONSE", text: response });
-    await sendWhatsAppMessage(phone, response);
-
-    if (workflowResult?.state === "awaiting_confirmation") {
-      // The reply already asked the user to confirm. Wait for next message.
-      // On next call, the confirmation check (above) will detect the affirmative.
-    } else if (workflowResult?.state === "collecting_slots" && workflowResult?.clarifyField) {
-      // The reply already asked for the missing field. Nothing to do — wait for user input.
-    }
-
-    // ── Shift-end auto-prompt for drivers ──
-    try {
-      const driver = await getDriverByPhone(phone);
-      if (driver && driver.shift) {
-        const prompt = buildShiftEndPrompt(driver.shift);
-        if (prompt) {
-          await sendWhatsAppMessage(phone, prompt);
-          const conv = await getConversationByPhone(phone);
-          if (conv) await insertMessage(conv.id, "assistant", prompt);
-        }
-      }
-    } catch (_) { /* silent */ }
+      intent: classifyIntent(text, ctxSlots).intent,
+    };
+    const execDeps: ExecutionDeps = {
+      send: sendWhatsAppMessage,
+      persist: insertMessage,
+      handler: handleMessage,
+      geo: { resolveGeoRoute, resolveZones, expandZones, computeProximityScore },
+      fare: { calculateFare },
+      memory: { saveContext },
+      guard: assertOutputSource,
+      driverOps: { getDriverByPhone, getConversationByPhone, buildShiftEndPrompt },
+    };
+    const decisionInput = {
+      text,
+      slots: ctxSlots,
+      tariffMatch,
+      confidence: confidenceResult?.overall_confidence ?? 0,
+      lang,
+    };
+    await processLead(decisionInput, execCtx, execDeps);
   } catch (e) {
     console.error("[LEAD_ERROR]", e);
     const errMsg = `⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`;
