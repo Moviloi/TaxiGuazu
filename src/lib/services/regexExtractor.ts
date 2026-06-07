@@ -9,19 +9,19 @@ import type { TripExtraction } from "@/lib/ai/extraction-schema";
 const AIRPORT_CODE_RE = /\b(IGR|IGU|AEP|EZE|FTE|COR|ROS|MDZ|BRC|BHI|CTC|CRD|REL|RES|SLA|UAQ|IRJ|PRA|NCJ)\b/i;
 
 // "estoy en X" — user states their current location
-const ESTOY_EN_RE = /estoy\s+(?:en|en el|en la|parado en|situado en|ubicado en)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+para\s+|\s+a\s+)/i;
+const ESTOY_EN_RE = /estoy\s+(?:en|en el|en la|parado en|situado en|ubicado en)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+para\s+|\s+a\s+|\s+al\s+|\s+quiero\s+|\s+necesito\s+|\s+voy\s+|\s+quisiera\s+|\s+hacia\s+)/i;
 
 // "desde X" / "de X" — explicit origin
-const DESDE_RE = /(?:desde|salgo de|parto de|salida de|saliendo de)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+a\s+|\s+hacia\s+|\s+para\s+)/i;
+const DESDE_RE = /(?:desde|salgo de|salgo del|parto de|salida de|saliendo de)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+a\s+|\s+al\s+|\s+hacia\s+|\s+para\s+|\s+quiero\s+|\s+necesito\s+|\s+voy\s+|\s+quisiera\s+)/i;
 
 // "origen X" — explicit marker (complements CORE's ORIGEN_DESTINO_RE)
 const ORIGEN_MARKER_RE = /origen(?:\s*:\s*|\s+)(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+(?:destino|para)\s+)/i;
 
 // "aeropuerto X" — e.g. "aeropuerto IGR", "el aeropuerto"
-const AEROPUERTO_RE = /(?:el\s+)?aeropuerto\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]{2,8})\b/i;
+const AEROPUERTO_RE = /(?:(?i:el)\s+)?(?i:aeropuerto)\s+([A-ZÁÉÍÓÚÑ]{2,8})\b/;
 
 // "a X" / "hacia X" / "para X" — explicit destination
-const HACIA_RE = /(?:voy\s+)?(?:a|hacia|para|voy a|me dirijo a|vamos a|viajo a|quiero ir a|necesito ir a|tengo que ir a)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+desde\s+|\s+de\s+)/i;
+const HACIA_RE = /\b(?:voy\s+)?(?:al|a|hacia|para\s+(?:ir\s+)?(?:al|a)|para|me dirijo a|vamos a|viajo a|quiero ir a|necesito ir a|tengo que ir a)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+desde\s+|\s+de\s+|\s+del\s+|\s+quiero\s+|\s+necesito\s+|\s+voy\s+|\s+quisiera\s+)/i;
 
 // "destino X" — explicit marker
 const DESTINO_MARKER_RE = /destino(?:\s*:\s*|\s+)(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+(?:origen|desde)\s+)/i;
@@ -56,7 +56,7 @@ export function regexExtractSlots(text: string): TripExtraction | null {
       origin = code || "Aeropuerto";
     } else {
       // Check if the value contains an airport code (e.g., "aeropuerto IGR")
-      const aeroMatch = raw.match(/aeropuerto\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]{2,8})/i);
+      const aeroMatch = raw.match(/(?i:aeropuerto)\s+([A-ZÁÉÍÓÚÑ]{2,8})\b/);
       if (aeroMatch) {
         origin = aeroMatch[1].toUpperCase();
       } else {
@@ -130,6 +130,24 @@ export function regexExtractSlots(text: string): TripExtraction | null {
       if (hasDirectionalTo) {
         destination = code;
       }
+    }
+  }
+
+  // ── STANDALONE PATTERNS (last resort) ──
+
+  // 10. "del X" / "desde el X" — origin contraction
+  if (!origin) {
+    const delMatch = text.match(/\b(?:del|desde el|desde la)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+(?:a|al|hacia|para)\s+)/i);
+    if (delMatch) {
+      origin = normalize(delMatch[1]);
+    }
+  }
+
+  // 11. "al X" / "a X" — destination last resort
+  if (!destination) {
+    const alMatch = text.match(/\b(?:a|al)\s+(.+?)(?:\s*[,;.!?]|\s*$|\s+y\s+|\s+desde\s+|\s+de\s+|\s+del\s+)/i);
+    if (alMatch) {
+      destination = normalize(alMatch[1]);
     }
   }
 
