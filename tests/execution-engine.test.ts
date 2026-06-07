@@ -142,6 +142,69 @@ describe("executeDecision — FINAL pipeline", () => {
   });
 });
 
+describe("executeDecision — CONFIRM_INTERPRETATION", () => {
+  it("sends message with origin/dest only, no geo/fare", async () => {
+    const deps = makeDeps();
+    const ctx = makeCtx({
+      extractionCtx: { slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" } } },
+    });
+    await executeDecision(makeDecision("CONFIRM_INTERPRETATION"), ctx, deps);
+
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Entendí"));
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Aeropuerto IGR"));
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Centro"));
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("¿Es correcto?"));
+    expect(deps.geo.resolveGeoRoute).not.toHaveBeenCalled();
+    expect(deps.fare.calculateFare).not.toHaveBeenCalled();
+    expect(deps.memory.saveContext).not.toHaveBeenCalled();
+    expect(deps.handler).not.toHaveBeenCalled();
+  });
+});
+
+describe("executeDecision — BOOKING_SUMMARY", () => {
+  it("runs geo+fare, sends summary with datetime and fare", async () => {
+    const deps = makeDeps();
+    const ctx = makeCtx({
+      extractionCtx: {
+        slots: {
+          origin: { value: "Aeropuerto IGR" },
+          destination: { value: "Centro" },
+          scheduled_at: { value: "2026-06-08T15:30:00.000Z" },
+        },
+      },
+    });
+    await executeDecision(makeDecision("BOOKING_SUMMARY"), ctx, deps);
+
+    expect(deps.geo.resolveGeoRoute).toHaveBeenCalled();
+    expect(deps.fare.calculateFare).toHaveBeenCalled();
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Aeropuerto IGR"));
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Centro"));
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("$15.000"));
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("chofer"));
+    expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("De acuerdo"));
+    expect(deps.memory.saveContext).toHaveBeenCalled();
+    expect(deps.handler).not.toHaveBeenCalled();
+  });
+
+  it("formats scheduled_at date in es-AR locale", async () => {
+    const deps = makeDeps();
+    const ctx = makeCtx({
+      extractionCtx: {
+        slots: {
+          origin: { value: "Aeropuerto IGR" },
+          destination: { value: "Centro" },
+          scheduled_at: { value: "2026-06-08T15:30:00.000Z" },
+        },
+      },
+    });
+    await executeDecision(makeDecision("BOOKING_SUMMARY"), ctx, deps);
+
+    const sentMsg = deps.send.mock.calls.find((c: any[]) => c[0] === "+54912345678")?.[1] ?? "";
+    expect(sentMsg).toContain("Fecha");
+    expect(sentMsg).not.toContain("2026-06-08T15:30");
+  });
+});
+
 describe("executeDecision — driverOps (shift-end prompt)", () => {
   it("triggers shift-end prompt when driver is on shift", async () => {
     const deps = makeDeps();

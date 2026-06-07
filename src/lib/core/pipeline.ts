@@ -24,7 +24,7 @@ export async function processLead(
   try {
     const decision = resolveDecision(decisionInput);
     await executeDecision(decision, execCtx, deps);
-    return decision.action === "FINAL" ? "completed" : "incomplete";
+    return decision.action === "FINAL" || decision.action === "BOOKING_SUMMARY" ? "completed" : "incomplete";
   } catch (e) {
     console.error("[PIPELINE] error:", e);
     return "error";

@@ -3,7 +3,6 @@
 
 import type { Intent } from "../types";
 import type { CoreLateral } from "../laterals/types";
-import type { DecisionTrace } from "../trace/types";
 
 export interface DecisionLog {
   correlationId: string;
@@ -14,6 +13,5 @@ export interface DecisionLog {
   selectedAction: string;
   latencyMs: number;
   lateralSnapshot?: CoreLateral;
-  trace?: DecisionTrace;
   metadata: Record<string, unknown>;
 }

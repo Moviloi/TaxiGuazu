@@ -37,7 +37,7 @@ describe("decisionEngine — INFO_PRICE", () => {
     expect(d.message).toContain("R$ 20000");
   });
 
-  it("INFO without tariff match → falls through to confidence routing", () => {
+  it("INFO without tariff match → falls through to booking completeness check", () => {
     const d = resolveDecision({
       text: "cuánto cuesta",
       slots: { origin: "IGR", destination: "Centro" },
@@ -45,7 +45,7 @@ describe("decisionEngine — INFO_PRICE", () => {
       confidence: 0.8,
       lang: "es",
     });
-    expect(d.action).toBe("FINAL");
+    expect(d.action).toBe("CONFIRM_INTERPRETATION");
   });
 });
 
@@ -147,21 +147,31 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     expect(d.message).toContain("No estoy seguro");
   });
 
-  it("confidence between 0.4 and 0.75 → CONFIRM", () => {
+  it("confidence between 0.4 and 0.75 → CONFIRM_INTERPRETATION (no datetime)", () => {
     const d = resolveDecision({
       text: "voy del aeropuerto al centro",
-      slots: { origin: "Aeropuerto IGR", destination: "Centro" },
+      slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" } },
       tariffMatch: undefined,
       confidence: 0.6,
       lang: "es",
     });
-    expect(d.action).toBe("CONFIRM");
-    expect(d.message).toContain("Aeropuerto IGR");
-    expect(d.message).toContain("Centro");
-    expect(d.message).toContain("Confirmás");
+    expect(d.action).toBe("CONFIRM_INTERPRETATION");
+    expect(d.message).toBe("");
   });
 
-  it("confidence ≥ 0.75 → FINAL", () => {
+  it("all fields present → BOOKING_SUMMARY", () => {
+    const d = resolveDecision({
+      text: "voy del aeropuerto al centro mañana a las 10",
+      slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" }, scheduled_at: { value: "2026-06-08T10:00:00.000Z" } },
+      tariffMatch: undefined,
+      confidence: 0.6,
+      lang: "es",
+    });
+    expect(d.action).toBe("BOOKING_SUMMARY");
+    expect(d.message).toBe("");
+  });
+
+  it("confidence ≥ 0.75 → CONFIRM_INTERPRETATION (no datetime)", () => {
     const d = resolveDecision({
       text: "IGR a Amerian",
       slots: { origin: "IGR", destination: "Amerian" },
@@ -169,11 +179,11 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
       confidence: 0.75,
       lang: "es",
     });
-    expect(d.action).toBe("FINAL");
+    expect(d.action).toBe("CONFIRM_INTERPRETATION");
     expect(d.message).toBe("");
   });
 
-  it("confidence at boundary 0.4 → CONFIRM", () => {
+  it("confidence at boundary 0.4 → CONFIRM_INTERPRETATION", () => {
     const d = resolveDecision({
       text: "viaje",
       slots: { origin: "IGR", destination: "Centro" },
@@ -181,10 +191,10 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
       confidence: 0.4,
       lang: "es",
     });
-    expect(d.action).toBe("CONFIRM");
+    expect(d.action).toBe("CONFIRM_INTERPRETATION");
   });
 
-  it("confidence exactly 0.75 → FINAL", () => {
+  it("confidence exactly 0.75 → CONFIRM_INTERPRETATION", () => {
     const d = resolveDecision({
       text: "viaje",
       slots: { origin: "IGR", destination: "Centro" },
@@ -192,7 +202,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
       confidence: 0.75,
       lang: "es",
     });
-    expect(d.action).toBe("FINAL");
+    expect(d.action).toBe("CONFIRM_INTERPRETATION");
   });
 
   it("confidence at 0 → CLARIFY", () => {
@@ -207,8 +217,8 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
   });
 });
 
-describe("decisionEngine — CONFIRM message slots", () => {
-  it("CONFIRM message uses slot values or fallback '...'", () => {
+describe("decisionEngine — MISSING_ROUTE fallback", () => {
+  it("MOVE with empty slots → CLARIFY", () => {
     const d = resolveDecision({
       text: "viaje",
       slots: {},
@@ -216,7 +226,7 @@ describe("decisionEngine — CONFIRM message slots", () => {
       confidence: 0.5,
       lang: "es",
     });
-    expect(d.action).toBe("CONFIRM");
-    expect(d.message).toContain("...");
+    expect(d.action).toBe("CLARIFY");
+    expect(d.message).toContain("decirme");
   });
 });

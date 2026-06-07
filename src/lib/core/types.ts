@@ -3,6 +3,8 @@
 export type DecisionAction =
   | "INFO_PRICE"
   | "CONFIRM_ROUTE"
+  | "CONFIRM_INTERPRETATION"
+  | "BOOKING_SUMMARY"
   | "ASK_ORIGIN"
   | "ASK_DESTINATION"
   | "CLARIFY"

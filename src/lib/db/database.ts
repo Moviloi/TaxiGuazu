@@ -851,10 +851,11 @@ export async function clearConversationHistory(convId: number): Promise<void> {
 
 // ========== TRIPS ==========
 
-export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number, flightNumber?: string): Promise<void> {
+export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number, flightNumber?: string, status?: string): Promise<void> {
+  const tripStatus = status || "consulta";
   await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, 'consulta', ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, scheduledAt || null, flightNumber || null] });
-  await syncTripPhaseFromLegacyStatus(tripId, "consulta");
+  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, tripStatus, scheduledAt || null, flightNumber || null] });
+  await syncTripPhaseFromLegacyStatus(tripId, tripStatus);
 }
 
 export async function getTripById(tripId: string): Promise<TripRow | null> {
@@ -946,6 +947,7 @@ export async function completeTrip(tripId: string): Promise<void> {
 
 const LEGACY_STATUS_TO_PHASE: Record<string, { phase: TripPhase; reason?: TripClosureReason }> = {
   consulta: { phase: "QUOTED" },
+  PENDING_DRIVER: { phase: "QUOTED" },
   asignado_chofer: { phase: "ASSIGNED" },
   reconfirmado_24hs: { phase: "ASSIGNED" },
   completado: { phase: "CLOSED", reason: "completed" },

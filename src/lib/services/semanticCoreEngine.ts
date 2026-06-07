@@ -13,6 +13,7 @@ import type {
   PolicyInput,
   ConfidenceBucket,
 } from "@/lib/core/types";
+import { evaluateBookingCompleteness } from "@/lib/services/completenessEngine";
 
 // Re-export all public types for consumers (backward compat)
 export type {
@@ -76,8 +77,8 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
   }
 
   if (input.confidence < 0.75) {
-    const origin = input.slots?.origin ?? "...";
-    const destination = input.slots?.destination ?? "...";
+    const origin = input.slots?.origin?.value ?? "...";
+    const destination = input.slots?.destination?.value ?? "...";
     return {
       action: "CONFIRM",
       message: `Perfecto, tengo origen en ${origin} y destino en ${destination}. ¿Confirmás el viaje?`,
@@ -150,18 +151,26 @@ export function resolveDecision(input: DecisionInput): CoreDecision {
     };
   }
 
-  if (input.confidence < 0.75) {
-    const origin = input.slots?.origin ?? "...";
-    const destination = input.slots?.destination ?? "...";
+  const bookingStatus = evaluateBookingCompleteness(input.slots);
+
+  if (bookingStatus.status === "MISSING_ROUTE") {
     return {
-      action: "CONFIRM",
-      message: `Perfecto, tengo origen en ${origin} y destino en ${destination}. ¿Confirmás el viaje?`,
+      action: "CLARIFY",
+      message: "¿Podés decirme desde dónde y hacia dónde necesitás el traslado?",
+      metadata: { intent, policy: "CLARIFY", confidenceBucket: cb },
+    };
+  }
+
+  if (bookingStatus.status === "MISSING_DATETIME") {
+    return {
+      action: "CONFIRM_INTERPRETATION",
+      message: "",
       metadata: { intent, policy: "CONFIRM", confidenceBucket: cb },
     };
   }
 
   return {
-    action: "FINAL",
+    action: "BOOKING_SUMMARY",
     message: "",
     metadata: { intent, policy: "FINAL", confidenceBucket: cb },
   };

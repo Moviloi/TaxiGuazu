@@ -36,7 +36,7 @@ describe("policyEngine", () => {
 
   it("CONFIRM when confidence between 0.4 and 0.75", () => {
     const result = evaluatePolicy({
-      slots: { origin: "IGR", destination: "Amerian" },
+      slots: { origin: { value: "IGR" }, destination: { value: "Amerian" } },
       completeness: { status: "COMPLETE" },
       intent: "BOOKING",
       confidence: 0.6,
@@ -49,7 +49,7 @@ describe("policyEngine", () => {
 
   it("CONFIRM at confidence 0.4", () => {
     const result = evaluatePolicy({
-      slots: { origin: "Aeropuerto", destination: "Centro" },
+      slots: { origin: { value: "Aeropuerto" }, destination: { value: "Centro" } },
       completeness: { status: "COMPLETE" },
       intent: "BOOKING",
       confidence: 0.4,
@@ -59,7 +59,7 @@ describe("policyEngine", () => {
 
   it("CONFIRM at confidence 0.74", () => {
     const result = evaluatePolicy({
-      slots: { origin: "IGR", destination: "Puerto Iguazú" },
+      slots: { origin: { value: "IGR" }, destination: { value: "Puerto Iguazú" } },
       completeness: { status: "COMPLETE" },
       intent: "BOOKING",
       confidence: 0.74,
@@ -89,13 +89,28 @@ describe("policyEngine", () => {
 
   it("CONFIRM message includes origin value", () => {
     const result = evaluatePolicy({
-      slots: { origin: "Aeropuerto IGR", destination: "Hotel Amerian" },
+      slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Hotel Amerian" } },
       completeness: { status: "COMPLETE" },
       intent: "BOOKING",
       confidence: 0.5,
     });
     expect(result.message).toContain("Aeropuerto IGR");
     expect(result.message).toContain("Hotel Amerian");
+  });
+
+  it("CONFIRM renders .value not [object Object]", () => {
+    const result = evaluatePolicy({
+      slots: {
+        origin: { value: "Aeropuerto", score: 0.9, reason: "test" },
+        destination: { value: "Centro", score: 0.9, reason: "test" },
+      },
+      completeness: { status: "COMPLETE" },
+      intent: "BOOKING",
+      confidence: 0.57,
+    });
+    expect(result.action).toBe("CONFIRM");
+    expect(result.message).toBe("Perfecto, tengo origen en Aeropuerto y destino en Centro. ¿Confirmás el viaje?");
+    expect(result.message).not.toContain("[object Object]");
   });
 
   it("CONFIRM falls back to '...' when slots missing", () => {

@@ -48,13 +48,22 @@ function makeDeps(): ExecutionDeps & { send: any; persist: any; handler: any } {
 }
 
 describe("processLead", () => {
-  it("returns 'completed' for FINAL decision (high confidence + complete slots)", async () => {
+  it("returns 'completed' for BOOKING_SUMMARY decision (all fields present)", async () => {
     const result = await processLead(
-      makeDecisionInput({ confidence: 0.9, slots: { origin: "IGR", destination: "Amerian" } }),
+      makeDecisionInput({ confidence: 0.9, slots: { origin: "IGR", destination: "Amerian", scheduled_at: "2026-06-08T10:00:00.000Z" } }),
       makeExecCtx(),
       makeDeps(),
     );
     expect(result).toBe("completed");
+  });
+
+  it("returns 'incomplete' for CONFIRM_INTERPRETATION decision (no datetime)", async () => {
+    const result = await processLead(
+      makeDecisionInput({ confidence: 0.6, slots: { origin: "IGR", destination: "Amerian" } }),
+      makeExecCtx(),
+      makeDeps(),
+    );
+    expect(result).toBe("incomplete");
   });
 
   it("returns 'incomplete' for CLARIFY decision (low confidence)", async () => {
@@ -107,12 +116,17 @@ describe("processLead", () => {
     expect(result).toBe("incomplete");
   });
 
-  it("handles errors gracefully", async () => {
+  it("handles errors gracefully when handler crashes", async () => {
     const deps = makeDeps();
     deps.handler = vi.fn().mockImplementation(() => { throw new Error("handler crash"); });
     const result = await processLead(
-      makeDecisionInput({ confidence: 0.9 }),
-      makeExecCtx(),
+      makeDecisionInput({
+        text: "sí",
+        slots: {},
+        confidence: 0,
+        tariffMatch: undefined,
+      }),
+      makeExecCtx({ text: "sí", intent: "CONFIRM" }),
       deps,
     );
     expect(result).toBe("error");

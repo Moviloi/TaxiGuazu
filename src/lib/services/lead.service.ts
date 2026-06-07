@@ -22,10 +22,11 @@ import {
   clearPendingOpportunity,
   updateOpportunityLogResponse,
   setChatSessionWorkflowState,
+  updateChatSessionWorkflow,
   getDbInstance,
 } from "@/lib/db/database";
 import { extractSlots } from "@/lib/services/extractSlots";
-import { evaluateCompleteness } from "@/lib/services/completenessEngine";
+import { evaluateCompleteness, evaluateBookingCompleteness } from "@/lib/services/completenessEngine";
 import { processLead } from "@/lib/core/pipeline";
 import { classifyIntent } from "@/lib/services/semanticCoreEngine";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/services/executionEngine";
@@ -475,6 +476,13 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         const origin = slots.origin || "";
         const destination = slots.destination || "";
         if (origin && destination) {
+          const bookingStatus = evaluateBookingCompleteness(slots);
+          if (bookingStatus.status === "MISSING_DATETIME") {
+            await sendWhatsAppMessage(phone, bookingStatus.message);
+            await insertMessage(conversation.id, "assistant", bookingStatus.message);
+            await updateChatSessionWorkflow(phone, "collecting_slots", "scheduled_at");
+            return;
+          }
           const fleetCheck = await ensureFleetCanHandle(pax, {
             phone,
             convId: conversation.id,
@@ -488,7 +496,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           }
           const tariffMatch = await matchTariff(origin, destination, pax);
           const tripId = `trip_${Date.now()}`;
-          await createTrip(tripId, phone, origin, destination, tariffMatch.matched ? tariffMatch.price : (slots.price || undefined), pax, slots.scheduled_at ? Math.floor(new Date(slots.scheduled_at).getTime() / 1000) : undefined, slots.flight || undefined);
+          const rawScheduledAt = slots.scheduled_at;
+          const scheduledAtValue = rawScheduledAt?.value ?? rawScheduledAt;
+          const scheduledAtTs = scheduledAtValue ? Math.floor(new Date(String(scheduledAtValue)).getTime() / 1000) : undefined;
+          await createTrip(tripId, phone, origin, destination, tariffMatch.matched ? tariffMatch.price : (slots.price || undefined), pax, scheduledAtTs, slots.flight || undefined, "PENDING_DRIVER");
 
           // LEARNING FEEDBACK: observar resultado real vs estimado
           const estimatedFare = slots.fareEstimate ?? slots.price ?? tariffMatch.price;
@@ -502,7 +513,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             if (tariffMatch.matched) {
               await updateTripTariff(trip.trip_id, tariffMatch.tariffId, tariffMatch.piso);
             }
-            const confirmMsg = "✅ ¡Viaje confirmado! Buscamos chofer para vos.";
+            const confirmMsg = "✅ Solicitud confirmada.\n\nEn breve un chofer se pondrá en contacto con vos.";
             await sendWhatsAppMessage(phone, confirmMsg);
             await insertMessage(conversation.id, "assistant", confirmMsg);
             const urgency = slots.urgency || "ahora";
