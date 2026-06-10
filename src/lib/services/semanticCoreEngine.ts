@@ -14,6 +14,7 @@ import type {
   ConfidenceBucket,
 } from "@/lib/core/types";
 import { evaluateBookingCompleteness } from "@/lib/services/completenessEngine";
+import { isOpportunityQuery } from "@/lib/services/opportunity-engine";
 
 // Re-export all public types for consumers (backward compat)
 export type {
@@ -39,6 +40,10 @@ export function classifyIntent(text: string, slots: Record<string, any>): Intent
 
   if (t.length < 30 && AFFIRMATIVE.test(t)) {
     return { intent: "CONFIRM" };
+  }
+
+  if (isOpportunityQuery(t)) {
+    return { intent: "OPPORTUNITY" };
   }
 
   if (PRICE_KEYWORDS.test(t)) {
@@ -100,13 +105,21 @@ export function resolveDecision(input: DecisionInput): CoreDecision {
   const intent = classifyIntent(input.text, input.slots).intent;
   const cb = bucketConfidence(input.confidence);
 
-  // INFO + tariff available → price response
-  if (intent === "INFO" && input.tariffMatch?.matched) {
-    const t = input.tariffMatch;
+  // INFO + pricing available → price response
+  if (intent === "INFO" && input.pricing?.final_price) {
+    const p = input.pricing;
     const priceMsg = input.lang.startsWith("pt")
-      ? `O traslado de ${t.canonicalOrigin} para ${t.canonicalDestination} custa R$ ${t.price}.`
-      : `El traslado de ${t.canonicalOrigin} a ${t.canonicalDestination} cuesta $${t.price} ARS.`;
+      ? `O traslado de ${p.origin.canonical_name} para ${p.destination.canonical_name} custa R$ ${p.final_price}.`
+      : `El traslado de ${p.origin.canonical_name} a ${p.destination.canonical_name} cuesta $${p.final_price} ARS.`;
     return { action: "INFO_PRICE", message: priceMsg, metadata: { intent, policy: "FINAL", confidenceBucket: cb } };
+  }
+
+  // OPPORTUNITY → query available benefits (never negotiate)
+  if (intent === "OPPORTUNITY") {
+    const msg = input.lang.startsWith("pt")
+      ? "Dé-me um momento enquanto verifico os benefícios disponíveis..."
+      : "Dame un momento mientras verifico los beneficios disponibles...";
+    return { action: "OPPORTUNITY_QUERY", message: msg, metadata: { intent, policy: "FINAL", confidenceBucket: cb } };
   }
 
   // CONFIRM → direct handler route

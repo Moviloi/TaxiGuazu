@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { resolveDecision } from "../src/lib/services/semanticCoreEngine";
 
-function makeTariffMatch(price = 15000) {
+function makePricing(price = 15000, origin = "Aeropuerto IGR", dest = "Centro") {
   return {
-    matched: true,
-    price,
-    canonicalOrigin: "Aeropuerto IGR",
-    canonicalDestination: "Centro",
+    final_price: price,
+    base_price: price,
+    markup: 0,
+    tariff_id: 1,
+    origin: { canonical_name: origin },
+    destination: { canonical_name: dest },
   };
 }
 
@@ -15,7 +17,7 @@ describe("decisionEngine — INFO_PRICE", () => {
     const d = resolveDecision({
       text: "cuánto cuesta ir al centro",
       slots: { destination: "Centro" },
-      tariffMatch: makeTariffMatch(12000),
+      pricing: makePricing(12000),
       confidence: 0,
       lang: "es",
     });
@@ -29,7 +31,7 @@ describe("decisionEngine — INFO_PRICE", () => {
     const d = resolveDecision({
       text: "me das una tarifa",
       slots: { origin: "Aeropuerto IGR", destination: "Centro" },
-      tariffMatch: makeTariffMatch(20000),
+      pricing: makePricing(20000),
       confidence: 0,
       lang: "pt",
     });
@@ -41,7 +43,7 @@ describe("decisionEngine — INFO_PRICE", () => {
     const d = resolveDecision({
       text: "cuánto cuesta",
       slots: { origin: "IGR", destination: "Centro" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.8,
       lang: "es",
     });
@@ -54,7 +56,7 @@ describe("decisionEngine — CONFIRM_ROUTE", () => {
     const d = resolveDecision({
       text: "sí",
       slots: {},
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "es",
     });
@@ -65,7 +67,7 @@ describe("decisionEngine — CONFIRM_ROUTE", () => {
     const d = resolveDecision({
       text: "dale",
       slots: {},
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "es",
     });
@@ -78,7 +80,7 @@ describe("decisionEngine — AMBIGUOUS → ASK", () => {
     const d = resolveDecision({
       text: "del aeropuerto",
       slots: { origin: "Aeropuerto IGR" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "es",
     });
@@ -90,7 +92,7 @@ describe("decisionEngine — AMBIGUOUS → ASK", () => {
     const d = resolveDecision({
       text: "al centro",
       slots: { destination: "Centro" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "es",
     });
@@ -102,7 +104,7 @@ describe("decisionEngine — AMBIGUOUS → ASK", () => {
     const d = resolveDecision({
       text: "hola",
       slots: {},
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "es",
     });
@@ -113,7 +115,7 @@ describe("decisionEngine — AMBIGUOUS → ASK", () => {
     const d = resolveDecision({
       text: "do aeroporto",
       slots: { origin: "Aeroporto" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "pt",
     });
@@ -125,7 +127,7 @@ describe("decisionEngine — AMBIGUOUS → ASK", () => {
     const d = resolveDecision({
       text: "para o centro",
       slots: { destination: "Centro" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "pt",
     });
@@ -139,7 +141,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     const d = resolveDecision({
       text: "voy del aeropuerto al centro",
       slots: { origin: "Aeropuerto IGR", destination: "Centro" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.3,
       lang: "es",
     });
@@ -151,7 +153,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     const d = resolveDecision({
       text: "voy del aeropuerto al centro",
       slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" } },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.6,
       lang: "es",
     });
@@ -163,7 +165,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     const d = resolveDecision({
       text: "voy del aeropuerto al centro mañana a las 10",
       slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" }, scheduled_at: { value: "2026-06-08T10:00:00.000Z" } },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.6,
       lang: "es",
     });
@@ -175,7 +177,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     const d = resolveDecision({
       text: "IGR a Amerian",
       slots: { origin: "IGR", destination: "Amerian" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.75,
       lang: "es",
     });
@@ -187,7 +189,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     const d = resolveDecision({
       text: "viaje",
       slots: { origin: "IGR", destination: "Centro" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.4,
       lang: "es",
     });
@@ -198,7 +200,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     const d = resolveDecision({
       text: "viaje",
       slots: { origin: "IGR", destination: "Centro" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.75,
       lang: "es",
     });
@@ -209,7 +211,7 @@ describe("decisionEngine — confidence routing (MOVE)", () => {
     const d = resolveDecision({
       text: "viaje",
       slots: { origin: "IGR", destination: "Centro" },
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0,
       lang: "es",
     });
@@ -222,7 +224,7 @@ describe("decisionEngine — MISSING_ROUTE fallback", () => {
     const d = resolveDecision({
       text: "viaje",
       slots: {},
-      tariffMatch: undefined,
+      pricing: undefined,
       confidence: 0.5,
       lang: "es",
     });

@@ -30,35 +30,8 @@ import { evaluateCompleteness, evaluateBookingCompleteness } from "@/lib/service
 import { processLead } from "@/lib/core/pipeline";
 import { classifyIntent } from "@/lib/services/semanticCoreEngine";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/services/executionEngine";
-import { resolveGeoRoute, resolveZones, expandZones, computeProximityScore } from "@/lib/services/geoEngine";
-import { calculateFare } from "@/lib/services/fareEngine";
-import { loadContext, mergeContext, saveContext } from "@/lib/services/contextMemory";
-import { observe as observeLearning } from "@/lib/services/fareLearningEngine";
-import { buildRouteKey } from "@/lib/services/fareLearningEngine";
-import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
-import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
-import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2, notifyAdmin } from "./admin.service";
-import { handleAdminCommand } from "./admin-commands";
-import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
-import type { TripRow } from "@/lib/db/types";
-import { calculateSlotConfidence } from "@/lib/services/confidence";
-import { evaluateWorkflowTransition } from "@/lib/services/slot-workflow";
-import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
-import { matchTariff } from "@/lib/services/tariff-matcher";
-import type { TariffMatchResult } from "@/lib/services/tariff-matcher";
-import {
-  advanceToNivel1,
-  advanceToNivel2,
-  advanceToNivel3,
-  advanceToWaitingDriver,
-  resetToIdle,
-  getWorkflow,
-} from "@/lib/utils/conversation-workflow";
-import { handleMessage } from "@/lib/ai/handler";
-import { assertCoreRouterPolicy, assertOutputSource, resetRequestState } from "@/lib/ai/guard";
-import { core } from "@/lib/ai/core";
+import { resolveGeoRoute } from "@/lib/services/geoEngine";
+import { evaluateOpportunities, formatOpportunityResponse } from "@/lib/services/opportunity-engine";
 import { opportunityEngine } from "@/lib/services/opportunity-engine";
 import { buildF4Signals, computeComprehensionScore, getF4State, getF4RecoveryMessage } from "@/lib/services/comprehension";
 import { buildMemory } from "@/lib/services/memory";
@@ -96,7 +69,7 @@ function formatConfidenceNote(
   e: TripExtraction,
   confidenceResult: ExtractionResult,
   workflowResult: SlotWorkflowContext,
-  tariffMatch?: TariffMatchResult,
+  pricing?: Awaited<ReturnType<typeof calculatePrice>>,
 ): string {
   const parts: string[] = [];
 
@@ -138,7 +111,7 @@ function formatConfidenceNote(
 if (e.origin) {
     const originScore = confidenceResult.slots.origin?.score ?? 0;
     const originReason = confidenceResult.slots.origin?.reason;
-    const originCanonical = tariffMatch?.canonicalOrigin;
+    const originCanonical = pricing?.origin.canonical_name ?? undefined;
     const { label: originLabel, suggestion: originSuggestion } = formatFieldLabel(e.origin, originCanonical, originReason);
     parts.push(`Origen: ${originLabel} (Confianza: ${originScore * 100}%)`);
     if (originSuggestion) {
@@ -148,7 +121,7 @@ if (e.origin) {
   if (e.destination) {
     const destScore = confidenceResult.slots.destination?.score ?? 0;
     const destReason = confidenceResult.slots.destination?.reason;
-    const destCanonical = tariffMatch?.canonicalDestination;
+    const destCanonical = pricing?.destination.canonical_name ?? undefined;
     const { label: destLabel, suggestion: destSuggestion } = formatFieldLabel(e.destination, destCanonical, destReason);
     parts.push(`Destino: ${destLabel} (Confianza: ${destScore * 100}%)`);
     if (destSuggestion) {
@@ -161,16 +134,13 @@ if (e.origin) {
   if (e.scheduled_at) parts.push(`Fecha: ${e.scheduled_at}`);
   if (e.customer_name) parts.push(`Nombre: ${e.customer_name}`);
 
-  if (tariffMatch?.matched) {
+  if (pricing && pricing.final_price > 0) {
     const pax = e.passengers || 1;
     const priceLabel = pax > 4 ? "precio hasta 6 pasajeros" : "precio hasta 4 pasajeros";
-    parts.push(`PRECIO OFICIAL (calculado por backend): $${tariffMatch.price} ARS (${priceLabel}).`);
-    parts.push(`VALOR_PRECIO: ${tariffMatch.price}`);
-    parts.push(`Ruta oficial: ${tariffMatch.canonicalOrigin} → ${tariffMatch.canonicalDestination}.`);
+    parts.push(`PRECIO OFICIAL (calculado por backend): $${pricing.final_price} ARS (${priceLabel}).`);
+    parts.push(`VALOR_PRECIO: ${pricing.final_price}`);
+    parts.push(`Ruta oficial: ${pricing.origin.canonical_name} → ${pricing.destination.canonical_name}.`);
     parts.push(`NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`);
-    if (tariffMatch.method === "fuzzy") {
-      parts.push(`(Match aproximado — el chofer confirmará el precio exacto.)`);
-    }
   } else {
     parts.push(`VALOR_PRECIO: NO_DISPONIBLE`);
     if (e.origin && e.destination) {
@@ -494,24 +464,28 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             await resetChatSession(phone);
             return;
           }
-          const tariffMatch = await matchTariff(origin, destination, pax);
+          const pricingResult = await calculatePrice({ origin, destination, passengers: pax });
+          const tariffV2Match = await resolveTariff(origin, destination, pax);
+          if (tariffV2Match.matched && Math.abs(tariffV2Match.price - pricingResult.final_price) > 0) {
+            console.log(`[CONFIRMATION V2] Price divergence: v1=${pricingResult.final_price} v2=${tariffV2Match.price}`);
+          }
           const tripId = `trip_${Date.now()}`;
           const rawScheduledAt = slots.scheduled_at;
           const scheduledAtValue = rawScheduledAt?.value ?? rawScheduledAt;
           const scheduledAtTs = scheduledAtValue ? Math.floor(new Date(String(scheduledAtValue)).getTime() / 1000) : undefined;
-          await createTrip(tripId, phone, origin, destination, tariffMatch.matched ? tariffMatch.price : (slots.price || undefined), pax, scheduledAtTs, slots.flight || undefined, "PENDING_DRIVER");
+          await createTrip(tripId, phone, origin, destination, pricingResult.final_price > 0 ? pricingResult.final_price : (slots.price || undefined), pax, scheduledAtTs, slots.flight || undefined, "PENDING_DRIVER");
 
           // LEARNING FEEDBACK: observar resultado real vs estimado
-          const estimatedFare = slots.fareEstimate ?? slots.price ?? tariffMatch.price;
-          const finalFare = tariffMatch.matched ? tariffMatch.price : (slots.price || 0);
+          const estimatedFare = slots.fareEstimate ?? slots.price ?? pricingResult.final_price;
+          const finalFare = pricingResult.final_price > 0 ? pricingResult.final_price : (slots.price || 0);
           const routeKey = buildRouteKey(slots.originZone ?? origin, slots.destinationZone ?? destination);
           observeLearning(Number(estimatedFare), Number(finalFare), routeKey, false);
           console.log("[LEARNING] observado:", { routeKey, estimatedFare, finalFare });
           await setConversationTrip(conversation.id, tripId);
           trip = await getActiveTripByPhone(phone);
           if (trip) {
-            if (tariffMatch.matched) {
-              await updateTripTariff(trip.trip_id, tariffMatch.tariffId, tariffMatch.piso);
+            if (pricingResult.final_price > 0) {
+              await updateTripTariff(trip.trip_id, pricingResult.tariff_id!, pricingResult.base_price);
             }
             const confirmMsg = "✅ Solicitud confirmada.\n\nEn breve un chofer se pondrá en contacto con vos.";
             await sendWhatsAppMessage(phone, confirmMsg);
@@ -546,9 +520,9 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
               origin: origin,
               destination: destination,
               passengers: pax,
-              tariffId: tariffMatch.matched ? tariffMatch.tariffId : null,
-              price: tariffMatch.matched ? tariffMatch.price : (slots.price || 0),
-              piso: tariffMatch.matched ? tariffMatch.piso : 0,
+              tariffId: pricingResult.tariff_id,
+              price: pricingResult.final_price > 0 ? pricingResult.final_price : (slots.price || 0),
+              piso: pricingResult.base_price,
               urgency,
               conversationId: conversation.id,
               tripLegType,
@@ -718,7 +692,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     let workflowResult: SlotWorkflowContext | undefined;
     let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
     let confidenceResult: ExtractionResult | undefined;
-    let tariffMatch: TariffMatchResult | undefined;
+    let pricing: Awaited<ReturnType<typeof calculatePrice>> | undefined;
     let coreDecisionEarly: ReturnType<typeof core> | undefined;
     let prevSlotsEarly: Record<string, string> = {};
     try {
@@ -767,15 +741,24 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           console.log("[EXTRACTION] Parse exitoso, calculando confidence...");
           confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
-          // Backend tariff matching — inject real price if origin + destination known
+          // Backend pricing — inject real price if origin + destination known
           if (parsed.data.origin && parsed.data.destination) {
             const pax = parsed.data.passengers || 1;
-            console.log(`[EXTRACTION] Buscando tariff: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
-            tariffMatch = await matchTariff(parsed.data.origin, parsed.data.destination, pax);
-            console.log(`[EXTRACTION] Tariff match: matched=${tariffMatch.matched} price=${tariffMatch.price} origin="${tariffMatch.canonicalOrigin}" dest="${tariffMatch.canonicalDestination}"`);
-            if (tariffMatch.matched) {
-              parsed.data.price = tariffMatch.price;
-              confidenceResult.slots.price = { value: tariffMatch.price, score: 1.0, reason: "backend_tariff_match" };
+            console.log(`[EXTRACTION] Calculando precio: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
+            pricing = await calculatePrice({ origin: parsed.data.origin, destination: parsed.data.destination, passengers: pax });
+            const tariffV2Match = await resolveTariff(parsed.data.origin, parsed.data.destination, pax);
+            if (tariffV2Match.matched) {
+              console.log(`[EXTRACTION V2] Tariff v2 match: level=${tariffV2Match.level} price=${tariffV2Match.price} (vs v3: ${pricing?.final_price})`);
+              if (!pricing || pricing.final_price <= 0 || Math.abs(tariffV2Match.price - pricing.final_price) > 0) {
+                console.log(`[EXTRACTION V2] ⚠️ Price divergence: v3=${pricing?.final_price} v2=${tariffV2Match.price} level=${tariffV2Match.level}`);
+              }
+            } else {
+              console.log(`[EXTRACTION V2] Tariff v2: not found (band hierarchy fallback also empty)`);
+            }
+            console.log(`[EXTRACTION] Pricing result: final_price=${pricing?.final_price} origin="${pricing?.origin.canonical_name}" dest="${pricing?.destination.canonical_name}"`);
+            if (pricing && pricing.final_price > 0) {
+              parsed.data.price = pricing.final_price;
+              confidenceResult.slots.price = { value: pricing.final_price, score: 1.0, reason: "backend_tariff_match" };
             } else if (parsed.data.origin || parsed.data.destination) {
               // Fallback: re-intentar con regex sobre texto original si Groq extrajo valores no resolubles (ej. "el aeropuerto")
               // Primero intentar extracción dirección-aware: "de X a Y"
@@ -793,14 +776,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
                 fbDest = text.match(destRx)?.[1];
               }
               if (fbOrigin && fbDest) {
-                const fbMatch = await matchTariff(fbOrigin, fbDest, parsed.data.passengers || 1);
-                if (fbMatch.matched) {
-                  console.log(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbMatch.price}`);
-                  tariffMatch = fbMatch;
+                const fbPricing = await calculatePrice({ origin: fbOrigin, destination: fbDest, passengers: parsed.data.passengers || 1 });
+                if (fbPricing.final_price > 0) {
+                  console.log(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbPricing.final_price}`);
+                  pricing = fbPricing;
                   parsed.data.origin = fbOrigin;
                   parsed.data.destination = fbDest;
-                  parsed.data.price = fbMatch.price;
-                  confidenceResult.slots.price = { value: fbMatch.price, score: 1.0, reason: "backend_tariff_match" };
+                  parsed.data.price = fbPricing.final_price;
+                  confidenceResult.slots.price = { value: fbPricing.final_price, score: 1.0, reason: "backend_tariff_match" };
                   confidenceResult.slots.origin = { value: fbOrigin, score: 1.0, reason: "regex_fallback" };
                   confidenceResult.slots.destination = { value: fbDest, score: 1.0, reason: "regex_fallback" };
                 }
@@ -857,7 +840,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
           await upsertChatSession(phone, mergedWithMemory, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
 
-          extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, tariffMatch);
+          extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing);
           console.log("[EXTRACTION] extractionNote generado:", extractionNote.substring(0, 150));
         } else {
           console.log("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
@@ -899,13 +882,13 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
         if (originMatch && destMatch) {
           console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
-          const ft = await matchTariff(originMatch, destMatch, 1);
-          if (ft.matched) {
-            tariffMatch = ft;
+          const ft = await calculatePrice({ origin: originMatch, destination: destMatch, passengers: 1 });
+          if (ft.final_price > 0) {
+            pricing = ft;
             if (confidenceResult) {
-              confidenceResult.slots.origin = { value: ft.canonicalOrigin, score: 1.0, reason: "regex_fallback" };
-              confidenceResult.slots.destination = { value: ft.canonicalDestination, score: 1.0, reason: "regex_fallback" };
-              confidenceResult.slots.price = { value: ft.price, score: 1.0, reason: "backend_tariff_match" };
+              confidenceResult.slots.origin = { value: ft.origin.canonical_name, score: 1.0, reason: "regex_fallback" };
+              confidenceResult.slots.destination = { value: ft.destination.canonical_name, score: 1.0, reason: "regex_fallback" };
+              confidenceResult.slots.price = { value: ft.final_price, score: 1.0, reason: "backend_tariff_match" };
             }
             workflowResult = await evaluateWorkflowTransition(phone, {
               slots: confidenceResult?.slots ?? {},
@@ -914,14 +897,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             });
             extractionNote = [
               `Confianza general: 100%. Estado: collecting_slots.`,
-              `Origen: "${originMatch}" → ${ft.canonicalOrigin} (Confianza: 100%)`,
-              `Destino: "${destMatch}" → ${ft.canonicalDestination} (Confianza: 100%)`,
-              `PRECIO OFICIAL (calculado por backend): $${ft.price} ARS (precio hasta 4 pasajeros).`,
-              `VALOR_PRECIO: ${ft.price}`,
-              `Ruta oficial: ${ft.canonicalOrigin} → ${ft.canonicalDestination}.`,
+              `Origen: "${originMatch}" → ${ft.origin.canonical_name} (Confianza: 100%)`,
+              `Destino: "${destMatch}" → ${ft.destination.canonical_name} (Confianza: 100%)`,
+              `PRECIO OFICIAL (calculado por backend): $${ft.final_price} ARS (precio hasta 4 pasajeros).`,
+              `VALOR_PRECIO: ${ft.final_price}`,
+              `Ruta oficial: ${ft.origin.canonical_name} → ${ft.destination.canonical_name}.`,
               `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
             ].join('\n');
-            console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.price);
+            console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.final_price);
           } else {
             console.log("[EXTRACTION] Fallback: tariff no encontrado");
           }
@@ -946,7 +929,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       parsedData,
       confidenceResult,
       workflowResult,
-      tariffMatch,
+      pricing,
       coreDecisionEarly?.roleLock,
       coreDecisionEarly?.slotStability,
       prevSlotsEarly,
@@ -961,7 +944,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       history,
       customerName: customerName || undefined,
       extractionCtx,
-      tariffMatch,
+      pricing,
       lang,
       intent: classifyIntent(text, ctxSlots).intent,
     };
@@ -969,8 +952,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       send: sendWhatsAppMessage,
       persist: insertMessage,
       handler: handleMessage,
-      geo: { resolveGeoRoute, resolveZones, expandZones, computeProximityScore },
-      fare: { calculateFare },
+      geo: { resolveGeoRoute },
       memory: { saveContext },
       guard: assertOutputSource,
       driverOps: { getDriverByPhone, getConversationByPhone, buildShiftEndPrompt },
@@ -978,10 +960,37 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const decisionInput = {
       text,
       slots: ctxSlots,
-      tariffMatch,
+      pricing,
       confidence: confidenceResult?.overall_confidence ?? 0,
       lang,
     };
+    // OPPORTUNITY QUERY — evaluate available benefits, never negotiate
+    if (classifyIntent(text, ctxSlots).intent === "OPPORTUNITY") {
+      if (pricing && pricing.final_price > 0) {
+        const oppResult = await evaluateOpportunities({
+          pricingResult: pricing,
+          tripContext: {
+            origin: parsedData?.origin ?? "",
+            destination: parsedData?.destination ?? "",
+            tariff_id: pricing.tariff_id,
+            passengers: parsedData?.passengers ?? 1,
+          },
+          userIntent: text,
+        });
+        const oppMsg = formatOpportunityResponse(oppResult, lang);
+        await sendWhatsAppMessage(phone, oppMsg);
+        await insertMessage(conversation.id, "assistant", oppMsg);
+        console.log("[OPPORTUNITY] response sent:", oppMsg.substring(0, 120));
+      } else {
+        const msg = lang.startsWith("pt")
+          ? "Primeiro preciso saber o trajeto para verificar benefícios disponíveis."
+          : "Primero necesito saber el trayecto para verificar beneficios disponibles.";
+        await sendWhatsAppMessage(phone, msg);
+        await insertMessage(conversation.id, "assistant", msg);
+      }
+      return;
+    }
+
     await processLead(decisionInput, execCtx, execDeps);
   } catch (e) {
     console.error("[LEAD_ERROR]", e);
@@ -1116,7 +1125,7 @@ function buildExtractionContext(
   _parsedData: TripExtraction | undefined,
   confidenceResult: ExtractionResult | undefined,
   workflowResult: SlotWorkflowContext | undefined,
-  tariffMatch: TariffMatchResult | undefined,
+  pricing: Awaited<ReturnType<typeof calculatePrice>> | undefined,
   roleLock?: RoleLock,
   slotStability?: SlotStabilityMap,
   prevSlots?: Record<string, string>,
@@ -1164,13 +1173,13 @@ function buildExtractionContext(
     workflowState: workflowResult.state,
     clarifyField: workflowResult.clarifyField ?? null,
     askForConfirmation: workflowResult.askForConfirmation ?? false,
-    tariff: tariffMatch
+    tariff: pricing
       ? {
-          matched: tariffMatch.matched,
-          price: tariffMatch.matched ? tariffMatch.price : undefined,
-          canonicalOrigin: tariffMatch.canonicalOrigin,
-          canonicalDestination: tariffMatch.canonicalDestination,
-          method: tariffMatch.method,
+          matched: pricing.final_price > 0,
+          price: pricing.final_price > 0 ? pricing.final_price : undefined,
+          canonicalOrigin: pricing.origin.canonical_name ?? undefined,
+          canonicalDestination: pricing.destination.canonical_name ?? undefined,
+          method: "v3",
         }
       : undefined,
     roleLock: roleLock ?? { origin: null, destination: null },

@@ -51,8 +51,6 @@ export interface TripRow {
   status: string | null;
   price_base: number | null;
   passengers: number | null;
-  discount_tier: number | null;
-  discount_explicit: number | null;
   assigned_driver_phone: string | null;
   created_at: number | null;
   updated_at: number | null;
@@ -168,26 +166,62 @@ export interface TariffRow {
   wait_included: number | null;
   price_4p: number;
   price_6p: number;
-  piso_4p: number;
-  piso_6p: number;
-  piso_4p_low: number | null;
-  piso_6p_low: number | null;
-  garantizado_4p: number | null;
-  garantizado_6p: number | null;
+  base_price_4p: number;
+  base_price_6p: number;
+  origin_place_id: string | null;
+  destination_place_id: string | null;
+  origin_zone_id: string | null;
+  destination_zone_id: string | null;
+  active: number | null;
 }
 
-export interface DriverDiscountRow {
+export interface ProviderAdjustmentRow {
   id: number;
-  driver_phone: string;
+  provider_id: string;
   tariff_id: number;
-  discount_pct: number;
+  adjustment_type: "percent" | "fixed";
+  adjustment_value: number;
+  valid_from: number | null;
   valid_until: number | null;
   active: number | null;
   created_at: number | null;
 }
 
-export interface DriverDiscountWithDriverRow extends DriverDiscountRow {
-  driver_name: string;
+export interface PromotionRow {
+  id: number;
+  source: string;
+  name: string;
+  description: string | null;
+  adjustment_pct: number;
+  origin_place_id: string | null;
+  destination_place_id: string | null;
+  origin_zone_id: string | null;
+  destination_zone_id: string | null;
+  min_passengers: number | null;
+  max_passengers: number | null;
+  valid_from: number | null;
+  valid_until: number | null;
+  active: number | null;
+  max_uses: number | null;
+  current_uses: number | null;
+  created_at: number | null;
+}
+
+export interface PackageRow {
+  id: number;
+  name: string;
+  description: string | null;
+  package_type: "round_trip" | "three_leg" | "multi_stop";
+  price: number;
+  included_services: string | null;
+  origin_place_id: string | null;
+  destination_place_id: string | null;
+  origin_zone_id: string | null;
+  destination_zone_id: string | null;
+  valid_from: number | null;
+  valid_until: number | null;
+  active: number | null;
+  created_at: number | null;
 }
 
 export interface LeadRow {
@@ -199,13 +233,6 @@ export interface LeadRow {
   passengers: number | null;
   taken_by: string | null;
   created_at: number | null;
-}
-
-export interface SurveyRow {
-  id: number;
-  trip_id: string;
-  sent_at: number | null;
-  response: string | null;
 }
 
 export interface LocationAliasRow {
@@ -240,15 +267,7 @@ export interface ProcessedMessageRow {
   payload_hash: string | null;
 }
 
-export type OpportunityType =
-  | "bundle_in_out"
-  | "complement"
-  | "capacity_ociosa"
-  | "promo_driver"
-  | "campaign_tg"
-  | "live_bid";
-
-export interface OpportunityContext {
+export type OpportunityContext = {
   tripId: string;
   clientPhone: string;
   origin: string;
@@ -294,18 +313,39 @@ export interface OpportunityRuleRow {
   created_at: number;
 }
 
-export interface OpportunityLogRow {
+// ========== TARIFF MODEL V3 (Place → Zone → Tariff) ==========
+
+export type PlaceType = "airport" | "city" | "hotel" | "poi" | "terminal" | "border" | "other";
+
+export interface PlaceRow {
+  place_id: string;
+  canonical_name: string;
+  display_name: string | null;
+  place_type: PlaceType;
+  operational_zone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  price_modifier: number | null;
+  active: number;
+  created_at: number;
+}
+
+export interface AliasRow {
   id: number;
-  conversation_id: number;
-  client_phone: string;
-  trip_id: string;
-  rule_id: number | null;
-  opportunity_type: string;
-  label: string;
-  original_price: number;
-  offered_price: number;
-  presented_at: number;
-  client_response: string | null;
-  phase: string;
-  responded_at: number | null;
+  place_id: string;
+  alias: string;
+  language: string | null;
+}
+
+export interface TariffV2Match {
+  matched: boolean;
+  price: number;
+  piso: number;
+  garantizado: number;
+  tariffId: number | null;
+  level: "place_place" | "place_zone" | "zone_place" | "zone_zone" | "not_found";
+  originPlaceId: string | null;
+  destinationPlaceId: string | null;
+  originZoneId: string | null;
+  destinationZoneId: string | null;
 }

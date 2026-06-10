@@ -1,7 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { expandZone, expandZones } from "../src/lib/services/zoneExpansionEngine";
-import { computeProximityScore } from "../src/lib/services/proximityScorer";
-import { resolveZones } from "../src/lib/services/zoneEngine";
+import { expandZone, expandZones, computeProximityScore, resolveZones } from "../src/lib/services/geoEngine";
 
 describe("zoneExpansionEngine", () => {
   // ── Expansión radial ──

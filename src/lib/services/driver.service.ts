@@ -31,7 +31,7 @@ import {
   setConnectionValue,
   deleteConnectionKey,
   getCustomerName,
-  getDriverDiscountForTariff,
+  getProviderAdjustmentForTariff,
 } from "@/lib/db/database";
 import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver, broadcastTripToDrivers } from "./admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
@@ -143,9 +143,9 @@ export async function handleDriverCompleted(convId: number, driverPhone: string)
 
   // Apply driver's voluntary promo discount to the displayed payout
   if (trip.tariff_id) {
-    const discountPct = await getDriverDiscountForTariff(driverPhone, trip.tariff_id);
-    if (discountPct && discountPct > 0) {
-      garantizado = Math.round(garantizado * (1 - discountPct / 100));
+    const adjValue = await getProviderAdjustmentForTariff(driverPhone, trip.tariff_id);
+    if (adjValue && adjValue > 0) {
+      garantizado = Math.round(garantizado * (1 - adjValue / 100));
     }
   }
 

@@ -13,12 +13,6 @@ function makeDeps() {
     handler: vi.fn().mockReturnValue({ policy: { finalResponse: "ok", outputSource: "POLICY" } }),
     geo: {
       resolveGeoRoute: vi.fn().mockReturnValue({ originZone: "Z_AIRPORT", destinationZone: "Z_CITY_CORE", routeType: "airport_to_city", proximityScore: 0.9 }),
-      resolveZones: vi.fn().mockReturnValue({ originZone: "Z_AIRPORT", destinationZone: "Z_CITY_CORE", originSubzone: null, destinationSubzone: null }),
-      expandZones: vi.fn().mockReturnValue({ origin: { zone: "Z_AIRPORT" }, destination: { zone: "Z_CITY_CORE" } }),
-      computeProximityScore: vi.fn().mockReturnValue({ score: 0.9, factors: {} }),
-    },
-    fare: {
-      calculateFare: vi.fn().mockReturnValue({ category: "standard", finalPrice: 15000, confidence: 0.9 }),
     },
     memory: {
       saveContext: vi.fn().mockResolvedValue(undefined),
@@ -35,7 +29,6 @@ function makeCtx(overrides = {}) {
     history: [],
     customerName: undefined,
     extractionCtx: undefined,
-    tariffMatch: undefined,
     lang: "es",
     intent: "MOVE",
     ...overrides,
@@ -62,7 +55,6 @@ describe("executeDecision — simple message actions", () => {
     const deps = makeDeps();
     await executeDecision(makeDecision("ASK_DESTINATION", "¿A dónde necesitás ir?"), makeCtx(), deps);
     expect(deps.send).toHaveBeenCalled();
-    expect(deps.fare.calculateFare).not.toHaveBeenCalled();
   });
 
   it("CLARIFY → sends message only", async () => {
@@ -96,19 +88,13 @@ describe("executeDecision — CONFIRM_ROUTE", () => {
 });
 
 describe("executeDecision — FINAL pipeline", () => {
-  it("runs geo → fare → handler → memory", async () => {
+  it("runs geo → handler → memory", async () => {
     const deps = makeDeps();
     const ctx = makeCtx({ intent: "MOVE", extractionCtx: { slots: { origin: "IGR", destination: "Amerian" } } });
     await executeDecision(makeDecision("FINAL"), ctx, deps);
 
     // GEO
     expect(deps.geo.resolveGeoRoute).toHaveBeenCalled();
-    expect(deps.geo.resolveZones).toHaveBeenCalled();
-    expect(deps.geo.expandZones).toHaveBeenCalled();
-    expect(deps.geo.computeProximityScore).toHaveBeenCalled();
-
-    // FARE
-    expect(deps.fare.calculateFare).toHaveBeenCalled();
 
     // HANDLER
     expect(deps.handler).toHaveBeenCalled();
@@ -125,11 +111,10 @@ describe("executeDecision — FINAL pipeline", () => {
     }));
   });
 
-  it("does not call geo/fare/handler for non-FINAL actions", async () => {
+  it("does not call geo/handler for non-FINAL actions", async () => {
     const deps = makeDeps();
     await executeDecision(makeDecision("CLARIFY", "test"), makeCtx(), deps);
     expect(deps.geo.resolveGeoRoute).not.toHaveBeenCalled();
-    expect(deps.fare.calculateFare).not.toHaveBeenCalled();
     expect(deps.handler).not.toHaveBeenCalled();
     expect(deps.memory.saveContext).not.toHaveBeenCalled();
   });
@@ -138,12 +123,11 @@ describe("executeDecision — FINAL pipeline", () => {
     const deps = makeDeps();
     await executeDecision(makeDecision("FINAL"), makeCtx({ extractionCtx: undefined }), deps);
     expect(deps.geo.resolveGeoRoute).toHaveBeenCalledWith({});
-    expect(deps.fare.calculateFare).toHaveBeenCalled();
   });
 });
 
 describe("executeDecision — CONFIRM_INTERPRETATION", () => {
-  it("sends message with origin/dest only, no geo/fare", async () => {
+  it("sends message with origin/dest only, no geo", async () => {
     const deps = makeDeps();
     const ctx = makeCtx({
       extractionCtx: { slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" } } },
@@ -155,16 +139,16 @@ describe("executeDecision — CONFIRM_INTERPRETATION", () => {
     expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Centro"));
     expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("¿Es correcto?"));
     expect(deps.geo.resolveGeoRoute).not.toHaveBeenCalled();
-    expect(deps.fare.calculateFare).not.toHaveBeenCalled();
     expect(deps.memory.saveContext).not.toHaveBeenCalled();
     expect(deps.handler).not.toHaveBeenCalled();
   });
 });
 
 describe("executeDecision — BOOKING_SUMMARY", () => {
-  it("runs geo+fare, sends summary with datetime and fare", async () => {
+  it("runs geo, sends summary with datetime and fare from pricing", async () => {
     const deps = makeDeps();
     const ctx = makeCtx({
+      pricing: { final_price: 15000 },
       extractionCtx: {
         slots: {
           origin: { value: "Aeropuerto IGR" },
@@ -176,7 +160,6 @@ describe("executeDecision — BOOKING_SUMMARY", () => {
     await executeDecision(makeDecision("BOOKING_SUMMARY"), ctx, deps);
 
     expect(deps.geo.resolveGeoRoute).toHaveBeenCalled();
-    expect(deps.fare.calculateFare).toHaveBeenCalled();
     expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Aeropuerto IGR"));
     expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("Centro"));
     expect(deps.send).toHaveBeenCalledWith("+54912345678", expect.stringContaining("$15.000"));
@@ -189,6 +172,7 @@ describe("executeDecision — BOOKING_SUMMARY", () => {
   it("formats scheduled_at date in es-AR locale", async () => {
     const deps = makeDeps();
     const ctx = makeCtx({
+      pricing: { final_price: 15000 },
       extractionCtx: {
         slots: {
           origin: { value: "Aeropuerto IGR" },
@@ -202,6 +186,21 @@ describe("executeDecision — BOOKING_SUMMARY", () => {
     const sentMsg = deps.send.mock.calls.find((c: any[]) => c[0] === "+54912345678")?.[1] ?? "";
     expect(sentMsg).toContain("Fecha");
     expect(sentMsg).not.toContain("2026-06-08T15:30");
+  });
+
+  it("shows — when pricing is not available", async () => {
+    const deps = makeDeps();
+    const ctx = makeCtx({
+      extractionCtx: {
+        slots: {
+          origin: { value: "Aeropuerto IGR" },
+          destination: { value: "Centro" },
+        },
+      },
+    });
+    await executeDecision(makeDecision("BOOKING_SUMMARY"), ctx, deps);
+    const sentMsg = deps.send.mock.calls.find((c: any[]) => c[0] === "+54912345678")?.[1] ?? "";
+    expect(sentMsg).toContain("$—");
   });
 });
 

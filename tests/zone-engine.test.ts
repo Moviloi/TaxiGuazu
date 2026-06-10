@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveZones } from "../src/lib/services/zoneEngine";
+import { resolveZones } from "../src/lib/services/geoEngine";
 
 describe("zoneEngine", () => {
   it("IGR → Centro Iguazú: Z_AIRPORT → Z_CITY_CORE, MEDIUM", () => {

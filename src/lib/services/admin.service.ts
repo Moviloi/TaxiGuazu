@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
-import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDiscountsForTariff, getDbInstance, getPrincipalDriver, getPrincipal2Driver, getDriverByPhone } from "@/lib/db/database";
+import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getProviderAdjustmentsForTariff, getDbInstance, getPrincipalDriver, getPrincipal2Driver, getDriverByPhone } from "@/lib/db/database";
 import type { DriverRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
@@ -102,12 +102,12 @@ function tierFactor(tier: string): number {
   return 1.0;
 }
 
-function driverFloor(driver: DriverRow, tripPiso: number, pisoLow?: number | null, discountPct?: number): number {
+function driverFloor(driver: DriverRow, tripPiso: number, pisoLow?: number | null, adjPct?: number): number {
   const useLow = driver.tier === 'low' && pisoLow != null;
   const base = useLow ? pisoLow! : tripPiso;
   let floor = Math.round(base * tierFactor(driver.tier || 'normal'));
-  if (discountPct && discountPct > 0) {
-    floor = Math.round(floor * (1 - discountPct / 100));
+  if (adjPct && adjPct > 0) {
+    floor = Math.round(floor * (1 - adjPct / 100));
   }
   if (driver.min_payout && driver.min_payout > floor) {
     floor = driver.min_payout;
@@ -169,12 +169,12 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
   const packageType = tripCount >= 3 ? 'three_leg' : tripCount >= 2 ? 'in_out' : '';
   const packageLabel = packageType === 'three_leg' ? '📦 Paquete 3+ tramos' : packageType === 'in_out' ? '📦 Paquete 2 tramos' : '';
 
-  // Load driver discounts for this tariff
-  let discountMap: Record<string, number> = {};
+  // Load driver adjustments for this tariff
+  let adjustmentMap: Record<string, number> = {};
   if (trip.tariff_id) {
-    const discounts = await getDiscountsForTariff(trip.tariff_id);
-    for (const d of discounts) {
-      discountMap[d.driver_phone] = d.discount_pct;
+    const adjustments = await getProviderAdjustmentsForTariff(trip.tariff_id);
+    for (const a of adjustments) {
+      adjustmentMap[a.provider_id] = a.adjustment_value;
     }
   }
 
@@ -182,23 +182,24 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
   let pisoLow: number | null = null;
   if (trip.tariff_id) {
     try {
-      const t = await getDbInstance().execute({ sql: "SELECT piso_4p_low, piso_6p_low FROM tariffs WHERE id = ?", args: [trip.tariff_id] });
+      const t = await getDbInstance().execute({ sql: "SELECT base_price_4p, base_price_6p FROM tariffs WHERE id = ?", args: [trip.tariff_id] });
       const row = t.rows[0] as any;
       if (row) {
         const passengersNum = trip.passengers || 0;
-        pisoLow = passengersNum > 4 ? (row.piso_6p_low ?? null) : (row.piso_4p_low ?? null);
+        const bp = passengersNum > 4 ? (row.base_price_6p ?? null) : (row.base_price_4p ?? null);
+        pisoLow = bp ? Math.round(bp * 0.8) : null;
       }
-    } catch (e) { console.error("[broadcastTripToDrivers] load low piso error:", e); }
+    } catch (e) { console.error("[broadcastTripToDrivers] load base_price error:", e); }
   }
 
-  let eligible: Array<DriverRow & { discount_pct: number; actual_payout: number }> = [];
+  let eligible: Array<DriverRow & { adjustment_pct: number; actual_payout: number }> = [];
   for (const d of drivers) {
-    const discountPct = discountMap[d.phone] || 0;
-    let floor = driverFloor(d, tripPiso, pisoLow, discountPct);
+    const adjPct = adjustmentMap[d.phone] || 0;
+    let floor = driverFloor(d, tripPiso, pisoLow, adjPct);
 
-    // Actual payout = full garantizado, reduced by driver's voluntary promo discount
-    const actualPayout = discountPct > 0
-      ? Math.round(effectivePayout * (1 - discountPct / 100))
+    // Actual payout = full garantizado, reduced by driver's voluntary adjustment
+    const actualPayout = adjPct > 0
+      ? Math.round(effectivePayout * (1 - adjPct / 100))
       : effectivePayout;
 
     // Package override: use package floor if lower
@@ -208,7 +209,7 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
     }
 
     if (actualPayout >= floor) {
-      eligible.push({ ...d, discount_pct: discountPct, actual_payout: actualPayout });
+      eligible.push({ ...d, adjustment_pct: adjPct, actual_payout: actualPayout });
     }
   }
 

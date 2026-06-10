@@ -8,7 +8,9 @@ export interface ExecutionContext {
   history: any[];
   customerName?: string;
   extractionCtx?: ExtractionContext;
-  tariffMatch?: any;
+  pricing?: {
+    final_price: number;
+  };
   lang: string;
   intent: string;
 }
@@ -19,12 +21,6 @@ export interface ExecutionDeps {
   handler: (text: string, mode: Mode, ctx?: any) => any;
   geo: {
     resolveGeoRoute: (slots: any) => any;
-    resolveZones: (slots: any) => any;
-    expandZones: (...args: any[]) => any;
-    computeProximityScore: (...args: any[]) => any;
-  };
-  fare: {
-    calculateFare: (expansion: any, proximity: any) => any;
   };
   memory: {
     saveContext: (phone: string, data: any) => Promise<void>;
@@ -97,21 +93,12 @@ async function handleFinal(
   ctx: ExecutionContext,
   deps: ExecutionDeps,
 ): Promise<void> {
-  const { phone, conversationId, text, extractionCtx, history, customerName, lang, intent } = ctx;
+  const { phone, conversationId, text, extractionCtx, history, customerName, lang, intent, pricing } = ctx;
   const slots = extractionCtx?.slots ?? {};
 
   // GEO ROUTE
   const geo = deps.geo.resolveGeoRoute(slots);
   console.log("[GEO] resolución:", { originZone: geo.originZone, destinationZone: geo.destinationZone, routeType: geo.routeType, proximityScore: geo.proximityScore });
-
-  // Reconstruct legacy shapes for downstream backward compat
-  const zones = deps.geo.resolveZones(slots);
-  const expansion = deps.geo.expandZones(zones.originZone, zones.destinationZone, zones.originSubzone, zones.destinationSubzone);
-  const proximityScore = deps.geo.computeProximityScore(expansion.origin, expansion.destination);
-
-  // FARE ENGINE
-  const fareResult = deps.fare.calculateFare(expansion, proximityScore);
-  console.log("[FARE] resultado:", { category: fareResult.category, finalPrice: fareResult.finalPrice, confidence: fareResult.confidence });
 
   // HANDLER
   const handlerResult = deps.handler(text, "RESERVA", {
@@ -131,10 +118,7 @@ async function handleFinal(
   await deps.memory.saveContext(phone, {
     slots,
     intent,
-    zones,
-    expansion,
-    proximityScore,
-    fare: fareResult,
+    pricing,
     confidence: ctx.extractionCtx?.overallConfidence,
   });
 
@@ -152,18 +136,6 @@ async function handleFinal(
       }
     } catch (_) { /* silent */ }
   }
-}
-
-function resolveGeoAndFare(
-  slots: Record<string, any>,
-  deps: ExecutionDeps,
-): { zones: any; expansion: any; proximityScore: number; fareResult: any } {
-  deps.geo.resolveGeoRoute(slots);
-  const zones = deps.geo.resolveZones(slots);
-  const expansion = deps.geo.expandZones(zones.originZone, zones.destinationZone, zones.originSubzone, zones.destinationSubzone);
-  const proximityScore = deps.geo.computeProximityScore(expansion.origin, expansion.destination);
-  const fareResult = deps.fare.calculateFare(expansion, proximityScore);
-  return { zones, expansion, proximityScore, fareResult };
 }
 
 function getSlotValue(slots: Record<string, any> | undefined, key: string): string {
@@ -193,13 +165,13 @@ async function handleBookingSummary(
   ctx: ExecutionContext,
   deps: ExecutionDeps,
 ): Promise<void> {
-  const { phone, conversationId, extractionCtx, intent } = ctx;
+  const { phone, conversationId, extractionCtx, intent, pricing } = ctx;
   const slots = extractionCtx?.slots ?? {};
-  const { zones, expansion, proximityScore, fareResult } = resolveGeoAndFare(slots, deps);
+  const geo = deps.geo.resolveGeoRoute(slots);
 
   const origin = getSlotValue(slots, "origin");
   const destination = getSlotValue(slots, "destination");
-  const formattedFare = fareResult.finalPrice?.toLocaleString("es-AR") ?? "—";
+  const formattedFare = pricing?.final_price?.toLocaleString("es-AR") ?? "—";
 
   const rawScheduledAt = getSlotValue(slots, "scheduled_at");
   let formattedDate = rawScheduledAt;
@@ -221,8 +193,7 @@ async function handleBookingSummary(
   await deps.persist(conversationId, "assistant", message);
 
   await deps.memory.saveContext(phone, {
-    slots, intent, zones, expansion, proximityScore,
-    fare: fareResult,
+    slots, intent, pricing, geo,
     confidence: ctx.extractionCtx?.overallConfidence,
   });
 }

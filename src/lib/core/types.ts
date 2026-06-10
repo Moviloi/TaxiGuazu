@@ -2,6 +2,7 @@
 
 export type DecisionAction =
   | "INFO_PRICE"
+  | "OPPORTUNITY_QUERY"
   | "CONFIRM_ROUTE"
   | "CONFIRM_INTERPRETATION"
   | "BOOKING_SUMMARY"
@@ -11,7 +12,7 @@ export type DecisionAction =
   | "CONFIRM"
   | "FINAL";
 
-export type Intent = "MOVE" | "INFO" | "CONFIRM" | "AMBIGUOUS";
+export type Intent = "MOVE" | "INFO" | "OPPORTUNITY" | "CONFIRM" | "AMBIGUOUS";
 
 export type PolicyAction = "QUESTION" | "CLARIFY" | "CONFIRM" | "FINAL";
 
@@ -30,11 +31,13 @@ export interface Decision {
 export interface DecisionInput {
   text: string;
   slots: Record<string, any>;
-  tariffMatch?: {
-    matched: boolean;
-    price?: number;
-    canonicalOrigin?: string;
-    canonicalDestination?: string;
+  pricing?: {
+    final_price: number;
+    base_price: number;
+    markup: number;
+    tariff_id: number | null;
+    origin: { canonical_name: string | null };
+    destination: { canonical_name: string | null };
   };
   confidence: number;
   lang: string;

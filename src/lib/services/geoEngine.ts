@@ -1,6 +1,7 @@
-// Geo Engine — unified determinístic geographic reasoning.
-// Fase 9.1: consolidates zoneEngine + zoneExpansionEngine + proximityScorer.
-// Single entry point for all geo logic.
+// ⚠️ Geo Engine — legacy geographic reasoning engine.
+// DEPRECATED: Location resolution lives in location-resolver.ts.
+// Kept for backward compat with executionEngine pipeline.
+// Only route/proximity logic should survive long-term.
 
 // ── Types ──
 
@@ -9,7 +10,6 @@ export type NodeType = "AIRPORT" | "HOTEL_ZONE" | "CITY_ZONE" | "BORDER" | "LAND
 export interface Zone {
   id: string;
   label: string;
-  basePrice?: number;
 }
 
 export interface Subzone {
@@ -67,7 +67,7 @@ export interface GeoRoute {
   destinationSubzone?: Subzone | null;
 }
 
-// ── Zone definitions ──
+// ── Zone definitions (legacy IDs — superseded by places.operational_zone) ──
 
 export const ZONES: Record<string, Zone> = {
   Z_AIRPORT: { id: "Z_AIRPORT", label: "Zona Aeropuerto" },
@@ -78,6 +78,7 @@ export const ZONES: Record<string, Zone> = {
   Z_EXTERIOR: { id: "Z_EXTERIOR", label: "Fuera de Área" },
 };
 
+// ⚠️ SUBZONE_MAP — legacy subzone definitions, superseded by places/aliases
 export const SUBZONE_MAP: Record<string, Subzone> = {
   amerian: { name: "Amerian", weight: 1.0, confidence: 0.95 },
   meliá: { name: "Meliá", weight: 0.9, confidence: 0.9 },
@@ -91,8 +92,7 @@ export const SUBZONE_MAP: Record<string, Subzone> = {
   "selva iryapu": { name: "Selva Iryapú", weight: 0.7, confidence: 0.8 },
 };
 
-// ── Node → Zone mapping ──
-
+// ⚠️ NODE_ZONE_MAP — legacy text→zone mapping, superseded by resolveLocation() + places table
 const NODE_ZONE_MAP: Record<string, string> = {
   igr: "Z_AIRPORT",
   igu: "Z_AIRPORT",
