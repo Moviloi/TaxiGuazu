@@ -1343,14 +1343,12 @@ export async function updateTripTariff(tripId: string, tariffId: number, pisoBas
   await ensureSchema();
   const trip = await getTripById(tripId);
   const pax = passengers ?? trip?.passengers ?? 0;
-  const garantizado = await getDbv().execute({
-    sql: `SELECT ${pax > 4 ? "COALESCE(garantizado_6p, ROUND(price_6p * 0.85))" : "COALESCE(garantizado_4p, ROUND(price_4p * 0.85))"} as val FROM tariffs WHERE id = ?`,
-    args: [tariffId],
-  });
-  const val = (garantizado.rows[0] as any)?.val ?? Math.round((trip?.price_base || 0) * 0.85);
+  const tariff = await queryOne<TariffRow>("SELECT * FROM tariffs WHERE id = ?", [tariffId]);
+  const price = tariff ? (pax > 4 ? tariff.price_6p : tariff.price_4p) : (trip?.price_base ?? 0);
+  const garantizado = Math.round(price * 0.85);
   await getDbv().execute({
     sql: "UPDATE trips SET tariff_id = ?, piso_base = ?, garantizado_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [tariffId, pisoBase, val, tripId],
+    args: [tariffId, pisoBase, garantizado, tripId],
   });
 }
 
@@ -1504,9 +1502,6 @@ export async function getExpiredTrips(): Promise<TripRow[]> {
 
 interface TariffWithPrice extends TariffRow {
   price: number;
-  piso: number;
-  piso_low: number | null;
-  garantizado: number;
 }
 
 export async function findTariff(origin: string, destination: string, passengers: number): Promise<TariffWithPrice | null> {
@@ -1517,9 +1512,6 @@ export async function findTariff(origin: string, destination: string, passengers
   return {
     ...t,
     price: passengers > 4 ? t.price_6p : t.price_4p,
-    piso: passengers > 4 ? t.piso_6p : t.piso_4p,
-    piso_low: passengers > 4 ? t.piso_6p_low : t.piso_4p_low,
-    garantizado: passengers > 4 ? (t.garantizado_6p ?? Math.round(t.price_6p * 0.85)) : (t.garantizado_4p ?? Math.round(t.price_4p * 0.85)),
   };
 }
 

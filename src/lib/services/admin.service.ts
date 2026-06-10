@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
-import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getProviderAdjustmentsForTariff, getDbInstance, getPrincipalDriver, getPrincipal2Driver, getDriverByPhone } from "@/lib/db/database";
+import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDbInstance, getPrincipalDriver, getPrincipal2Driver, getDriverByPhone } from "@/lib/db/database";
 import type { DriverRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
@@ -169,15 +169,6 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
   const packageType = tripCount >= 3 ? 'three_leg' : tripCount >= 2 ? 'in_out' : '';
   const packageLabel = packageType === 'three_leg' ? '📦 Paquete 3+ tramos' : packageType === 'in_out' ? '📦 Paquete 2 tramos' : '';
 
-  // Load driver adjustments for this tariff
-  let adjustmentMap: Record<string, number> = {};
-  if (trip.tariff_id) {
-    const adjustments = await getProviderAdjustmentsForTariff(trip.tariff_id);
-    for (const a of adjustments) {
-      adjustmentMap[a.provider_id] = a.adjustment_value;
-    }
-  }
-
   // Load low piso for this tariff (used for low-tier drivers)
   let pisoLow: number | null = null;
   if (trip.tariff_id) {
@@ -194,13 +185,9 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
 
   let eligible: Array<DriverRow & { adjustment_pct: number; actual_payout: number }> = [];
   for (const d of drivers) {
-    const adjPct = adjustmentMap[d.phone] || 0;
+    const adjPct = 0;
     let floor = driverFloor(d, tripPiso, pisoLow, adjPct);
-
-    // Actual payout = full garantizado, reduced by driver's voluntary adjustment
-    const actualPayout = adjPct > 0
-      ? Math.round(effectivePayout * (1 - adjPct / 100))
-      : effectivePayout;
+    const actualPayout = effectivePayout;
 
     // Package override: use package floor if lower
     if (packageType && d.min_payout) {

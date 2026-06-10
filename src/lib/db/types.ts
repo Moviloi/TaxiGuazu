@@ -187,6 +187,20 @@ export interface ProviderAdjustmentRow {
   created_at: number | null;
 }
 
+export interface DriverDiscountRow {
+  id: number;
+  driver_phone: string;
+  tariff_id: number;
+  discount_pct: number;
+  valid_until: number | null;
+  active: number | null;
+  created_at: number | null;
+}
+
+export interface DriverDiscountWithDriverRow extends DriverDiscountRow {
+  driver_name: string;
+}
+
 export interface PromotionRow {
   id: number;
   source: string;
@@ -285,6 +299,8 @@ export type OpportunityContext = {
   hasPendingOpportunity: boolean;
   memoryBoost?: number;
 }
+
+export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";
 
 export interface Opportunity {
   type: OpportunityType;

@@ -1,5 +1,5 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs, getProviderAdjustments, createProviderAdjustment, deleteProviderAdjustment } from "@/lib/db/database";
+import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs } from "@/lib/db/database";
 import { TIERS } from "@/config/constants";
 import { ADMIN_PHONE } from "./admin.service";
 
@@ -64,21 +64,6 @@ export async function handleAdminCommand(phone: string, text: string): Promise<b
 
   if (lower === ".guia" || lower === ".guide") {
     await handleToggleGuide(phone);
-    return true;
-  }
-
-  if (lower.startsWith(".ajuste") || lower.startsWith(".ajuste")) {
-    await handleAddAdjustment(phone, trimmed);
-    return true;
-  }
-
-  if (lower === ".ajustes") {
-    await handleListAdjustments(phone);
-    return true;
-  }
-
-  if (lower.startsWith(".rm_ajuste") || lower.startsWith(".rm-ajuste")) {
-    await handleRemoveAdjustment(phone, trimmed);
     return true;
   }
 
@@ -529,93 +514,6 @@ async function handleToggleGuide(phone: string): Promise<void> {
   }
 }
 
-async function handleAddAdjustment(phone: string, text: string): Promise<void> {
-  const driver = await getDriverByPhone(phone);
-  if (!driver) {
-    await sendWhatsAppMessage(phone, "❌ No estás registrado como chofer.");
-    return;
-  }
-
-  const parts = text.split(/\s+/);
-  if (parts.length < 3) {
-    await sendWhatsAppMessage(phone, "Usá: .ajuste ID_TARIFA % [dias_vigencia]\nEj: .ajuste 1 20 30 (ajuste del 20% en tarifa #1 por 30 días)\nUsá .tarifas para buscar el ID.");
-    return;
-  }
-
-  const tariffId = parseInt(parts[1]);
-  const adjValue = parseInt(parts[2]);
-
-  if (isNaN(tariffId) || tariffId <= 0) {
-    await sendWhatsAppMessage(phone, "❌ ID de tarifa inválido.");
-    return;
-  }
-  if (isNaN(adjValue) || adjValue <= 0 || adjValue > 100) {
-    await sendWhatsAppMessage(phone, "❌ El ajuste debe ser entre 1 y 100.");
-    return;
-  }
-
-  let validDays: number | undefined;
-  if (parts.length >= 4) {
-    validDays = parseInt(parts[3]);
-    if (isNaN(validDays) || validDays <= 0) {
-      await sendWhatsAppMessage(phone, "❌ Vigencia inválida. Usá cantidad de días (ej: 30).");
-      return;
-    }
-  }
-
-  const result = await createProviderAdjustment(phone, tariffId, adjValue, validDays);
-  if (result.ok) {
-    let msg = `✅ Ajuste del ${adjValue}% en tarifa #${tariffId}`;
-    if (validDays) msg += ` por ${validDays} días`;
-    msg += ". El sistema lo aplicará a clientes interesados.";
-    await sendWhatsAppMessage(phone, msg);
-  } else {
-    await sendWhatsAppMessage(phone, `❌ ${result.error || "Error al crear ajuste."}`);
-  }
-}
-
-async function handleListAdjustments(phone: string): Promise<void> {
-  const driver = await getDriverByPhone(phone);
-  if (!driver) {
-    await sendWhatsAppMessage(phone, "❌ No estás registrado como chofer.");
-    return;
-  }
-
-  const adjustments = await getProviderAdjustments(phone);
-  if (adjustments.length === 0) {
-    await sendWhatsAppMessage(phone, "📦 No tenés ajustes activos.\nAgregá uno con: .ajuste ID_TARIFA % [dias]");
-    return;
-  }
-
-  let msg = "📦 *Tus ajustes:*\n";
-  for (const a of adjustments) {
-    const dest = a.destination || `Tarifa #${a.tariff_id}`;
-    const vigencia = a.valid_until ? ` hasta ${new Date(a.valid_until * 1000).toLocaleDateString("es-AR")}` : " sin vencimiento";
-    msg += `\n#${a.id} ${dest}: -${a.adjustment_value}%${vigencia}`;
-  }
-  await sendWhatsAppMessage(phone, msg);
-}
-
-async function handleRemoveAdjustment(phone: string, text: string): Promise<void> {
-  const parts = text.split(/\s+/);
-  if (parts.length < 2) {
-    await sendWhatsAppMessage(phone, "Usá: .rm_ajuste ID\nUsá .ajustes para ver los IDs.");
-    return;
-  }
-
-  const id = parseInt(parts[1]);
-  if (isNaN(id)) {
-    await sendWhatsAppMessage(phone, "❌ ID inválido.");
-    return;
-  }
-
-  const ok = await deleteProviderAdjustment(id, phone);
-  if (ok) {
-    await sendWhatsAppMessage(phone, `✅ Ajuste #${id} eliminado.`);
-  } else {
-    await sendWhatsAppMessage(phone, `❌ Ajuste #${id} no encontrado o no te pertenece.`);
-  }
-}
 
 async function handleSearchTariffs(phone: string, text: string): Promise<void> {
   const parts = text.split(/\s+/);

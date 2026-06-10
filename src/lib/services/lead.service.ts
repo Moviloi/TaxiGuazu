@@ -50,6 +50,25 @@ import { isAdminCommand, parseAdminCommand, executeAdminCommand } from "@/lib/se
 import { logDecision } from "@/lib/services/decision-log";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 import type { ExtractionContext, Lang, RoleLock, SlotStabilityMap } from "@/lib/ai/types";
+import type { TripRow } from "@/lib/db/types";
+import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
+import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
+import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
+import { evaluateWorkflowTransition } from "@/lib/services/slot-workflow";
+import { calculatePrice } from "@/lib/services/pricing-engine";
+import { resetRequestState, assertCoreRouterPolicy, assertOutputSource } from "@/lib/ai/guard";
+import { handleMessage } from "@/lib/ai/handler";
+import { core } from "@/lib/ai/core";
+import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { resetToIdle, getWorkflow, advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver } from "@/lib/utils/conversation-workflow";
+import { notifyAdmin, offerToSpecificDriver, getPrincipal2, broadcastTripToDrivers } from "@/lib/services/admin.service";
+import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
+import { handleAdminCommand } from "@/lib/services/admin-commands";
+import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
+import { resolveTariff } from "@/lib/services/tariff-resolver";
+import { buildRouteKey, observe as observeLearning } from "@/lib/services/fareLearningEngine";
+import { loadContext, mergeContext, saveContext } from "@/lib/services/contextMemory";
+import { calculateSlotConfidence } from "@/lib/services/confidence";
 
 const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
 

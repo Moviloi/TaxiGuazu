@@ -31,7 +31,6 @@ import {
   setConnectionValue,
   deleteConnectionKey,
   getCustomerName,
-  getProviderAdjustmentForTariff,
 } from "@/lib/db/database";
 import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver, broadcastTripToDrivers } from "./admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
@@ -140,14 +139,6 @@ export async function handleDriverCompleted(convId: number, driverPhone: string)
 
   const price = trip.price_base || 0;
   let garantizado = trip.garantizado_base ?? Math.round(price * 0.85);
-
-  // Apply driver's voluntary promo discount to the displayed payout
-  if (trip.tariff_id) {
-    const adjValue = await getProviderAdjustmentForTariff(driverPhone, trip.tariff_id);
-    if (adjValue && adjValue > 0) {
-      garantizado = Math.round(garantizado * (1 - adjValue / 100));
-    }
-  }
 
   const tg = price - garantizado;
 
@@ -510,7 +501,7 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
   if (!tripA) return;
 
   if (tariff?.id) {
-    await updateTripTariff(tripA.trip_id, tariff.id, tariff.piso || 0);
+    await updateTripTariff(tripA.trip_id, tariff.id, tariff.price || 0);
   }
 
   // Store Trip B data for sequel
@@ -522,7 +513,7 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
     paxA: paxA,
     flight_number: origData.flight_number || null,
     tariff_id: tariff?.id || null,
-    piso: tariff?.piso || 0,
+    piso: tariff?.price || 0,
   });
   await setConnectionValue(`contingency_pending_B_${convId}`, bData);
 
