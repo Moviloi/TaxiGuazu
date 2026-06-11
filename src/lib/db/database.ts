@@ -112,13 +112,14 @@ async function initSchema(): Promise<void> {
       status TEXT DEFAULT 'consulta',
       price_base REAL,
       passengers INTEGER,
-      discount_tier INTEGER DEFAULT 0,
       discount_explicit INTEGER DEFAULT 0,
       assigned_driver_phone TEXT,
       created_at INTEGER DEFAULT (unixepoch()),
       updated_at INTEGER DEFAULT (unixepoch()),
       confirmed_at INTEGER,
-      contact_shared_at INTEGER
+      contact_shared_at INTEGER,
+      cancelled_at INTEGER,
+      cancelled_by TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS drivers (
       driver_id TEXT PRIMARY KEY,
@@ -128,16 +129,6 @@ async function initSchema(): Promise<void> {
       group_id TEXT,
       active INTEGER DEFAULT 1,
       created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS workflows (
-      conversation_id INTEGER PRIMARY KEY,
-      phone TEXT NOT NULL,
-      state TEXT NOT NULL DEFAULT 'idle',
-      trip_id TEXT,
-      assigned_driver_phone TEXT,
-      group_asked_at INTEGER,
-      last_message_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
     )`,
     `CREATE TABLE IF NOT EXISTS driver_codes (
       code TEXT PRIMARY KEY,
@@ -180,8 +171,13 @@ async function initSchema(): Promise<void> {
       wait_included INTEGER DEFAULT 0,
       price_4p REAL NOT NULL,
       price_6p REAL NOT NULL,
-      piso_4p REAL NOT NULL,
-      piso_6p REAL NOT NULL
+      base_price_4p REAL,
+      base_price_6p REAL,
+      origin_place_id TEXT,
+      destination_place_id TEXT,
+      origin_zone_id TEXT,
+      destination_zone_id TEXT,
+      active INTEGER DEFAULT 1
     )`,
     `CREATE TABLE IF NOT EXISTS driver_discounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,6 +214,72 @@ async function initSchema(): Promise<void> {
       alias TEXT PRIMARY KEY,
       canonical_name TEXT NOT NULL,
       location_code TEXT,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS places (
+      place_id TEXT PRIMARY KEY,
+      canonical_name TEXT NOT NULL,
+      official_name TEXT NOT NULL,
+      google_maps_name TEXT NOT NULL,
+      place_type TEXT NOT NULL CHECK(place_type IN ('airport','bus_terminal','border_crossing','attraction','shopping','hotel','resort','hostel','restaurant','casino','event_center','tourist_area','port','other')),
+      city TEXT NOT NULL CHECK(city IN ('Puerto Iguazú','Foz do Iguaçu','Ciudad del Este')),
+      country TEXT NOT NULL CHECK(country IN ('Argentina','Brasil','Paraguay')),
+      latitude REAL,
+      longitude REAL,
+      tourist_relevance_score INTEGER NOT NULL DEFAULT 5,
+      operational_zone TEXT,
+      active_status TEXT NOT NULL DEFAULT 'active' CHECK(active_status IN ('active','inactive'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS aliases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      place_id TEXT NOT NULL,
+      alias TEXT NOT NULL,
+      language TEXT NOT NULL CHECK(language IN ('es','en','pt'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS promotions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      adjustment_pct REAL NOT NULL,
+      origin_place_id TEXT,
+      destination_place_id TEXT,
+      origin_zone_id TEXT,
+      destination_zone_id TEXT,
+      min_passengers INTEGER,
+      max_passengers INTEGER,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      active INTEGER DEFAULT 1,
+      max_uses INTEGER,
+      current_uses INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS provider_adjustments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider_id TEXT NOT NULL,
+      tariff_id INTEGER NOT NULL,
+      adjustment_type TEXT NOT NULL CHECK(adjustment_type IN ('percent','fixed')),
+      adjustment_value REAL NOT NULL,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      active INTEGER DEFAULT 1,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS packages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      package_type TEXT NOT NULL CHECK(package_type IN ('round_trip','three_leg','multi_stop')),
+      price REAL NOT NULL,
+      included_services TEXT,
+      origin_place_id TEXT,
+      destination_place_id TEXT,
+      origin_zone_id TEXT,
+      destination_zone_id TEXT,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      active INTEGER DEFAULT 1,
       created_at INTEGER DEFAULT (unixepoch())
     )`,
     `CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -265,7 +327,8 @@ async function initSchema(): Promise<void> {
       offered_price REAL NOT NULL,
       presented_at INTEGER NOT NULL DEFAULT (unixepoch()),
       client_response TEXT,
-      phase TEXT NOT NULL DEFAULT 'post_confirmation'
+      phase TEXT NOT NULL DEFAULT 'post_confirmation',
+      responded_at INTEGER
     )`,
     `CREATE TABLE IF NOT EXISTS conversation_f4_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -294,23 +357,6 @@ async function initSchema(): Promise<void> {
       intent TEXT,
       success_score REAL,
       opportunity_type TEXT,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS opportunity_economics (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT NOT NULL,
-      estimated_revenue REAL NOT NULL DEFAULT 0,
-      conversion_probability REAL NOT NULL DEFAULT 0.5,
-      margin REAL NOT NULL DEFAULT 0.2,
-      operational_cost REAL NOT NULL DEFAULT 0,
-      updated_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS human_feedback (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      feedback_type TEXT NOT NULL,
-      entity TEXT,
-      operator_id TEXT NOT NULL,
       timestamp INTEGER DEFAULT (unixepoch())
     )`,
     `CREATE TABLE IF NOT EXISTS system_metrics (
@@ -403,6 +449,9 @@ async function initSchema(): Promise<void> {
       policies TEXT DEFAULT '[]',
       created_at INTEGER DEFAULT (unixepoch())
     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(LOWER(origin), LOWER(destination))`,
+    `CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(LOWER(alias))`,
+    `CREATE INDEX IF NOT EXISTS idx_aliases_place ON aliases(place_id)`,
     `CREATE INDEX IF NOT EXISTS idx_decision_log_session ON decision_log(session_id)`,
     `CREATE INDEX IF NOT EXISTS idx_f9_events_session ON f9_events(session_id)`,
     `CREATE INDEX IF NOT EXISTS idx_f9_events_timestamp ON f9_events(timestamp)`,
@@ -413,9 +462,6 @@ async function initSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_simulations_timestamp ON simulations(timestamp)`,
     `CREATE INDEX IF NOT EXISTS idx_policy_results_policy ON policy_results(policy_id)`,
     `CREATE INDEX IF NOT EXISTS idx_policy_results_timestamp ON policy_results(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_human_feedback_session ON human_feedback(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_human_feedback_timestamp ON human_feedback(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_opportunity_economics_type ON opportunity_economics(type)`,
     `CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(recorded_at)`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);

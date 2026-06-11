@@ -8,7 +8,7 @@ const TABLES: { name: string; dateColumn: string }[] = [
   { name: "f9_error_log", dateColumn: "created_at" },
   { name: "f9_drift_log", dateColumn: "timestamp" },
   { name: "policy_results", dateColumn: "timestamp" },
-  { name: "conversation_f4_log", dateColumn: "recorded_at" },
+  { name: "conversation_f4_log", dateColumn: "timestamp" },
 ];
 
 export async function runHousekeeping(): Promise<void> {
