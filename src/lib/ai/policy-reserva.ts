@@ -8,7 +8,7 @@
 // ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
 // estructura de ruta turística.
 
-import { buildGenericClarify, buildGenericSafeFallback, inferMissingFieldFromCore, buildGreeting, buildPriceInfo } from "./response-builder";
+import { buildGenericClarify, buildGenericSafeFallback, inferMissingFieldFromCore, buildPriceInfo } from "./response-builder";
 import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
 
