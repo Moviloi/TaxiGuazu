@@ -1,3 +1,8 @@
+// ARCHITECTURE NOTE (Phase D): Imports types from frozen F7/F8 modules.
+// decision-log.ts bridges the conversation layer with the experimental learning pipeline.
+// Kept separate to avoid coupling lead.service to F7/F8 types directly.
+// Verify compatibility when F7/F8 types change.
+
 import { getDbInstance } from "@/lib/db/database";
 import type { F7Decision } from "./f7-types";
 import type { F8Result } from "./f8-types";

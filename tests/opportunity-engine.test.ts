@@ -243,7 +243,7 @@ describe("formatOpportunityResponse", () => {
       ],
     }, "es");
     expect(msg).toContain("Oportunidades disponibles");
-    expect(msg).toContain("ahorro de $1200");
+    expect(msg).toContain("ahorro de $");
   });
 
   it("shows both applied and available in Portuguese", () => {

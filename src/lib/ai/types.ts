@@ -4,9 +4,7 @@
 // v5.0 FASE 5B: PolicyOutput es la ÚNICA fuente del finalResponse.
 // outputSource es un discriminante que el guardrail enforce.
 
-export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "AMBIGUOUS"
-  // Legacy value kept for backward compat with policy-reserva.ts
-  | "STATEFUL";
+export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "AMBIGUOUS";
 
 export type Mode = "AHORA" | "RESERVA";
 
@@ -86,6 +84,8 @@ export interface HandlerContext {
   customerName?: string;
   extraction?: ExtractionContext;
   lang?: Lang;
+  phone?: string;
+  userText?: string;
 }
 
 export interface PolicyOutput {
@@ -93,11 +93,17 @@ export interface PolicyOutput {
   mode: Mode;
   policyHint: string;
   requiresConfirmation: boolean;
-  stateful: boolean;
   finalResponse: string;
   requiresUserInput: boolean;
   nextExpectedFields: string[];
   outputSource: OutputSource;
+  // EXECUTION METADATA — flags para executionEngine.
+  // Indican qué efectos secundarios ejecutar además de send+persist.
+  needsGeo: boolean;
+  needsSaveContext: boolean;
+  // ADMIN NOTIFY — side effect flag for lateral intents (EMERGENCY, RESCHEDULE).
+  needsAdminNotify?: boolean;
+  adminNotifyBody?: string;
 }
 
 export interface HandleMessageResult {

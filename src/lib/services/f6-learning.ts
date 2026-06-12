@@ -1,3 +1,7 @@
+// ARCHITECTURE NOTE (Phase D): Learning utility — semi-frozen.
+// Consumed by frozen F7 (f7-objectives) and F9 (f9-learning, f9-admin) modules.
+// Changes here can ripple into frozen modules. Only modify for critical fixes.
+
 import { getDbInstance } from "@/lib/db/database";
 
 export async function getWeight(key: string): Promise<number> {

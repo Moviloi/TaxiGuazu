@@ -1,3 +1,8 @@
+// ARCHITECTURE NOTE (Phase D): Geo domain — semi-frozen.
+// Alongside geoEngine.ts (DEPRECATED but kept for backward compat).
+// Location resolution should eventually be unified into a single geo service.
+// No changes until Geo domain is unblocked for refactor.
+
 import { getDbInstance } from "@/lib/db/database";
 
 function getDb() {

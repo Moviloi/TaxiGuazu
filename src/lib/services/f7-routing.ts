@@ -1,3 +1,9 @@
+// F7: SYSTEM LOAD & ROUTING — frozen (FASE A). Pipeline experimental F7→F8→F9.
+// FUTURE RESPONSIBILITY: Evaluar carga del sistema y ruteo de decisiones.
+// CURRENT STATUS: Cableado en lead.service.ts como pipeline bloqueado. No modificar.
+// MIGRATION NOTE: Deshabilitar F9 perdería limpieza de tablas. F7→F8→F9 solo se
+//   desbloquea cuando Conversation Core + Pricing + Geo estén congelados.
+
 import type { Opportunity } from "@/lib/db/types";
 import type { F7ScoredOpportunity, F7Decision, ObjectiveWeights, SystemLoad } from "./f7-types";
 import { computeEconomicScore } from "./f7-economics";

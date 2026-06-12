@@ -1,3 +1,7 @@
+// F6 EVENTS — frozen. ARCHITECTURE NOTE: Este módulo está congelado.
+// No modificar. F6 implementa el logging de eventos de intención, entidades,
+// oportunidades y escalaciones. Cualquier cambio requiere aprobación de arquitectura.
+
 import { getDbInstance } from "@/lib/db/database";
 import type { DbExecutor } from "@/lib/db/database";
 

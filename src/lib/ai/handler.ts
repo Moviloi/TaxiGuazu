@@ -12,6 +12,7 @@
 //   - assertPipelineComplete (core/decision/policy armados)
 //   - assertOutputSource(policy.outputSource) === "POLICY"
 
+import { core } from "./core";
 import { router } from "./router";
 import { policyAhora } from "./policy-ahora";
 import { policyReserva } from "./policy-reserva";
@@ -19,7 +20,8 @@ import { assertOutputSource, assertPipelineComplete, setRequestState } from "./g
 import type { HandleMessageResult, HandlerContext, Mode } from "./types";
 
 export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): HandleMessageResult {
-  const decision = router(input, mode);
+  const coreDecision = core(input);
+  const decision = router(coreDecision, mode);
   const policy =
     mode === "AHORA"
       ? policyAhora(decision, ctx)
@@ -37,7 +39,7 @@ export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): 
   );
   console.log(`[ROUTER] mode=${mode} outputType=${decision.decision} reason="${decision.reason}"`);
   console.log(
-    `[POLICY] mode=${policy.mode} hint="${policy.policyHint}" requiresConfirmation=${policy.requiresConfirmation} stateful=${policy.stateful}`,
+    `[POLICY] mode=${policy.mode} hint="${policy.policyHint}" requiresConfirmation=${policy.requiresConfirmation}`,
   );
   console.log(`[OUTPUT_SOURCE]=POLICY`);
 

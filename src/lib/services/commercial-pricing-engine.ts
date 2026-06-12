@@ -1,3 +1,9 @@
+// ARCHITECTURE NOTE (Phase D): Pricing domain — semi-frozen.
+// Part of the pricing domain alongside pricing-engine.ts (frozen) and
+// tariff-resolver.ts (semi-frozen). Must remain stable until pricing
+// domain is fully unblocked for refactor.
+// Future: integrate commercial rules into a unified pricing service.
+
 import { getDbInstance } from "@/lib/db/database";
 import type { PromotionRow, PackageRow, ProviderAdjustmentRow } from "@/lib/db/types";
 

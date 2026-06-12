@@ -1,3 +1,8 @@
+// ARCHITECTURE NOTE (Phase D): Imports ADMIN_PHONE from frozen admin.service.ts.
+// admin-commands.ts is the admin interface layer — distinct from admin.service.ts
+// which manages dispatch/system notifications. Keep this import boundary clean:
+// admin-commands reads configuration; admin.service manages dispatch.
+
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs } from "@/lib/db/database";
 import { TIERS } from "@/config/constants";

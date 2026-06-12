@@ -1,12 +1,12 @@
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolveAlias } from "@/lib/db/database";
 import { CONFIDENCE_PROCEED, CONFIDENCE_CLARIFY } from "@/config/constants";
+import { AMBIGUOUS_LOCATION_TERMS } from "@/lib/ai/patterns";
 
 type SlotKey = "origin" | "destination" | "passengers" | "price" | "scheduled_at" | "flight" | "urgency" | "customer_name";
 
 const RELATIVE_DAY_RE = /\b(hoy|mañana|pasado\s*mañana|esta\s*semana|próximos?\s*días)\b/i;
 const AMBIGUOUS_PAX_RE = /\b(varios?|unas?|familia|grupo|compañía|tripulación|gente|personas?)\b/i;
-const AMBIGUOUS_LOCATION_TERMS = ["ciudad", "centro", "aeropuerto", "puerto", "microcentro", "la ciudad", "a la ciudad"];
 
 export async function calculateSlotConfidence(
   extractedData: TripExtraction,

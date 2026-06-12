@@ -1,6 +1,11 @@
+// FLEET VALIDATION — frozen. ARCHITECTURE NOTE: Módulo congelado.
+// No modificar. Valida capacidad de flota antes de aceptar un booking.
+// Cualquier cambio requiere aprobación de arquitectura.
+
 import { getMaxFleetCapacity, validateFleetCanHandle, findTariff, insertMessage } from "@/lib/db/database";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { notifyAdmin } from "@/lib/services/admin.service";
+import { buildFleetCapacityMessage, buildFleetTariffMessage } from "@/lib/ai/response-builder";
 
 export interface FleetValidationContext {
   phone: string;
@@ -18,17 +23,6 @@ export interface FleetValidationResult {
 }
 
 const TARIFF_MAX_PAX = 6;
-
-function buildCapacityMessage(maxCapacity: number | null): string {
-  if (maxCapacity === null) {
-    return "Actualmente no tenemos vehículos disponibles. Para reservar, comuníquese con un operador.";
-  }
-  return `Actualmente nuestra flota admite hasta ${maxCapacity} pasajeros por vehículo. Para grupos mayores, comuníquese con un operador.`;
-}
-
-function buildTariffMessage(): string {
-  return `Por el momento no tenemos una tarifa configurada para esa cantidad de pasajeros. Comuníquese con un operador para coordinar el viaje.`;
-}
 
 async function rejectAndNotify(
   pax: number,
@@ -71,7 +65,7 @@ export async function ensureFleetCanHandle(
 
   if (!fleet.ok) {
     if (fleet.max === null) {
-      const clientMsg = buildCapacityMessage(null);
+      const clientMsg = buildFleetCapacityMessage(null);
       await rejectAndNotify(pax, context, "no_fleet", clientMsg, "fleet_capacity_exceeded");
       await notifyAdmin(`🚨 *FLOTA SIN VEHÍCULOS CONFIGURADOS*
 
@@ -81,7 +75,7 @@ Origen: ${context.origin ?? "?"} → ${context.destination ?? "?"}
 
 Revisar inventario de choferes y completar capacidades en la base.`);
     } else {
-      const clientMsg = buildCapacityMessage(fleet.max);
+      const clientMsg = buildFleetCapacityMessage(fleet.max);
       await rejectAndNotify(pax, context, "no_capacity", clientMsg, "fleet_capacity_exceeded");
       await notifyAdmin(`⚠️ *CAPACIDAD INSUFICIENTE*
 
@@ -95,7 +89,7 @@ Reasignar manualmente o coordinar vehículo de mayor capacidad.`);
 
   if (pax > TARIFF_MAX_PAX || (context.origin && context.destination)) {
     if (pax > TARIFF_MAX_PAX) {
-      const clientMsg = buildTariffMessage();
+      const clientMsg = buildFleetTariffMessage();
       await rejectAndNotify(pax, context, "no_tariff", clientMsg, "missing_capacity_tariff");
       await notifyAdmin(`⚠️ *TARIFA FALTANTE PARA CAPACIDAD SOLICITADA*
 
@@ -108,7 +102,7 @@ La tabla tariffs actual solo admite hasta ${TARIFF_MAX_PAX} pasajeros. Configura
     if (context.origin && context.destination) {
       const tariff = await findTariff(context.origin, context.destination, pax);
       if (!tariff) {
-        const clientMsg = buildTariffMessage();
+        const clientMsg = buildFleetTariffMessage();
         await rejectAndNotify(pax, context, "no_tariff", clientMsg, "missing_capacity_tariff");
         await notifyAdmin(`⚠️ *TARIFA FALTANTE*
 

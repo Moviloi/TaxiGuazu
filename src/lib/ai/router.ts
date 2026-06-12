@@ -1,16 +1,14 @@
 // ROUTER — capa ejecutora pura.
 // NO contiene lógica de decisión (intent, confidence, keywords).
-// SOLO consume CoreDecision y retorna OutputType.
+// NO llama a core() internamente — recibe CoreDecision como parámetro.
+// SOLO mapea CoreDecision → OutputType.
 //
 // v5.0 FASE 6.4: router es 100% executor.
 //   - route() mapea PolicyAction → handler name (pure function)
-//   - router() legacy mantiene backward compat con handler.ts
-//     (internamente usa core + policy-ahora/policy-reserva)
+//   - router() recibe CoreDecision + Mode, retorna FinalDecision
 //
 // v5.0 FASE 11: Purged dead imports (policy, trace, telemetry).
-// router() now maps CoreDecision directly to OutputType.
 
-import { core } from "./core";
 import type { CoreDecision, FinalDecision, Mode, OutputType } from "./types";
 
 function coreToOutputType(c: CoreDecision): { outputType: OutputType; reason: string } {
@@ -31,11 +29,10 @@ function coreToOutputType(c: CoreDecision): { outputType: OutputType; reason: st
   return { outputType: "CLARIFY", reason: "default → CLARIFY" };
 }
 
-// ── router(): legacy backward compat — FASE 6.4 refactored ──
-// Internamente usa core() + mapeo directo a OutputType.
+// ── router(): recibe CoreDecision + Mode, retorna FinalDecision ──
+// NO llama a core() internamente — el caller (handler.ts) pasa el CoreDecision.
 // NO usa applyPolicy, NO usa telemetry, NO usa trace.
-export function router(input: string, mode: Mode): FinalDecision {
-  const c: CoreDecision = core(input);
+export function router(c: CoreDecision, mode: Mode): FinalDecision {
   const { outputType, reason } = coreToOutputType(c);
 
   return {

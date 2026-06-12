@@ -1,3 +1,12 @@
+// ARCHITECTURE NOTE (Phase C4): Dispatch workflow FSM (nivel_1/2/3, waiting_driver).
+// Writes chat_sessions.workflow_state — SAME column as slot-workflow.ts (conversational
+// states: idle, collecting_slots, awaiting_confirmation). Both modules share this column
+// with no mutex or coordination.
+//
+// Future: split into dispatch_state + conversational_state columns.
+// Until then, do NOT add new states without checking the other module's transition map.
+// This module is semi-frozen — dispatch changes only, no conversational logic.
+
 import {
   getChatSession,
   getConversationById,

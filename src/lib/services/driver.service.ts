@@ -1,3 +1,7 @@
+// ARCHITECTURE NOTE (Phase D): Dispatch domain — semi-frozen.
+// Deeply coupled to admin.service.ts (frozen) and conversation-workflow.ts (semi-frozen).
+// Imports dispatch internals (driver tiers, workflow transitions) from frozen modules.
+// Future: consolidate dispatch orchestration into a single dispatch.service.ts.
 
 import {
   getWorkflow,

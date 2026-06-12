@@ -1,3 +1,11 @@
+// ARCHITECTURE NOTE (Phase C4): This module manages conversational slot-collection states
+// via chat_sessions.workflow_state. The SAME column is also written by
+// conversation-workflow.ts (dispatch states: nivel_1/2/3, waiting_driver).
+// Both modules can overwrite each other's state — no mutex or coordination exists.
+// Future: split workflow_state into conversational_state and dispatch_state columns.
+// Until then, slot-workflow must NOT write dispatch states, and conversation-workflow
+// must NOT write slot states. Review on any state transition change.
+
 import { getChatSession, resetChatSession, updateChatSessionWorkflow } from "@/lib/db/database";
 import { getActiveTripByPhone } from "@/lib/db/database";
 import { SESSION_INACTIVITY_48H_S } from "@/config/constants";

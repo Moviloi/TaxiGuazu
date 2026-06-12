@@ -1,3 +1,5 @@
+// ARCHITECTURE NOTE: Pricing domain. Congelado durante Conversation Core MVP.
+// Separa cálculo de tarifas de lógica conversacional. No mover.
 import { resolveLocation } from "./location-resolver";
 import { resolveTariff, resolveTariffByPlaceIds } from "./tariff-resolver";
 import { applyCommercialRules, type Adjustment } from "./commercial-pricing-engine";

@@ -17,6 +17,7 @@
 // - Si el valor matchea términos ambiguos (centro, hotel) → stability = "ambiguous"
 //   (el rol está fijo pero el valor necesita refinamiento).
 
+import { AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { CoreDecision, Intent, RoleLock, SlotStabilityMap } from "./types";
 import { applyLaterals } from "./laterals";
 
@@ -41,8 +42,7 @@ const POST_SERVICE_RE = /\b(gracias\s+por\s+(el\s+)?viaje|excelente\s+servicio|m
 const EMERGENCY_RE = /\b(emergencia|ayuda\b|me\s+pas[óo]\s+algo|no\s+(llega|aparece|viene|encuentro)|chofer\s+no\s+(llega|aparece|viene)|perd[ií]\s+el\s+viaje|estoy\s+varad[ao])\b/i;
 
 // Términos de ubicación que el CORE NO extrae como hechos (son ambiguos para el CORE).
-// La policy AHORA o RESERVA puede tratarlos por separado.
-const AMBIGUOUS_LOCATION_TERMS = /\b(centro|microcentro|ciudad|aeropuerto|puerto|la ciudad|cerca|zona|alrededores)\b/i;
+// Definidos en patterns.ts — fuente única.
 
 // v5.0 FASE 5B.2: patrones de estructura sintáctica para detectar role lock.
 // El CORE no infiere semánticamente: solo respeta la sintaxis del input.
@@ -110,7 +110,7 @@ function cleanExtractedValue(raw: string): string {
 }
 
 function isValueAmbiguous(value: string): boolean {
-  return AMBIGUOUS_LOCATION_TERMS.test(value);
+  return AMBIGUOUS_LOCATION_RE.test(value);
 }
 
 export function core(input: string): CoreDecision {
@@ -149,7 +149,7 @@ export function core(input: string): CoreDecision {
   const t = trimmed.match(TIME_RE);
   if (t) facts.push(`time:${t[1].replace(/\s+/g, "")}`);
 
-  if (AMBIGUOUS_LOCATION_TERMS.test(trimmed)) {
+  if (AMBIGUOUS_LOCATION_RE.test(trimmed)) {
     facts.push("location_ambiguous:true");
   }
 
@@ -291,8 +291,6 @@ function computeConfidence(facts: string[], intent: Intent): number {
   if (intent === "RESCHEDULE") base = 0.7;
   if (intent === "POST_SERVICE") base = 0.5;
   if (intent === "EMERGENCY") base = 0.9;
-  if (intent === "STATEFUL") base = 0.8;
-
   const explicitSignals = facts.filter(
     (f) =>
       f.startsWith("passengers:") ||

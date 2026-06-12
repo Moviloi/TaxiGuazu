@@ -104,20 +104,3 @@ export async function generateGroqExtraction(
     return null;
   }
 }
-
-export async function generateGroqReply(
-  _userText: string,
-  _history?: Message[],
-  _trip?: null,
-  _clientPhone?: string,
-  _promoNote?: string,
-  _customerName?: string,
-  _extractionNote?: string,
-): Promise<string> {
-  console.error(
-    "[LEGACY BLOCKED] generateGroqReply() invocado. v5.0 FASE 5B: el output final debe venir de POLICY via handleMessage().",
-  );
-  throw new Error(
-    "LEGACY_FLOW_BLOCKED: generateGroqReply está deshabilitado. Use handleMessage() para obtener el finalResponse desde POLICY.",
-  );
-}

@@ -1,234 +1,200 @@
 import { describe, it, expect } from "vitest";
-import { resolveDecision } from "../src/lib/services/semanticCoreEngine";
+import { handleMessage } from "../src/lib/ai/handler";
+import type { HandlerContext } from "../src/lib/ai/types";
 
-function makePricing(price = 15000, origin = "Aeropuerto IGR", dest = "Centro") {
+function makeCtx(overrides: Partial<HandlerContext> = {}): HandlerContext {
   return {
-    final_price: price,
-    base_price: price,
-    markup: 0,
-    tariff_id: 1,
-    origin: { canonical_name: origin },
-    destination: { canonical_name: dest },
+    lang: "es",
+    ...overrides,
   };
 }
 
-describe("decisionEngine — INFO_PRICE", () => {
-  it("INFO with tariff match → INFO_PRICE ES", () => {
-    const d = resolveDecision({
-      text: "cuánto cuesta ir al centro",
-      slots: { destination: "Centro" },
-      pricing: makePricing(12000),
-      confidence: 0,
-      lang: "es",
-    });
-    expect(d.action).toBe("INFO_PRICE");
-    expect(d.message).toContain("$12000");
-    expect(d.message).toContain("Aeropuerto IGR");
-    expect(d.message).toContain("Centro");
+// Helper: slot shorthand para tests.
+function slot(v: string): { value: string; score: number; reason: string } {
+  return { value: v, score: 1, reason: "test" };
+}
+
+describe("handler → policy (replaces old resolveDecision)", () => {
+  it("COMMERCIAL + tariff matched → price info response", () => {
+    const result = handleMessage("cuánto cuesta ir al centro", "RESERVA", makeCtx({
+      extraction: {
+        slots: { destination: slot("Centro") },
+        tariff: { matched: true, price: 12000, canonicalOrigin: "Aeropuerto IGR", canonicalDestination: "Centro" },
+        workflowState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: false,
+        overallConfidence: 0.9,
+      },
+    }));
+    expect(result.policy.finalResponse).toContain("$");
+    expect(result.policy.finalResponse).toContain("12000");
+    expect(result.policy.finalResponse).toContain("Centro");
+    expect(result.policy.outputSource).toBe("POLICY");
   });
 
-  it("INFO with tariff match → INFO_PRICE PT", () => {
-    const d = resolveDecision({
-      text: "me das una tarifa",
-      slots: { origin: "Aeropuerto IGR", destination: "Centro" },
-      pricing: makePricing(20000),
-      confidence: 0,
+  it("affirmation 'sí' → policy response (not empty)", () => {
+    const result = handleMessage("sí", "RESERVA", makeCtx({
+      extraction: {
+        slots: { origin: slot("IGR"), destination: slot("Centro") },
+        workflowState: "awaiting_confirmation",
+        clarifyField: null,
+        askForConfirmation: false,
+        overallConfidence: 0.9,
+      },
+    }));
+    expect(result.policy.finalResponse).toBeTruthy();
+    expect(result.policy.outputSource).toBe("POLICY");
+  });
+
+  it("short ambiguous text 'del aeropuerto' → SAFE_FALLBACK (core can't parse standalone)", () => {
+    const result = handleMessage("del aeropuerto", "RESERVA", makeCtx({ lang: "es" }));
+    expect(result.policy.decision).toBe("SAFE_FALLBACK");
+    expect(result.policy.finalResponse).toBeTruthy();
+    expect(result.policy.outputSource).toBe("POLICY");
+  });
+
+  it("PT text → SAFE_FALLBACK (core only supports Spanish)", () => {
+    const result = handleMessage("para o centro", "RESERVA", makeCtx({ lang: "pt" }));
+    expect(result.policy.decision).toBe("SAFE_FALLBACK");
+    expect(result.policy.outputSource).toBe("POLICY");
+  });
+
+  it("low core confidence → SAFE_FALLBACK", () => {
+    const result = handleMessage("xyzzy flurbo garblex", "RESERVA", makeCtx());
+    expect(result.policy.decision).toBe("SAFE_FALLBACK");
+    expect(result.policy.finalResponse).toBeTruthy();
+    expect(result.policy.outputSource).toBe("POLICY");
+  });
+
+  it("stable origin+dest, missing datetime → acknowledge + request time", () => {
+    const result = handleMessage("IGR a Amerian", "RESERVA", makeCtx({
+      extraction: {
+        slots: {
+          origin: { value: "IGR", score: 1, reason: "core_role_lock" },
+          destination: { value: "Amerian", score: 1, reason: "core_role_lock" },
+        },
+        workflowState: "collecting_slots",
+        clarifyField: "scheduled_at",
+        askForConfirmation: false,
+        overallConfidence: 0.9,
+      },
+    }));
+    expect(result.policy.finalResponse).toContain("IGR");
+    expect(result.policy.finalResponse).toContain("Amerian");
+    expect(result.policy.nextExpectedFields).toContain("scheduled_at");
+    expect(result.policy.outputSource).toBe("POLICY");
+  });
+
+  it("all slots + tariff matched → confirmation message with pricing", () => {
+    const result = handleMessage("IGR a Amerian mañana a las 10", "RESERVA", makeCtx({
+      extraction: {
+        slots: {
+          origin: { value: "IGR", score: 1, reason: "locked" },
+          destination: { value: "Amerian", score: 1, reason: "locked" },
+          passengers: { value: 2, score: 1, reason: "explicit" },
+          scheduled_at: { value: "2026-06-13T10:00:00.000Z", score: 1, reason: "explicit" },
+        },
+        tariff: { matched: true, price: 15000, canonicalOrigin: "IGR", canonicalDestination: "Amerian" },
+        workflowState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: true,
+        overallConfidence: 0.9,
+      },
+    }));
+    expect(result.policy.finalResponse).toContain("IGR");
+    expect(result.policy.finalResponse).toContain("Amerian");
+    expect(result.policy.finalResponse).toContain("15000");
+    expect(result.policy.finalResponse).toContain("Confirm");
+    expect(result.policy.needsGeo).toBe(true);
+    expect(result.policy.needsSaveContext).toBe(true);
+    expect(result.policy.outputSource).toBe("POLICY");
+  });
+
+  it("PT text with rich extraction → SAFE_FALLBACK (core doesn't parse Portuguese)", () => {
+    const result = handleMessage("IGR para Amerian amanhã às 10", "RESERVA", makeCtx({
       lang: "pt",
-    });
-    expect(d.action).toBe("INFO_PRICE");
-    expect(d.message).toContain("R$ 20000");
+      extraction: {
+        slots: {
+          origin: { value: "IGR", score: 1, reason: "locked" },
+          destination: { value: "Amerian", score: 1, reason: "locked" },
+          passengers: { value: 1, score: 1, reason: "explicit" },
+          scheduled_at: { value: "2026-06-13T10:00:00.000Z", score: 1, reason: "explicit" },
+        },
+        tariff: { matched: true, price: 15000, canonicalOrigin: "IGR", canonicalDestination: "Amerian" },
+        workflowState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: true,
+        overallConfidence: 0.9,
+      },
+    }));
+    // Core doesn't parse PT → SAFE_FALLBACK; policy never reaches PT branch.
+    expect(result.policy.decision).toBe("SAFE_FALLBACK");
+    expect(result.policy.finalResponse).toBeTruthy();
+    expect(result.policy.outputSource).toBe("POLICY");
   });
 
-  it("INFO without tariff match → falls through to booking completeness check", () => {
-    const d = resolveDecision({
-      text: "cuánto cuesta",
-      slots: { origin: "IGR", destination: "Centro" },
-      pricing: undefined,
-      confidence: 0.8,
-      lang: "es",
-    });
-    expect(d.action).toBe("CONFIRM_INTERPRETATION");
-  });
-});
-
-describe("decisionEngine — CONFIRM_ROUTE", () => {
-  it("short affirmative → CONFIRM_ROUTE", () => {
-    const d = resolveDecision({
-      text: "sí",
-      slots: {},
-      pricing: undefined,
-      confidence: 0,
-      lang: "es",
-    });
-    expect(d.action).toBe("CONFIRM_ROUTE");
+  it("EMERGENCY lateral → emergency response + admin notify flag", () => {
+    const result = handleMessage("emergencia necesito ayuda urgente", "RESERVA", makeCtx({
+      extraction: {
+        slots: {},
+        overallConfidence: 0.9,
+        workflowState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+    }));
+    expect(result.policy.finalResponse).toBeTruthy();
+    expect(result.policy.needsAdminNotify).toBe(true);
+    expect(result.policy.adminNotifyBody).toContain("EMERGENCIA");
+    expect(result.policy.outputSource).toBe("POLICY");
   });
 
-  it("'dale' → CONFIRM_ROUTE", () => {
-    const d = resolveDecision({
-      text: "dale",
-      slots: {},
-      pricing: undefined,
-      confidence: 0,
-      lang: "es",
-    });
-    expect(d.action).toBe("CONFIRM_ROUTE");
-  });
-});
-
-describe("decisionEngine — AMBIGUOUS → ASK", () => {
-  it("origin present, missing destination → ASK_DESTINATION", () => {
-    const d = resolveDecision({
-      text: "del aeropuerto",
-      slots: { origin: "Aeropuerto IGR" },
-      pricing: undefined,
-      confidence: 0,
-      lang: "es",
-    });
-    expect(d.action).toBe("ASK_DESTINATION");
-    expect(d.message).toContain("dónde");
+  it("RESCHEDULE lateral → reschedule response + admin notify flag", () => {
+    const result = handleMessage("necesito reprogramar mi viaje", "RESERVA", makeCtx({
+      extraction: {
+        slots: {},
+        overallConfidence: 0.9,
+        workflowState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+    }));
+    expect(result.policy.finalResponse).toContain("reprogramar");
+    expect(result.policy.needsAdminNotify).toBe(true);
+    expect(result.policy.adminNotifyBody).toContain("REPROGRAMACIÓN");
+    expect(result.policy.outputSource).toBe("POLICY");
   });
 
-  it("destination present, missing origin → ASK_ORIGIN", () => {
-    const d = resolveDecision({
-      text: "al centro",
-      slots: { destination: "Centro" },
-      pricing: undefined,
-      confidence: 0,
-      lang: "es",
-    });
-    expect(d.action).toBe("ASK_ORIGIN");
-    expect(d.message).toContain("dónde");
+  it("POST_SERVICE lateral → post-service response, no admin notify", () => {
+    const result = handleMessage("gracias por el viaje", "RESERVA", makeCtx({
+      extraction: {
+        slots: {},
+        overallConfidence: 0.9,
+        workflowState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+    }));
+    expect(result.policy.finalResponse).toMatch(/gracias/i);
+    expect(result.policy.needsAdminNotify).toBeFalsy();
+    expect(result.policy.outputSource).toBe("POLICY");
   });
 
-  it("neither slot → ASK_DESTINATION generic", () => {
-    const d = resolveDecision({
-      text: "hola",
-      slots: {},
-      pricing: undefined,
-      confidence: 0,
-      lang: "es",
-    });
-    expect(d.action).toBe("ASK_DESTINATION");
-  });
-
-  it("ASK_DESTINATION in PT", () => {
-    const d = resolveDecision({
-      text: "do aeroporto",
-      slots: { origin: "Aeroporto" },
-      pricing: undefined,
-      confidence: 0,
-      lang: "pt",
-    });
-    expect(d.action).toBe("ASK_DESTINATION");
-    expect(d.message).toContain("Para onde");
-  });
-
-  it("ASK_ORIGIN in PT", () => {
-    const d = resolveDecision({
-      text: "para o centro",
-      slots: { destination: "Centro" },
-      pricing: undefined,
-      confidence: 0,
-      lang: "pt",
-    });
-    expect(d.action).toBe("ASK_ORIGIN");
-    expect(d.message).toContain("De onde");
-  });
-});
-
-describe("decisionEngine — confidence routing (MOVE)", () => {
-  it("confidence < 0.4 → CLARIFY", () => {
-    const d = resolveDecision({
-      text: "voy del aeropuerto al centro",
-      slots: { origin: "Aeropuerto IGR", destination: "Centro" },
-      pricing: undefined,
-      confidence: 0.3,
-      lang: "es",
-    });
-    expect(d.action).toBe("CLARIFY");
-    expect(d.message).toContain("No estoy seguro");
-  });
-
-  it("confidence between 0.4 and 0.75 → CONFIRM_INTERPRETATION (no datetime)", () => {
-    const d = resolveDecision({
-      text: "voy del aeropuerto al centro",
-      slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" } },
-      pricing: undefined,
-      confidence: 0.6,
-      lang: "es",
-    });
-    expect(d.action).toBe("CONFIRM_INTERPRETATION");
-    expect(d.message).toBe("");
-  });
-
-  it("all fields present → BOOKING_SUMMARY", () => {
-    const d = resolveDecision({
-      text: "voy del aeropuerto al centro mañana a las 10",
-      slots: { origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" }, scheduled_at: { value: "2026-06-08T10:00:00.000Z" } },
-      pricing: undefined,
-      confidence: 0.6,
-      lang: "es",
-    });
-    expect(d.action).toBe("BOOKING_SUMMARY");
-    expect(d.message).toBe("");
-  });
-
-  it("confidence ≥ 0.75 → CONFIRM_INTERPRETATION (no datetime)", () => {
-    const d = resolveDecision({
-      text: "IGR a Amerian",
-      slots: { origin: "IGR", destination: "Amerian" },
-      pricing: undefined,
-      confidence: 0.75,
-      lang: "es",
-    });
-    expect(d.action).toBe("CONFIRM_INTERPRETATION");
-    expect(d.message).toBe("");
-  });
-
-  it("confidence at boundary 0.4 → CONFIRM_INTERPRETATION", () => {
-    const d = resolveDecision({
-      text: "viaje",
-      slots: { origin: "IGR", destination: "Centro" },
-      pricing: undefined,
-      confidence: 0.4,
-      lang: "es",
-    });
-    expect(d.action).toBe("CONFIRM_INTERPRETATION");
-  });
-
-  it("confidence exactly 0.75 → CONFIRM_INTERPRETATION", () => {
-    const d = resolveDecision({
-      text: "viaje",
-      slots: { origin: "IGR", destination: "Centro" },
-      pricing: undefined,
-      confidence: 0.75,
-      lang: "es",
-    });
-    expect(d.action).toBe("CONFIRM_INTERPRETATION");
-  });
-
-  it("confidence at 0 → CLARIFY", () => {
-    const d = resolveDecision({
-      text: "viaje",
-      slots: { origin: "IGR", destination: "Centro" },
-      pricing: undefined,
-      confidence: 0,
-      lang: "es",
-    });
-    expect(d.action).toBe("CLARIFY");
-  });
-});
-
-describe("decisionEngine — MISSING_ROUTE fallback", () => {
-  it("MOVE with empty slots → CLARIFY", () => {
-    const d = resolveDecision({
-      text: "viaje",
-      slots: {},
-      pricing: undefined,
-      confidence: 0.5,
-      lang: "es",
-    });
-    expect(d.action).toBe("CLARIFY");
-    expect(d.message).toContain("decirme");
+  it("tariff unmatched → no-tariff confirmation", () => {
+    const result = handleMessage("IGR a Amerian", "RESERVA", makeCtx({
+      extraction: {
+        slots: {
+          origin: slot("IGR"),
+          destination: slot("UnknownLocation"),
+        },
+        workflowState: "awaiting_confirmation",
+        clarifyField: null,
+        askForConfirmation: false,
+        overallConfidence: 0.8,
+      },
+    }));
+    expect(result.policy.finalResponse).toContain("tarifa");
+    expect(result.policy.nextExpectedFields).toContain("affirmation");
+    expect(result.policy.outputSource).toBe("POLICY");
   });
 });

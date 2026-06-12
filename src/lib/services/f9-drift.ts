@@ -1,3 +1,10 @@
+// F9: DRIFT DETECTION & LEARNING — frozen (FASE A). Pipeline experimental F7→F8→F9.
+// FUTURE RESPONSIBILITY: Detectar drift en predicciones y aprendizaje.
+// CURRENT STATUS: Cableado en lead.service.ts como pipeline bloqueado. f9-index.ts
+//   orquesta housekeeping (limpieza de tablas). No modificar.
+// MIGRATION NOTE: Deshabilitar perdería limpieza de tablas. Bloqueado hasta
+//   Conversation Core + Pricing + Geo congelados.
+
 import { adjustPricing, adjustEntityClassification, adjustPolicyPerformance, recordDrift } from "./f9-learning";
 import type { DriftSeverity } from "./f9-types";
 import { clamp01 } from "@/lib/utils/clamp";

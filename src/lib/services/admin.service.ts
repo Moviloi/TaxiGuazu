@@ -1,3 +1,7 @@
+// ADMIN SERVICE — frozen. ARCHITECTURE NOTE: Módulo congelado.
+// No modificar. Gestiona notificaciones a administradores, asignación de viajes
+// y comunicación con choferes. Cualquier cambio requiere aprobación de arquitectura.
+
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { getAvailableDrivers, getClientPreferredDriver, getActiveTripsByClient, getPackagePrice, incrementOfferReceived, getDbInstance, getPrincipalDriver, getPrincipal2Driver, getDriverByPhone } from "@/lib/db/database";
 import type { DriverRow, TripRow } from "@/lib/db/types";

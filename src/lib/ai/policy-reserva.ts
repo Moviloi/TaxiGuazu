@@ -8,22 +8,15 @@
 // ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
 // estructura de ruta turística.
 
+import { buildGenericClarify, buildGenericSafeFallback, inferMissingFieldFromCore, buildGreeting, buildPriceInfo } from "./response-builder";
+import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
-
-// Hotel/landmark names que requieren clarificación: el LLM puede extraerlos
-// pero la policy no puede inferir a qué dirección específica se refieren.
-const AMBIGUOUS_HOTEL_LANDMARKS_RE =
-  /\b(amerian|meli[áa]|panoramic|gran\s+hotel|falls\s+hotel|iguaz[uú]\s+grand|lo\s+de\s+ramona|hotel\s+\w+)\b/i;
-
-// Términos genéricos de ubicación que el LLM o el regex extrae como "ambiguous_term"
-// pero que la policy no debe asociar automáticamente a un campo (origin/destination).
-const GENERIC_AMBIGUOUS_LOCATION_RE = /\b(centro|microcentro|hotel|iguaz[uú]|cerca|zona|alrededores)\b/i;
 
 function isAmbiguous(value: string | number | null | undefined): boolean {
   if (value == null) return true;
   const v = String(value).trim();
   if (!v) return true;
-  return GENERIC_AMBIGUOUS_LOCATION_RE.test(v) || AMBIGUOUS_HOTEL_LANDMARKS_RE.test(v);
+  return AMBIGUOUS_LOCATION_RE.test(v) || AMBIGUOUS_HOTEL_LANDMARKS_RE.test(v);
 }
 
 // v5.0 FASE 5B.1: safeSlotResolution NO infiere ni reordena. Solo respeta lo
@@ -69,7 +62,6 @@ function formatHotelLandmarkLabel(value: string): string {
 export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): PolicyOutput {
   const lang = ctx?.lang ?? "es";
   const extraction = ctx?.extraction;
-  const stateful = decision.core.intent === "STATEFUL";
   const requiresConfirmation = decision.decision === "EXECUTE";
 
   const built = buildReservaFinalResponse(decision, extraction, lang);
@@ -82,9 +74,7 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
   let policyHint: string;
   switch (decision.decision) {
     case "EXECUTE":
-      policyHint = stateful
-        ? "RESERVA: continuar estado existente (STATEFUL)."
-        : "RESERVA: ejecutar acción con confirmación obligatoria.";
+      policyHint = "RESERVA: ejecutar acción con confirmación obligatoria.";
       break;
     case "ANSWER":
       policyHint = "RESERVA: responder con contexto si existe.";
@@ -97,17 +87,31 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
       policyHint = "RESERVA: requerir confirmación antes de actuar.";
   }
 
-  return {
+  // EXECUTION METADATA: cuando la reserva está completa (confirmación con tarifa),
+  // pipeline/executionEngine corre geo + saveContext como efectos secundarios.
+  const needsGeo = decision.decision === "EXECUTE" && extraction?.askForConfirmation === true && extraction?.tariff?.matched === true;
+  const needsSaveContext = needsGeo;
+
+  const output: PolicyOutput = {
     decision: decision.decision,
     mode: "RESERVA",
     policyHint,
     requiresConfirmation,
-    stateful,
     finalResponse,
     requiresUserInput,
     nextExpectedFields,
     outputSource: "POLICY",
+    needsGeo,
+    needsSaveContext,
   };
+
+  // Lateral intents: EMERGENCY and RESCHEDULE require admin notification as side effect.
+  if (decision.core.intent === "EMERGENCY" || decision.core.intent === "RESCHEDULE") {
+    output.needsAdminNotify = true;
+    output.adminNotifyBody = buildAdminNotifyBody(decision.core.intent, ctx?.phone, ctx?.userText);
+  }
+
+  return output;
 }
 
 interface BuiltResponse {
@@ -120,6 +124,35 @@ function buildReservaFinalResponse(
   extraction: ExtractionContext | undefined,
   lang: Lang,
 ): BuiltResponse {
+  // Lateral intents: EMERGENCY, RESCHEDULE, POST_SERVICE get specialized responses.
+  if (decision.core.intent === "EMERGENCY") {
+    return { finalResponse: buildLateralEmergencyResponse(lang), nextExpectedFields: [] };
+  }
+  if (decision.core.intent === "RESCHEDULE") {
+    return { finalResponse: buildLateralRescheduleResponse(lang), nextExpectedFields: [] };
+  }
+  if (decision.core.intent === "POST_SERVICE") {
+    return { finalResponse: buildLateralPostServiceResponse(lang), nextExpectedFields: [] };
+  }
+
+  // Confirmación de booking: usuario afirma mientras el workflow esperaba confirmación.
+  // La policy reconoce que el usuario ya dijo sí y produce el mensaje de booking aceptado.
+  if (decision.core.facts.some((f) => f.startsWith("affirmation:")) && extraction?.workflowState === "awaiting_confirmation") {
+    const origin = extraction.slots.origin?.value ?? "";
+    const destination = extraction.slots.destination?.value ?? "";
+    const price = extraction.tariff?.price;
+    if (price != null && extraction.tariff?.matched) {
+      return {
+        finalResponse: buildBookingAcceptedResponse(origin, destination, price, lang),
+        nextExpectedFields: [],
+      };
+    }
+    return {
+      finalResponse: buildBookingAcceptedNoPriceResponse(origin, destination, lang),
+      nextExpectedFields: [],
+    };
+  }
+
   if (extraction) {
     // v5.0 FASE 5B.2: SAFE RESPONSE FALLBACK.
     // Si el role lock fijó origin y destination (ambos roles estables) y NO
@@ -149,6 +182,19 @@ function buildReservaFinalResponse(
         nextExpectedFields: ["affirmation"],
       };
     }
+  }
+
+  // ANSWER + tariff matched → respuesta informativa de precio (INFO_PRICE).
+  if (decision.decision === "ANSWER" && extraction?.tariff?.matched && extraction.tariff.price != null) {
+    return {
+      finalResponse: buildPriceInfo(
+        extraction.tariff.canonicalOrigin ?? "origen",
+        extraction.tariff.canonicalDestination ?? "destino",
+        extraction.tariff.price,
+        lang,
+      ),
+      nextExpectedFields: [],
+    };
   }
 
   if (decision.decision === "CLARIFY") {
@@ -302,42 +348,7 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
   return `¿Podés indicarme ${field}?`;
 }
 
-function buildGenericClarify(field: string | null, lang: Lang): string {
-  if (field === "location_ambiguous") {
-    if (lang === "en") return `Which specific place and what time do you need the ride?`;
-    if (lang === "pt") return `Qual local específico e que horas você precisa da corrida?`;
-    return `¿Qué lugar específico y a qué hora necesitás el viaje?`;
-  }
-  if (field === "origin") {
-    if (lang === "en") return `Where are you leaving from?`;
-    if (lang === "pt") return `De onde você está saindo?`;
-    return `¿Desde dónde salís?`;
-  }
-  if (field === "destination") {
-    if (lang === "en") return `Where do you need to go?`;
-    if (lang === "pt") return `Para onde você precisa ir?`;
-    return `¿A dónde necesitás ir?`;
-  }
-  if (field === "time") {
-    if (lang === "en") return `What time do you need the ride?`;
-    if (lang === "pt") return `A que horas você precisa da corrida?`;
-    return `¿A qué hora necesitás el viaje?`;
-  }
-  if (field === "passengers") {
-    if (lang === "en") return `How many passengers?`;
-    if (lang === "pt") return `Quantos passageiros?`;
-    return `¿Cuántos pasajeros?`;
-  }
-  if (lang === "en") return `Could you tell me more about the trip you need?`;
-  if (lang === "pt") return `Pode me contar mais sobre a viagem que você precisa?`;
-  return `¿Podés contarme un poco más sobre el viaje que necesitás?`;
-}
 
-function buildGenericSafeFallback(lang: Lang): string {
-  if (lang === "en") return `I couldn't process that. An operator will assist you shortly.`;
-  if (lang === "pt") return `Não consegui processar isso. Um operador vai te atender em breve.`;
-  return `No pude procesar eso. Un operador te va a asistir en breve.`;
-}
 
 // v5.0 FASE 5B.2: SAFE RESPONSE FALLBACK.
 // Retorna el acknowledge ("Perfecto, tengo origen en X y destino hacia Y...")
@@ -366,7 +377,7 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): stri
   const destStrRaw = String(destination).trim();
   const destReason = extraction.slots.destination?.reason;
   const destIsAmbiguous =
-    destReason === "ambiguous_term" || GENERIC_AMBIGUOUS_LOCATION_RE.test(destStrRaw);
+    destReason === "ambiguous_term" || AMBIGUOUS_LOCATION_RE.test(destStrRaw);
 
   if (lang === "en") {
     const askAddress = destIsAmbiguous ? `, and what's the exact address in ${destStrRaw}` : "";
@@ -399,14 +410,18 @@ function withDefiniteArticle(value: string, lang: Lang): string {
   return `el ${v}`;
 }
 
-function inferMissingFieldFromCore(decision: FinalDecision): string | null {
-  const facts = decision.core.facts;
-  if (facts.includes("location_ambiguous:true")) return "location_ambiguous";
-  if (!facts.some((f) => f.startsWith("origin:"))) return "origin";
-  if (!facts.some((f) => f.startsWith("destination:"))) return "destination";
-  if (!facts.some((f) => f.startsWith("time:")) && !facts.some((f) => f.startsWith("date:"))) return "time";
-  if (!facts.some((f) => f.startsWith("passengers:"))) return "passengers";
-  return null;
+// ── booking accepted response builders ──────────────────────
+
+function buildBookingAcceptedResponse(origin: string | number | null, destination: string | number | null, price: number, lang: Lang): string {
+  if (lang === "en") return `✅ Booking confirmed.\n\nFrom: ${origin}\nTo: ${destination}\nPrice: $${price} ARS\n\nA driver will contact you shortly.`;
+  if (lang === "pt") return `✅ Solicitação confirmada.\n\nOrigem: ${origin}\nDestino: ${destination}\nValor: R$ ${price} ARS\n\nEm breve um motorista entrará em contato.`;
+  return `✅ Solicitud confirmada.\n\nOrigen: ${origin}\nDestino: ${destination}\nPrecio: $${price} ARS\n\nEn breve un chofer se pondrá en contacto con vos.`;
+}
+
+function buildBookingAcceptedNoPriceResponse(origin: string | number | null, destination: string | number | null, lang: Lang): string {
+  if (lang === "en") return `✅ Booking confirmed.\n\nFrom: ${origin}\nTo: ${destination}\n\nAn operator will confirm availability and final price. A driver will contact you shortly.`;
+  if (lang === "pt") return `✅ Solicitação confirmada.\n\nOrigem: ${origin}\nDestino: ${destination}\n\nUm operador vai confirmar disponibilidade e valor final. Em breve um motorista entrará em contato.`;
+  return `✅ Solicitud confirmada.\n\nOrigen: ${origin}\nDestino: ${destination}\n\nUn operador va a confirmar disponibilidad y precio final. En breve un chofer se pondrá en contacto con vos.`;
 }
 
 function formatSchedule(value: string, lang: Lang): string {
@@ -420,4 +435,36 @@ function formatSchedule(value: string, lang: Lang): string {
   } catch {
     return value;
   }
+}
+
+// ── lateral intent response builders ───────────────────────────
+
+function buildLateralEmergencyResponse(lang: Lang): string {
+  if (lang === "en") return "🚨 We're notifying our team. An operator will contact you urgently.";
+  if (lang === "pt") return "🚨 Estamos notificando nossa equipe. Um operador entrará em contato urgente.";
+  return "🚨 Estamos notificando a nuestro equipo. Un operador te va a contactar urgente.";
+}
+
+function buildLateralRescheduleResponse(lang: Lang): string {
+  if (lang === "en") return "Understood. An operator will review your reservation and contact you to reschedule.";
+  if (lang === "pt") return "Entendido. Um operador vai revisar sua reserva e entrar em contato para reprogramar.";
+  return "Entendido. Un operador va a revisar tu reserva y te contacta para reprogramar.";
+}
+
+function buildLateralPostServiceResponse(lang: Lang): string {
+  if (lang === "en") return "Thank you for your message. If you need help with billing or have a complaint, an operator will contact you.";
+  if (lang === "pt") return "Obrigado pela mensagem. Se precisar de ajuda com faturamento ou tiver alguma reclamação, um operador entrará em contato.";
+  return "Gracias por tu mensaje. Si necesitás ayuda con facturación o tenés algún reclamo, un operador te va a contactar.";
+}
+
+function buildAdminNotifyBody(intent: string, phone: string | undefined, userText: string | undefined): string {
+  const msg = userText ?? "";
+  const truncated = msg.substring(0, 200);
+  if (intent === "EMERGENCY") {
+    return `🚨 *EMERGENCIA — Cliente pide ayuda urgente*\n\nTeléfono: ${phone ?? "unknown"}\nMensaje: "${truncated}"`;
+  }
+  if (intent === "RESCHEDULE") {
+    return `🔄 *REPROGRAMACIÓN — Cliente quiere modificar su viaje*\n\nTeléfono: ${phone ?? "unknown"}\nMensaje: "${truncated}"`;
+  }
+  return "";
 }

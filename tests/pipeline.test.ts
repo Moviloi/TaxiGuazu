@@ -1,17 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { processLead } from "../src/lib/core/pipeline";
-import type { DecisionInput } from "../src/lib/core/types";
-import type { ExecutionContext, ExecutionDeps } from "../src/lib/services/executionEngine";
-
-function makeDecisionInput(overrides: Partial<DecisionInput> = {}): DecisionInput {
-  return {
-    text: "IGR a Amerian",
-    slots: { origin: "IGR", destination: "Amerian" },
-    confidence: 0.9,
-    lang: "es",
-    ...overrides,
-  };
-}
+import type { ExecutionContext, ExecutionDeps } from "../src/lib/core/pipeline";
 
 function makeExecCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
@@ -26,109 +15,80 @@ function makeExecCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContex
   };
 }
 
-function makeDeps(): ExecutionDeps & { send: any; persist: any; handler: any } {
+function makeDeps(): ExecutionDeps {
   return {
     send: vi.fn().mockResolvedValue(undefined),
     persist: vi.fn().mockResolvedValue(1),
-    handler: vi.fn().mockReturnValue({ policy: { finalResponse: "ok", outputSource: "POLICY" } }),
+    handler: vi.fn().mockReturnValue({ policy: { finalResponse: "ok", outputSource: "POLICY", needsGeo: false, needsSaveContext: false } }),
     geo: {
       resolveGeoRoute: vi.fn().mockReturnValue({}),
-      resolveZones: vi.fn().mockReturnValue({}),
-      expandZones: vi.fn().mockReturnValue({}),
-      computeProximityScore: vi.fn().mockReturnValue({}),
-    },
-    fare: {
-      calculateFare: vi.fn().mockReturnValue({ category: "standard", finalPrice: 10000, confidence: 1 }),
     },
     memory: {
       saveContext: vi.fn().mockResolvedValue(undefined),
     },
-    guard: vi.fn(),
+    adminNotify: vi.fn().mockResolvedValue(undefined),
   };
 }
 
-describe("processLead", () => {
-  it("returns 'completed' for BOOKING_SUMMARY decision (all fields present)", async () => {
-    const result = await processLead(
-      makeDecisionInput({ confidence: 0.9, slots: { origin: "IGR", destination: "Amerian", scheduled_at: "2026-06-08T10:00:00.000Z" } }),
-      makeExecCtx(),
-      makeDeps(),
-    );
+describe("processLead (handler-based v5.7)", () => {
+  it("returns 'completed' when handler policy indicates booking complete (needsGeo=true)", async () => {
+    const deps = makeDeps();
+    deps.handler = vi.fn().mockReturnValue({ policy: { finalResponse: "Resumen del viaje", outputSource: "POLICY", needsGeo: true, needsSaveContext: true } });
+    const ctx = makeExecCtx({
+      extractionCtx: { slots: { origin: { value: "IGR", score: 1, reason: "test" }, destination: { value: "Centro", score: 1, reason: "test" } }, overallConfidence: 0.9, workflowState: "collecting_slots", clarifyField: null, askForConfirmation: true },
+    });
+    const result = await processLead(ctx, deps);
     expect(result).toBe("completed");
   });
 
-  it("returns 'incomplete' for CONFIRM_INTERPRETATION decision (no datetime)", async () => {
-    const result = await processLead(
-      makeDecisionInput({ confidence: 0.6, slots: { origin: "IGR", destination: "Amerian" } }),
-      makeExecCtx(),
-      makeDeps(),
-    );
+  it("returns 'incomplete' when handler policy says incomplete (needsGeo=false)", async () => {
+    const deps = makeDeps();
+    const result = await processLead(makeExecCtx(), deps);
     expect(result).toBe("incomplete");
   });
 
-  it("returns 'incomplete' for CLARIFY decision (low confidence)", async () => {
-    const result = await processLead(
-      makeDecisionInput({ confidence: 0.3, slots: { origin: "IGR", destination: "Centro" } }),
-      makeExecCtx(),
-      makeDeps(),
-    );
-    expect(result).toBe("incomplete");
+  it("sends and persists the handler's finalResponse", async () => {
+    const deps = makeDeps();
+    deps.handler = vi.fn().mockReturnValue({ policy: { finalResponse: "¿A dónde necesitás ir?", outputSource: "POLICY", needsGeo: false, needsSaveContext: false } });
+    await processLead(makeExecCtx({ text: "del aeropuerto" }), deps);
+    expect(deps.handler).toHaveBeenCalledWith("del aeropuerto", "RESERVA", expect.any(Object));
+    expect(deps.send).toHaveBeenCalledWith("+54911111111", "¿A dónde necesitás ir?");
+    expect(deps.persist).toHaveBeenCalledWith(1, "assistant", "¿A dónde necesitás ir?");
   });
 
-  it("returns 'incomplete' for INFO_PRICE decision", async () => {
-    const result = await processLead(
-      makeDecisionInput({
-        text: "cuánto cuesta",
-        slots: { origin: "IGR", destination: "Centro" },
-        pricing: { final_price: 15000, base_price: 15000, markup: 0, tariff_id: null, origin: { canonical_name: "IGR" }, destination: { canonical_name: "Centro" } },
-        confidence: 0.9,
-      }),
-      makeExecCtx({ intent: "INFO" }),
-      makeDeps(),
-    );
-    expect(result).toBe("incomplete");
+  it("runs geo + saveContext when needsGeo=true", async () => {
+    const deps = makeDeps();
+    deps.handler = vi.fn().mockReturnValue({ policy: { finalResponse: "Resumen", outputSource: "POLICY", needsGeo: true, needsSaveContext: true } });
+    const ctx = makeExecCtx({
+      extractionCtx: { slots: { origin: { value: "IGR", score: 1, reason: "test" } }, overallConfidence: 0.9, workflowState: "collecting_slots", clarifyField: null, askForConfirmation: false },
+      pricing: { final_price: 15000 },
+    });
+    await processLead(ctx, deps);
+    expect(deps.geo.resolveGeoRoute).toHaveBeenCalled();
+    expect(deps.memory.saveContext).toHaveBeenCalledWith("+54911111111", expect.objectContaining({
+      intent: "MOVE",
+      pricing: expect.any(Object),
+    }));
   });
 
-  it("returns 'incomplete' for ASK_DESTINATION decision (missing destination)", async () => {
-    const result = await processLead(
-      makeDecisionInput({
-        text: "del aeropuerto",
-        slots: { origin: "Aeropuerto IGR" },
-        confidence: 0,
-      }),
-      makeExecCtx({ intent: "AMBIGUOUS" }),
-      makeDeps(),
-    );
-    expect(result).toBe("incomplete");
+  it("calls adminNotify when needsAdminNotify=true", async () => {
+    const deps = makeDeps();
+    deps.handler = vi.fn().mockReturnValue({ policy: { finalResponse: "🚨 Emergencia", outputSource: "POLICY", needsGeo: false, needsSaveContext: false, needsAdminNotify: true, adminNotifyBody: "EMERGENCY alert" } });
+    await processLead(makeExecCtx({ text: "ayuda urgente" }), deps);
+    expect(deps.adminNotify).toHaveBeenCalledWith("EMERGENCY alert");
+    expect(deps.send).toHaveBeenCalledWith("+54911111111", "🚨 Emergencia");
   });
 
-  it("returns 'incomplete' for CONFIRM_ROUTE decision", async () => {
-    const result = await processLead(
-      makeDecisionInput({
-        text: "sí",
-        slots: {},
-        confidence: 0,
-        pricing: undefined,
-      }),
-      makeExecCtx({ intent: "CONFIRM" }),
-      makeDeps(),
-    );
-    expect(result).toBe("incomplete");
+  it("skips adminNotify when needsAdminNotify is false", async () => {
+    const deps = makeDeps();
+    await processLead(makeExecCtx(), deps);
+    expect(deps.adminNotify).not.toHaveBeenCalled();
   });
 
   it("handles errors gracefully when handler crashes", async () => {
     const deps = makeDeps();
     deps.handler = vi.fn().mockImplementation(() => { throw new Error("handler crash"); });
-    const result = await processLead(
-      makeDecisionInput({
-        text: "sí",
-        slots: {},
-        confidence: 0,
-        pricing: undefined,
-      }),
-      makeExecCtx({ text: "sí", intent: "CONFIRM" }),
-      deps,
-    );
+    const result = await processLead(makeExecCtx({ text: "sí", intent: "CONFIRM" }), deps);
     expect(result).toBe("error");
   });
 });

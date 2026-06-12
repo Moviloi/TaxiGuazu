@@ -22,20 +22,19 @@ import {
   clearPendingOpportunity,
   updateOpportunityLogResponse,
   setChatSessionWorkflowState,
-  updateChatSessionWorkflow,
   getDbInstance,
 } from "@/lib/db/database";
 import { extractSlots } from "@/lib/services/extractSlots";
-import { evaluateCompleteness, evaluateBookingCompleteness } from "@/lib/services/completenessEngine";
+import { evaluateCompleteness } from "@/lib/services/completenessEngine";
+import { buildSlotClarify, formatOpportunityResponse, buildOpportunityAcceptedMessage, buildOpportunityDeclinedMessage, buildOpportunityNoPricingMessage, buildOpportunityOfferMessage, buildGlobalErrorMessage, buildF4EscalationMessage } from "@/lib/ai/response-builder";
 import { processLead } from "@/lib/core/pipeline";
-import { classifyIntent } from "@/lib/services/semanticCoreEngine";
-import type { ExecutionContext, ExecutionDeps } from "@/lib/services/executionEngine";
+import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
 import { resolveGeoRoute } from "@/lib/services/geoEngine";
-import { evaluateOpportunities, formatOpportunityResponse } from "@/lib/services/opportunity-engine";
+import { evaluateOpportunities, isOpportunityQuery } from "@/lib/services/opportunity-engine";
 import { opportunityEngine } from "@/lib/services/opportunity-engine";
 import { buildF4Signals, computeComprehensionScore, getF4State, getF4RecoveryMessage } from "@/lib/services/comprehension";
 import { buildMemory } from "@/lib/services/memory";
-import { buildPredictedContext, enrichF4Signals, computeMemoryBoost } from "@/lib/services/predictive-routing";
+import { buildPredictedContext, enrichF4Signals } from "@/lib/services/predictive-routing";
 import { logIntentDetected, logEntityDetected, logOpportunityShown, logUserResponse, logEscalation } from "@/lib/services/f6-events";
 import { recordF4Outcome, getF4ThresholdAdjustment } from "@/lib/services/f6-learning";
 import { loadObjectiveWeights } from "@/lib/services/f7-objectives";
@@ -48,15 +47,16 @@ import { runF9 } from "@/lib/services/f9-index";
 import { logF9Error } from "@/lib/services/f9-error";
 import { isAdminCommand, parseAdminCommand, executeAdminCommand } from "@/lib/services/f9-admin";
 import { logDecision } from "@/lib/services/decision-log";
-import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
-import type { ExtractionContext, Lang, RoleLock, SlotStabilityMap } from "@/lib/ai/types";
+
+import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
+import type { ExtractionContext, Lang, RoleLock, SlotStabilityMap, ConfirmedSlot } from "@/lib/ai/types";
 import type { TripRow } from "@/lib/db/types";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
 import { evaluateWorkflowTransition } from "@/lib/services/slot-workflow";
 import { calculatePrice } from "@/lib/services/pricing-engine";
-import { resetRequestState, assertCoreRouterPolicy, assertOutputSource } from "@/lib/ai/guard";
+import { resetRequestState, assertCoreRouterPolicy } from "@/lib/ai/guard";
 import { handleMessage } from "@/lib/ai/handler";
 import { core } from "@/lib/ai/core";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
@@ -69,20 +69,6 @@ import { resolveTariff } from "@/lib/services/tariff-resolver";
 import { buildRouteKey, observe as observeLearning } from "@/lib/services/fareLearningEngine";
 import { loadContext, mergeContext, saveContext } from "@/lib/services/contextMemory";
 import { calculateSlotConfidence } from "@/lib/services/confidence";
-
-const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
-
-function isAffirmativeMessage(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  if (AFFIRMATIVE_RE.test(t)) return true;
-  const clean = t.replace(/[^a-záéíóúñ\s]/g, "").trim();
-  return /\b(ok\b|dale\b|confirmo\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b)/.test(clean);
-}
-
-const NEGATIVE_RE = /^(no\b|no gracias|no, gracias|no me interesa|no quiero|nop|nah)/i;
-function isNegativeMessage(text: string): boolean {
-  return NEGATIVE_RE.test(text.trim().toLowerCase());
-}
 
 function formatConfidenceNote(
   e: TripExtraction,
@@ -198,6 +184,8 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     resetRequestState();
     // CORE+ROUTER+POLICY: setea guard state. Cualquier LLM call posterior debe pasar assert.
     handleMessage(text, "RESERVA");
+    // B1: Single core() call reused throughout the function.
+    const leadCore = core(text);
     const trimmed = text.trim();
     const lower = trimmed.toLowerCase();
 
@@ -323,35 +311,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       return;
     }
 
-    // FASE 6.1: detección temprana de intents laterales
-    const lateralIntent = core(text).intent;
-    if (lateralIntent === "EMERGENCY") {
-      console.log("[LATERAL] EMERGENCY detected for", phone);
-      const resp = "🚨 Estamos notificando a nuestro equipo. Un operador te va a contactar urgente.";
-      await sendWhatsAppMessage(phone, resp);
-      const conv = await getOrCreateConversation(phone);
-      await insertMessage(conv.id, "assistant", resp);
-      await notifyAdmin(`🚨 *EMERGENCIA — Cliente pide ayuda urgente*\n\nTeléfono: ${phone}\nMensaje: "${trimmed.substring(0, 200)}"`);
-      return;
-    }
-    if (lateralIntent === "RESCHEDULE") {
-      console.log("[LATERAL] RESCHEDULE detected for", phone);
-      const resp = "Entendido. Un operador va a revisar tu reserva y te contacta para reprogramar.";
-      await sendWhatsAppMessage(phone, resp);
-      const conv = await getOrCreateConversation(phone);
-      await insertMessage(conv.id, "assistant", resp);
-      await notifyAdmin(`🔄 *REPROGRAMACIÓN — Cliente quiere modificar su viaje*\n\nTeléfono: ${phone}\nMensaje: "${trimmed.substring(0, 200)}"`);
-      return;
-    }
-    if (lateralIntent === "POST_SERVICE") {
-      console.log("[LATERAL] POST_SERVICE detected for", phone);
-      const resp = "Gracias por tu mensaje. Si necesitás ayuda con facturación o tenés algún reclamo, un operador te va a contactar.";
-      await sendWhatsAppMessage(phone, resp);
-      const conv = await getOrCreateConversation(phone);
-      await insertMessage(conv.id, "assistant", resp);
-      return;
-    }
-
     const conversation = await getOrCreateConversation(phone, undefined);
     const freshConv = await getConversationById(conversation.id);
     if (!freshConv || freshConv.taken_by_human) return;
@@ -375,7 +334,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         } else if (isAffirmativeMessage(text)) {
           console.log(`[OPPORTUNITY] accepted by ${phone} rule="${pending.label}"`);
           await updateOpportunityLogResponse(pending.logId, "accepted", now);
-          const infoMsg = `Perfecto. Te comparto información sobre ${pending.label}.`;
+          const infoMsg = buildOpportunityAcceptedMessage(pending.label);
           await sendWhatsAppMessage(phone, infoMsg);
           await insertMessage(conversation.id, "assistant", infoMsg);
           await clearPendingOpportunity(phone);
@@ -385,7 +344,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         } else if (isNegativeMessage(text)) {
           console.log(`[OPPORTUNITY] declined by ${phone} rule="${pending.label}"`);
           await updateOpportunityLogResponse(pending.logId, "declined", now);
-          const declineMsg = "Entendido. Quedamos a disposición.";
+          const declineMsg = buildOpportunityDeclinedMessage();
           await sendWhatsAppMessage(phone, declineMsg);
           await insertMessage(conversation.id, "assistant", declineMsg);
           await clearPendingOpportunity(phone);
@@ -448,194 +407,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     // === F5 MEMORY + PREDICTIVE ROUTING (hoisted before confirmation) ===
     const history = sessionReset ? [] : await getRecentHistory(conversation.id, 20);
     const f5Session = await getChatSession(phone);
-    const f5Core = core(text);
+    const f5Core = leadCore;
     const f5Memory = buildMemory(f5Session, history);
     const f5Context = buildPredictedContext(text, f5Core.intent, f5Memory);
     logIntentDetected(String(conversation.id), f5Core.intent, f5Context.intentPrediction.confidence);
     const detectedEntities = f5Context.entityPrediction.candidates;
     if (detectedEntities.length > 0) logEntityDetected(String(conversation.id), detectedEntities);
 
-    // === CONFIRMATION CHECK (Phase 5-6) ===
-    // If workflow_state is "awaiting_confirmation" and user affirms → dispatch directly
-    {
-      const session = await getChatSession(phone);
-      if (session?.workflow_state === "awaiting_confirmation" && isAffirmativeMessage(text)) {
-        const slots = JSON.parse(session.slots || "{}");
-        const pax = slots.passengers || 1;
-        const origin = slots.origin || "";
-        const destination = slots.destination || "";
-        if (origin && destination) {
-          const bookingStatus = evaluateBookingCompleteness(slots);
-          if (bookingStatus.status === "MISSING_DATETIME") {
-            await sendWhatsAppMessage(phone, bookingStatus.message);
-            await insertMessage(conversation.id, "assistant", bookingStatus.message);
-            await updateChatSessionWorkflow(phone, "collecting_slots", "scheduled_at");
-            return;
-          }
-          const fleetCheck = await ensureFleetCanHandle(pax, {
-            phone,
-            convId: conversation.id,
-            origin,
-            destination,
-            source: "lead.confirmation.new_flow",
-          });
-          if (!fleetCheck.ok) {
-            await resetChatSession(phone);
-            return;
-          }
-          const pricingResult = await calculatePrice({ origin, destination, passengers: pax });
-          const tariffV2Match = await resolveTariff(origin, destination, pax);
-          if (tariffV2Match.matched && Math.abs(tariffV2Match.price - pricingResult.final_price) > 0) {
-            console.log(`[CONFIRMATION V2] Price divergence: v1=${pricingResult.final_price} v2=${tariffV2Match.price}`);
-          }
-          const tripId = `trip_${Date.now()}`;
-          const rawScheduledAt = slots.scheduled_at;
-          const scheduledAtValue = rawScheduledAt?.value ?? rawScheduledAt;
-          const scheduledAtTs = scheduledAtValue ? Math.floor(new Date(String(scheduledAtValue)).getTime() / 1000) : undefined;
-          await createTrip(tripId, phone, origin, destination, pricingResult.final_price > 0 ? pricingResult.final_price : (slots.price || undefined), pax, scheduledAtTs, slots.flight || undefined, "PENDING_DRIVER");
 
-          // LEARNING FEEDBACK: observar resultado real vs estimado
-          const estimatedFare = slots.fareEstimate ?? slots.price ?? pricingResult.final_price;
-          const finalFare = pricingResult.final_price > 0 ? pricingResult.final_price : (slots.price || 0);
-          const routeKey = buildRouteKey(slots.originZone ?? origin, slots.destinationZone ?? destination);
-          observeLearning(Number(estimatedFare), Number(finalFare), routeKey, false);
-          console.log("[LEARNING] observado:", { routeKey, estimatedFare, finalFare });
-          await setConversationTrip(conversation.id, tripId);
-          trip = await getActiveTripByPhone(phone);
-          if (trip) {
-            if (pricingResult.final_price > 0) {
-              await updateTripTariff(trip.trip_id, pricingResult.tariff_id!, pricingResult.base_price);
-            }
-            const confirmMsg = "✅ Solicitud confirmada.\n\nEn breve un chofer se pondrá en contacto con vos.";
-            await sendWhatsAppMessage(phone, confirmMsg);
-            await insertMessage(conversation.id, "assistant", confirmMsg);
-            const urgency = slots.urgency || "ahora";
-            await escalateTrip(conversation.id, phone, trip, urgency, pax);
-
-            const AIRPORT_RE = /aeropuerto|iguazú|iguacu|airport|aeroparque/i;
-            const HOTEL_RE = /hotel|centro/i;
-            const INTENT_KW_RE = /city tour|cena( show)?|tour|excursión/i;
-            const ENTITY_RE = getAllDomainPatterns().length > 0
-              ? new RegExp(getAllDomainPatterns().map((p) => `(?:${p.source})`).join("|"), "i")
-              : /(?!)/i;
-            const originLower = origin.toLowerCase();
-            const destLower = destination.toLowerCase();
-            const oAir = AIRPORT_RE.test(originLower);
-            const dAir = AIRPORT_RE.test(destLower);
-            const oHotel = HOTEL_RE.test(originLower);
-            const dHotel = HOTEL_RE.test(destLower);
-            const tripLegType: "airport_to_hotel" | "hotel_to_airport" | "airport_to_airport" | "hotel_to_hotel" | "other" = oAir && dHotel ? "airport_to_hotel" : oHotel && dAir ? "hotel_to_airport" : oAir && dAir ? "airport_to_airport" : oHotel && dHotel ? "hotel_to_hotel" : "other";
-            const hotelZone = HOTEL_RE.test(originLower) || HOTEL_RE.test(destLower);
-            const intentKeywords: string[] = [];
-            const intentMatch = text.match(INTENT_KW_RE);
-            if (intentMatch) intentKeywords.push(intentMatch[0].toLowerCase());
-            const entityMatches: string[] = [];
-            const entityMatch = text.match(ENTITY_RE);
-            if (entityMatch) entityMatches.push(entityMatch[0].toLowerCase());
-
-            const opportunityContext = {
-              tripId: trip.trip_id,
-              clientPhone: phone,
-              origin: origin,
-              destination: destination,
-              passengers: pax,
-              tariffId: pricingResult.tariff_id,
-              price: pricingResult.final_price > 0 ? pricingResult.final_price : (slots.price || 0),
-              piso: pricingResult.base_price,
-              urgency,
-              conversationId: conversation.id,
-              tripLegType,
-              hotelZone,
-              intentKeywords,
-              entityMatches,
-              hasPendingOpportunity: !!session?.pending_opportunity,
-              memoryBoost: f5Context ? computeMemoryBoost(f5Memory.sessionMemory, entityMatches) : 0,
-            };
-            const rawOpportunities = await opportunityEngine.evaluate(opportunityContext);
-            const f7Weights = await loadObjectiveWeights();
-            const f7Load = await getSystemLoad();
-            const f7Decision = adjustOpportunityRanking(
-              rawOpportunities,
-              f7Weights,
-              f7Load,
-              [opportunityContext.memoryBoost ?? 0],
-              0.3,
-              0.5,
-            );
-            if (f7Decision.loadAdjusted && f7Decision.ranked.length > 0) {
-              console.log(`[F7] Load-adjusted routing: highLoad=${f7Load.driversAvailable < 3} queue=${f7Load.queueLength}`);
-            }
-
-            seedPolicies().catch((e) => logF9Error("seed-policies", e));
-
-            const f8Result = await runF8(
-              f7Decision, f7Load, f5Core.intent, 0, phone, String(conversation.id),
-            );
-            console.log(`[F8] policies=${f8Result.policyResults.length} blocked=${f8Result.blocked} guardrails=${f8Result.activeGuardrails.length} experiment=${f8Result.experimentVariant}`);
-
-            if (f8Result.blocked) {
-              console.log(`[F8] Oportunidad bloqueada por policy/guardrail`);
-              await resetChatSession(phone);
-              return;
-            }
-
-            computeGlobalMetrics().catch((e) => logF9Error("global-metrics", e));
-
-            logDecision(String(conversation.id), f7Decision, f8Result).catch((e) => logF9Error("decision-log", e));
-
-            runF9(f7Decision, f8Result, String(conversation.id), f5Core.intent).catch((e) => logF9Error("f9-orchestrator", e));
-
-            const finalOpportunities = f8Result.finalOverride?.ranked ?? f7Decision.ranked;
-
-            const db = getDbInstance();
-            const tx = await db.transaction();
-            try {
-              for (const opp of finalOpportunities) {
-                const oppMsg = opp.description + " ¿Te interesa recibir información?";
-                const now = Math.floor(Date.now() / 1000);
-                const pendingData = JSON.stringify({
-                  id: String(opp.ruleId),
-                  tipo: opp.type,
-                  presented_at: now,
-                  expires_at: now + 86400,
-                  logId: opp.logId,
-                  label: opp.label,
-                  f7EconomicScore: opp.economicScore,
-                  f7Utility: opp.utilityScore,
-                });
-                await insertMessage(conversation.id, "assistant", oppMsg, tx);
-                await setChatSessionWorkflowState(phone, "post_trip_opportunity", tx);
-                await tx.execute({
-                  sql: "UPDATE chat_sessions SET pending_opportunity = ?, updated_at = unixepoch() WHERE phone = ?",
-                  args: [pendingData, phone],
-                });
-                await logOpportunityShown(String(conversation.id), opp.label, opp.utilityScore, tx);
-              }
-              await tx.commit();
-            } catch (e) {
-              await tx.rollback();
-              console.error(`[OPPORTUNITY_ENGINE] Error en transacción, rolling back:`, e);
-              return;
-            }
-
-            for (const opp of finalOpportunities) {
-              const oppMsg = opp.description + " ¿Te interesa recibir información?";
-              await sendWhatsAppMessage(phone, oppMsg);
-              console.log(`[OPPORTUNITY_ENGINE] F7 optimized: label="${opp.label}" economicScore=${opp.economicScore} utility=${opp.utilityScore}`);
-              console.log(`[OPPORTUNITY_ENGINE] pending_opportunity set for ${phone} rule="${opp.label}"`);
-            }
-            if (finalOpportunities.length === 0) {
-              await resetChatSession(phone);
-            }
-          } else {
-            await resetChatSession(phone);
-          }
-        } else {
-          await resetChatSession(phone);
-        }
-        return;
-      }
-    }
 
     // === COMPREHENSION CHECK (F4) ===
     {
@@ -684,7 +463,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         });
         logEscalation(String(conversation.id), reason, f4Score);
         await notifyAdmin(`⚠️ *ESCALACIÓN F4 — Bajo nivel de comprensión*\n\nTeléfono: ${phone}\nScore: ${f4Score.toFixed(2)}\nMensaje: "${text.substring(0, 200)}"`);
-        const escMsg = "No entendí bien tu consulta. Un operador humano te va a contactar para ayudarte.";
+        const escMsg = buildF4EscalationMessage();
         console.log("[TRACE RESPONSE]", { source: "F4_ESCALATION", text: escMsg });
         await sendWhatsAppMessage(phone, escMsg);
         await insertMessage(conversation.id, "assistant", escMsg);
@@ -712,7 +491,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
     let confidenceResult: ExtractionResult | undefined;
     let pricing: Awaited<ReturnType<typeof calculatePrice>> | undefined;
-    let coreDecisionEarly: ReturnType<typeof core> | undefined;
+    const coreDecisionEarly = leadCore;
     let prevSlotsEarly: Record<string, string> = {};
     try {
       console.log("[EXTRACTION] Iniciando extraction para:", text.substring(0, 80));
@@ -725,7 +504,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // v5.0 FASE 5B.4: detectar role lock + prev slots ANTES del LLM call
       // para inyectar el约束 (constraint) de CORE en el prompt. El LLM
       // debe respetar role lock y no contradecir prev slots persistidos.
-      coreDecisionEarly = core(text);
       prevSlotsEarly = await loadPreviousSlots(phone);
       const ctxMemory = await loadContext(phone);
       console.log("[CONTEXT] cargado:", { origin: ctxMemory.origin, destination: ctxMemory.destination, intent: ctxMemory.intent });
@@ -747,9 +525,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // COMPLETENESS GATE → decide if we have enough to proceed
       const completeness = evaluateCompleteness(raw);
       if (completeness.status === "ASK") {
-        console.log("[COMPLETENESS] bloqueado", { field: completeness.field, message: completeness.message });
-        await sendWhatsAppMessage(phone, completeness.message);
-        await insertMessage(conversation.id, "assistant", completeness.message);
+        const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
+        console.log("[COMPLETENESS] bloqueado", { field: completeness.field });
+        await sendWhatsAppMessage(phone, msg);
+        await insertMessage(conversation.id, "assistant", msg);
         return;
       }
 
@@ -873,65 +652,12 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // FALLBACK: si la extracción falló, intentar regex simple
     if (!extractionNote) {
-      try {
-        console.log("[EXTRACTION] Intentando fallback regex...");
-        let originMatch: string | undefined;
-        let destMatch: string | undefined;
-        // Primero intentar dirección-aware
-        const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
-        if (dirMatch) {
-          originMatch = dirMatch[1].trim();
-          destMatch = dirMatch[2].trim();
-        }
-        if (!originMatch || !destMatch) {
-          const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
-          const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-          originMatch = text.match(originRx)?.[1];
-          destMatch = text.match(destRx)?.[1];
-        }
-
-        // Si el texto actual no tiene palabra de origen, buscar en session.slots
-        if (!originMatch) {
-          const session = await getChatSession(phone);
-          if (session?.slots) {
-            const slots = JSON.parse(session.slots);
-            if (slots.origin) originMatch = slots.origin;
-          }
-        }
-
-        if (originMatch && destMatch) {
-          console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
-          const ft = await calculatePrice({ origin: originMatch, destination: destMatch, passengers: 1 });
-          if (ft.final_price > 0) {
-            pricing = ft;
-            if (confidenceResult) {
-              confidenceResult.slots.origin = { value: ft.origin.canonical_name, score: 1.0, reason: "regex_fallback" };
-              confidenceResult.slots.destination = { value: ft.destination.canonical_name, score: 1.0, reason: "regex_fallback" };
-              confidenceResult.slots.price = { value: ft.final_price, score: 1.0, reason: "backend_tariff_match" };
-            }
-            workflowResult = await evaluateWorkflowTransition(phone, {
-              slots: confidenceResult?.slots ?? {},
-              overall_confidence: 1.0,
-              action: "proceed",
-            });
-            extractionNote = [
-              `Confianza general: 100%. Estado: collecting_slots.`,
-              `Origen: "${originMatch}" → ${ft.origin.canonical_name} (Confianza: 100%)`,
-              `Destino: "${destMatch}" → ${ft.destination.canonical_name} (Confianza: 100%)`,
-              `PRECIO OFICIAL (calculado por backend): $${ft.final_price} ARS (precio hasta 4 pasajeros).`,
-              `VALOR_PRECIO: ${ft.final_price}`,
-              `Ruta oficial: ${ft.origin.canonical_name} → ${ft.destination.canonical_name}.`,
-              `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
-            ].join('\n');
-            console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.final_price);
-          } else {
-            console.log("[EXTRACTION] Fallback: tariff no encontrado");
-          }
-        } else {
-          console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto ni de session. text:", text.substring(0, 60), "originMatch:", originMatch, "destMatch:", destMatch);
-        }
-      } catch (e) {
-        console.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
+      const fb = await tryFallbackExtraction(text, phone, confidenceResult);
+      if (fb) {
+        pricing = fb.pricing;
+        confidenceResult = fb.confidenceResult;
+        workflowResult = fb.workflowResult;
+        extractionNote = fb.extractionNote;
       }
     }
 
@@ -955,7 +681,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     );
 
     // CORE PIPELINE — decision → execution (Fase 10)
-    const ctxSlots = extractionCtx?.slots ?? {};
     const execCtx: ExecutionContext = {
       phone,
       conversationId: conversation.id,
@@ -965,7 +690,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       extractionCtx,
       pricing,
       lang,
-      intent: classifyIntent(text, ctxSlots).intent,
+      intent: coreDecisionEarly.intent,
     };
     const execDeps: ExecutionDeps = {
       send: sendWhatsAppMessage,
@@ -973,18 +698,10 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       handler: handleMessage,
       geo: { resolveGeoRoute },
       memory: { saveContext },
-      guard: assertOutputSource,
-      driverOps: { getDriverByPhone, getConversationByPhone, buildShiftEndPrompt },
-    };
-    const decisionInput = {
-      text,
-      slots: ctxSlots,
-      pricing,
-      confidence: confidenceResult?.overall_confidence ?? 0,
-      lang,
+      adminNotify: notifyAdmin,
     };
     // OPPORTUNITY QUERY — evaluate available benefits, never negotiate
-    if (classifyIntent(text, ctxSlots).intent === "OPPORTUNITY") {
+    if (isOpportunityQuery(text)) {
       if (pricing && pricing.final_price > 0) {
         const oppResult = await evaluateOpportunities({
           pricingResult: pricing,
@@ -1001,21 +718,177 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         await insertMessage(conversation.id, "assistant", oppMsg);
         console.log("[OPPORTUNITY] response sent:", oppMsg.substring(0, 120));
       } else {
-        const msg = lang.startsWith("pt")
-          ? "Primeiro preciso saber o trajeto para verificar benefícios disponíveis."
-          : "Primero necesito saber el trayecto para verificar beneficios disponibles.";
+        const msg = buildOpportunityNoPricingMessage(lang);
         await sendWhatsAppMessage(phone, msg);
         await insertMessage(conversation.id, "assistant", msg);
       }
       return;
     }
 
-    await processLead(decisionInput, execCtx, execDeps);
+    // === CONFIRMATION SHORTCUT ===
+    // If workflow_state is "awaiting_confirmation" and user affirms,
+    // build extraction context from session data and let pipeline handle the response.
+    // Execution side effects (trip creation, dispatch) happen after processLead.
+    {
+      const session = await getChatSession(phone);
+      if (session?.workflow_state === "awaiting_confirmation" && isAffirmativeMessage(text)) {
+        const rawSlots = JSON.parse(session.slots || "{}");
+        const origin = rawSlots.origin || "";
+        const destination = rawSlots.destination || "";
+        if (origin && destination) {
+          const fleetCheck = await ensureFleetCanHandle(rawSlots.passengers || 1, {
+            phone,
+            convId: conversation.id,
+            origin,
+            destination,
+            source: "lead.confirmation.new_flow",
+          });
+          if (!fleetCheck.ok) {
+            await resetChatSession(phone);
+            return;
+          }
+          const pricingResult = await calculatePrice({ origin, destination, passengers: rawSlots.passengers || 1 });
+          const tariffV2Match = await resolveTariff(origin, destination, rawSlots.passengers || 1);
+          if (tariffV2Match.matched && Math.abs(tariffV2Match.price - pricingResult.final_price) > 0) {
+            console.log(`[CONFIRMATION V2] Price divergence: v1=${pricingResult.final_price} v2=${tariffV2Match.price}`);
+          }
+
+          // Build extraction context from session slots (no LLM extraction needed for affirmation).
+          const confirmedSlots: Record<string, ConfirmedSlot> = {};
+          for (const [k, v] of Object.entries(rawSlots)) {
+            confirmedSlots[k] = { value: String(v ?? ""), score: 1, reason: "session" };
+          }
+          const extractionCtx: ExtractionContext = {
+            slots: confirmedSlots,
+            overallConfidence: 1.0,
+            workflowState: "awaiting_confirmation",
+            clarifyField: null,
+            askForConfirmation: true,
+            tariff: tariffV2Match.matched
+              ? {
+                  matched: true,
+                  price: tariffV2Match.price,
+                  canonicalOrigin: pricingResult.origin.canonical_name ?? origin,
+                  canonicalDestination: pricingResult.destination.canonical_name ?? destination,
+                }
+              : { matched: false },
+          };
+          const execCtx: ExecutionContext = {
+            phone,
+            conversationId: conversation.id,
+            text,
+            history,
+            customerName: customerName || undefined,
+            extractionCtx,
+            pricing: { final_price: pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || 0) },
+            lang,
+            intent: "MOVE",
+          };
+
+          const pipelineResult = await processLead(execCtx, execDeps);
+
+          if (pipelineResult === "completed") {
+            // Execution side effects — trip creation, dispatch, F7/F8/F9
+            const pax = rawSlots.passengers || 1;
+            const tripId = `trip_${Date.now()}`;
+            const rawScheduledAt = rawSlots.scheduled_at;
+            const scheduledAtValue = rawScheduledAt?.value ?? rawScheduledAt;
+            const scheduledAtTs = scheduledAtValue ? Math.floor(new Date(String(scheduledAtValue)).getTime() / 1000) : undefined;
+            await createTrip(tripId, phone, origin, destination, pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || undefined), pax, scheduledAtTs, rawSlots.flight || undefined, "PENDING_DRIVER");
+
+            const estimatedFare = rawSlots.fareEstimate ?? rawSlots.price ?? pricingResult.final_price;
+            const finalFare = pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || 0);
+            const routeKey = buildRouteKey(rawSlots.originZone ?? origin, rawSlots.destinationZone ?? destination);
+            observeLearning(Number(estimatedFare), Number(finalFare), routeKey, false);
+            await setConversationTrip(conversation.id, tripId);
+            trip = await getActiveTripByPhone(phone);
+            if (trip) {
+              if (pricingResult.final_price > 0) {
+                await updateTripTariff(trip.trip_id, pricingResult.tariff_id!, pricingResult.base_price);
+              }
+              const urgency = rawSlots.urgency || "ahora";
+              await escalateTrip(conversation.id, phone, trip, urgency, pax);
+
+              const AIRPORT_RE = /aeropuerto|iguazú|iguacu|airport|aeroparque/i;
+              const HOTEL_RE = /hotel|centro/i;
+              const originLower = origin.toLowerCase();
+              const destLower = destination.toLowerCase();
+              const oAir = AIRPORT_RE.test(originLower);
+              const dAir = AIRPORT_RE.test(destLower);
+              const oHotel = HOTEL_RE.test(originLower);
+              const dHotel = HOTEL_RE.test(destLower);
+              const tripLegType: "airport_to_hotel" | "hotel_to_airport" | "airport_to_airport" | "hotel_to_hotel" | "other" = oAir && dHotel ? "airport_to_hotel" : oHotel && dAir ? "hotel_to_airport" : oAir && dAir ? "airport_to_airport" : oHotel && dHotel ? "hotel_to_hotel" : "other";
+              const hotelZone = HOTEL_RE.test(originLower) || HOTEL_RE.test(destLower);
+              const oppContext = {
+                tripId: trip.trip_id,
+                clientPhone: phone,
+                origin, destination, passengers: pax,
+                tariffId: pricingResult.tariff_id,
+                price: pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || 0),
+                piso: pricingResult.base_price, urgency,
+                conversationId: conversation.id,
+                tripLegType, hotelZone,
+                intentKeywords: [] as string[],
+                entityMatches: [] as string[],
+                hasPendingOpportunity: !!session?.pending_opportunity,
+                memoryBoost: 0,
+              };
+              const rawOpportunities = await opportunityEngine.evaluate(oppContext);
+              const f7Weights = await loadObjectiveWeights();
+              const f7Load = await getSystemLoad();
+              const f7Decision = adjustOpportunityRanking(rawOpportunities, f7Weights, f7Load, [0], 0.3, 0.5);
+              seedPolicies().catch((e) => logF9Error("seed-policies", e));
+              const f8Result = await runF8(f7Decision, f7Load, "MOVE", 0, phone, String(conversation.id));
+              if (f8Result.blocked) { await resetChatSession(phone); return; }
+              computeGlobalMetrics().catch((e) => logF9Error("global-metrics", e));
+              logDecision(String(conversation.id), f7Decision, f8Result).catch((e) => logF9Error("decision-log", e));
+              runF9(f7Decision, f8Result, String(conversation.id), "MOVE").catch((e) => logF9Error("f9-orchestrator", e));
+
+              const finalOpps = f8Result.finalOverride?.ranked ?? f7Decision.ranked;
+              const db = getDbInstance();
+              const tx = await db.transaction();
+              try {
+                for (const opp of finalOpps) {
+                  const oppMsg = buildOpportunityOfferMessage(opp.description);
+                  const now = Math.floor(Date.now() / 1000);
+                  const pendingData = JSON.stringify({
+                    id: String(opp.ruleId), tipo: opp.type, presented_at: now, expires_at: now + 86400,
+                    logId: opp.logId, label: opp.label, f7EconomicScore: opp.economicScore, f7Utility: opp.utilityScore,
+                  });
+                  await insertMessage(conversation.id, "assistant", oppMsg, tx);
+                  await setChatSessionWorkflowState(phone, "post_trip_opportunity", tx);
+                  await tx.execute({ sql: "UPDATE chat_sessions SET pending_opportunity = ?, updated_at = unixepoch() WHERE phone = ?", args: [pendingData, phone] });
+                  await logOpportunityShown(String(conversation.id), opp.label, opp.utilityScore, tx);
+                }
+                await tx.commit();
+              } catch (e) {
+                await tx.rollback();
+                console.error(`[OPPORTUNITY_ENGINE] Error en transacción, rolling back:`, e);
+                return;
+              }
+              for (const opp of finalOpps) {
+                await sendWhatsAppMessage(phone, buildOpportunityOfferMessage(opp.description));
+              }
+              if (finalOpps.length === 0) await resetChatSession(phone);
+            } else {
+              await resetChatSession(phone);
+            }
+          } else {
+            await resetChatSession(phone);
+          }
+        } else {
+          await resetChatSession(phone);
+        }
+        return;
+      }
+    }
+
+    await processLead(execCtx, execDeps);
   } catch (e) {
     console.error("[LEAD_ERROR]", e);
     const errMsg = `⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`;
     try {
-      const errResp = "Disculpe, ocurrió un error. Un operador lo asistirá.";
+      const errResp = buildGlobalErrorMessage();
       console.log("[TRACE RESPONSE]", { source: "GLOBAL_ERROR", text: errResp });
       await sendWhatsAppMessage(phone, errResp);
       const conv = await getConversationByPhone(phone);
@@ -1223,5 +1096,90 @@ async function loadPreviousSlots(phone: string): Promise<Record<string, string>>
     return result;
   } catch {
     return {};
+  }
+}
+
+interface FallbackExtractionResult {
+  pricing: Awaited<ReturnType<typeof calculatePrice>>;
+  confidenceResult: ExtractionResult;
+  workflowResult: SlotWorkflowContext;
+  extractionNote: string;
+}
+
+/**
+ * B2: Fallback extraction usando regex cuando la extracción vía LLM falla.
+ * Devuelve resultado completo si es exitoso, o null si no.
+ * No muta variables externas.
+ */
+async function tryFallbackExtraction(
+  text: string,
+  phone: string,
+  prevConfidence: ExtractionResult | undefined,
+): Promise<FallbackExtractionResult | null> {
+  try {
+    console.log("[EXTRACTION] Intentando fallback regex...");
+    let originMatch: string | undefined;
+    let destMatch: string | undefined;
+    const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
+    if (dirMatch) {
+      originMatch = dirMatch[1].trim();
+      destMatch = dirMatch[2].trim();
+    }
+    if (!originMatch || !destMatch) {
+      const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
+      const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+      originMatch = text.match(originRx)?.[1];
+      destMatch = text.match(destRx)?.[1];
+    }
+
+    if (!originMatch) {
+      const session = await getChatSession(phone);
+      if (session?.slots) {
+        const slots = JSON.parse(session.slots);
+        if (slots.origin) originMatch = slots.origin;
+      }
+    }
+
+    if (originMatch && destMatch) {
+      console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
+      const ft = await calculatePrice({ origin: originMatch, destination: destMatch, passengers: 1 });
+      if (ft.final_price > 0) {
+        const slots: Record<string, { value: string | number; score: number; reason: string }> = {};
+        if (prevConfidence) {
+          Object.assign(slots, prevConfidence.slots);
+        }
+        slots.origin = { value: ft.origin.canonical_name ?? originMatch, score: 1.0, reason: "regex_fallback" };
+        slots.destination = { value: ft.destination.canonical_name ?? destMatch, score: 1.0, reason: "regex_fallback" };
+        slots.price = { value: ft.final_price, score: 1.0, reason: "backend_tariff_match" };
+        const fbConfidence: ExtractionResult = {
+          slots,
+          overall_confidence: 1.0,
+          action: "proceed",
+        };
+        const fbWorkflow = await evaluateWorkflowTransition(phone, {
+          slots: fbConfidence.slots as Record<string, any>,
+          overall_confidence: 1.0,
+          action: "proceed",
+        });
+        const fbExtractionNote = [
+          `Confianza general: 100%. Estado: collecting_slots.`,
+          `Origen: "${originMatch}" → ${ft.origin.canonical_name} (Confianza: 100%)`,
+          `Destino: "${destMatch}" → ${ft.destination.canonical_name} (Confianza: 100%)`,
+          `PRECIO OFICIAL (calculado por backend): $${ft.final_price} ARS (precio hasta 4 pasajeros).`,
+          `VALOR_PRECIO: ${ft.final_price}`,
+          `Ruta oficial: ${ft.origin.canonical_name} → ${ft.destination.canonical_name}.`,
+          `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
+        ].join('\n');
+        console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.final_price);
+        return { pricing: ft, confidenceResult: fbConfidence, workflowResult: fbWorkflow, extractionNote: fbExtractionNote };
+      }
+      console.log("[EXTRACTION] Fallback: tariff no encontrado");
+    } else {
+      console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto ni de session. text:", text.substring(0, 60), "originMatch:", originMatch, "destMatch:", destMatch);
+    }
+    return null;
+  } catch (e) {
+    console.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
+    return null;
   }
 }

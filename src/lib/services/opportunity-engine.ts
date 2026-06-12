@@ -1,3 +1,5 @@
+// ARCHITECTURE NOTE: Oportunity domain. Congelado durante Conversation Core MVP.
+// Flujo independiente gestionado por lead.service.ts. No pasa por pipeline ni policies.
 import { getDbInstance } from "@/lib/db/database";
 import type { ProviderAdjustmentRow, PromotionRow, PackageRow, OpportunityContext, Opportunity, OpportunityRuleRow } from "@/lib/db/types";
 import type { PricingResult } from "./pricing-engine";
@@ -269,41 +271,6 @@ export async function evaluateOpportunities(input: OpportunityInput): Promise<Op
   };
 }
 
-export function formatOpportunityResponse(
-  result: OpportunityResult,
-  lang: string,
-): string {
-  if (!result.available) {
-    return lang.startsWith("pt")
-      ? "No momento, não há benefícios adicionais disponíveis para esta rota. O preço oficial já é o melhor que podemos oferecer."
-      : "Por el momento no hay beneficios adicionales disponibles para esta ruta. El precio oficial ya es el mejor que podemos ofrecer.";
-  }
-
-  const lines: string[] = [];
-  const applied = result.opportunities.filter(o => o.already_applied);
-  const available = result.opportunities.filter(o => !o.already_applied);
-
-  if (applied.length > 0) {
-    lines.push(lang.startsWith("pt")
-      ? "✅ *Benefícios já aplicados ao preço:*"
-      : "✅ *Beneficios ya aplicados al precio:*");
-    for (const o of applied) {
-      lines.push(`• ${o.label} (${lang.startsWith("pt") ? "economia" : "ahorro"}: $${o.savings})`);
-    }
-  }
-
-  if (available.length > 0) {
-    if (lines.length > 0) lines.push("");
-    lines.push(lang.startsWith("pt")
-      ? "🎯 *Oportunidades disponíveis:*"
-      : "🎯 *Oportunidades disponibles:*");
-    for (const o of available) {
-      const suffix = o.valid_until
-        ? ` (${lang.startsWith("pt") ? "válido até" : "válido hasta"} ${new Date(o.valid_until * 1000).toLocaleDateString()})`
-        : "";
-      lines.push(`• ${o.label} — ${lang.startsWith("pt") ? "economia de" : "ahorro de"} $${o.savings}${suffix}`);
-    }
-  }
-
-  return lines.join("\n");
-}
+// Re-exportado desde response-builder para mantener compatibilidad de imports.
+// v5.0 A5: La implementación vive en response-builder.ts.
+export { formatOpportunityResponse } from "@/lib/ai/response-builder";
