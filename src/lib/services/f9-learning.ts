@@ -1,6 +1,6 @@
 // F9: DRIFT DETECTION & LEARNING — frozen (FASE A). Pipeline experimental F7→F8→F9.
 // FUTURE RESPONSIBILITY: Detectar drift en predicciones y aprendizaje.
-// CURRENT STATUS: Cableado en lead.service.ts como pipeline bloqueado. f9-index.ts
+// CURRENT STATUS: Cableado en learning-pipeline.service.ts como pipeline bloqueado. f9-index.ts
 //   orquesta housekeeping (limpieza de tablas). No modificar.
 // MIGRATION NOTE: Deshabilitar perdería limpieza de tablas. Bloqueado hasta
 //   Conversation Core + Pricing + Geo congelados.

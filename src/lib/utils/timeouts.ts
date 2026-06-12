@@ -1,27 +1,23 @@
 import {
   getExpiredByState,
-  advanceToNivel2,
-  advanceToNivel3,
   closeWorkflow,
 } from "./conversation-workflow";
 import {
   getActiveTripByPhone,
   getDriverByPhone,
-  getDriverExpiry,
   getTripsByScheduledAtWindow,
   getTripsPendingCloseOut,
   getDbInstance,
   updateTripState,
-  findTariff,
   getExpiredTrips,
   getConnectionValue,
   getConnectionValueFlag,
   setConnectionFlag,
   setConnectionValue,
-  deleteConnectionKey,
 } from "../db/database";
-import { notifyAdmin, broadcastTripToDrivers, offerToSpecificDriver, getPrincipal2 } from "../services/admin.service";
+import { notifyAdmin } from "../services/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "../whatsapp/sender";
+import { executeEscalation } from "../services/dispatch/dispatch.service";
 import { sendPendingSurveys } from "../services/survey.service";
 import {
   TIMEOUT_NIVEL_1_MS,
@@ -37,148 +33,24 @@ export async function checkTimeouts(): Promise<void> {
   await sendPendingSurveys();
 
   // === DISPATCH LEVELS ===
-
-  // Nivel 1 expired → offer to Nivel 2 (Principal2)
   const nivel1Expired = await getExpiredByState("nivel_1", TIMEOUT_NIVEL_1_MS);
   for (const ctx of nivel1Expired) {
-    console.log(`[TIMEOUT] Nivel 1 expiró para conv ${ctx.conversationId}`);
-    const trip = await getActiveTripByPhone(ctx.phone);
-    if (!trip) continue;
-
-    const principal2 = await getPrincipal2();
-    if (principal2 && principal2.status === "active") {
-      const expiry = await getDriverExpiry(principal2.phone);
-      if (expiry.active) {
-        await advanceToNivel2(ctx.conversationId, ctx.phone);
-        await offerToSpecificDriver(
-          principal2.phone, trip, ctx.conversationId,
-          `⭐ *NIVEL 2 — RESERVA*`,
-          `El Principal no respondió. Tenés 30min para aceptar.`
-        );
-        console.log(`[DISPATCH] Nivel 1 timeout → Nivel 2 (${principal2.name}) conv ${ctx.conversationId}`);
-        continue;
-      }
-    }
-
-    // No principal2 → broadcast
-    await advanceToNivel3(ctx.conversationId, ctx.phone);
-    await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
-    console.log(`[DISPATCH] Nivel 1 timeout → broadcast conv ${ctx.conversationId}`);
+    await executeEscalation({ conversationId: ctx.conversationId, phone: ctx.phone, currentState: "nivel_1" });
   }
 
-  // Nivel 2 expired → broadcast (Nivel 3)
   const nivel2Expired = await getExpiredByState("nivel_2", TIMEOUT_NIVEL_2_MS);
   for (const ctx of nivel2Expired) {
-    console.log(`[TIMEOUT] Nivel 2 expiró para conv ${ctx.conversationId}`);
-    const trip = await getActiveTripByPhone(ctx.phone);
-    if (!trip) continue;
-
-    await advanceToNivel3(ctx.conversationId, ctx.phone);
-    await broadcastTripToDrivers(trip, ctx.conversationId, ctx.phone);
-    console.log(`[DISPATCH] Nivel 2 timeout → broadcast conv ${ctx.conversationId}`);
+    await executeEscalation({ conversationId: ctx.conversationId, phone: ctx.phone, currentState: "nivel_2" });
   }
 
-  // Nivel 3 expired → notify admin
   const nivel3Expired = await getExpiredByState("nivel_3", TIMEOUT_NIVEL_3_MS);
   for (const ctx of nivel3Expired) {
-    console.log(`[TIMEOUT] Nivel 3 expiró para conv ${ctx.conversationId}`);
-    const trip = await getActiveTripByPhone(ctx.phone);
-    const destino = trip?.destination || "sin destino";
-
-    await notifyAdmin(`⚠️ *Viaje sin asignar*
-
-Cliente: ${ctx.phone}
-Destino: ${destino}
-
-Los 3 niveles de despacho agotados. Reasigná manualmente.`);
-
-    await closeWorkflow(ctx.conversationId);
+    await executeEscalation({ conversationId: ctx.conversationId, phone: ctx.phone, currentState: "nivel_3" });
   }
 
-  // Waiting driver (AHORA) expired → notify admin, or offer contingency for 5-6pax
   const waitingDriverExpired = await getExpiredByState("waiting_driver", TIMEOUT_WAITING_DRIVER_MS);
   for (const ctx of waitingDriverExpired) {
-    console.log(`[TIMEOUT] Waiting driver expiró para conv ${ctx.conversationId}`);
-    const trip = await getActiveTripByPhone(ctx.phone);
-    const destino = trip?.destination || "sin destino";
-
-    // Check if contingency was already offered for this conv
-    if (await getConnectionValueFlag(`contingency_offered_${ctx.conversationId}`)) continue;
-
-    if (trip && trip.passengers && trip.passengers > 4) {
-      // FIXME: La lógica de contingencia de 2 vehículos fue diseñada para una flota 4p/6p.
-      // Al incorporar vehículos de mayor capacidad debe revisarse o reemplazarse por una
-      // estrategia configurable basada en car_capacity.
-      // Store original trip data for contingency handler
-      const tripData = JSON.stringify({
-        origin: trip.origin,
-        destination: trip.destination,
-        price_base: trip.price_base,
-        passengers: trip.passengers,
-        flight_number: trip.flight_number || null,
-      });
-      await setConnectionValue(`contingency_data_${ctx.conversationId}`, tripData);
-      await setConnectionFlag(`contingency_offered_${ctx.conversationId}`);
-
-      // Look up the 4p tariff for accurate pricing
-      const tariff4p = await findTariff(trip.origin || "", trip.destination || "ninguno", 4);
-      const price4p = tariff4p?.price || trip.price_base || 0;
-
-      await closeWorkflow(ctx.conversationId);
-
-      await sendInteractiveButtons(ctx.phone,
-        `Mirá, en este microsegundo no encuentro una minivan de hasta 6 plazas disponible. Pero para no hacerte esperar, te puedo buscar dos autos de hasta 4 pasajeros ya mismo. Te saldría [$${price4p.toLocaleString("es-AR")}] × 2 en total (es decir, $${price4p.toLocaleString("es-AR")} cada uno). ¿Te sirve que intente buscártelos?`, [
-        { id: `contingencia_si_${ctx.conversationId}`, title: "✅ Sí, buscá" },
-        { id: `contingencia_no_${ctx.conversationId}`, title: "❌ No, gracias" },
-      ]);
-
-      console.log(`[CONTINGENCIA] Ofrecida para conv ${ctx.conversationId} (${trip.passengers} pax)`);
-      continue;
-    }
-
-    // Check if this is a dual contingency timeout (Trip B waiting after Trip A was assigned)
-    const dualValue = await getConnectionValue(`contingency_dual_${ctx.conversationId}`);
-    if (dualValue) {
-      console.log(`[TIMEOUT] Dual contingency — Trip B timeout para conv ${ctx.conversationId}`);
-      const dual = JSON.parse(dualValue);
-
-      // Cancel Trip B
-      if (trip) {
-        await updateTripState(trip.trip_id, "cancelado");
-      }
-
-      // Cancel Trip A
-      await updateTripState(dual.tripA_id, "cancelado");
-
-      // Notify Trip A driver
-      await sendWhatsAppMessage(dual.driverA_phone, `❌ El segundo auto no se confirmó a tiempo. El viaje compartido se cancela. Disculpá las molestias.`);
-
-      // Notify client
-      await sendWhatsAppMessage(ctx.phone, `Disculpá, no pudimos conseguir dos autos disponibles. Un operador se va a comunicar para ayudarte.`);
-
-      // Notify admin
-      await notifyAdmin(`⚠️ *Contingencia fallida — 2 autos no disponible*
-
-Cliente: ${ctx.phone}
-Auto A: ${dual.driverA_name} (${dual.driverA_phone}) — cancelado
-Ambos viajes cancelados. Contactar manualmente.`);
-
-      // Clean up
-      await deleteConnectionKey(`contingency_dual_${ctx.conversationId}`);
-
-      await closeWorkflow(ctx.conversationId);
-      continue;
-    }
-
-    await sendWhatsAppMessage(ctx.phone, "Disculpá, no encontramos un chofer disponible ahora mismo. Un operador se va a comunicar para ayudarte.");
-    await notifyAdmin(`⚠️ *AHORA sin chofer*
-
-Cliente: ${ctx.phone}
-Destino: ${destino}
-
-Ningún chofer tomó el servicio AHORA. Reasigná manualmente.`);
-
-    await closeWorkflow(ctx.conversationId);
+    await executeEscalation({ conversationId: ctx.conversationId, phone: ctx.phone, currentState: "waiting_driver" });
   }
 
   // === CRON JOBS ===

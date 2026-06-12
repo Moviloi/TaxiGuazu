@@ -6,7 +6,7 @@
 //   if dest    == null → ASK_DESTINATION
 //   otherwise          → COMPLETE
 
-export interface CompletenessResult {
+interface CompletenessResult {
   status: "ASK" | "COMPLETE";
   field?: "origin" | "destination";
 }

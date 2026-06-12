@@ -97,7 +97,7 @@ export interface PolicyOutput {
   requiresUserInput: boolean;
   nextExpectedFields: string[];
   outputSource: OutputSource;
-  // EXECUTION METADATA — flags para executionEngine.
+  // EXECUTION METADATA — flags para efectos secundarios post-decisión.
   // Indican qué efectos secundarios ejecutar además de send+persist.
   needsGeo: boolean;
   needsSaveContext: boolean;

@@ -36,7 +36,8 @@ import {
   deleteConnectionKey,
   getCustomerName,
 } from "@/lib/db/database";
-import { notifyAdmin, notifyOtherDriversTaken, offerToSpecificDriver, broadcastTripToDrivers } from "./admin.service";
+import { notifyAdmin, notifyOtherDriversTaken } from "./admin.service";
+import { offerToSpecificDriver, broadcastTripToDrivers } from "./dispatch/dispatch.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
 

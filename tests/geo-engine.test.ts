@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { resolveGeoRoute, resolveZones, computeProximityScore, expandZones } from "../src/lib/services/geoEngine";
+import { resolveGeoRoute } from "../src/lib/services/geoEngine";
 
 describe("geoEngine", () => {
-  // ── resolveGeoRoute (unified entry point) ──
-
   it("IGR → Centro → MEDIUM (airport to city)", () => {
     const r = resolveGeoRoute({ origin: "IGR", destination: "Centro" });
     expect(r.originZone).toBe("Z_AIRPORT");
@@ -39,52 +37,6 @@ describe("geoEngine", () => {
     expect(r.routeType).toBe("LONG");
     expect(r.proximityScore).toBeLessThan(0.4);
   });
-
-  // ── resolveZones (backward compat) ──
-
-  it("resolveZones returns subzone for hotel node", () => {
-    const r = resolveZones({ origin: "IGR", destination: "Amerian" });
-    expect(r.destinationSubzone?.name).toBe("Amerian");
-    expect(r.originSubzone).toBeNull();
-  });
-
-  it("resolveZones returns null subzone for non-hotel", () => {
-    const r = resolveZones({ origin: "IGR", destination: "Centro" });
-    expect(r.destinationSubzone).toBeNull();
-  });
-
-  // ── computeProximityScore (backward compat) ──
-
-  it("proximity airport → city core is MEDIUM", () => {
-    const e = expandZones("Z_AIRPORT", "Z_CITY_CORE");
-    const p = computeProximityScore(e.origin, e.destination);
-    expect(p.score).toBeGreaterThanOrEqual(0.4);
-    expect(p.factors.corridorAlignment).toBeGreaterThan(0);
-  });
-
-  it("proximity border → anything has penalty", () => {
-    const e = expandZones("Z_BORDER", "Z_LANDMARK");
-    const p = computeProximityScore(e.origin, e.destination);
-    expect(p.factors.aduanaPenalty).toBeGreaterThan(0);
-    expect(p.score).toBeLessThan(0.5);
-  });
-
-  // ── GeoRoute fields ──
-
-  it("geoRoute includes originNode and destinationNode", () => {
-    const r = resolveGeoRoute({ origin: "IGR", destination: "Centro" });
-    expect(r.originNode).toBe("IGR");
-    expect(r.destinationNode).toBe("Centro");
-  });
-
-  it("geoRoute proximityScore matches computeProximityScore", () => {
-    const r = resolveGeoRoute({ origin: "Aduana", destination: "Cataratas" });
-    const e = expandZones("Z_BORDER", "Z_LANDMARK");
-    const p = computeProximityScore(e.origin, e.destination);
-    expect(r.proximityScore).toBe(p.score);
-  });
-
-  // ── Null / partial ──
 
   it("null slots → null zones + MEDIUM", () => {
     const r = resolveGeoRoute({ origin: null, destination: null });

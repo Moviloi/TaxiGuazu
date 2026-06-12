@@ -88,7 +88,7 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
   }
 
   // EXECUTION METADATA: cuando la reserva está completa (confirmación con tarifa),
-  // pipeline/executionEngine corre geo + saveContext como efectos secundarios.
+  // el pipeline ejecuta geo + saveContext como efectos secundarios.
   const needsGeo = decision.decision === "EXECUTE" && extraction?.askForConfirmation === true && extraction?.tariff?.matched === true;
   const needsSaveContext = needsGeo;
 

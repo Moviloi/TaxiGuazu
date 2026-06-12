@@ -1,6 +1,6 @@
 // F8: POLICY SIMULATION & GUARDRAILS — frozen (FASE A). Pipeline experimental F7→F8→F9.
 // FUTURE RESPONSIBILITY: Simular políticas y aplicar guardrails de decisión.
-// CURRENT STATUS: Cableado en lead.service.ts como pipeline bloqueado. No modificar.
+// CURRENT STATUS: Cableado en learning-pipeline.service.ts como pipeline bloqueado. No modificar.
 // MIGRATION NOTE: F8 usa f9-error para logging. Todo el pipeline se desbloquea junto.
 
 import type { SafetyGuardrail, PolicyCondition } from "./f8-types";

@@ -1,18 +1,11 @@
 // ⚠️ Geo Engine — legacy geographic reasoning engine.
 // DEPRECATED: Location resolution lives in location-resolver.ts.
-// Kept for backward compat with executionEngine pipeline.
+// Legacy — route/proximity logic only.
 // Only route/proximity logic should survive long-term.
 
 // ── Types ──
 
-export type NodeType = "AIRPORT" | "HOTEL_ZONE" | "CITY_ZONE" | "BORDER" | "LANDMARK";
-
-export interface Zone {
-  id: string;
-  label: string;
-}
-
-export interface Subzone {
+interface Subzone {
   name: string;
   weight: number;
   confidence: number;
@@ -26,13 +19,13 @@ export interface ZoneResolution {
   destinationSubzone?: Subzone | null;
 }
 
-export interface RadialProbs {
+interface RadialProbs {
   core: number;
   boundary: number;
   transition: number;
 }
 
-export interface ExpandedZone {
+interface ExpandedZone {
   zone: string;
   label?: string;
   probs: RadialProbs;
@@ -44,7 +37,7 @@ export interface ZoneExpansionResult {
   destination: ExpandedZone | null;
 }
 
-export interface ProximityFactors {
+interface ProximityFactors {
   distance: number;
   roadAccess: number;
   aduanaPenalty: number;
@@ -56,7 +49,7 @@ export interface ProximityScore {
   factors: ProximityFactors;
 }
 
-export interface GeoRoute {
+interface GeoRoute {
   originNode: string;
   destinationNode: string;
   originZone: string | null;
@@ -67,19 +60,8 @@ export interface GeoRoute {
   destinationSubzone?: Subzone | null;
 }
 
-// ── Zone definitions (legacy IDs — superseded by places.operational_zone) ──
-
-export const ZONES: Record<string, Zone> = {
-  Z_AIRPORT: { id: "Z_AIRPORT", label: "Zona Aeropuerto" },
-  Z_CITY_CORE: { id: "Z_CITY_CORE", label: "Centro / Casco Urbano" },
-  Z_HOTEL_ZONE: { id: "Z_HOTEL_ZONE", label: "Zona Hotelera" },
-  Z_BORDER: { id: "Z_BORDER", label: "Frontera / Aduana" },
-  Z_LANDMARK: { id: "Z_LANDMARK", label: "Atracción Turística" },
-  Z_EXTERIOR: { id: "Z_EXTERIOR", label: "Fuera de Área" },
-};
-
 // ⚠️ SUBZONE_MAP — legacy subzone definitions, superseded by places/aliases
-export const SUBZONE_MAP: Record<string, Subzone> = {
+const SUBZONE_MAP: Record<string, Subzone> = {
   amerian: { name: "Amerian", weight: 1.0, confidence: 0.95 },
   meliá: { name: "Meliá", weight: 0.9, confidence: 0.9 },
   melia: { name: "Meliá", weight: 0.9, confidence: 0.9 },
@@ -222,7 +204,7 @@ function computeProximity(a: string | null, b: string | null): number {
 
 // ── Public API (backward compat) ──
 
-export function resolveZones(slots: Record<string, any>): ZoneResolution {
+function resolveZones(slots: Record<string, any>): ZoneResolution {
   const originRaw = slots?.origin ?? null;
   const destinationRaw = slots?.destination ?? null;
   const originZone = mapNodeToZone(originRaw);
@@ -233,46 +215,25 @@ export function resolveZones(slots: Record<string, any>): ZoneResolution {
   return { originZone, destinationZone, distanceClass, originSubzone, destinationSubzone };
 }
 
-export function computeProximityScore(
-  origin: ExpandedZone | null,
-  destination: ExpandedZone | null,
-): ProximityScore {
-  const originZone = origin?.zone ?? null;
-  const destinationZone = destination?.zone ?? null;
-  const score = computeProximity(originZone, destinationZone);
-  const aduanaPenalty = (originZone === "Z_BORDER" || destinationZone === "Z_BORDER") ? ADUANA_PENALTY : 0;
-  const pairKey = originZone && destinationZone ? `${originZone}→${destinationZone}` : "";
-  const corridorAlignment = CORRIDOR_PAIRS.has(pairKey) ? CORRIDOR_BONUS : 0;
-  let roadAccess = 0.6;
-  if (originZone === "Z_AIRPORT" || destinationZone === "Z_AIRPORT") roadAccess = 0.8;
-  else if (originZone === "Z_BORDER" || destinationZone === "Z_BORDER") roadAccess = 0.4;
-  return {
-    score,
-    factors: { distance: score, roadAccess, aduanaPenalty, corridorAlignment },
-  };
-}
+// ── Trip leg classification ──
 
-export function expandZone(zoneId: string | null, subzone?: Subzone | null): ExpandedZone | null {
-  if (!zoneId) return null;
-  const profiles: Record<string, RadialProbs> = {
-    Z_AIRPORT: { core: 1.0, boundary: 0.6, transition: 0.3 },
-    Z_CITY_CORE: { core: 1.0, boundary: 0.7, transition: 0.4 },
-    Z_HOTEL_ZONE: { core: 1.0, boundary: 0.65, transition: 0.35 },
-    Z_BORDER: { core: 1.0, boundary: 0.5, transition: 0.2 },
-    Z_LANDMARK: { core: 1.0, boundary: 0.55, transition: 0.25 },
-    Z_EXTERIOR: { core: 1.0, boundary: 0.5, transition: 0.2 },
-  };
-  return { zone: zoneId, probs: profiles[zoneId] ?? { core: 1.0, boundary: 0.5, transition: 0.3 }, subzone: subzone ?? null };
-}
+export type TripLegType = "airport_to_hotel" | "hotel_to_airport" | "airport_to_airport" | "hotel_to_hotel" | "other";
 
-export function expandZones(
-  originZone: string | null, destinationZone: string | null,
-  originSubzone?: Subzone | null, destinationSubzone?: Subzone | null,
-): ZoneExpansionResult {
-  return {
-    origin: expandZone(originZone, originSubzone),
-    destination: expandZone(destinationZone, destinationSubzone),
-  };
+export function classifyTripLeg(origin: string, destination: string): { type: TripLegType; hotelZone: boolean } {
+  const AIRPORT_RE = /aeropuerto|iguazú|iguacu|airport|aeroparque/i;
+  const HOTEL_RE = /hotel|centro/i;
+  const originLower = origin.toLowerCase();
+  const destLower = destination.toLowerCase();
+  const oAir = AIRPORT_RE.test(originLower);
+  const dAir = AIRPORT_RE.test(destLower);
+  const oHotel = HOTEL_RE.test(originLower);
+  const dHotel = HOTEL_RE.test(destLower);
+  const type: TripLegType = oAir && dHotel ? "airport_to_hotel"
+    : oHotel && dAir ? "hotel_to_airport"
+    : oAir && dAir ? "airport_to_airport"
+    : oHotel && dHotel ? "hotel_to_hotel"
+    : "other";
+  return { type, hotelZone: HOTEL_RE.test(originLower) || HOTEL_RE.test(destLower) };
 }
 
 // ── Unified entry point (Fase 9.1) ──

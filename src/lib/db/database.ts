@@ -1550,6 +1550,8 @@ interface TariffWithPrice extends TariffRow {
   price: number;
 }
 
+// DEPRECATED: bypasses tariff-resolver domain boundary
+// TODO: migrate all callers to tariff-resolver.resolveTariff()
 export async function findTariff(origin: string, destination: string, passengers: number): Promise<TariffWithPrice | null> {
   const o = origin.toLowerCase().trim();
   const d = destination.toLowerCase().trim();
