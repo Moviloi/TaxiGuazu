@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resolveTariff, resolveTariffByPlaceIds } from "../src/lib/services/tariff-resolver";
 
-vi.mock("../src/lib/db/database", () => {
-  const mockDb = {
-    execute: vi.fn(),
-  };
-  return { getDbInstance: () => mockDb };
-});
+const mockDb = { execute: vi.fn() };
+
+vi.mock("../src/lib/db/core/connection", () => ({
+  getDbv: () => mockDb,
+  ensureSchema: vi.fn(),
+}));
 
 vi.mock("../src/lib/services/location-resolver", () => ({
   resolveLocation: vi.fn(),
@@ -14,9 +14,6 @@ vi.mock("../src/lib/services/location-resolver", () => ({
 }));
 
 const { resolveLocation } = await import("../src/lib/services/location-resolver");
-
-const { getDbInstance } = await import("../src/lib/db/database");
-const mockDb = getDbInstance() as any;
 
 function mockResolveLocation(result: Partial<ReturnType<typeof resolveLocation extends (...args: any[]) => infer R ? R : never>>) {
   (resolveLocation as any).mockResolvedValue(result);

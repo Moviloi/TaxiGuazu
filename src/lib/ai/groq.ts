@@ -29,11 +29,11 @@ function detectLang(text: string): "es" | "en" | "pt" {
   return "es";
 }
 
-// v5.0 FASE 5B OUTPUT LOCK:
+// OUTPUT LOCK:
 // generateGroqExtraction es el ÚNICO call al LLM permitido. Se usa solo para
 // extracción de slots (rol CORE). Cualquier uso fuera de eso es bypass.
 //
-// v5.0 FASE 5B.4: acepta `extractionContext` (roleLock + slotStability +
+// acepta \`extractionContext\` (roleLock + slotStability +
 // prevSlots) de CORE para que el LLM no contradiga decisiones sintácticas.
 // El contexto se inyecta como system message adicional, después del prompt
 // base y antes del system de idioma/nombre. Así el LLM ve primero las
@@ -57,7 +57,7 @@ export async function generateGroqExtraction(
     { role: "system", content: getExtractionPrompt() },
   ];
 
-  // v5.0 FASE 5B.4: inyectar contexto de CORE (role lock + prev slots) como
+  // inyectar contexto de CORE (role lock + prev slots) como
   // system message adicional. El LLM debe respetarlo, no contradecirlo.
   const coreContext = getExtractionContextMessage(extractionContext);
   if (coreContext) {

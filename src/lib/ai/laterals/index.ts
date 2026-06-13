@@ -1,4 +1,4 @@
-// FASE 6.2: Entry point del sistema lateral.
+// Entry point del sistema lateral.
 // applyLaterals recibe un CoreDecision y retorna CoreLateral.
 // Solo 5 intents tienen lateral; el resto retorna EMPTY_LATERAL.
 

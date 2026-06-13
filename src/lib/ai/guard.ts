@@ -1,5 +1,5 @@
 // GUARD — Hard enforcement del flujo CORE → ROUTER → POLICY → OUTPUT.
-// v5.0 FASE 5B: cualquier intento de emitir output fuera de POLICY se BLOQUEA.
+// cualquier intento de emitir output fuera de POLICY se BLOQUEA.
 //
 // Reglas:
 // - handleMessage() setea el state (CORE, FinalDecision, PolicyOutput).
@@ -47,13 +47,13 @@ export function assertCoreRouterPolicy(): true | BlockResult {
       reason: "CORE_ROUTER_REQUIRED",
       context: `core=${!!coreState} router=${!!finalState} policy=${!!policyState}`,
     };
-    console.log("[LEGACY BLOCKED]", block);
+    console.log("[BLOCKED]", block);
     return block;
   }
   return true;
 }
 
-// v5.0 FASE 5B: hard guardrail para outputs no-POLICY.
+// hard guardrail para outputs no-POLICY.
 // Lanza OUTPUT_VIOLATION. Uso: assertOutputSource(policy.outputSource).
 export function assertOutputSource(source: OutputSource | string): true {
   if (source !== "POLICY") {
@@ -66,7 +66,7 @@ export function assertOutputSource(source: OutputSource | string): true {
   return true;
 }
 
-// v5.0 FASE 5B: assert runtime que el pipeline CORE+ROUTER+POLICY está armado.
+// assert runtime que el pipeline CORE+ROUTER+POLICY está armado.
 // Uso: assertPipelineComplete(decision.core, decision, policy).
 export function assertPipelineComplete(
   core: CoreDecision | null | undefined,
@@ -79,7 +79,7 @@ export function assertPipelineComplete(
       reason: "PIPELINE_INCOMPLETE",
       context: `core=${!!core} router=${!!decision} policy=${!!policy}`,
     };
-    console.log("[LEGACY BLOCKED]", block);
+    console.log("[BLOCKED]", block);
     return block;
   }
   return true;

@@ -1,10 +1,26 @@
 // Context Memory Engine — stateful conversation continuity.
-// Fase 5: maintains partial trip state (slots + intent + zone + confidence + timestamps)
+// maintains partial trip state (slots + intent + zone + confidence + timestamps)
 // across turns, enabling multi-turn natural conversation.
 
 import { getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
 import { type ZoneResolution, type ZoneExpansionResult, type ProximityScore } from "@/lib/services/geoEngine";
-import { type FareResult } from "@/lib/services/fareEngine";
+
+type FareCategory = "LOW" | "MEDIUM" | "MEDIUM+" | "HIGH" | "VARIABLE";
+
+interface FareAdjustments {
+  subzoneModifier: number;
+  corridorBonus: number;
+  borderPenalty: number;
+  proximityModifier: number;
+}
+
+interface FareResult {
+  category: FareCategory;
+  basePrice: number;
+  finalPrice: number;
+  adjustments: FareAdjustments;
+  confidence: number;
+}
 
 export interface ConversationContext {
   origin?: string;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { checkTimeouts } from "@/lib/utils/timeouts";
+import { checkTimeouts } from "@/lib/services/housekeeping/timeouts";
 
-// TODO FASE 7: proteger este endpoint con un cron secret / shared secret header
+// TODO: proteger este endpoint con un cron secret / shared secret header
 // y remover el checkTimeouts() del webhook principal (R27, R29).
 export async function GET() {
   try {

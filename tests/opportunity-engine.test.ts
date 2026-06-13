@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/lib/db/database", () => {
-  const mockExecute = vi.fn();
-  return {
-    getDbInstance: () => ({ execute: mockExecute }),
-    getActiveComplementRules: vi.fn(async () => []),
-    insertOpportunityLog: vi.fn(async () => 1),
-  };
-});
+const mockExecute = vi.fn();
+const mockDb = { execute: mockExecute };
+
+vi.mock("../src/lib/db/core/connection", () => ({
+  getDbv: () => mockDb,
+  ensureSchema: vi.fn(),
+}));
+
+vi.mock("../src/lib/db/database", () => ({
+  getActiveComplementRules: vi.fn(async () => []),
+  insertOpportunityLog: vi.fn(async () => 1),
+}));
 
 import {
   isOpportunityQuery,
@@ -15,9 +19,6 @@ import {
   formatOpportunityResponse,
   type OpportunityInput,
 } from "../src/lib/services/opportunity-engine";
-import { getDbInstance } from "../src/lib/db/database";
-
-const mockDb = getDbInstance() as any;
 
 const basePricing = {
   final_price: 12000,

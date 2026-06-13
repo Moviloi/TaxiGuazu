@@ -47,15 +47,50 @@ src/
 │   └── env.ts                   # Validación Zod de env vars
 └── lib/
     ├── ai/                      # Groq + extracción de datos
+    │   ├── core.ts              #   Detección de intent + role lock
+    │   ├── router.ts            #   Enrutamiento a policy según modo
+    │   ├── handler.ts           #   Pipeline CORE → ROUTER → POLICY
+    │   ├── guard.ts             #   Safety guardrails (assert output source)
+    │   └── policy-reserva.ts    #   Policy RESERVA (respuesta sin LLM)
     ├── db/                      # SQLite/Turso (database.ts + types.ts)
-    ├── services/                # Lógica de negocio
+    ├── services/                # Lógica de negocio por dominio
+    │   ├── lead.service.ts      #   Detección: orquestación entrada (único punto)
+    │   ├── contextMemory.ts     #   Persistencia de estado de sesión
+    │   ├── confidence.ts        #   Cálculo de confianza de extracción
+    │   ├── geoEngine.ts         #   Resolución geográfica (zonas, expansión)
+    │   ├── pricing/             #   Motor de precios (facade + resolución tarifas)
+    │   ├── dispatch/            #   Asignación multi-nivel a choferes
+    │   ├── trip-execution/      #   Ejecución de viajes (confirmación, llegada, post-servicio)
+    │   └── learning/            #   Pipeline de aprendizaje (oportunidades, policy, adaptación)
     ├── utils/                   # Timeouts, dispatch workflow
     └── whatsapp/                # Cliente WhatsApp Cloud API
 ```
 
-## Webhook
+## Flujo de mensaje
 
-Meta envía los mensajes entrantes a `POST /api/whatsapp/webhook`. La verificación del webhook se maneja en `GET /api/whatsapp/webhook` usando `WHATSAPP_VERIFY_TOKEN`.
+```
+WhatsApp Webhook
+     │
+     ▼
+Conversation Core (lib/services/lead.service.ts)
+  • Recepción del mensaje
+  • Idempotencia (message_id único)
+  • Detección de grupo (driver) vs individual (cliente)
+     │
+     ▼
+AI Pipeline (lib/ai/)
+  • CORE: detección de intent + role lock + slot stability
+  • ROUTER: selección de modo de respuesta
+  • POLICY: generación de respuesta sin LLM (basada en reglas)
+     │
+     ▼
+Execution Domains (lib/services/)
+  • pricing/     → Cálculo de precio + resolución de tarifas
+  • dispatch/    → Asignación a choferes (nivel_1 → nivel_2 → broadcast)
+  • trip-execution/ → Confirmación, llegada, post-servicio
+  • learning/    → Oportunidades, policy engine, adaptación
+  • persistence  → DB (SQLite/Turso via database.ts)
+```
 
 ## Dispatch
 

@@ -8,9 +8,8 @@ import {
   getAvailableDrivers,
   getClientPreferredDriver,
   getActiveTripsByClient,
-  getPackagePrice,
+  getPackagePrices,
   incrementOfferReceived,
-  getDbInstance,
   getPrincipalDriver,
   getPrincipal2Driver,
   getDriverByPhone,
@@ -22,12 +21,15 @@ import {
   deleteConnectionKey,
   updateTripState,
   findTariff,
+  getTariffById,
 } from "@/lib/db/database";
-import type { DriverRow, TripRow } from "@/lib/db/types";
+import { getDbv } from "@/lib/db/core/connection";
+import { getConnectionCache } from "@/lib/db/domains/learning";
+import type { DriverRow, PackagePriceRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
 import { notifyAdmin } from "@/lib/services/admin.service";
-import { advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver, closeWorkflow } from "@/lib/utils/conversation-workflow";
+import { advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver, closeWorkflow } from "@/lib/services/workflow/conversation-workflow";
 
 export type DispatchLevel = "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver";
 
@@ -173,11 +175,8 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
       return;
     }
 
-    const dualValue = await getDbInstance().execute({
-      sql: "SELECT value FROM connection_cache WHERE key = ?",
-      args: [`contingency_dual_${input.conversationId}`],
-    });
-    const dualRow = dualValue.rows[0] as any;
+    const dualValue = await getConnectionCache(`contingency_dual_${input.conversationId}`);
+    const dualRow = dualValue ? { value: dualValue } : null;
     if (dualRow) {
       const dual = JSON.parse(dualRow.value);
       if (trip) await updateTripState(trip.trip_id, "cancelado");
@@ -244,16 +243,20 @@ export async function broadcastTripToDrivers(
 
   if (drivers.length === 0) {
     try {
-      const all = await getDbInstance().execute(`SELECT d.phone, d.name, d.status, d.tier, d.country,
-        c.phone as conv_phone, c.last_message_at,
-        CASE WHEN c.phone IS NULL THEN 'no_join'
-             WHEN c.last_message_at IS NULL THEN 'no_msg'
-             WHEN c.last_message_at <= ${Math.floor(Date.now() / 1000) - 86400} THEN 'expired'
-             ELSE 'ok' END as conv_status
-        FROM drivers d
-        LEFT JOIN conversations c ON c.phone = d.phone
-        WHERE d.status = 'active'`);
-      console.log("[BROADCAST_DEBUG] No drivers found via getAvailableDrivers. All active drivers:", JSON.stringify(all.rows));
+      const cutoff = Math.floor(Date.now() / 1000) - 86400;
+      await getDbv().execute({
+        sql: `SELECT d.phone, d.name, d.status, d.tier, d.country,
+          c.phone as conv_phone, c.last_message_at,
+          CASE WHEN c.phone IS NULL THEN 'no_join'
+               WHEN c.last_message_at IS NULL THEN 'no_msg'
+               WHEN c.last_message_at <= ? THEN 'expired'
+               ELSE 'ok' END as conv_status
+          FROM drivers d
+          LEFT JOIN conversations c ON c.phone = d.phone
+          WHERE d.status = 'active'`,
+        args: [cutoff],
+      });
+      console.log("[BROADCAST_DEBUG] No active drivers found via getAvailableDrivers");
     } catch (e) { console.error("[BROADCAST_DEBUG] error:", e); }
 
     await notifyAdmin(`🚕 *VIAJE SIN CHOFER DISPONIBLE*
@@ -279,14 +282,20 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
   let pisoLow: number | null = null;
   if (trip.tariff_id) {
     try {
-      const t = await getDbInstance().execute({ sql: "SELECT base_price_4p, base_price_6p FROM tariffs WHERE id = ?", args: [trip.tariff_id] });
-      const row = t.rows[0] as any;
+      const row = await getTariffById(trip.tariff_id);
       if (row) {
         const passengersNum = trip.passengers || 0;
         const bp = passengersNum > 4 ? (row.base_price_6p ?? null) : (row.base_price_4p ?? null);
         pisoLow = bp ? Math.round(bp * 0.8) : null;
       }
     } catch (e) { console.error("[broadcastTripToDrivers] load base_price error:", e); }
+  }
+
+  // Batch-fetch package prices for drivers that need them
+  let packagePriceMap = new Map<string, PackagePriceRow>();
+  if (packageType) {
+    const pkgPhones = drivers.filter((d) => d.min_payout).map((d) => d.phone);
+    packagePriceMap = await getPackagePrices(pkgPhones, packageType);
   }
 
   let eligible: Array<DriverRow & { adjustment_pct: number; actual_payout: number }> = [];
@@ -296,7 +305,7 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
     const actualPayout = effectivePayout;
 
     if (packageType && d.min_payout) {
-      const pkg = await getPackagePrice(d.phone, packageType);
+      const pkg = packagePriceMap.get(d.phone);
       if (pkg && pkg.min_payout < floor) floor = pkg.min_payout;
     }
 
@@ -376,8 +385,9 @@ Ningún chofer activo en este turno. Reenviá manualmente.`);
     return (b.acceptance_score || 0) - (a.acceptance_score || 0);
   });
 
-  const icon = urgencyIcon(urgency || "");
-  const label = urgencyLabel(urgency || "");
+  const uLower = (urgency || "").toLowerCase();
+  const icon = uLower.includes("reserva") || uLower.includes("semana") || uLower.includes("proximo") || uLower.includes("lunes") || uLower.includes("martes") ? "📅" : "🚕";
+  const label = uLower.includes("reserva") ? "RESERVA" : uLower.includes("consulta") ? "CONSULTA" : "VIAJE DISPONIBLE";
   const shiftInfo = shiftClass ? `\n${shiftLabel(shiftClass)}` : "";
   const pkgInfo = packageLabel ? `\n${packageLabel}` : "";
   const schInfo = scheduledLabel(trip);
@@ -391,7 +401,7 @@ Valor garantizado: $${driver.actual_payout.toLocaleString("es-AR")}${passengers 
     return sendInteractiveButtons(driver.phone, body, [
       { id: `aceptar_${convId}`, title: "✅ Aceptar" },
     ]).then(() => incrementOfferReceived(driver.phone))
-      .catch((e) => console.error(`[BROADCAST] Failed to send to ${driver.phone}:`, e));
+      .catch((e) => console.error(`[BROADCAST] Failed to send to driver:`, e));
   }));
 
   const tierCounts = { low: 0, normal: 0, premium: 0 };
@@ -420,19 +430,6 @@ function detectCountry(origin: string): string {
   return "AR";
 }
 
-function urgencyIcon(urgency: string): string {
-  const u = urgency.toLowerCase();
-  if (u.includes("reserva") || u.includes("semana") || u.includes("proximo") || u.includes("lunes") || u.includes("martes")) return "📅";
-  return "🚕";
-}
-
-function urgencyLabel(urgency: string): string {
-  const u = urgency.toLowerCase();
-  if (u.includes("reserva")) return "RESERVA";
-  if (u.includes("consulta")) return "CONSULTA";
-  return "VIAJE DISPONIBLE";
-}
-
 function tripShiftClass(urgency: string): "day" | "night" | null {
   const u = urgency.toLowerCase();
   if (u.includes("consulta") || u.includes("reserva")) return null;
@@ -453,15 +450,11 @@ function scheduledLabel(trip: any): string {
   return `\n📅 ${dateStr} ${timeStr}`;
 }
 
-function tierFactor(tier: string): number {
-  if (tier === "low") return LOW_PISO_FACTOR;
-  return 1.0;
-}
-
 function driverFloor(driver: DriverRow, tripPiso: number, pisoLow?: number | null, adjPct?: number): number {
   const useLow = driver.tier === "low" && pisoLow != null;
   const base = useLow ? pisoLow! : tripPiso;
-  let floor = Math.round(base * tierFactor(driver.tier || "normal"));
+  const factor = driver.tier === "low" ? LOW_PISO_FACTOR : 1.0;
+  let floor = Math.round(base * factor);
   if (adjPct && adjPct > 0) {
     floor = Math.round(floor * (1 - adjPct / 100));
   }

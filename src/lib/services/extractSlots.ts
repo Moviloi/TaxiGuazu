@@ -1,5 +1,5 @@
 // Slot Extraction Pipeline — three-layer hybrid extractor.
-// v5.0 FASE 5B: order of operations:
+// order of operations:
 //   1. regexExtractor  (deterministic, no LLM)
 //   2. entityExtractor (known location lookup)
 //   3. LLM fallback    (generateGroqExtraction, only if 1+2 produce nothing)

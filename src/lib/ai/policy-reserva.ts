@@ -1,8 +1,8 @@
 // POLICY RESERVA — flujos multi-step, STATEFUL, confirmación obligatoria en EXECUTE.
-// v5.0 FASE 5B: policy es la ÚNICA fuente de finalResponse. Sin LLM.
+// policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic nueva, inferencia geográfica, generación libre.
 //
-// v5.0 FASE 5B.1 (patch): se eliminó la heurística "centro = origin" que
+// (patch): se eliminó la heurística "centro = origin" que
 // invertía slots. La policy ya NO asigna automáticamente "centro" a origin.
 // Cualquier ambigüedad → CLARIFY explícito. La detección de hoteles/landmarks
 // ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
@@ -19,7 +19,7 @@ function isAmbiguous(value: string | number | null | undefined): boolean {
   return AMBIGUOUS_LOCATION_RE.test(v) || AMBIGUOUS_HOTEL_LANDMARKS_RE.test(v);
 }
 
-// v5.0 FASE 5B.1: safeSlotResolution NO infiere ni reordena. Solo respeta lo
+// safeSlotResolution NO infiere ni reordena. Solo respeta lo
 // que el extractor (LLM o regex) ya asignó a cada slot.
 function safeSlotResolution(extraction: ExtractionContext | undefined): {
   origin: string | null;
@@ -43,7 +43,7 @@ function safeSlotResolution(extraction: ExtractionContext | undefined): {
   return { origin, destination, ambiguityFlags };
 }
 
-// v5.0 FASE 5B.1: formatHotelLandmarkLabel agrega "Hotel " como prefijo
+// formatHotelLandmarkLabel agrega "Hotel " como prefijo
 // cosmético cuando el usuario mencionó un nombre de hotel suelto (ej. "amerian"
 // → "Hotel Amerian"). Si el value ya contiene "centro", no agrega "en el centro"
 // al final (sería redundante). NO infiere dirección ni ubicación: solo label.
@@ -154,7 +154,7 @@ function buildReservaFinalResponse(
   }
 
   if (extraction) {
-    // v5.0 FASE 5B.2: SAFE RESPONSE FALLBACK.
+    // SAFE RESPONSE FALLBACK.
     // Si el role lock fijó origin y destination (ambos roles estables) y NO
     // hay scheduled_at → acknowledge lo que ya tenemos y pedir refinamiento
     // (hora + dirección si destination es ambiguo). NO resetear, NO pedir todo
@@ -315,7 +315,7 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
   }
 
   if (field === "origin") {
-    // v5.0 FASE 5B.1: NO preguntar "desde qué lugar del centro" hardcodeado.
+    // NO preguntar "desde qué lugar del centro" hardcodeado.
     // El policy respeta lo que el extractor ya asignó. Si origin es ambiguo,
     // pregunta genéricamente sin asumir "centro" como referencia.
     if (slots.origin?.reason === "ambiguous_term" || (originValue && isAmbiguous(originValue))) {
@@ -350,7 +350,7 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
 
 
 
-// v5.0 FASE 5B.2: SAFE RESPONSE FALLBACK.
+// SAFE RESPONSE FALLBACK.
 // Retorna el acknowledge ("Perfecto, tengo origen en X y destino hacia Y...")
 // si se cumplen las condiciones:
 //   1. roleLock fija ambos roles (origin y destination), aunque los valores
@@ -391,7 +391,7 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): stri
   return `Perfecto. Tengo origen en ${originStr} y destino hacia ${destStr}. ¿A qué hora necesitás el traslado${askAddress}?`;
 }
 
-// v5.0 FASE 5B.2: prepend artículo definido cuando el value es un sustantivo
+// prepend artículo definido cuando el value es un sustantivo
 // común sin artículo ("aeropuerto" → "el aeropuerto", "centro" → "el centro").
 // No agrega nada si el value ya tiene artículo o es un nombre propio.
 function withDefiniteArticle(value: string, lang: Lang): string {

@@ -7,7 +7,7 @@
 // - NO completa datos faltantes.
 // - Si no hay facts extraídos → intent = "AMBIGUOUS".
 //
-// v5.0 FASE 5B.2 (slot stability + role lock):
+// slot stability + role lock:
 // CORE detecta la estructura sintáctica del input ("estoy en X", "ir a Y",
 // "desde X", "origen X y destino Y") y produce roleLock + slotStability.
 // Esto es stateful semánticamente: una vez que un slot tiene rol fijo, no se reinterpreta.
@@ -30,7 +30,7 @@ const DATE_RE = /\b(hoy|ma[ñn]ana|pasado\s*ma[ñn]ana|esta\s*semana|pr[oó]xim[
 const TIME_RE = /\b(?:a\s*las?\s*)?(\d{1,2}:\d{2}|\d{1,2}\s*(?:hs|horas|h))\b/i;
 const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo)\b/i;
 
-// FASE 6.1: 9 nuevos intents — patrones específicos
+// 9 nuevos intents — patrones específicos
 const GREETING_RE = /\b(hola|buenas|buen[oa]s?\s*(d[ií]as|tardes|noches)|qu[eé] tal|c[oó]mo est[áa]s|saludos|hey)\b/i;
 const INFORMATIONAL_RE = /\b(horarios|funcionan|atienden|cu[aá]ndo\s+(abren|cierran)|d[óo]nde\s+(est[áa]n|queda[n]?)|tienen\s+(servicio|traslado|viaje)|c[óo]mo\s+(funciona|trabajan|llegar|ir))\b/i;
 const COMMERCIAL_RE = /\b(cu[aá]nto\s+(cuesta|sale|vale|est[áa])|precio|tarifa|cotizaci[óo]n|presupuesto|a\s*cuanto|valor)\b/i;
@@ -44,7 +44,7 @@ const EMERGENCY_RE = /\b(emergencia|ayuda\b|me\s+pas[óo]\s+algo|no\s+(llega|apa
 // Términos de ubicación que el CORE NO extrae como hechos (son ambiguos para el CORE).
 // Definidos en patterns.ts — fuente única.
 
-// v5.0 FASE 5B.2: patrones de estructura sintáctica para detectar role lock.
+// patrones de estructura sintáctica para detectar role lock.
 // El CORE no infiere semánticamente: solo respeta la sintaxis del input.
 // El grupo capturado se detiene en conectores o verbos que indican otro slot.
 // IMPORTANTE: en español "al" y "del" son palabras (contracciones) — no
@@ -157,7 +157,7 @@ export function core(input: string): CoreDecision {
     facts.push("affirmation:true");
   }
 
-  // FASE 6.1: 9 nuevos intents — extraer facts específicos
+  // 9 nuevos intents — extraer facts específicos
   const g = trimmed.match(GREETING_RE);
   if (g) facts.push(`greeting:${g[1].toLowerCase()}`);
 
@@ -185,7 +185,7 @@ export function core(input: string): CoreDecision {
   const em = trimmed.match(EMERGENCY_RE);
   if (em) facts.push(`emergency:${em[1].toLowerCase()}`);
 
-  // v5.0 FASE 5B.2: detectar estructura sintáctica para role lock.
+  // detectar estructura sintáctica para role lock.
   const { roleLock, slotStability } = detectStructure(trimmed);
   if (roleLock.origin) facts.push(`origin:${roleLock.origin}`);
   if (roleLock.destination) facts.push(`destination:${roleLock.destination}`);
@@ -213,7 +213,7 @@ function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Inte
   const has = (prefix: string) => facts.some((f) => f.startsWith(prefix));
   const hasLocationAmbiguous = has("location_ambiguous:");
 
-  // FASE 6.1: prioridad estricta de 1 (más alta) a 10 (más baja).
+  // prioridad estricta de 1 (más alta) a 10 (más baja).
 
   // 1. Lateral intents (emergencia, reprogramación, post-servicio)
   if (has("emergency:")) return "EMERGENCY";

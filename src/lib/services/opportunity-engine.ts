@@ -1,20 +1,11 @@
 // ARCHITECTURE NOTE: Oportunity domain. Congelado durante Conversation Core MVP.
 // Flujo independiente gestionado por lead.service.ts. No pasa por pipeline ni policies.
-import { getDbInstance } from "@/lib/db/database";
 import type { ProviderAdjustmentRow, PromotionRow, PackageRow, OpportunityContext, Opportunity, OpportunityRuleRow } from "@/lib/db/types";
 import type { PricingResult } from "./pricing-engine";
+import { queryOne } from "@/lib/db/core/helpers";
 import { getActiveComplementRules, insertOpportunityLog } from "@/lib/db/database";
-import { getEntityWeight } from "@/lib/services/f6-learning";
+import { getEntityWeight } from "@/lib/services/learning/learning-utils";
 import { resolveEntityFromCatalog } from "@/lib/config/entity-catalog";
-
-function getDb() {
-  return getDbInstance();
-}
-
-async function queryOne<T>(sql: string, args?: any[]): Promise<T | null> {
-  const rs = await getDb().execute({ sql, args: args ?? [] });
-  return (rs.rows[0] as T | undefined) ?? null;
-}
 
 // ── Legacy complement opportunities (post-confirmation cross-sell) ──
 
@@ -189,46 +180,62 @@ export async function evaluateOpportunities(input: OpportunityInput): Promise<Op
     });
   }
 
-  // 2. Provider adjustments not yet applied
-  if (p.tariff_id) {
-    const providerAdj = await queryOne<ProviderAdjustmentRow>(
-      `SELECT * FROM provider_adjustments
-       WHERE tariff_id = ? AND active = 1
+  // 2-4. Parallel queries for provider adjustments, promotions, and packages
+  const [providerAdj, promo, pkg] = await Promise.all([
+    p.tariff_id
+      ? queryOne<ProviderAdjustmentRow>(
+          `SELECT * FROM provider_adjustments
+           WHERE tariff_id = ? AND active = 1
+             AND (valid_from IS NULL OR valid_from <= ?)
+             AND (valid_until IS NULL OR valid_until >= ?)
+           ORDER BY adjustment_value DESC LIMIT 1`,
+          [p.tariff_id, now, now]
+        )
+      : Promise.resolve(null),
+    queryOne<PromotionRow>(
+      `SELECT * FROM promotions
+       WHERE source = 'promotion' AND active = 1
          AND (valid_from IS NULL OR valid_from <= ?)
          AND (valid_until IS NULL OR valid_until >= ?)
-       ORDER BY adjustment_value DESC LIMIT 1`,
-      [p.tariff_id, now, now]
-    );
-    if (providerAdj && !p.adjustments.some(a => a.type === "provider_adjustment")) {
-      const savings = Math.round(p.final_price * providerAdj.adjustment_value / 100);
-      opportunities.push({
-        type: "provider_adjustment",
-        label: `Ajuste del proveedor: ${providerAdj.adjustment_value}%`,
-        description: null,
-        savings,
-        already_applied: false,
-        valid_until: providerAdj.valid_until,
-      });
-    }
+         AND (max_uses IS NULL OR current_uses < max_uses)
+         AND (min_passengers IS NULL OR ? >= min_passengers)
+         AND (max_passengers IS NULL OR ? <= max_passengers)
+         AND (
+           (origin_place_id IS NULL OR origin_place_id = ?)
+           AND (destination_place_id IS NULL OR destination_place_id = ?)
+         )
+       ORDER BY adjustment_pct DESC LIMIT 1`,
+      [now, now, input.tripContext.passengers, input.tripContext.passengers,
+       p.origin.place_id, p.destination.place_id]
+    ),
+    queryOne<PackageRow>(
+      `SELECT * FROM packages
+       WHERE active = 1
+         AND (valid_from IS NULL OR valid_from <= ?)
+         AND (valid_until IS NULL OR valid_until >= ?)
+         AND (
+           (origin_place_id IS NULL OR origin_place_id = ?)
+           AND (destination_place_id IS NULL OR destination_place_id = ?)
+         )
+       ORDER BY price ASC LIMIT 1`,
+      [now, now, p.origin.place_id, p.destination.place_id]
+    ),
+  ]);
+
+  // 2. Provider adjustments not yet applied
+  if (providerAdj && !p.adjustments.some(a => a.type === "provider_adjustment")) {
+    const savings = Math.round(p.final_price * providerAdj.adjustment_value / 100);
+    opportunities.push({
+      type: "provider_adjustment",
+      label: `Ajuste del proveedor: ${providerAdj.adjustment_value}%`,
+      description: null,
+      savings,
+      already_applied: false,
+      valid_until: providerAdj.valid_until,
+    });
   }
 
   // 3. Promotions not yet applied
-  const promo = await queryOne<PromotionRow>(
-    `SELECT * FROM promotions
-     WHERE source = 'promotion' AND active = 1
-       AND (valid_from IS NULL OR valid_from <= ?)
-       AND (valid_until IS NULL OR valid_until >= ?)
-       AND (max_uses IS NULL OR current_uses < max_uses)
-       AND (min_passengers IS NULL OR ? >= min_passengers)
-       AND (max_passengers IS NULL OR ? <= max_passengers)
-       AND (
-         (origin_place_id IS NULL OR origin_place_id = ?)
-         AND (destination_place_id IS NULL OR destination_place_id = ?)
-       )
-     ORDER BY adjustment_pct DESC LIMIT 1`,
-    [now, now, input.tripContext.passengers, input.tripContext.passengers,
-     p.origin.place_id, p.destination.place_id]
-  );
   if (promo && !p.adjustments.some(a => a.type === "promotion")) {
     const savings = Math.round(p.final_price * promo.adjustment_pct / 100);
     opportunities.push({
@@ -242,18 +249,6 @@ export async function evaluateOpportunities(input: OpportunityInput): Promise<Op
   }
 
   // 4. Packages not yet applied
-  const pkg = await queryOne<PackageRow>(
-    `SELECT * FROM packages
-     WHERE active = 1
-       AND (valid_from IS NULL OR valid_from <= ?)
-       AND (valid_until IS NULL OR valid_until >= ?)
-       AND (
-         (origin_place_id IS NULL OR origin_place_id = ?)
-         AND (destination_place_id IS NULL OR destination_place_id = ?)
-       )
-     ORDER BY price ASC LIMIT 1`,
-    [now, now, p.origin.place_id, p.destination.place_id]
-  );
   if (pkg && pkg.price < p.final_price && !p.adjustments.some(a => a.type === "package")) {
     opportunities.push({
       type: "package",

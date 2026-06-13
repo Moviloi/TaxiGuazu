@@ -1,4 +1,4 @@
-import type { F4Signals } from "@/lib/services/comprehension";
+import type { ComprehensionSignals } from "@/lib/services/comprehension";
 import type { Memory, SessionMemory } from "@/lib/services/memory";
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllEntityKeys } from "@/lib/config/entity-catalog";
@@ -77,15 +77,15 @@ export function predictIntent(text: string, coreIntent: string, memory: Memory):
   return { predictedIntent: coreIntent, confidence: 0.50 };
 }
 
-export interface EnrichedF4Signals extends F4Signals {
+export interface EnrichedComprehensionSignals extends ComprehensionSignals {
   f5Boost: number;
 }
 
-export function enrichF4Signals(
-  signals: F4Signals,
+export function enrichComprehensionSignals(
+  signals: ComprehensionSignals,
   entityPrediction: EntityPrediction,
   intentPrediction: IntentPrediction,
-): EnrichedF4Signals {
+): EnrichedComprehensionSignals {
   let intentBoost = 0;
   let entityBoost = 0;
 
@@ -101,7 +101,7 @@ export function enrichF4Signals(
       : 0;
   }
 
-  const f5Boost = clamp01(intentBoost * 0.30 + entityBoost * 0.25);
+  const predictionBoost = clamp01(intentBoost * 0.30 + entityBoost * 0.25);
 
   return {
     intentConfidence: clamp01(signals.intentConfidence + intentBoost),
@@ -109,7 +109,7 @@ export function enrichF4Signals(
     slotCompleteness: clamp01(signals.slotCompleteness),
     extractionConfidence: clamp01(signals.extractionConfidence),
     conversationStability: clamp01(signals.conversationStability),
-    f5Boost,
+    f5Boost: predictionBoost,
   };
 }
 

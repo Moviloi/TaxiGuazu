@@ -1,5 +1,5 @@
 // Regex Extractor — deterministic slot extraction without LLM.
-// v5.0 FASE 5B: runs before entityExtractor and LLM fallback.
+// runs before entityExtractor and LLM fallback.
 // Patterns detect explicit origin/destination markers only.
 // No inference, no defaults, no geocoding.
 

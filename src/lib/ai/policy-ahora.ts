@@ -1,5 +1,5 @@
 // POLICY AHORA — ejecución inmediata, sin estado, mínima inferencia.
-// v5.0 FASE 5B: policy es la ÚNICA fuente de finalResponse. Sin LLM.
+// policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic, inferencia geográfica, generación libre.
 
 import { inferMissingFieldFromCore, buildGreeting } from "./response-builder";

@@ -99,7 +99,7 @@ export async function evaluateWorkflowTransition(
   // Validate transition
   const allowed = VALID_SLOT_TRANSITIONS[currentState];
   if (allowed && !allowed.includes(newState)) {
-    console.warn(`[SLOT_STATE] Invalid transition: ${currentState} → ${newState} (phone ${phone})`);
+    console.warn(`[SLOT_STATE] Invalid transition: ${currentState} → ${newState}`);
     newState = currentState;
   }
 

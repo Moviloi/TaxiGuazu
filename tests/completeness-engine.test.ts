@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evaluateCompleteness } from "../src/lib/services/completenessEngine";
+import { evaluateCompleteness } from "../src/lib/services/workflow/evaluate-completeness";
 
 describe("completenessEngine", () => {
   it("ASK_ORIGIN when origin is null", () => {

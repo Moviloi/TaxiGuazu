@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildF4Signals,
+  buildComprehensionSignals,
   computeComprehensionScore,
-  getF4State,
-  getF4RecoveryMessage,
+  getComprehensionState,
+  getRecoveryMessage,
 } from "@/lib/services/comprehension";
 import type { ChatSessionRow } from "@/lib/db/types";
-import type { F4State } from "@/lib/services/comprehension";
+import type { ComprehensionState } from "@/lib/services/comprehension";
 
 function session(overrides?: Partial<ChatSessionRow>): ChatSessionRow {
   return {
@@ -31,10 +31,10 @@ function session(overrides?: Partial<ChatSessionRow>): ChatSessionRow {
 }
 
 describe("F4 — Comprehension Engine", () => {
-  describe("buildF4Signals", () => {
+  describe("buildComprehensionSignals", () => {
     it("BOOKING intent with known entity → high intent + entity confidence", () => {
       const s = session({ slots: JSON.stringify({ origin: "Hotel Rafain", destination: "Aeropuerto" }) });
-      const signals = buildF4Signals({
+      const signals = buildComprehensionSignals({
         text: "quiero ir al rafain cena show",
         coreIntent: "BOOKING",
         slotStability: { origin: "open", destination: "open" },
@@ -46,7 +46,7 @@ describe("F4 — Comprehension Engine", () => {
 
     it("AMBIGUOUS intent with no entity → low intent + low entity", () => {
       const s = session({ slots: null });
-      const signals = buildF4Signals({
+      const signals = buildComprehensionSignals({
         text: "hola",
         coreIntent: "AMBIGUOUS",
         slotStability: { origin: "open", destination: "open" },
@@ -58,31 +58,31 @@ describe("F4 — Comprehension Engine", () => {
 
     it("no slots → low slotCompleteness", () => {
       const s = session({ slots: null });
-      const signals = buildF4Signals({ text: "hola", coreIntent: "GREETING", slotStability: { origin: "open", destination: "open" }, session: s });
+      const signals = buildComprehensionSignals({ text: "hola", coreIntent: "GREETING", slotStability: { origin: "open", destination: "open" }, session: s });
       expect(signals.slotCompleteness).toBe(0.2);
     });
 
     it("both slots filled → slotCompleteness 1.0", () => {
       const s = session({ slots: JSON.stringify({ origin: "A", destination: "B" }) });
-      const signals = buildF4Signals({ text: "viaje", coreIntent: "BOOKING", slotStability: { origin: "open", destination: "open" }, session: s });
+      const signals = buildComprehensionSignals({ text: "viaje", coreIntent: "BOOKING", slotStability: { origin: "open", destination: "open" }, session: s });
       expect(signals.slotCompleteness).toBe(1.0);
     });
 
     it("partial slots → slotCompleteness 0.6", () => {
       const s = session({ slots: JSON.stringify({ origin: "A" }) });
-      const signals = buildF4Signals({ text: "viaje", coreIntent: "BOOKING", slotStability: { origin: "open", destination: "open" }, session: s });
+      const signals = buildComprehensionSignals({ text: "viaje", coreIntent: "BOOKING", slotStability: { origin: "open", destination: "open" }, session: s });
       expect(signals.slotCompleteness).toBe(0.6);
     });
 
     it("conversationStability: all locked → 1.0", () => {
-      const signals = buildF4Signals({
+      const signals = buildComprehensionSignals({
         text: "viaje", coreIntent: "BOOKING", slotStability: { origin: "locked", destination: "locked" }, session: session({ slots: "{}" }),
       });
       expect(signals.conversationStability).toBe(1.0);
     });
 
     it("conversationStability: open slots → lower stability", () => {
-      const signals = buildF4Signals({
+      const signals = buildComprehensionSignals({
         text: "viaje", coreIntent: "BOOKING", slotStability: { origin: "open", destination: "open" }, session: session({ slots: "{}" }),
       });
       expect(signals.conversationStability).toBe(0.5);
@@ -112,8 +112,8 @@ describe("F4 — Comprehension Engine", () => {
     });
   });
 
-  describe("getF4State", () => {
-    const cases: [number, F4State][] = [
+  describe("getComprehensionState", () => {
+    const cases: [number, ComprehensionState][] = [
       [0.95, "FULL_CONTROL"],
       [0.85, "FULL_CONTROL"],
       [0.84, "CLARIFICATION"],
@@ -126,41 +126,41 @@ describe("F4 — Comprehension Engine", () => {
       [0.00, "ESCALATION"],
     ];
     it.each(cases)("score %f → %s", (score, expected) => {
-      expect(getF4State(score)).toBe(expected);
+      expect(getComprehensionState(score)).toBe(expected);
     });
   });
 
-  describe("getF4RecoveryMessage", () => {
+  describe("getRecoveryMessage", () => {
     it("CLARIFICATION with missing origin → asks origin", () => {
       const s = session({ slots: JSON.stringify({ destination: "X" }) });
-      const msg = getF4RecoveryMessage("CLARIFICATION", s);
+      const msg = getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
       expect(msg.toLowerCase()).toContain("salís");
     });
 
     it("CLARIFICATION with missing destination → asks destination", () => {
       const s = session({ slots: JSON.stringify({ origin: "X" }) });
-      const msg = getF4RecoveryMessage("CLARIFICATION", s);
+      const msg = getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
       expect(msg.toLowerCase()).toContain("ir");
     });
 
     it("CLARIFICATION with no slots → generic", () => {
       const s = session({ slots: null });
-      const msg = getF4RecoveryMessage("CLARIFICATION", s);
+      const msg = getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
     });
 
     it("RECOVERY → generic confirmation message", () => {
       const s = session({ slots: JSON.stringify({ origin: "A", destination: "B" }) });
-      const msg = getF4RecoveryMessage("RECOVERY", s);
+      const msg = getRecoveryMessage("RECOVERY", s);
       expect(msg).toBeTruthy();
       expect(msg.toLowerCase()).toContain("confirmar");
     });
 
     it("ESCALATION → still returns RECOVERY message (fallback)", () => {
       const s = session();
-      const msg = getF4RecoveryMessage("ESCALATION", s);
+      const msg = getRecoveryMessage("ESCALATION", s);
       expect(msg).toBeTruthy();
     });
   });
@@ -168,35 +168,35 @@ describe("F4 — Comprehension Engine", () => {
   describe("F4 — Integration scenarios", () => {
     it("FULL_CONTROL: BOOKING + rafain entity + both slots + high extraction confidence", () => {
       const s = session({ slots: JSON.stringify({ origin: "Hotel Rafain", destination: "Aeropuerto Iguazú" }), confidence: JSON.stringify({ origin: 0.9, destination: 0.8 }) });
-      const signals = buildF4Signals({ text: "necesito ir a rafain", coreIntent: "BOOKING", slotStability: { origin: "locked", destination: "locked" }, session: s });
+      const signals = buildComprehensionSignals({ text: "necesito ir a rafain", coreIntent: "BOOKING", slotStability: { origin: "locked", destination: "locked" }, session: s });
       const score = computeComprehensionScore(signals);
-      expect(getF4State(score)).toBe("FULL_CONTROL");
+      expect(getComprehensionState(score)).toBe("FULL_CONTROL");
     });
 
     it("CLARIFICATION: PRE_BOOKING + rafain entity + one slot filled", () => {
       const s = session({ slots: JSON.stringify({ origin: "Hotel Rafain" }) });
-      const signals = buildF4Signals({ text: "rafain", coreIntent: "PRE_BOOKING", slotStability: { origin: "locked", destination: "open" }, session: s });
+      const signals = buildComprehensionSignals({ text: "rafain", coreIntent: "PRE_BOOKING", slotStability: { origin: "locked", destination: "open" }, session: s });
       const score = computeComprehensionScore(signals);
-      expect(getF4State(score)).toBe("CLARIFICATION");
+      expect(getComprehensionState(score)).toBe("CLARIFICATION");
     });
 
     it("RECOVERY: AMBIGUOUS + no entity + no slots", () => {
       const s = session({ slots: null });
-      const signals = buildF4Signals({ text: "hola", coreIntent: "GREETING", slotStability: { origin: "open", destination: "open" }, session: s });
+      const signals = buildComprehensionSignals({ text: "hola", coreIntent: "GREETING", slotStability: { origin: "open", destination: "open" }, session: s });
       const score = computeComprehensionScore(signals);
-      expect(getF4State(score)).toBe("RECOVERY");
+      expect(getComprehensionState(score)).toBe("RECOVERY");
     });
 
     it("ESCALATION: AMBIGUOUS + no entity + no slots + unstable", () => {
       const s = session({ slots: null });
-      const signals = buildF4Signals({ text: "no sé", coreIntent: "AMBIGUOUS", slotStability: { origin: "ambiguous", destination: "open" }, session: s });
+      const signals = buildComprehensionSignals({ text: "no sé", coreIntent: "AMBIGUOUS", slotStability: { origin: "ambiguous", destination: "open" }, session: s });
       const score = computeComprehensionScore(signals);
-      expect(getF4State(score)).toBe("ESCALATION");
+      expect(getComprehensionState(score)).toBe("ESCALATION");
     });
 
     it("CLARIFICATION when missing slots → message mentions missing field", () => {
       const s = session({ slots: JSON.stringify({ origin: "Hotel" }) });
-      const msg = getF4RecoveryMessage("CLARIFICATION", s);
+      const msg = getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
       expect(msg).toContain("ir");
     });

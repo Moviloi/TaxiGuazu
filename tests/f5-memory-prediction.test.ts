@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildMemory, buildShortTermBuffer, buildSessionMemory, getEntityBias, extractEntities } from "@/lib/services/memory";
-import { predictEntity, predictIntent, enrichF4Signals, buildPredictedContext, computeMemoryBoost } from "@/lib/services/predictive-routing";
-import type { F4Signals } from "@/lib/services/comprehension";
+import { predictEntity, predictIntent, enrichComprehensionSignals, buildPredictedContext, computeMemoryBoost } from "@/lib/services/predictive-routing";
+import type { ComprehensionSignals } from "@/lib/services/comprehension";
 
 const emptyMsg = (i: number) => ({ id: i, conversation_id: 1, role: "user" as const, content: "", created_at: 1000 + i });
 
@@ -129,32 +129,32 @@ describe("F5 — Predictive Routing", () => {
     });
   });
 
-  describe("enrichF4Signals", () => {
-    const base: F4Signals = { intentConfidence: 0.6, entityConfidence: 0.3, slotCompleteness: 0.2, extractionConfidence: 0.5, conversationStability: 0.7 };
+  describe("enrichComprehensionSignals", () => {
+    const base: ComprehensionSignals = { intentConfidence: 0.6, entityConfidence: 0.3, slotCompleteness: 0.2, extractionConfidence: 0.5, conversationStability: 0.7 };
 
     it("boosts intent + entity when predictions have high confidence", () => {
-      const enriched = enrichF4Signals(base, { candidates: ["rafain"], confidence: 0.85 }, { predictedIntent: "BOOKING", confidence: 0.82 });
+      const enriched = enrichComprehensionSignals(base, { candidates: ["rafain"], confidence: 0.85 }, { predictedIntent: "BOOKING", confidence: 0.82 });
       expect(enriched.intentConfidence).toBeGreaterThan(0.6);
       expect(enriched.entityConfidence).toBeGreaterThan(0.3);
       expect(enriched.f5Boost).toBeGreaterThan(0);
     });
 
     it("no boost when predictions have low confidence", () => {
-      const enriched = enrichF4Signals(base, { candidates: [], confidence: 0 }, { predictedIntent: "GREETING", confidence: 0.3 });
+      const enriched = enrichComprehensionSignals(base, { candidates: [], confidence: 0 }, { predictedIntent: "GREETING", confidence: 0.3 });
       expect(enriched.intentConfidence).toBe(0.6);
       expect(enriched.entityConfidence).toBe(0.3);
       expect(enriched.f5Boost).toBe(0);
     });
 
     it("caps boosted values at 1.0", () => {
-      const high: F4Signals = { intentConfidence: 0.95, entityConfidence: 0.95, slotCompleteness: 1.0, extractionConfidence: 1.0, conversationStability: 1.0 };
-      const enriched = enrichF4Signals(high, { candidates: ["rafain"], confidence: 0.9 }, { predictedIntent: "BOOKING", confidence: 0.9 });
+      const high: ComprehensionSignals = { intentConfidence: 0.95, entityConfidence: 0.95, slotCompleteness: 1.0, extractionConfidence: 1.0, conversationStability: 1.0 };
+      const enriched = enrichComprehensionSignals(high, { candidates: ["rafain"], confidence: 0.9 }, { predictedIntent: "BOOKING", confidence: 0.9 });
       expect(enriched.intentConfidence).toBeLessThanOrEqual(1.0);
       expect(enriched.entityConfidence).toBeLessThanOrEqual(1.0);
     });
 
     it("preserves non-boosted signals unchanged", () => {
-      const enriched = enrichF4Signals(base, { candidates: [], confidence: 0 }, { predictedIntent: "AMBIGUOUS", confidence: 0.2 });
+      const enriched = enrichComprehensionSignals(base, { candidates: [], confidence: 0 }, { predictedIntent: "AMBIGUOUS", confidence: 0.2 });
       expect(enriched.slotCompleteness).toBe(0.2);
       expect(enriched.extractionConfidence).toBe(0.5);
       expect(enriched.conversationStability).toBe(0.7);

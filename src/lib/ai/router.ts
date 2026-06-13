@@ -3,11 +3,11 @@
 // NO llama a core() internamente — recibe CoreDecision como parámetro.
 // SOLO mapea CoreDecision → OutputType.
 //
-// v5.0 FASE 6.4: router es 100% executor.
+// router es 100% executor.
 //   - route() mapea PolicyAction → handler name (pure function)
 //   - router() recibe CoreDecision + Mode, retorna FinalDecision
 //
-// v5.0 FASE 11: Purged dead imports (policy, trace, telemetry).
+// Purged dead imports (policy, trace, telemetry).
 
 import type { CoreDecision, FinalDecision, Mode, OutputType } from "./types";
 

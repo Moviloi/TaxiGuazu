@@ -1,6 +1,6 @@
 import type { RoleLock, SlotStabilityMap } from "./types";
 
-// v5.0 FASE 5B.4: el prompt base se complementa con contexto dinámico sobre
+// el prompt base se complementa con contexto dinámico sobre
 // lo que CORE ya detectó. Si CORE fijó role lock para origin/destination, el
 // LLM NO debe contradecir (ni re-extraer ese rol). Si hay prev slots de turnos
 // anteriores, el LLM debe enfocarse solo en info NUEVA del mensaje actual.
@@ -45,13 +45,13 @@ Respuesta SOLO JSON, sin texto adicional.
 `.trim();
 }
 
-// v5.0 FASE 5B.4: genera un system message adicional con el contexto que CORE
+// genera un system message adicional con el contexto que CORE
 // ya detectó. El LLM usa esto como约束 (constraint) y NO contradice roles fijos.
 export function getExtractionContextMessage(ctx: ExtractionContext | undefined): string {
   if (!ctx) return "";
 
   const lines: string[] = [];
-  lines.push("CONTEXTO_CORE (FASE 5B.4):");
+  lines.push("CONTEXTO_CORE:");
 
   if (ctx.roleLock?.origin) {
     lines.push(`- ROLE_LOCK_ORIGIN: "${ctx.roleLock.origin}" (CORE detectó "estoy en"/"desde"). NO contradecir.`);

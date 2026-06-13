@@ -34,7 +34,7 @@ async function postToWhatsApp(payload: any): Promise<void> {
   } catch (error: any) {
     const detail = error?.response?.data || error.message;
     console.error(`[SEND ERROR]`, detail);
-    throw new Error(`WhatsApp send failed: ${JSON.stringify(detail)}`);
+    throw new Error("WhatsApp send failed");
   }
 }
 
@@ -45,7 +45,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
     type: "text",
     text: { body: text },
   };
-  console.log(`[SEND] → ${to}: ${text.substring(0, 50)}`);
+  console.log(`[SEND] → ******${to.slice(-4)}: ${text.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }
 
@@ -75,7 +75,7 @@ export async function sendInteractiveList(
       },
     },
   };
-  console.log(`[SEND LIST] → ${to}: ${bodyText.substring(0, 50)}`);
+  console.log(`[SEND LIST] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }
 
@@ -101,6 +101,6 @@ export async function sendInteractiveButtons(
       },
     },
   };
-  console.log(`[SEND BUTTONS] → ${to}: ${bodyText.substring(0, 50)}`);
+  console.log(`[SEND BUTTONS] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }

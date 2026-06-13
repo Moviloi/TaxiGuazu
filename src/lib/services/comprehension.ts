@@ -3,9 +3,9 @@ import type { RoleLock, SlotStabilityMap } from "@/lib/ai/types";
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 
-export type F4State = "FULL_CONTROL" | "CLARIFICATION" | "RECOVERY" | "ESCALATION";
+export type ComprehensionState = "FULL_CONTROL" | "CLARIFICATION" | "RECOVERY" | "ESCALATION";
 
-export interface F4Signals {
+export interface ComprehensionSignals {
   intentConfidence: number;
   entityConfidence: number;
   slotCompleteness: number;
@@ -13,10 +13,10 @@ export interface F4Signals {
   conversationStability: number;
 }
 
-export interface F4Result {
+export interface ComprehensionResult {
   score: number;
-  state: F4State;
-  signals: F4Signals;
+  state: ComprehensionState;
+  signals: ComprehensionSignals;
 }
 
 export interface EffectiveSlots {
@@ -93,13 +93,13 @@ function computeConversationStability(stabilityMap: SlotStabilityMap): number {
   return 0.7;
 }
 
-export function buildF4Signals(params: {
+export function buildComprehensionSignals(params: {
   text: string;
   coreIntent: string;
   slotStability: SlotStabilityMap;
   roleLock?: RoleLock;
   session: ChatSessionRow | null;
-}): F4Signals {
+}): ComprehensionSignals {
   const intentConfidence = clamp01(INTENT_CONFIDENCE_MAP[params.coreIntent] ?? 0.3);
   const entityConfidence = clamp01(scanEntities(params.text));
   const effective = buildEffectiveSlots(params.session, params.roleLock ?? { origin: null, destination: null });
@@ -110,7 +110,7 @@ export function buildF4Signals(params: {
   return { intentConfidence, entityConfidence, slotCompleteness, extractionConfidence, conversationStability };
 }
 
-export function computeComprehensionScore(signals: F4Signals): number {
+export function computeComprehensionScore(signals: ComprehensionSignals): number {
   return (
     signals.intentConfidence * 0.30 +
     signals.entityConfidence * 0.25 +
@@ -120,7 +120,7 @@ export function computeComprehensionScore(signals: F4Signals): number {
   );
 }
 
-export function getF4State(score: number, thresholdAdjustment = 0): F4State {
+export function getComprehensionState(score: number, thresholdAdjustment = 0): ComprehensionState {
   const escThreshold = 0.40 + thresholdAdjustment;
   if (score >= 0.85) return "FULL_CONTROL";
   if (score >= 0.65) return "CLARIFICATION";
@@ -128,7 +128,7 @@ export function getF4State(score: number, thresholdAdjustment = 0): F4State {
   return "ESCALATION";
 }
 
-export function getF4RecoveryMessage(state: F4State, session: ChatSessionRow | null): string {
+export function getRecoveryMessage(state: ComprehensionState, session: ChatSessionRow | null): string {
   if (state === "CLARIFICATION") {
     if (session?.slots) {
       try {

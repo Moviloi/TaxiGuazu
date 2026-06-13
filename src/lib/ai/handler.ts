@@ -1,5 +1,5 @@
 // HANDLER — entry point de la arquitectura CORE → ROUTER → POLICY → OUTPUT.
-// v5.0 FASE 5B: ÚNICO punto de salida. El finalResponse viene de POLICY.
+// ÚNICO punto de salida. El finalResponse viene de POLICY.
 // Prohibido: cualquier LLM que redacte el mensaje al usuario fuera de aquí.
 //
 // Logging obligatorio en cada request:

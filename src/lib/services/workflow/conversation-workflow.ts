@@ -11,8 +11,8 @@ import {
   getChatSession,
   getConversationById,
   setChatSessionWorkflowState,
-  getDbInstance,
 } from "@/lib/db/database";
+import { getDbv } from "@/lib/db/core/connection";
 
 export type WorkflowState =
   | "idle"
@@ -25,8 +25,8 @@ export type WorkflowState =
   | "waiting_driver"
   | "closed";
 
-// Source of truth: chat_sessions.workflow_state (Fase 3 v5.0)
-// La tabla `workflows` quedó sin callers activos y es candidata a DROP en Fase 6.
+// Source of truth: chat_sessions.workflow_state
+// La tabla `workflows` quedó sin callers activos y es candidata a DROP.
 const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   idle: ["collecting_slots", "awaiting_confirmation", "nivel_1", "waiting_driver"],
   collecting_slots: ["awaiting_confirmation", "nivel_1", "waiting_driver"],
@@ -58,7 +58,7 @@ async function transitionTo(phone: string, newState: WorkflowState): Promise<voi
   const current = (session?.workflow_state || "idle") as WorkflowState;
   const allowed = VALID_TRANSITIONS[current];
   if (allowed && !allowed.includes(newState)) {
-    console.warn(`[STATEMACHINE] Transición inválida: ${current} → ${newState} (phone ${phone})`);
+    console.warn(`[STATEMACHINE] Transición inválida: ${current} → ${newState}`);
   }
   await setChatSessionWorkflowState(phone, newState);
 }
@@ -107,7 +107,7 @@ export async function isWorkflowActive(convId: number): Promise<boolean> {
 
 export async function getExpiredByState(state: WorkflowState, timeoutMs: number): Promise<WorkflowContext[]> {
   const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const db = getDbInstance();
+  const db = getDbv();
   const rs = await db.execute({
     sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
           FROM chat_sessions cs
@@ -124,7 +124,7 @@ export async function getExpiredByState(state: WorkflowState, timeoutMs: number)
 
 export async function getStaleWorkflows(timeoutMs: number): Promise<WorkflowContext[]> {
   const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const db = getDbInstance();
+  const db = getDbv();
   const rs = await db.execute({
     sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
           FROM chat_sessions cs
@@ -140,7 +140,7 @@ export async function getStaleWorkflows(timeoutMs: number): Promise<WorkflowCont
 }
 
 export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
-  const db = getDbInstance();
+  const db = getDbv();
   const rs = await db.execute({
     sql: `UPDATE chat_sessions
           SET workflow_state = 'closed', updated_at = unixepoch()
@@ -148,6 +148,6 @@ export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
     args: [phone],
   });
   const ok = rs.rowsAffected > 0;
-  console.log(`[ASSIGN] phone=${phone} rowsAffected=${rs.rowsAffected} ok=${ok}`);
+  console.log(`[ASSIGN] rowsAffected=${rs.rowsAffected} ok=${ok}`);
   return ok;
 }

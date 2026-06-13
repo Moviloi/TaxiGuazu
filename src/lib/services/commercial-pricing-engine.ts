@@ -4,17 +4,8 @@
 // domain is fully unblocked for refactor.
 // Future: integrate commercial rules into a unified pricing service.
 
-import { getDbInstance } from "@/lib/db/database";
 import type { PromotionRow, PackageRow, ProviderAdjustmentRow } from "@/lib/db/types";
-
-function getDb() {
-  return getDbInstance();
-}
-
-async function queryOne<T>(sql: string, args?: any[]): Promise<T | null> {
-  const rs = await getDb().execute({ sql, args: args ?? [] });
-  return (rs.rows[0] as T | undefined) ?? null;
-}
+import { queryOne } from "@/lib/db/core/helpers";
 
 // ── Types ──
 

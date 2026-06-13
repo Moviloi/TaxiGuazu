@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Faltan phone o text" }, { status: 400 });
     }
 
-    console.log(`[SIMULATE] ← ${phone}: ${text}`);
+    console.log(`[SIMULATE] event=message_received phone=******${phone.slice(-4)} len=${text.length}`);
     await handleLeadMessage(phone, text);
 
     return NextResponse.json({ ok: true });

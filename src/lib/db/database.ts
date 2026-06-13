@@ -1,14 +1,7 @@
-import { createClient, type InValue } from "@libsql/client";
-import path from "path";
-import fs from "fs";
-import { DB_PATH } from "@/config/constants";
 import type {
-  ConnectionStateRow,
   ConversationRow,
   MessageRow,
   TripRow,
-  TripPhase,
-  TripClosureReason,
   DriverRow,
   DriverStatus,
   DriverInvitationRow,
@@ -26,494 +19,10 @@ import type {
   OpportunityRuleRow,
 } from "./types";
 
-type LibSqlClient = ReturnType<typeof createClient>;
-
-export type DbExecutor = {
-  execute(stmt: { sql: string; args?: InValue[] }): Promise<{ lastInsertRowid?: number | bigint; rowsAffected?: number }>;
-};
-
-async function query<T>(sql: string, args?: InValue[]): Promise<T[]> {
-  await ensureSchema();
-  const rs = await getDbv().execute({ sql, args: args ?? [] });
-  return rs.rows as unknown as T[];
-}
-
-async function queryOne<T>(sql: string, args?: InValue[]): Promise<T | null> {
-  const rows = await query<T>(sql, args);
-  return rows[0] ?? null;
-}
-
-let dbClient: LibSqlClient | null = null;
-let schemaReady: Promise<void> | null = null;
-
-function getUrl(): string {
-  const tursoUrl = process.env.TURSO_DATABASE_URL;
-  if (tursoUrl) return tursoUrl;
-  const fallback = process.env.VERCEL ? "/tmp/bot.db" : DB_PATH;
-  const dir = path.dirname(fallback);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return `file:${fallback}`;
-}
-
-function getDbv(): LibSqlClient {
-  if (dbClient) return dbClient;
-
-  dbClient = createClient({
-    url: getUrl(),
-    authToken: process.env.TURSO_DATABASE_TOKEN,
-  });
-
-  schemaReady = initSchema();
-  
-  return dbClient;
-}
-
-async function ensureSchema(): Promise<void> {
-  if (!schemaReady) {
-    getDbv();
-    schemaReady = initSchema();
-  }
-  await schemaReady;
-}
-
-async function initSchema(): Promise<void> {
-  const db = getDbv();
-  await db.batch([
-    `CREATE TABLE IF NOT EXISTS connection_state (
-      key TEXT PRIMARY KEY,
-      value TEXT,
-      updated_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS conversations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      phone TEXT UNIQUE NOT NULL,
-      name TEXT,
-      mode TEXT CHECK(mode IN ('AI','HUMAN')) NOT NULL DEFAULT 'AI',
-      taken_by_human INTEGER DEFAULT 0,
-      human_operator_phone TEXT,
-      trip_id TEXT,
-      trip_status TEXT DEFAULT 'consulta',
-      last_message_at INTEGER,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id INTEGER NOT NULL REFERENCES conversations(id),
-      role TEXT CHECK(role IN ('user','assistant','human')) NOT NULL,
-      content TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at)`,
-    `CREATE TABLE IF NOT EXISTS trips (
-      trip_id TEXT PRIMARY KEY,
-      client_phone TEXT NOT NULL,
-      origin TEXT,
-      destination TEXT,
-      status TEXT DEFAULT 'consulta',
-      price_base REAL,
-      passengers INTEGER,
-      discount_explicit INTEGER DEFAULT 0,
-      assigned_driver_phone TEXT,
-      created_at INTEGER DEFAULT (unixepoch()),
-      updated_at INTEGER DEFAULT (unixepoch()),
-      confirmed_at INTEGER,
-      contact_shared_at INTEGER,
-      cancelled_at INTEGER,
-      cancelled_by TEXT
-    )`,
-    `CREATE TABLE IF NOT EXISTS drivers (
-      driver_id TEXT PRIMARY KEY,
-      name TEXT,
-      phone TEXT UNIQUE NOT NULL,
-      is_principal INTEGER DEFAULT 0,
-      group_id TEXT,
-      active INTEGER DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS driver_codes (
-      code TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      phone TEXT UNIQUE,
-      created_by TEXT,
-      created_at INTEGER DEFAULT (unixepoch()),
-      registered_at INTEGER
-    )`,
-    `CREATE TABLE IF NOT EXISTS client_preferred_drivers (
-      client_phone TEXT PRIMARY KEY,
-      preferred_driver_phone TEXT NOT NULL,
-      backup_driver_phone TEXT,
-      created_at INTEGER DEFAULT (unixepoch()),
-      updated_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS package_prices (
-      driver_phone TEXT NOT NULL,
-      package_type TEXT NOT NULL CHECK(package_type IN ('in_out','three_leg')),
-      min_payout REAL NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      PRIMARY KEY (driver_phone, package_type)
-    )`,
-    `CREATE TABLE IF NOT EXISTS reservation_slots (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 0 AND 6),
-      start_time TEXT NOT NULL,
-      end_time TEXT NOT NULL,
-      label TEXT,
-      max_bookings INTEGER DEFAULT 1,
-      active INTEGER DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS tariffs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      origin TEXT NOT NULL,
-      destination TEXT NOT NULL,
-      modality TEXT,
-      crosses_border INTEGER DEFAULT 0,
-      wait_included INTEGER DEFAULT 0,
-      price_4p REAL NOT NULL,
-      price_6p REAL NOT NULL,
-      base_price_4p REAL,
-      base_price_6p REAL,
-      origin_place_id TEXT,
-      destination_place_id TEXT,
-      origin_zone_id TEXT,
-      destination_zone_id TEXT,
-      active INTEGER DEFAULT 1
-    )`,
-    `CREATE TABLE IF NOT EXISTS driver_discounts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      driver_phone TEXT NOT NULL,
-      tariff_id INTEGER NOT NULL,
-      discount_pct INTEGER NOT NULL CHECK(discount_pct > 0 AND discount_pct <= 100),
-      valid_until INTEGER,
-      active INTEGER DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS leads (
-      conv_id INTEGER PRIMARY KEY,
-      client_phone TEXT NOT NULL,
-      origin TEXT,
-      destination TEXT NOT NULL,
-      price REAL,
-      passengers INTEGER,
-      taken_by TEXT,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS driver_invitations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      code TEXT UNIQUE NOT NULL,
-      phone TEXT,
-      created_by TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      expires_at INTEGER,
-      used_at INTEGER,
-      driver_id TEXT,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','expired','revoked'))
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_driver_invitations_status ON driver_invitations(status, created_at)`,
-    `CREATE TABLE IF NOT EXISTS location_aliases (
-      alias TEXT PRIMARY KEY,
-      canonical_name TEXT NOT NULL,
-      location_code TEXT,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS places (
-      place_id TEXT PRIMARY KEY,
-      canonical_name TEXT NOT NULL,
-      official_name TEXT NOT NULL,
-      google_maps_name TEXT NOT NULL,
-      place_type TEXT NOT NULL CHECK(place_type IN ('airport','bus_terminal','border_crossing','attraction','shopping','hotel','resort','hostel','restaurant','casino','event_center','tourist_area','port','other')),
-      city TEXT NOT NULL CHECK(city IN ('Puerto Iguazú','Foz do Iguaçu','Ciudad del Este')),
-      country TEXT NOT NULL CHECK(country IN ('Argentina','Brasil','Paraguay')),
-      latitude REAL,
-      longitude REAL,
-      tourist_relevance_score INTEGER NOT NULL DEFAULT 5,
-      operational_zone TEXT,
-      active_status TEXT NOT NULL DEFAULT 'active' CHECK(active_status IN ('active','inactive'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS aliases (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      place_id TEXT NOT NULL,
-      alias TEXT NOT NULL,
-      language TEXT NOT NULL CHECK(language IN ('es','en','pt'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS promotions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      source TEXT NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      adjustment_pct REAL NOT NULL,
-      origin_place_id TEXT,
-      destination_place_id TEXT,
-      origin_zone_id TEXT,
-      destination_zone_id TEXT,
-      min_passengers INTEGER,
-      max_passengers INTEGER,
-      valid_from INTEGER,
-      valid_until INTEGER,
-      active INTEGER DEFAULT 1,
-      max_uses INTEGER,
-      current_uses INTEGER DEFAULT 0,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS provider_adjustments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      provider_id TEXT NOT NULL,
-      tariff_id INTEGER NOT NULL,
-      adjustment_type TEXT NOT NULL CHECK(adjustment_type IN ('percent','fixed')),
-      adjustment_value REAL NOT NULL,
-      valid_from INTEGER,
-      valid_until INTEGER,
-      active INTEGER DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS packages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      package_type TEXT NOT NULL CHECK(package_type IN ('round_trip','three_leg','multi_stop')),
-      price REAL NOT NULL,
-      included_services TEXT,
-      origin_place_id TEXT,
-      destination_place_id TEXT,
-      origin_zone_id TEXT,
-      destination_zone_id TEXT,
-      valid_from INTEGER,
-      valid_until INTEGER,
-      active INTEGER DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS chat_sessions (
-      phone TEXT PRIMARY KEY,
-      slots TEXT,
-      confidence TEXT,
-      confirmed_fields TEXT,
-      source_message_ids TEXT,
-      extraction_count INTEGER DEFAULT 0,
-      last_extracted_at INTEGER,
-      workflow_state TEXT DEFAULT 'idle',
-      clarify_field TEXT,
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS processed_messages (
-      message_id TEXT PRIMARY KEY,
-      phone TEXT,
-      message_type TEXT,
-      processed_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      payload_hash TEXT
-    )`,
-    `CREATE TABLE IF NOT EXISTS opportunity_rules (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      opportunity_type TEXT NOT NULL,
-      label TEXT NOT NULL,
-      description TEXT,
-      active INTEGER DEFAULT 1,
-      priority INTEGER DEFAULT 0,
-      trigger_type TEXT NOT NULL DEFAULT 'post_confirmation',
-      tariff_id INTEGER,
-      config_json TEXT,
-      valid_from INTEGER,
-      valid_until INTEGER,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS opportunity_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id INTEGER NOT NULL,
-      client_phone TEXT NOT NULL,
-      trip_id TEXT NOT NULL,
-      rule_id INTEGER,
-      opportunity_type TEXT NOT NULL,
-      label TEXT NOT NULL,
-      original_price REAL NOT NULL,
-      offered_price REAL NOT NULL,
-      presented_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      client_response TEXT,
-      phase TEXT NOT NULL DEFAULT 'post_confirmation',
-      responded_at INTEGER
-    )`,
-    `CREATE TABLE IF NOT EXISTS conversation_f4_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      score REAL,
-      state TEXT,
-      timestamp INTEGER DEFAULT (unixepoch()),
-      reason TEXT
-    )`,
-    `CREATE TABLE IF NOT EXISTS conversation_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      event_type TEXT NOT NULL,
-      metadata TEXT,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS learning_weights (
-      key TEXT PRIMARY KEY,
-      value REAL NOT NULL DEFAULT 0,
-      updated_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS conversion_outcomes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      entity TEXT,
-      intent TEXT,
-      success_score REAL,
-      opportunity_type TEXT,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS system_metrics (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      revenue_total REAL DEFAULT 0,
-      conversion_rate REAL DEFAULT 0,
-      load_factor REAL DEFAULT 0,
-      escalation_rate REAL DEFAULT 0,
-      recorded_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS policies (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      priority INTEGER DEFAULT 0,
-      condition TEXT NOT NULL DEFAULT '[]',
-      action TEXT NOT NULL DEFAULT 'allow',
-      params TEXT DEFAULT '{}',
-      active INTEGER DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS policy_results (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      policy_id TEXT NOT NULL,
-      variant TEXT,
-      revenue REAL DEFAULT 0,
-      conversion INTEGER DEFAULT 0,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS simulations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      opportunity_id TEXT,
-      predicted_conversion REAL DEFAULT 0,
-      predicted_revenue REAL DEFAULT 0,
-      risk TEXT DEFAULT 'low',
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS f9_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      type TEXT NOT NULL,
-      entity TEXT,
-      intent TEXT,
-      predicted_value REAL,
-      actual_value REAL,
-      revenue REAL,
-      timestamp INTEGER DEFAULT (unixepoch()),
-      source TEXT NOT NULL DEFAULT 'HUMAN'
-    )`,
-    `CREATE TABLE IF NOT EXISTS f9_admin_commands (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      command_text TEXT NOT NULL,
-      parsed_action TEXT,
-      author TEXT,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS f9_drift_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      metric TEXT NOT NULL,
-      entity TEXT NOT NULL,
-      drift_value REAL NOT NULL DEFAULT 0,
-      severity TEXT NOT NULL DEFAULT 'low',
-      session_id TEXT,
-      policy_id TEXT,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS f9_error_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      component TEXT NOT NULL,
-      error TEXT NOT NULL,
-      stack TEXT,
-      created_at INTEGER NOT NULL
-    )`,
-    `CREATE TABLE IF NOT EXISTS housekeeping_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      job TEXT NOT NULL,
-      rows_deleted INTEGER DEFAULT 0,
-      duration_ms INTEGER DEFAULT 0,
-      ran_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS decision_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      selected_opportunity TEXT,
-      candidate_opportunities TEXT NOT NULL DEFAULT '[]',
-      utility_score REAL DEFAULT 0,
-      load_adjusted INTEGER DEFAULT 0,
-      policy_override INTEGER DEFAULT 0,
-      guardrails TEXT DEFAULT '[]',
-      policies TEXT DEFAULT '[]',
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(LOWER(origin), LOWER(destination))`,
-    `CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(LOWER(alias))`,
-    `CREATE INDEX IF NOT EXISTS idx_aliases_place ON aliases(place_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_decision_log_session ON decision_log(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_events_session ON f9_events(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_events_timestamp ON f9_events(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_drift_log_session ON f9_drift_log(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_drift_log_timestamp ON f9_drift_log(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_error_log_created ON f9_error_log(created_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_simulations_session ON simulations(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_simulations_timestamp ON simulations(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_policy_results_policy ON policy_results(policy_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_policy_results_timestamp ON policy_results(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(recorded_at)`,
-    `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
-  ]);
-}
-
-
-// ========== CONNECTION STATE ==========
-
-export async function getConnectionState(): Promise<{ status?: string; qr_string?: string; phone?: string; updated_at?: number } | null> {
-  const rows = await query<ConnectionStateRow>("SELECT key, value, updated_at FROM connection_state");
-  if (rows.length === 0) return null;
-  const state: Record<string, string | number | null> = {};
-  for (const row of rows) {
-    state[row.key] = row.value;
-    state.updated_at = row.updated_at;
-  }
-  return state;
-}
-
-export async function setConnectionState(key: string, value: string): Promise<void> {
-  const existing = await queryOne<ConnectionStateRow>("SELECT value FROM connection_state WHERE key = ?", [key]);
-  if (existing) {
-    await getDbv().execute({ sql: "UPDATE connection_state SET value = ?, updated_at = unixepoch() WHERE key = ?", args: [value, key] });
-  } else {
-    await getDbv().execute({ sql: "INSERT INTO connection_state (key, value) VALUES (?, ?)", args: [key, value] });
-  }
-}
-
-export async function setConnectionStateBatch(states: { status?: string; qr_string?: string | null; phone?: string | null }): Promise<void> {
-  await ensureSchema();
-  const stmts: { sql: string; args: any[] }[] = [];
-  if (states.status !== undefined) {
-    stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['status', states.status] });
-  }
-  if (states.qr_string !== undefined) {
-    if (states.qr_string === null) {
-      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'qr_string'", args: [] });
-    } else {
-      stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['qr_string', states.qr_string] });
-    }
-  }
-  if (states.phone !== undefined) {
-    if (states.phone === null) {
-      stmts.push({ sql: "DELETE FROM connection_state WHERE key = 'phone'", args: [] });
-    } else {
-      stmts.push({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: ['phone', states.phone] });
-    }
-  }
-  if (stmts.length > 0) {
-    await getDbv().batch(stmts);
-  }
-}
+import { getDbv, ensureSchema, type DbExecutor } from "./core/connection";
+import { query, queryOne, levenshtein } from "./core/helpers";
+import { validateReaderConsistency, reportTripPhaseNullCount } from "./domains/trips";
+import { getConnectionValue } from "./domains/connection-state";
 
 // ========== CONVERSATIONS ==========
 
@@ -609,263 +118,6 @@ export async function getRecentHistory(conversationId: number, limit = 20): Prom
 export async function clearConversationHistory(convId: number): Promise<void> {
   await ensureSchema();
   await getDbv().execute({ sql: "DELETE FROM messages WHERE conversation_id = ?", args: [convId] });
-}
-
-// ========== TRIPS ==========
-
-export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number, flightNumber?: string, status?: string): Promise<void> {
-  const tripStatus = status || "consulta";
-  await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, tripStatus, scheduledAt || null, flightNumber || null] });
-  await syncTripPhaseFromLegacyStatus(tripId, tripStatus);
-}
-
-export async function getTripById(tripId: string): Promise<TripRow | null> {
-  return queryOne<TripRow>("SELECT * FROM trips WHERE trip_id = ?", [tripId]);
-}
-
-export async function getActiveTripByPhone(clientPhone: string): Promise<TripRow | null> {
-  // Fase 5B.1: phase-based primary filter; status-based legacy + phase COUNT for cross-validation.
-  const trip = await queryOne<TripRow>(
-    "SELECT * FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL) ORDER BY created_at DESC LIMIT 1",
-    [clientPhone]
-  );
-  const legacyRs = await getDbv().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
-    args: [clientPhone],
-  });
-  const phaseRs = await getDbv().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL)",
-    args: [clientPhone],
-  });
-  await validateReaderConsistency(
-    "getActiveTripByPhone",
-    Number((legacyRs.rows[0] as any)?.cnt ?? 0),
-    Number((phaseRs.rows[0] as any)?.cnt ?? 0),
-    ["DRAFT", "QUOTED", "CONFIRMED", "ASSIGNED", "IN_PROGRESS"]
-  );
-  await reportTripPhaseNullCount("getActiveTripByPhone");
-  if (trip) checkTripPhaseDivergence(trip, "getActiveTripByPhone");
-  return trip;
-}
-
-export async function getTripByAssignedDriver(driverPhone: string): Promise<TripRow | null> {
-  const trip = await queryOne<TripRow>("SELECT * FROM trips WHERE assigned_driver_phone = ? AND status = 'asignado_chofer' ORDER BY created_at DESC LIMIT 1", [driverPhone]);
-  if (trip) checkTripPhaseDivergence(trip, "getTripByAssignedDriver");
-  return trip;
-}
-
-export async function updateTripState(tripId: string, newState: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "UPDATE trips SET status = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [newState, tripId] });
-  await syncTripPhaseFromLegacyStatus(tripId, newState);
-}
-
-export async function updateTripDiscountExplicit(tripId: string, discountPercent: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "UPDATE trips SET discount_explicit = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [discountPercent, tripId] });
-}
-
-export async function assignDriverToTrip(tripId: string, driverPhone: string): Promise<{ commission: number; payout: number } | null> {
-  await ensureSchema();
-  const trip = await getTripById(tripId);
-  if (!trip) return null;
-
-  const price = trip.price_base || 0;
-  let payout = trip.garantizado_base ?? Math.round(price * 0.85);
-
-  // Apply driver's voluntary promotional discount (driver opted to earn less)
-  if (trip.tariff_id) {
-    const discountPct = await getDriverDiscountForTariff(driverPhone, trip.tariff_id);
-    if (discountPct && discountPct > 0) {
-      payout = Math.round(payout * (1 - discountPct / 100));
-    }
-  }
-
-  const commission = price - payout;
-
-  await getDbv().execute({
-    sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', commission_amount = ?, driver_payout = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [driverPhone, commission, payout, tripId],
-  });
-  await syncTripPhaseFromLegacyStatus(tripId, "asignado_chofer");
-  return { commission, payout };
-}
-
-export async function completeTrip(tripId: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET status = 'completado', confirmed_at = unixepoch(), updated_at = unixepoch() WHERE trip_id = ?",
-    args: [tripId],
-  });
-  await syncTripPhaseFromLegacyStatus(tripId, "completado");
-}
-
-// ========== TRIP MODEL V3 (Fase 4A + 4B) ==========
-// Fase 4A: setTripPhase, closeTrip, getTripByIdWithDiagnostics, getTripPhase.
-// Fase 4B: syncTripPhaseFromLegacyStatus es la UNICA autoridad de sincronización
-//          status → trip_phase. Todo writer DEBE pasar por él.
-// setTripPhase/closeTrip NO usan el mapping (escriben phase directamente) — no duplican.
-
-const LEGACY_STATUS_TO_PHASE: Record<string, { phase: TripPhase; reason?: TripClosureReason }> = {
-  consulta: { phase: "QUOTED" },
-  PENDING_DRIVER: { phase: "QUOTED" },
-  asignado_chofer: { phase: "ASSIGNED" },
-  reconfirmado_24hs: { phase: "ASSIGNED" },
-  completado: { phase: "CLOSED", reason: "completed" },
-  cancelado: { phase: "CLOSED", reason: "cancelled" },
-};
-
-const divergenceLogged = new Set<string>();
-const phaseSyncLogged = new Set<string>();
-const phaseUnknownStatusLogged = new Set<string>();
-
-function checkTripPhaseDivergence(trip: TripRow, source: string): void {
-  if (!trip.trip_phase) return;
-  const expected = LEGACY_STATUS_TO_PHASE[trip.status || ""];
-  if (expected && expected.phase !== trip.trip_phase && !divergenceLogged.has(trip.trip_id)) {
-    divergenceLogged.add(trip.trip_id);
-    console.warn("[diagnostic] trip_phase_divergence", JSON.stringify({
-      trip_id: trip.trip_id,
-      legacy_status: trip.status,
-      trip_phase: trip.trip_phase,
-      source,
-    }));
-  }
-}
-
-function checkDivergenceForTrips(trips: TripRow[], source: string): void {
-  for (const trip of trips) {
-    checkTripPhaseDivergence(trip, source);
-  }
-}
-
-export async function syncTripPhaseFromLegacyStatus(tripId: string, status: string | null): Promise<void> {
-  if (!status) return;
-
-  const mapping = LEGACY_STATUS_TO_PHASE[status];
-  if (!mapping) {
-    const key = `${tripId}:${status}`;
-    if (!phaseUnknownStatusLogged.has(key)) {
-      phaseUnknownStatusLogged.add(key);
-      console.warn("[metric] trip_phase_unknown_status", JSON.stringify({
-        trip_id: tripId,
-        status,
-      }));
-    }
-    return;
-  }
-
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT trip_phase, closure_reason FROM trips WHERE trip_id = ?",
-    args: [tripId],
-  });
-  const row = rs.rows[0] as any;
-  if (!row) return;
-
-  const currentPhase = row.trip_phase as TripPhase | null;
-  const expectedReason = mapping.reason || null;
-
-  // Divergence: trip_phase ya seteado y distinto del esperado por status
-  if (currentPhase && currentPhase !== mapping.phase && !divergenceLogged.has(tripId)) {
-    divergenceLogged.add(tripId);
-    console.warn("[metric] trip_phase_divergence", JSON.stringify({
-      trip_id: tripId,
-      status,
-      trip_phase: currentPhase,
-    }));
-  }
-
-  // Sync write (idempotente)
-  await getDbv().execute({
-    sql: "UPDATE trips SET trip_phase = ?, closure_reason = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [mapping.phase, expectedReason, tripId],
-  });
-
-  // Sync metric (rate-limited per (tripId, status))
-  const syncKey = `${tripId}:${status}`;
-  if (!phaseSyncLogged.has(syncKey)) {
-    phaseSyncLogged.add(syncKey);
-    console.log("[metric] trip_phase_sync", JSON.stringify({
-      trip_id: tripId,
-      status,
-      trip_phase: mapping.phase,
-    }));
-  }
-}
-
-export async function getTripPhase(tripId: string): Promise<TripPhase | null> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "SELECT trip_phase FROM trips WHERE trip_id = ?",
-    args: [tripId],
-  });
-  const val = (rs.rows[0] as any)?.trip_phase;
-  return val ? (val as TripPhase) : null;
-}
-
-export async function setTripPhase(tripId: string, phase: TripPhase): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET trip_phase = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [phase, tripId],
-  });
-}
-
-export async function closeTrip(tripId: string, reason: TripClosureReason): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET trip_phase = 'CLOSED', closure_reason = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [reason, tripId],
-  });
-}
-
-export async function getTripByIdWithDiagnostics(tripId: string, source: string): Promise<TripRow | null> {
-  const trip = await getTripById(tripId);
-  if (trip) checkTripPhaseDivergence(trip, source);
-  return trip;
-}
-
-// ========== FASE 4C — READER VALIDATION (READ-ONLY) ==========
-// NO modifica comportamiento. NO cambia queries. NO cambia cardinalidad.
-// Solo emite métricas de validación comparando conteo legacy vs conteo phase.
-// Se ejecuta en PRODUCCIÓN (sin gate de NODE_ENV).
-
-const validationMismatchLogged = new Set<string>();
-const phaseNullLogged = new Set<string>();
-
-export async function validateReaderConsistency(
-  source: string,
-  legacyCount: number,
-  phaseCount: number,
-  expectedPhase: TripPhase | TripPhase[]
-): Promise<void> {
-  const expectedKey = Array.isArray(expectedPhase) ? [...expectedPhase].sort().join("|") : expectedPhase;
-  const key = `${source}:${expectedKey}`;
-  if (legacyCount !== phaseCount && !validationMismatchLogged.has(key)) {
-    validationMismatchLogged.add(key);
-    console.warn("[metric] trip_phase_reader_validation_mismatch", JSON.stringify({
-      source,
-      legacy_count: legacyCount,
-      phase_count: phaseCount,
-      expected_phase: expectedPhase,
-    }));
-  }
-}
-
-export async function reportTripPhaseNullCount(source: string): Promise<number> {
-  await ensureSchema();
-  const rs = await getDbv().execute("SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IS NULL");
-  const cnt = Number((rs.rows[0] as any)?.cnt ?? 0);
-  if (!phaseNullLogged.has(source)) {
-    phaseNullLogged.add(source);
-    console.log("[metric] trip_phase_null_count", JSON.stringify({
-      source,
-      count: cnt,
-    }));
-  }
-  return cnt;
 }
 
 // ========== LEADS ==========
@@ -1143,25 +395,19 @@ export async function updateDriverByCode(
 
 export async function getAvailableDrivers(filters?: { minCapacity?: number; country?: string; strictMinCapacity?: boolean }): Promise<DriverRow[]> {
   const cutoff = Math.floor(Date.now() / 1000) - 86400;
-  const conditions: string[] = ["d.status = 'active'", "c.last_message_at > ?"];
-  const args: InValue[] = [cutoff];
-
-  if (filters?.minCapacity) {
-    if (filters.strictMinCapacity) {
-      conditions.push("d.car_capacity >= ?");
-    } else {
-      conditions.push("(d.car_capacity IS NULL OR d.car_capacity >= ?)");
-    }
-    args.push(filters.minCapacity);
-  }
-  if (filters?.country) {
-    conditions.push("(d.country IS NULL OR d.country = ?)");
-    args.push(filters.country);
-  }
+  const capacityFilter = filters?.minCapacity ?? null;
+  const strictFilter = filters?.strictMinCapacity ? capacityFilter : null;
+  const relaxedFilter = !filters?.strictMinCapacity ? capacityFilter : null;
+  const countryFilter = filters?.country ?? null;
 
   return query<DriverRow>(`SELECT d.* FROM drivers d
     INNER JOIN conversations c ON c.phone = d.phone
-    WHERE ${conditions.join(" AND ")}`, args);
+    WHERE d.status = 'active'
+      AND c.last_message_at > ?
+      AND (? IS NULL OR (d.car_capacity IS NOT NULL AND d.car_capacity >= ?))
+      AND (? IS NULL OR d.car_capacity IS NULL OR d.car_capacity >= ?)
+      AND (? IS NULL OR d.country IS NULL OR d.country = ?)`,
+    [cutoff, strictFilter, strictFilter, relaxedFilter, relaxedFilter, countryFilter, countryFilter]);
 }
 
 // ========== DRIVER INVITATIONS ==========
@@ -1332,23 +578,6 @@ export async function getPackagePrice(driverPhone: string, packageType: string):
   return queryOne<PackagePriceRow>("SELECT * FROM package_prices WHERE driver_phone = ? AND package_type = ?", [driverPhone, packageType]);
 }
 
-export async function getActiveTripsByClient(clientPhone: string): Promise<TripRow[]> {
-  const trips = await query<TripRow>("SELECT * FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL) ORDER BY created_at ASC", [clientPhone]);
-  // Fase 4D: phase-based primary filter; status-based COUNT for cross-validation.
-  const legacyRs = await getDbv().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
-    args: [clientPhone],
-  });
-  await validateReaderConsistency(
-    "getActiveTripsByClient",
-    Number((legacyRs.rows[0] as any)?.cnt ?? 0),
-    trips.length,
-    ["DRAFT", "QUOTED", "CONFIRMED", "ASSIGNED", "IN_PROGRESS"]
-  );
-  await reportTripPhaseNullCount("getActiveTripsByClient");
-  return trips;
-}
-
 // ========== SURVEY ==========
 
 export async function getTripsPendingSurvey(): Promise<TripRow[]> {
@@ -1385,117 +614,6 @@ export async function setSurveyResponse(tripId: string, response: string): Promi
 
 // ========== RESERVATION SLOTS ==========
 
-export async function updateTripTariff(tripId: string, tariffId: number, pisoBase: number, passengers?: number): Promise<void> {
-  await ensureSchema();
-  const trip = await getTripById(tripId);
-  const pax = passengers ?? trip?.passengers ?? 0;
-  const tariff = await queryOne<TariffRow>("SELECT * FROM tariffs WHERE id = ?", [tariffId]);
-  const price = tariff ? (pax > 4 ? tariff.price_6p : tariff.price_4p) : (trip?.price_base ?? 0);
-  const garantizado = Math.round(price * 0.85);
-  await getDbv().execute({
-    sql: "UPDATE trips SET tariff_id = ?, piso_base = ?, garantizado_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [tariffId, pisoBase, garantizado, tripId],
-  });
-}
-
-export async function updateTripScheduledAt(tripId: string, scheduledAt: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET scheduled_at = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [scheduledAt, tripId],
-  });
-}
-
-export async function updateTripFlight(tripId: string, flightNumber: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET flight_number = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [flightNumber, tripId],
-  });
-}
-
-export async function updateTripPassengers(tripId: string, passengers: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET passengers = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [passengers, tripId],
-  });
-}
-
-export async function updateTripOrigin(tripId: string, origin: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET origin = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [origin, tripId],
-  });
-}
-
-export async function updateTripDestination(tripId: string, destination: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET destination = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [destination, tripId],
-  });
-}
-
-export async function updateTripPriceBase(tripId: string, price: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET price_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [price, tripId],
-  });
-}
-
-export async function updateTripHotel(tripId: string, hotel: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET hotel_destination = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [hotel, tripId],
-  });
-}
-
-export async function setComisionDeclarada(tripId: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET comision_declarada = 1, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [tripId],
-  });
-}
-
-export async function getTripsByScheduledAtWindow(startTs: number, endTs: number): Promise<TripRow[]> {
-  const trips = await query<TripRow>(
-    "SELECT * FROM trips WHERE scheduled_at >= ? AND scheduled_at <= ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at",
-    [startTs, endTs]
-  );
-  checkDivergenceForTrips(trips, "getTripsByScheduledAtWindow");
-  return trips;
-}
-
-export async function getTripsPendingCloseOut(): Promise<TripRow[]> {
-  const cutoff = Math.floor(Date.now() / 1000) - 7200;
-  const trips = await query<TripRow>(
-    "SELECT * FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ? ORDER BY confirmed_at",
-    [cutoff]
-  );
-  // Fase 4D: phase-based primary with reconfirmado_24hs exclusion; legacy + phase COUNT for cross-validation.
-  const legacyRs = await getDbv().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
-    args: [cutoff],
-  });
-  const phaseRs = await getDbv().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
-    args: [cutoff],
-  });
-  await validateReaderConsistency(
-    "getTripsPendingCloseOut",
-    Number((legacyRs.rows[0] as any)?.cnt ?? 0),
-    Number((phaseRs.rows[0] as any)?.cnt ?? 0),
-    ["ASSIGNED", "CLOSED"]
-  );
-  await reportTripPhaseNullCount("getTripsPendingCloseOut");
-  return trips;
-}
-
 export async function createReservationSlot(dayOfWeek: number, startTime: string, endTime: string, label?: string, maxBookings = 1): Promise<{ ok: boolean; error?: string }> {
   await ensureSchema();
   try {
@@ -1526,25 +644,15 @@ export async function deleteReservationSlot(id: number): Promise<boolean> {
   return rs.rowsAffected > 0;
 }
 
-export async function getTripsScheduledForDate(dateStr: string): Promise<TripRow[]> {
-  const startOfDay = Math.floor(new Date(dateStr + "T00:00:00").getTime() / 1000);
-  const endOfDay = Math.floor(new Date(dateStr + "T23:59:59").getTime() / 1000);
-  return query<TripRow>("SELECT * FROM trips WHERE scheduled_at >= ? AND scheduled_at <= ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at", [startOfDay, endOfDay]);
-}
-
-export async function getUpcomingReservations(limit = 20): Promise<TripRow[]> {
-  const now = Math.floor(Date.now() / 1000);
-  return query<TripRow>("SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at > ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at ASC LIMIT ?", [now, limit]);
-}
-
-export async function getExpiredTrips(): Promise<TripRow[]> {
-  const now = Math.floor(Date.now() / 1000);
-  const trips = await query<TripRow>("SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at < ? AND status NOT IN ('completado','cancelado')", [now]);
-  checkDivergenceForTrips(trips, "getExpiredTrips");
-  return trips;
-}
-
 // ========== TARIFFS ==========
+
+export async function getTariffById(tariffId: number): Promise<{ base_price_4p: number | null; base_price_6p: number | null } | null> {
+  const rs = await getDbv().execute({
+    sql: "SELECT base_price_4p, base_price_6p FROM tariffs WHERE id = ?",
+    args: [tariffId],
+  });
+  return (rs.rows[0] as any) ?? null;
+}
 
 interface TariffWithPrice extends TariffRow {
   price: number;
@@ -1566,21 +674,6 @@ export async function findTariff(origin: string, destination: string, passengers
 export async function searchTariffs(text: string): Promise<TariffRow[]> {
   const q = `%${text.toLowerCase()}%`;
   return query<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) LIKE ? OR LOWER(destination) LIKE ?", [q, q]);
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-    }
-  }
-  return dp[m][n];
 }
 
 export async function resolveAlias(text: string): Promise<{ resolved: boolean; names: string[] }> {
@@ -1744,35 +837,7 @@ export async function setCustomerName(phone: string, name: string): Promise<void
 }
 
 export async function getCustomerName(phone: string): Promise<string | null> {
-  const row = await getDbv().execute({
-    sql: "SELECT value FROM connection_state WHERE key = ?",
-    args: [`customer_name_${phone}`],
-  });
-  return ((row.rows as any[])[0]?.value) || null;
-}
-
-// ========== DB INSTANCE ==========
-
-export async function getConnectionValue(key: string): Promise<string | null> {
-  const rs = await getDbv().execute({ sql: "SELECT value FROM connection_state WHERE key = ?", args: [key] });
-  return (rs.rows[0] as { value?: string } | undefined)?.value ?? null;
-}
-
-export async function getConnectionValueFlag(key: string): Promise<boolean> {
-  const val = await getConnectionValue(key);
-  return val !== null;
-}
-
-export async function setConnectionFlag(key: string): Promise<void> {
-  await getDbv().execute({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, '1', unixepoch())", args: [key] });
-}
-
-export async function setConnectionValue(key: string, value: string): Promise<void> {
-  await getDbv().execute({ sql: "INSERT OR REPLACE INTO connection_state (key, value, updated_at) VALUES (?, ?, unixepoch())", args: [key, value] });
-}
-
-export async function deleteConnectionKey(key: string): Promise<void> {
-  await getDbv().execute({ sql: "DELETE FROM connection_state WHERE key = ?", args: [key] });
+  return getConnectionValue(`customer_name_${phone}`);
 }
 
 // ========== PROCESSED MESSAGES (WhatsApp webhook idempotency) ==========
@@ -1815,11 +880,6 @@ export async function countProcessedMessages(): Promise<number> {
   const row = await queryOne<{ c: number }>("SELECT COUNT(*) as c FROM processed_messages");
   return row?.c ?? 0;
 }
-
-export function getDbInstance(): LibSqlClient {
-  return getDbv();
-}
-
 
 export async function getActiveComplementRules(): Promise<OpportunityRuleRow[]> {
   return query<OpportunityRuleRow>(
@@ -1864,3 +924,46 @@ export async function clearPendingOpportunity(phone: string): Promise<void> {
     args: [phone],
   });
 }
+
+export {
+  getConnectionState,
+  setConnectionState,
+  setConnectionStateBatch,
+  getConnectionValue,
+  getConnectionValueFlag,
+  setConnectionFlag,
+  setConnectionValue,
+  deleteConnectionKey,
+} from "./domains/connection-state";
+export {
+  createTrip,
+  getTripById,
+  getActiveTripByPhone,
+  getTripByAssignedDriver,
+  updateTripState,
+  updateTripDiscountExplicit,
+  assignDriverToTrip,
+  completeTrip,
+  syncTripPhaseFromLegacyStatus,
+  getTripPhase,
+  setTripPhase,
+  closeTrip,
+  getTripByIdWithDiagnostics,
+  validateReaderConsistency,
+  reportTripPhaseNullCount,
+  getActiveTripsByClient,
+  updateTripTariff,
+  updateTripScheduledAt,
+  updateTripFlight,
+  updateTripPassengers,
+  updateTripOrigin,
+  updateTripDestination,
+  updateTripPriceBase,
+  updateTripHotel,
+  setComisionDeclarada,
+  getTripsByScheduledAtWindow,
+  getTripsPendingCloseOut,
+  getTripsScheduledForDate,
+  getUpcomingReservations,
+  getExpiredTrips,
+} from "./domains/trips";

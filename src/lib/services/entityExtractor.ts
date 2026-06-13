@@ -1,5 +1,5 @@
 // Entity Extractor — known location lookup without LLM.
-// v5.0 FASE 5B: runs after regexExtractor, before LLM fallback.
+// runs after regexExtractor, before LLM fallback.
 // Detects registered hotels, POIs, and structured points of interest.
 // Only matches when the entity name appears as a primary mention.
 

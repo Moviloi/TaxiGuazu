@@ -8,7 +8,7 @@ import {
   advanceToNivel1,
   advanceToWaitingDriver,
   assignWorkflowAtomic,
-} from "@/lib/utils/conversation-workflow";
+} from "@/lib/services/workflow/conversation-workflow";
 import {
   getActiveTripByPhone,
   getDriverByPhone,
@@ -67,14 +67,10 @@ export async function handleDriverResponse(
   await assignDriver(workflow, driverPhone);
 }
 
-export async function handleDriverAccept(driverPhone: string, text: string): Promise<void> {
+export async function handleDriverAccept(_driverPhone: string, text: string): Promise<void> {
   if (!isAccepting(text)) return;
 
-  // TODO FASE 6 / LEGACY: la mecánica "driver acepta por texto en el grupo" dependía
-  // del estado workflows.state='waiting_group' (getFirstWaitingWorkflow) que fue
-  // eliminado en Fase 1 y consolidado en chat_sessions en Fase 3. El flujo actual
-  // de aceptación es exclusivamente por botón interactivo (handleDriverButtonAccept).
-  console.log(`[LEGACY-ACCEPT] Chofer ${driverPhone} intentó aceptar por texto — flujo deshabilitado`);
+  console.log(`[LEGACY-ACCEPT] Chofer intentó aceptar por texto — flujo deshabilitado`);
   return;
 }
 
@@ -85,7 +81,7 @@ export async function handleDriverArrived(driverPhone: string): Promise<void> {
   await sendWhatsAppMessage(trip.client_phone, `🟢 *Chofer en camino*
 
 Tu chofer está llegando al destino. Que tengas un buen viaje!`);
-  console.log(`[LLEGUÉ] Chofer ${driverPhone} llegó, cliente ${trip.client_phone} notificado`);
+  console.log(`[LLEGUÉ] Chofer llegó, cliente notificado`);
 }
 
 export async function handleDriverEnViaje(convId: number, driverPhone: string): Promise<void> {
@@ -101,7 +97,7 @@ export async function handleDriverEnViaje(convId: number, driverPhone: string): 
   await sendWhatsAppMessage(trip.client_phone, `🟢 *Chofer en camino*
 
 ${driverName} está en camino. Que tengas un buen viaje!`);
-  console.log(`[EN VIAJE] Chofer ${driverPhone} en viaje, cliente ${trip.client_phone} notificado`);
+  console.log(`[EN VIAJE] Chofer en viaje, cliente notificado`);
 }
 
 export async function handleDriverCompleted(convId: number, driverPhone: string): Promise<void> {
@@ -117,7 +113,7 @@ export async function handleDriverCompleted(convId: number, driverPhone: string)
   const existingPref = await getClientPreferredDriver(trip.client_phone);
   if (!existingPref) {
     await setClientPreferredDriver(trip.client_phone, driverPhone);
-    console.log(`[TITULAR] Cliente ${trip.client_phone} → chofer ${driverPhone} (post-servicio)`);
+    console.log(`[TITULAR] Post-servicio completado`);
   }
 
   const driver = await getDriverByPhone(driverPhone);
@@ -174,7 +170,7 @@ export async function handleDriverButtonAccept(convId: number, driverPhone: stri
 async function assignDriver(workflow: { conversationId: number; phone: string; state: string }, driverPhone: string): Promise<void> {
   const convId = workflow.conversationId;
   if (!convId) {
-    console.error(`[ASSIGN] No convId for driver ${driverPhone}`);
+    console.error(`[ASSIGN] No convId for driver`);
     return;
   }
 
@@ -183,7 +179,7 @@ async function assignDriver(workflow: { conversationId: number; phone: string; s
   const assigned = await assignWorkflowAtomic(workflow.phone);
   if (!assigned) {
     if (trip?.assigned_driver_phone === driverPhone) {
-      console.log(`[ASSIGN] Recuperado: ${driverPhone} ya estaba asignado a conv ${convId}`);
+      console.log(`[ASSIGN] Driver ya estaba asignado a conv ${convId}`);
     } else {
       await sendWhatsAppMessage(driverPhone, "⚠️ El viaje ya fue asignado a otro chofer.");
       return;
@@ -240,7 +236,7 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
   // --- Send client message(s) ---
   if (isContingencyTripA) {
     // Dual contingency Trip A — skip client message, will send combined when both assigned
-    console.log(`[CONTINGENCIA] Trip A asignado (${driverName}), esperando Trip B para msg combinado`);
+    console.log(`[CONTINGENCIA] Trip A asignado, esperando Trip B para msg combinado`);
   } else if (hasDualActive) {
     // Dual contingency Trip B — both assigned, send combined message
     const dual = JSON.parse(await getConnectionValue(`contingency_dual_${convId}`) || "{}");
@@ -391,7 +387,7 @@ export async function handleDriverTakeLead(convId: number, driverPhone: string):
   // Notify other drivers
   notifyOtherDriversTaken(driverPhone, lead.destination);
 
-  console.log(`[LEAD] Tomado por ${driverPhone} para conv ${convId}: ${lead.destination}`);
+  console.log(`[LEAD] Tomado para conv ${convId}: ${lead.destination}`);
 }
 
 export async function handleDriverReconfirmOk(buttonId: string, driverPhone: string): Promise<void> {
@@ -402,7 +398,7 @@ export async function handleDriverReconfirmOk(buttonId: string, driverPhone: str
   await updateTripState(tripId, "reconfirmado_24hs");
   await sendWhatsAppMessage(driverPhone, `✅ Viaje a ${trip.destination} reconfirmado. Gracias!`);
   await notifyAdmin(`🔄 Viaje reconfirmado por ${driverPhone} para ${tripId} → ${trip.destination}`);
-  console.log(`[RECONFIRM] OK ${driverPhone} trip ${tripId}`);
+  console.log(`[RECONFIRM] OK trip ${tripId}`);
 }
 
 export async function handleDriverReconfirmNo(buttonId: string, driverPhone: string): Promise<void> {
@@ -431,7 +427,7 @@ Reasignar manualmente.`);
     }
   }
 
-  console.log(`[RECONFIRM] NO ${driverPhone} trip ${tripId}`);
+  console.log(`[RECONFIRM] NO trip ${tripId}`);
 }
 
 export async function handleComisionOk(buttonId: string, driverPhone: string): Promise<void> {
@@ -442,7 +438,7 @@ export async function handleComisionOk(buttonId: string, driverPhone: string): P
   await setComisionDeclarada(tripId);
   const commission = trip.commission_amount || Math.round((trip.price_base || 0) * 0.15);
   await sendWhatsAppMessage(driverPhone, `✅ Comisión de $${commission.toLocaleString("es-AR")} confirmada. Gracias!`);
-  console.log(`[COMISION] OK ${driverPhone} trip ${tripId} comision=${commission}`);
+  console.log(`[COMISION] OK trip ${tripId} comision=${commission}`);
 }
 
 export async function handleComisionRevision(buttonId: string, driverPhone: string): Promise<void> {
@@ -457,7 +453,7 @@ Viaje: ${tripId} → ${trip.destination}
 Comisión actual: $${(trip.commission_amount || Math.round((trip.price_base || 0) * 0.15)).toLocaleString("es-AR")}
 
 El chofer pide revisar la comisión. Contactarlo manualmente.`);
-  console.log(`[COMISION] Revision solicitada ${driverPhone} trip ${tripId}`);
+  console.log(`[COMISION] Revision solicitada trip ${tripId}`);
 }
 
 export async function handleContingenciaSi(convId: number, clientPhone: string): Promise<void> {

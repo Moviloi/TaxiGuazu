@@ -119,8 +119,8 @@ export interface DriverRow {
   approved_by: string | null;
 }
 
-// Nota Fase 3 v5.0: WorkflowRow ya no se usa en código activo. La tabla `workflows`
-// se conserva por ahora (DROP planeado para Fase 6).
+// Nota: WorkflowRow ya no se usa en código activo. La tabla `workflows`
+// se conserva por ahora (DROP pendiente).
 
 export interface DriverCodeRow {
   code: string;
@@ -326,23 +326,6 @@ export interface OpportunityRuleRow {
   config_json: string | null;
   valid_from: number | null;
   valid_until: number | null;
-  created_at: number;
-}
-
-// ========== TARIFF MODEL V3 (Place → Zone → Tariff) ==========
-
-export type PlaceType = "airport" | "city" | "hotel" | "poi" | "terminal" | "border" | "other";
-
-export interface PlaceRow {
-  place_id: string;
-  canonical_name: string;
-  display_name: string | null;
-  place_type: PlaceType;
-  operational_zone: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  price_modifier: number | null;
-  active: number;
   created_at: number;
 }
 

@@ -4,18 +4,9 @@
 // pricing domain is fully unblocked for refactor.
 // Future: merge v2/v3 tariff resolution into a unified pricing service.
 
-import { getDbInstance } from "@/lib/db/database";
 import type { TariffRow, TariffV2Match } from "@/lib/db/types";
+import { queryOne } from "@/lib/db/core/helpers";
 import { resolveLocation } from "./location-resolver";
-
-function getDb() {
-  return getDbInstance();
-}
-
-async function queryOne<T>(sql: string, args?: any[]): Promise<T | null> {
-  const rs = await getDb().execute({ sql, args: args ?? [] });
-  return (rs.rows[0] as T | undefined) ?? null;
-}
 
 async function findTariffRow(opts: {
   originPlaceId?: string | null;
@@ -23,40 +14,17 @@ async function findTariffRow(opts: {
   originZoneId?: string | null;
   destZoneId?: string | null;
 }): Promise<TariffRow | null> {
-  const conditions: string[] = ["active = 1"];
-  const args: any[] = [];
-
-  if (opts.originPlaceId != null) {
-    conditions.push("origin_place_id = ?");
-    args.push(opts.originPlaceId);
-  } else {
-    conditions.push("origin_place_id IS NULL");
-  }
-
-  if (opts.destPlaceId != null) {
-    conditions.push("destination_place_id = ?");
-    args.push(opts.destPlaceId);
-  } else {
-    conditions.push("destination_place_id IS NULL");
-  }
-
-  if (opts.originZoneId != null) {
-    conditions.push("origin_zone_id = ?");
-    args.push(opts.originZoneId);
-  } else {
-    conditions.push("origin_zone_id IS NULL");
-  }
-
-  if (opts.destZoneId != null) {
-    conditions.push("destination_zone_id = ?");
-    args.push(opts.destZoneId);
-  } else {
-    conditions.push("destination_zone_id IS NULL");
-  }
-
   return queryOne<TariffRow>(
-    `SELECT * FROM tariffs WHERE ${conditions.join(" AND ")} LIMIT 1`,
-    args
+    `SELECT * FROM tariffs WHERE active = 1
+     AND (CASE WHEN ? IS NULL THEN origin_place_id IS NULL ELSE origin_place_id = ? END)
+     AND (CASE WHEN ? IS NULL THEN destination_place_id IS NULL ELSE destination_place_id = ? END)
+     AND (CASE WHEN ? IS NULL THEN origin_zone_id IS NULL ELSE origin_zone_id = ? END)
+     AND (CASE WHEN ? IS NULL THEN destination_zone_id IS NULL ELSE destination_zone_id = ? END)
+     LIMIT 1`,
+    [opts.originPlaceId ?? null, opts.originPlaceId ?? null,
+     opts.destPlaceId ?? null, opts.destPlaceId ?? null,
+     opts.originZoneId ?? null, opts.originZoneId ?? null,
+     opts.destZoneId ?? null, opts.destZoneId ?? null]
   );
 }
 

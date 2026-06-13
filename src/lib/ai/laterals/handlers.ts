@@ -1,4 +1,4 @@
-// FASE 6.2: Laterales Handlers — pure functions
+// Laterales Handlers — pure functions
 // Deterministas, sin regex nuevo, sin side effects, sin IO.
 // SOLO interpretan facts[] + slotStability del core() existente.
 

@@ -1,4 +1,4 @@
-// FASE 6.2: Tipos del sistema lateral
+// Tipos del sistema lateral
 // Determinista, sin regex nuevo, sin side effects.
 
 export type RiskLevel = "low" | "medium" | "high";

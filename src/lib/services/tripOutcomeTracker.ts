@@ -1,5 +1,5 @@
 // Trip Outcome Tracker — records real vs estimated fare outcomes per route.
-// Fase 8: provides the signal for controlled weight adjustment.
+// Provides the signal for controlled weight adjustment.
 
 export interface TripOutcome {
   routeKey: string;

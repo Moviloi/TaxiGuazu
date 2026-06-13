@@ -44,7 +44,7 @@ export async function notifyOtherDriversTaken(excludePhone: string, destination:
   await Promise.all(drivers
     .filter(d => d.phone !== excludePhone)
     .map(d => sendWhatsAppMessage(d.phone, `⏰ El viaje a ${destination} ya fue tomado por otro chofer.`)
-      .catch(e => console.error(`[NOTIFY] Failed to notify ${d.phone}:`, e))
+      .catch(e => console.error(`[NOTIFY] Failed to notify driver:`, e))
     )
   );
 }
@@ -81,7 +81,7 @@ Precio ref: $${lead.price.toLocaleString("es-AR")}${passengers ? `\nPasajeros: $
   await Promise.all(drivers.map(driver =>
     sendInteractiveButtons(driver.phone, body, [
       { id: `tomar_lead_${convId}`, title: "Tomar lead" },
-    ]).catch(e => console.error(`[LEAD] Failed to send lead to ${driver.phone}:`, e))
+    ]).catch(e => console.error(`[LEAD] Failed to send lead to driver:`, e))
   ));
 
   console.log(`[LEAD] Broadcast a ${drivers.length} choferes: ${lead.destination} (${country})`);

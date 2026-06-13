@@ -236,7 +236,7 @@ export function classifyTripLeg(origin: string, destination: string): { type: Tr
   return { type, hotelZone: HOTEL_RE.test(originLower) || HOTEL_RE.test(destLower) };
 }
 
-// ── Unified entry point (Fase 9.1) ──
+// ── Unified entry point ──
 
 export function resolveGeoRoute(slots: Record<string, any>): GeoRoute {
   const zones = resolveZones(slots);

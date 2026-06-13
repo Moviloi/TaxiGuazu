@@ -26,7 +26,7 @@ Tu opinión nos ayuda a mejorar.`;
     ]);
 
     await markSurveySent(trip.trip_id);
-    console.log(`[SURVEY] Enviada para trip ${trip.trip_id} a ${trip.client_phone}`);
+    console.log(`[SURVEY] Enviada trip=${trip.trip_id}`);
   }
 
   if (trips.length > 0) {
@@ -76,5 +76,5 @@ export async function handleNewTripResponse(phone: string, buttonId: string): Pr
 
   const simulatedText = destMap[dest] || "Hola! Quiero info sobre un viaje";
   await handleLeadMessage(phone, simulatedText);
-  console.log(`[SURVEY] Post-encuesta: nuevo lead para ${dest} de ${phone}`);
+  console.log(`[SURVEY] Post-encuesta: nuevo lead destino=${dest}`);
 }

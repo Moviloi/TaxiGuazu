@@ -1,7 +1,7 @@
 // Tipos base de la arquitectura CORE → ROUTER → POLICIES
 // Determinista, sin LLM en la decisión ni en el output final.
 //
-// v5.0 FASE 5B: PolicyOutput es la ÚNICA fuente del finalResponse.
+// PolicyOutput es la ÚNICA fuente del finalResponse.
 // outputSource es un discriminante que el guardrail enforce.
 
 export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "AMBIGUOUS";
@@ -14,7 +14,7 @@ export type OutputSource = "POLICY";
 
 export type Lang = "es" | "en" | "pt";
 
-// v5.0 FASE 5B.2 (slot stability + role lock):
+// slot stability + role lock:
 // "locked" = el slot fue fijado por la estructura sintáctica del input
 //   (ej. "estoy en X" → origin locked a X). No se reinterpreta en turnos
 //   posteriores.
@@ -41,7 +41,7 @@ export interface CoreDecision {
   confidence: number;
   slotStability: SlotStabilityMap;
   roleLock: RoleLock;
-  // FASE 6.2: lateral metadata (optional for backward compat)
+  // lateral metadata (optional for backward compat)
   lateral?: CoreLateral;
 }
 
@@ -72,7 +72,7 @@ export interface ExtractionContext {
     canonicalDestination?: string;
     method?: string;
   };
-  // v5.0 FASE 5B.2: role lock + slot stability detectados por CORE.
+  // role lock + slot stability detectados por CORE.
   // POLICY usa esto para decidir entre "Perfecto, tengo origen en X..."
   // (cuando slots están locked) vs CLARIFY.
   roleLock?: RoleLock;

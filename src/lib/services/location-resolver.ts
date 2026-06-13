@@ -3,22 +3,13 @@
 // Location resolution should eventually be unified into a single geo service.
 // No changes until Geo domain is unblocked for refactor.
 
-import { getDbInstance } from "@/lib/db/database";
-
-function getDb() {
-  return getDbInstance();
-}
+import { queryOne } from "@/lib/db/core/helpers";
 
 export interface ResolveLocationResult {
   place_id: string | null;
   canonical_name: string | null;
   operational_zone: string | null;
   confidence: "exact" | "alias" | "fuzzy" | "not_found";
-}
-
-async function queryOne<T>(sql: string, args?: any[]): Promise<T | null> {
-  const rs = await getDb().execute({ sql, args: args ?? [] });
-  return (rs.rows[0] as T | undefined) ?? null;
 }
 
 function normalize(text: string): string {

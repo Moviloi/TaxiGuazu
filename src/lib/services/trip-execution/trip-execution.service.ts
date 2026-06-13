@@ -6,15 +6,16 @@ import {
   insertMessage,
   setChatSessionWorkflowState,
   resetChatSession,
-  getDbInstance,
 } from "@/lib/db/database";
+import { getDbv } from "@/lib/db/core/connection";
+import { setPendingOpportunity } from "@/lib/db/domains/learning";
 import type { ChatSessionRow, OpportunityContext } from "@/lib/db/types";
 import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
-import { buildRouteKey, observe as observeLearning } from "@/lib/services/fareLearningEngine";
+import { buildRouteKey, observe as observeLearning } from "@/lib/services/learning/fare-learning-engine";
 import { classifyTripLeg } from "@/lib/services/geoEngine";
 import { opportunityEngine } from "@/lib/services/opportunity-engine";
 import { evaluateLearningPipeline } from "@/lib/services/learning/learning-pipeline.service";
-import { logOpportunityShown } from "@/lib/services/f6-events";
+import { logOpportunityShown } from "@/lib/services/learning/event-tracking";
 import { buildOpportunityOfferMessage } from "@/lib/ai/response-builder";
 import { executeDispatch } from "@/lib/services/dispatch/dispatch.service";
 import type { DispatchResult } from "@/lib/services/dispatch/dispatch.service";
@@ -106,13 +107,14 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
   const rawScheduledAt = rawSlots.scheduled_at;
   const scheduledAtValue = rawScheduledAt?.value ?? rawScheduledAt;
   const scheduledAtTs = scheduledAtValue ? Math.floor(new Date(String(scheduledAtValue)).getTime() / 1000) : undefined;
-  await createTrip(tripId, phone, origin, destination, pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || undefined), pax, scheduledAtTs, rawSlots.flight || undefined, "PENDING_DRIVER");
-
   const estimatedFare = rawSlots.fareEstimate ?? rawSlots.price ?? pricingResult.final_price;
   const finalFare = pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || 0);
   const routeKey = buildRouteKey(rawSlots.originZone ?? origin, rawSlots.destinationZone ?? destination);
-  observeLearning(Number(estimatedFare), Number(finalFare), routeKey, false);
-  await setConversationTrip(conversationId, tripId);
+  await Promise.all([
+    createTrip(tripId, phone, origin, destination, pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || undefined), pax, scheduledAtTs, rawSlots.flight || undefined, "PENDING_DRIVER"),
+    observeLearning(Number(estimatedFare), Number(finalFare), routeKey, false),
+    setConversationTrip(conversationId, tripId),
+  ]);
   const trip = await getActiveTripByPhone(phone);
   if (!trip) {
     await resetChatSession(phone);
@@ -152,8 +154,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     return { tripId, executed: false, dispatchResult };
   }
   const finalOpps = learningResult.rankedOpportunities;
-  const db = getDbInstance();
-  const tx = await db.transaction();
+  const tx = await getDbv().transaction();
   try {
     for (const opp of finalOpps) {
       const oppMsg = buildOpportunityOfferMessage(opp.description);
@@ -164,7 +165,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
       });
       await insertMessage(conversationId, "assistant", oppMsg, tx);
       await setChatSessionWorkflowState(phone, "post_trip_opportunity", tx);
-      await tx.execute({ sql: "UPDATE chat_sessions SET pending_opportunity = ?, updated_at = unixepoch() WHERE phone = ?", args: [pendingData, phone] });
+      await setPendingOpportunity(phone, pendingData, tx);
       await logOpportunityShown(String(conversationId), opp.label, opp.utilityScore, tx);
     }
     await tx.commit();

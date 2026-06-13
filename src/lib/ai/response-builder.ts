@@ -171,6 +171,6 @@ export function buildGlobalErrorMessage(): string {
   return "Disculpe, ocurrió un error. Un operador lo asistirá.";
 }
 
-export function buildF4EscalationMessage(): string {
+export function buildEscalationMessage(): string {
   return "No entendí bien tu consulta. Un operador humano te va a contactar para ayudarte.";
 }
