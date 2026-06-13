@@ -6,7 +6,7 @@
 
 import type { TariffRow, TariffV2Match } from "@/lib/db/types";
 import { queryOne } from "@/lib/db/core/helpers";
-import { resolveLocation } from "./location-resolver";
+import { resolveLocation } from "../geo/location-resolver";
 
 async function findTariffRow(opts: {
   originPlaceId?: string | null;

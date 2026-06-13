@@ -2,21 +2,22 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { insertMessage, getChatSession, resetChatSession } from "@/lib/db/database";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
 import { processLead } from "@/lib/core/pipeline";
-import { resolveGeoRoute } from "@/lib/services/geo-engine";
-import { evaluateOpportunities, isOpportunityQuery } from "@/lib/services/opportunity-engine";
+import { resolveGeoRoute } from "@/lib/services/geo/geo-engine";
+import { evaluateOpportunities, isOpportunityQuery } from "@/lib/services/learning/opportunity-engine";
 import { buildOpportunityNoPricingMessage, formatOpportunityResponse } from "@/lib/ai/response-builder";
 import { handleMessage } from "@/lib/ai/handler";
-import { saveContext } from "@/lib/services/context-memory";
-import { notifyAdmin } from "@/lib/services/admin.service";
+import { saveContext } from "@/lib/services/memory/context-memory";
+import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { isAffirmativeMessage } from "@/lib/ai/patterns";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
 import type { ExtractionContext } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
+import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 import { core } from "@/lib/ai/core";
+import { log } from "@/lib/utils/logger";
 type CoreResult = ReturnType<typeof core>;
 
 export interface PolicyPipelineInput {
@@ -89,7 +90,7 @@ export async function handlePolicyPipeline(
       const oppMsg = formatOpportunityResponse(oppResult, lang);
       await sendWhatsAppMessage(phone, oppMsg);
       await insertMessage(conversation.id, "assistant", oppMsg);
-      console.log("[OPPORTUNITY] response sent:", oppMsg.substring(0, 120));
+      log.info("[OPPORTUNITY] response sent:", oppMsg.substring(0, 120));
     } else {
       const msg = buildOpportunityNoPricingMessage(lang);
       await sendWhatsAppMessage(phone, msg);

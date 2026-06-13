@@ -11,6 +11,7 @@
 // y handleMessage() antes de cualquier LLM call o send al usuario.
 
 import type { CoreDecision, FinalDecision, OutputSource, PolicyOutput } from "./types";
+import { log } from "@/lib/utils/logger";
 
 export interface BlockResult {
   status: "BLOCKED_LEGACY_FLOW";
@@ -47,7 +48,7 @@ export function assertCoreRouterPolicy(): true | BlockResult {
       reason: "CORE_ROUTER_REQUIRED",
       context: `core=${!!coreState} router=${!!finalState} policy=${!!policyState}`,
     };
-    console.log("[BLOCKED]", block);
+    log.info("[BLOCKED]", block);
     return block;
   }
   return true;
@@ -60,7 +61,7 @@ export function assertOutputSource(source: OutputSource | string): true {
     const err = new Error(
       `OUTPUT_VIOLATION: NON_POLICY_RESPONSE_BLOCKED (source=${source ?? "undefined"})`,
     );
-    console.error("[OUTPUT_VIOLATION]", err.message);
+    log.error("[OUTPUT_VIOLATION]", err.message);
     throw err;
   }
   return true;
@@ -79,7 +80,7 @@ export function assertPipelineComplete(
       reason: "PIPELINE_INCOMPLETE",
       context: `core=${!!core} router=${!!decision} policy=${!!policy}`,
     };
-    console.log("[BLOCKED]", block);
+    log.info("[BLOCKED]", block);
     return block;
   }
   return true;

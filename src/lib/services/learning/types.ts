@@ -1,4 +1,4 @@
-import type { Opportunity } from "@/lib/db/types";
+import type { Opportunity } from "@/lib/services/learning/opportunity-types";
 
 // ── Opportunity Scoring & System Load ──
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyCommercialRules, type CommercialInput, type CommercialLookups } from "../src/lib/services/commercial-pricing-engine";
+import { applyCommercialRules, type CommercialInput, type CommercialLookups } from "../src/lib/services/pricing/commercial-pricing-engine";
 
 const baseInput: CommercialInput = {
   base_price: 10000,

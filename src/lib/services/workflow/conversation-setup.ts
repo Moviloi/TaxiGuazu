@@ -1,6 +1,7 @@
 import { getOrCreateConversation, getConversationById, insertMessage, getRecentHistory, getActiveTripByPhone, updateTripState, clearConversationHistory, setCustomerName, getCustomerName, resetChatSession } from "@/lib/db/database";
 import { getWorkflow, resetToIdle } from "@/lib/services/workflow/conversation-workflow";
 import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
+import { log } from "@/lib/utils/logger";
 
 export interface ConversationSetupResult {
   conversation: { id: number };
@@ -27,7 +28,7 @@ export async function handleConversationSetup(
   let trip = await getActiveTripByPhone(phone);
 
   if (trip && trip.scheduled_at && trip.scheduled_at < now) {
-    console.log(`[SESSION] Cond A: trip ${trip.trip_id} expirado, archivando`);
+    log.info(`[SESSION] Cond A: trip ${trip.trip_id} expirado, archivando`);
     await updateTripState(trip.trip_id, 'completado');
     sessionReset = true;
     trip = null;
@@ -37,7 +38,7 @@ export async function handleConversationSetup(
     const lastMsgAt = freshConv.last_message_at || 0;
     const inactive48h = (now - lastMsgAt) > SESSION_INACTIVITY_48H_S;
     if (inactive48h && !trip) {
-      console.log(`[SESSION] Cond B: inactividad >48h sin reserva, reseteando`);
+      log.info(`[SESSION] Cond B: inactividad >48h sin reserva, reseteando`);
       sessionReset = true;
     }
   }

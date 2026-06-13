@@ -1,5 +1,5 @@
-import type { ComprehensionSignals } from "@/lib/services/comprehension";
-import type { Memory, SessionMemory } from "@/lib/services/memory";
+import type { ComprehensionSignals } from "@/lib/services/extraction/comprehension";
+import type { Memory, SessionMemory } from "@/lib/services/memory/memory";
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllEntityKeys } from "@/lib/config/entity-catalog";
 

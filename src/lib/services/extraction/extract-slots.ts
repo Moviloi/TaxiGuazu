@@ -11,6 +11,7 @@ import { regexExtractSlots } from "./regex-extractor";
 import { entityExtractSlots } from "./entity-extractor";
 import { generateGroqExtraction } from "@/lib/ai/groq";
 import type { ExtractionContext } from "@/lib/ai/extraction-prompt";
+import { log } from "@/lib/utils/logger";
 
 interface Message {
   role: string;
@@ -27,18 +28,18 @@ export async function extractSlots(
   // 1. Try regex extractor (deterministic, no LLM)
   const regexResult = regexExtractSlots(text);
   if (regexResult && (regexResult.origin || regexResult.destination)) {
-    console.log("[EXTRACT] regex match", { origin: regexResult.origin, destination: regexResult.destination });
+    log.info("[EXTRACT] regex match", { origin: regexResult.origin, destination: regexResult.destination });
     return regexResult;
   }
 
   // 2. Try entity extractor (known locations, no LLM)
   const entityResult = entityExtractSlots(text);
   if (entityResult && (entityResult.origin || entityResult.destination)) {
-    console.log("[EXTRACT] entity match", { origin: entityResult.origin, destination: entityResult.destination });
+    log.info("[EXTRACT] entity match", { origin: entityResult.origin, destination: entityResult.destination });
     return entityResult;
   }
 
   // 3. LLM fallback (only if regex and entity both produced nothing)
-  console.log("[EXTRACT] LLM fallback");
+  log.info("[EXTRACT] LLM fallback");
   return generateGroqExtraction(text, history, customerName, extractionContext);
 }

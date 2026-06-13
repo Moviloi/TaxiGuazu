@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import { getExtractionPrompt, getExtractionContextMessage, type ExtractionContext } from "./extraction-prompt";
 import { getEnv } from "@/config/env";
 import { GROQ_MODEL, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS } from "@/config/constants";
+import { log } from "@/lib/utils/logger";
 
 interface Message {
   role: string;
@@ -14,7 +15,7 @@ function getGroq(): Groq | null {
     const env = getEnv();
     return new Groq({ apiKey: env.GROQ_API_KEY });
   } catch (e) {
-    console.error("[GROQ]", e instanceof Error ? e.message : String(e));
+    log.error("[GROQ]", e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -100,7 +101,7 @@ export async function generateGroqExtraction(
 
     return JSON.parse(content);
   } catch (e) {
-    console.error("[GROQ_EXTRACTION_ERROR]", e);
+    log.error("[GROQ_EXTRACTION_ERROR]", e);
     return null;
   }
 }

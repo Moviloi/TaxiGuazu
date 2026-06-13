@@ -9,7 +9,7 @@
 //   4. Error — fallback, escalación, error global
 
 import type { FinalDecision, Lang } from "./types";
-import type { OpportunityResult } from "@/lib/services/opportunity-engine";
+import type { OpportunityResult } from "@/lib/services/learning/opportunity-types";
 
 // ─── 1. CONVERSACIONAL ───────────────────────────────────────────────────────
 

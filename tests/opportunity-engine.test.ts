@@ -4,7 +4,7 @@ const mockExecute = vi.fn();
 const mockDb = { execute: mockExecute };
 
 vi.mock("../src/lib/db/core/connection", () => ({
-  getDbv: () => mockDb,
+  getDb: () => mockDb,
   ensureSchema: vi.fn(),
 }));
 
@@ -16,9 +16,9 @@ vi.mock("../src/lib/db/database", () => ({
 import {
   isOpportunityQuery,
   evaluateOpportunities,
-  formatOpportunityResponse,
   type OpportunityInput,
-} from "../src/lib/services/opportunity-engine";
+} from "../src/lib/services/learning/opportunity-engine";
+import { formatOpportunityResponse } from "../src/lib/ai/response-builder";
 
 const basePricing = {
   final_price: 12000,

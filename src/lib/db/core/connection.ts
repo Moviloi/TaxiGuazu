@@ -22,7 +22,7 @@ function getUrl(): string {
   return `file:${fallback}`;
 }
 
-export function getDbv(): LibSqlClient {
+export function getDb(): LibSqlClient {
   if (dbClient) return dbClient;
   dbClient = createClient({
     url: getUrl(),
@@ -34,14 +34,14 @@ export function getDbv(): LibSqlClient {
 
 export async function ensureSchema(): Promise<void> {
   if (!schemaReady) {
-    getDbv();
+    getDb();
     schemaReady = initSchema();
   }
   await schemaReady;
 }
 
 async function initSchema(): Promise<void> {
-  const db = getDbv();
+  const db = getDb();
   await db.batch([
     `CREATE TABLE IF NOT EXISTS connection_state (
       key TEXT PRIMARY KEY,

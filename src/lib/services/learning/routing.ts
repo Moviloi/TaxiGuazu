@@ -1,4 +1,4 @@
-import type { Opportunity } from "@/lib/db/types";
+import type { Opportunity } from "@/lib/services/learning/opportunity-types";
 import type { ScoredOpportunity, LearningDecision, ObjectiveWeights, SystemLoad } from "./types";
 import { computeEconomicScore } from "./economics";
 import { computeUtilityScore } from "./objectives";

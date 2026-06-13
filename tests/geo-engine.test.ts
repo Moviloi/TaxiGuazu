@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveGeoRoute } from "../src/lib/services/geo-engine";
+import { resolveGeoRoute } from "../src/lib/services/geo/geo-engine";
 
 describe("geoEngine", () => {
   it("IGR → Centro → MEDIUM (airport to city)", () => {

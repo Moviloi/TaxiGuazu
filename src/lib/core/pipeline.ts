@@ -14,6 +14,7 @@
 //   memory:  { saveContext }
 
 import type { ExtractionContext } from "@/lib/ai/types";
+import { log } from "@/lib/utils/logger";
 
 export interface ExecutionContext {
   phone: string;
@@ -92,7 +93,7 @@ export async function processLead(
     // (askForConfirmation + tariff.matched).
     return needsGeo ? "completed" : "incomplete";
   } catch (e) {
-    console.error("[PIPELINE] error:", e);
+    log.error("[PIPELINE] error:", e);
     return "error";
   }
 }

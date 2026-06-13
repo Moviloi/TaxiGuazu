@@ -1,7 +1,43 @@
 // Fare Learning Engine — adjusts zone/proximity/border weights from historical trip outcomes.
 // Controlled feedback loop — no ML, just deterministic weight tuning.
 
-import { recordOutcome, getAllOutcomes, type TripOutcome } from "@/lib/services/trip-outcome-tracker";
+export interface TripOutcome {
+  routeKey: string;
+  estimatedFare: number;
+  finalFare: number;
+  humanOverride: boolean;
+  timestamp: number;
+}
+
+const outcomes: TripOutcome[] = [];
+const MAX_OUTCOMES = 500;
+
+export function recordOutcome(outcome: TripOutcome): void {
+  outcomes.push(outcome);
+  if (outcomes.length > MAX_OUTCOMES) {
+    outcomes.splice(0, outcomes.length - MAX_OUTCOMES);
+  }
+}
+
+export function getOutcomes(routeKey: string): TripOutcome[] {
+  return outcomes.filter((o) => o.routeKey === routeKey);
+}
+
+export function getRecentOutcomes(routeKey: string, count: number = 10): TripOutcome[] {
+  return getOutcomes(routeKey).slice(-count);
+}
+
+export function getAllOutcomes(): TripOutcome[] {
+  return [...outcomes];
+}
+
+export function clearOutcomes(): void {
+  outcomes.length = 0;
+}
+
+export function getOutcomeCount(): number {
+  return outcomes.length;
+}
 
 export interface LearningWeights {
   zoneAdjustments: Record<string, number>;
@@ -49,17 +85,13 @@ export function computeWeights(): LearningWeights {
     const errors = routeOutcomes.map((o) => computeError(o.estimatedFare, o.finalFare));
     const meanError = errors.reduce((a, b) => a + b, 0) / errors.length;
 
-    // Only adjust if error exceeds ±5% threshold
     if (Math.abs(meanError) < 0.05) continue;
 
     const adjustment = 1 + meanError * ADJUSTMENT_RATE * 10;
     zoneAdjustments[route] = Math.max(MIN_ADJUSTMENT, Math.min(MAX_ADJUSTMENT, adjustment));
   }
 
-  // Proximity calibration: check if errors correlate with proximity score
   const proximityCalibration = computeProximityCalibration(allOutcomes);
-
-  // Border sensitivity: if humans frequently override border routes, reduce penalty
   const borderSensitivity = computeBorderSensitivity(allOutcomes);
 
   return { zoneAdjustments, proximityCalibration, borderSensitivity };
@@ -79,8 +111,6 @@ export function applyWeights(
 
   return price;
 }
-
-// ── Internal helpers ──
 
 function getAllRecentByRoute(): Record<string, TripOutcome[]> {
   const grouped: Record<string, TripOutcome[]> = {};
@@ -115,8 +145,8 @@ function computeProximityCalibration(allOutcomes: Record<string, TripOutcome[]>)
   }
   if (count < 5) return DEFAULT_PROXIMITY_CALIBRATION;
   const meanAbsError = totalError / count;
-  if (meanAbsError < 0.1) return 0.95;  // over-estimating → reduce proximity impact
-  if (meanAbsError > 0.25) return 1.05; // under-estimating → increase
+  if (meanAbsError < 0.1) return 0.95;
+  if (meanAbsError > 0.25) return 1.05;
   return DEFAULT_PROXIMITY_CALIBRATION;
 }
 
@@ -132,7 +162,7 @@ function computeBorderSensitivity(allOutcomes: Record<string, TripOutcome[]>): n
   }
   if (borderTotal < 3) return DEFAULT_BORDER_SENSITIVITY;
   const overrideRate = borderOverrides / borderTotal;
-  if (overrideRate > 0.5) return 0.85;  // reduce border penalty sensitivity
+  if (overrideRate > 0.5) return 0.85;
   if (overrideRate < 0.2) return 1.0;
   return DEFAULT_BORDER_SENSITIVITY;
 }

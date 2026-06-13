@@ -261,18 +261,18 @@ ai/response-builder.ts → imports OpportunityResult from services/opportunity-e
 
 | # | Task | Files | Effort | Risk |
 |---|------|-------|--------|------|
-| 2a | Break circular dependency: move `getDriverDiscountForTariff` into domains/trips.ts | database.ts, domains/trips.ts | 5 min | Low — function is self-contained |
-| 2b | Rename `getDbv()` → `getDb()` across 144 references | connection.ts + all callers + 2 test mocks | 30 min | Low — mechanical rename |
-| 2c | Rename `setComisionDeclarada` → `setCommissionDeclared` | database.ts, trips.ts, driver.service.ts | 5 min | Low — update 3 callers |
-| 2d | Add centralized logger, replace 109 console.* calls | New file + 15 files | 60 min | Medium — wide sweep, but mechanical |
-| 2e | Move `OpportunityContext`, `Opportunity`, `OpportunityType` from db/types.ts to service types | db/types.ts + new types file + update imports | 10 min | Low — type-only move |
-| 2f | Fix AI → Services reverse dependency (extract opportunity display types) | ai/response-builder.ts, opportunity-engine.ts + new types | 15 min | Low — type extraction |
+| 2a | Break circular dependency: move `getDriverDiscountForTariff` into domains/trips.ts | database.ts, domains/trips.ts | 5 min | ✅ done — made it a private function in trips.ts, removed from database.ts |
+| 2b | Rename `getDbv()` → `getDb()` across 120 references | connection.ts + all callers + 2 test mocks | 30 min | ✅ done — mechanical `getDbv` → `getDb` across all 14 files |
+| 2c | Rename `setComisionDeclarada` → `setCommissionDeclared` | database.ts, trips.ts, driver.service.ts | 5 min | ✅ done — 3 files, 4 refs |
+| 2d | Add centralized logger, replace 160 console.* calls | src/lib/utils/logger.ts + 34 files | 60 min | ✅ done — `log.debug/info/warn/error` with LOG_LEVEL env control |
+| 2e | Move `OpportunityContext`, `Opportunity`, `OpportunityType` from db/types.ts to service types | src/lib/services/opportunity-types.ts + db/types.ts + 5 files | 10 min | ✅ done — created opportunity-types.ts, removed duplicate in opportunity-engine.ts |
+| 2f | Fix AI → Services reverse dependency (extract opportunity display types) | ai/response-builder.ts, opportunity-engine.ts, opportunity-types.ts | 15 min | ✅ done — moved `OpportunityOffer` + `OpportunityResult` to shared types, removed re-export, no AI→services value imports remain |
 
 ### Tier 3 — Structural reorganization (needs planning)
 
 | # | Task | Effort | Risk |
 |---|------|--------|------|
-| 3a | Restructure `services/` flat directory: move 20 files into proper subdirectories (extraction/, geo/, memory/, pricing/, admin/, dispatch/) | 60 min | Medium — update all import paths |
+| 3a | Restructure `services/` flat directory: move 22 files into subdirs | 22 flat files → admin/ (2), geo/ (2), memory/ (3), extraction/ (5), pricing/ (3), dispatch/ (2), learning/ (3), workflow/ (1), trip-execution/ (1) | 60 min | ✅ done — lead.service.ts, housekeeping.ts stay flat; 2 post-move fixes (import type + relative path) |
 | 3b | Consolidate `services/learning/` over-split files (merge 22 → ~12 files) | 30 min | Medium — update internal imports |
 | 3c | Merge `housekeeping.ts` into `housekeeping/timeouts.ts` | 15 min | Low — merge logic |
 | 3d | Eliminate 5 service file direct `getDbv().execute` calls (create wrappers in database.ts) | 30 min | Low — per G.2.12 pattern |

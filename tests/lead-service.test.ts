@@ -45,11 +45,11 @@ vi.mock("@/lib/ai/guard", () => ({
   assertCoreRouterPolicy: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("@/lib/services/extract-slots", () => ({
+vi.mock("@/lib/services/extraction/extract-slots", () => ({
   extractSlots: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/services/confidence", () => ({
+vi.mock("@/lib/services/extraction/confidence", () => ({
   calculateSlotConfidence: vi.fn().mockResolvedValue({
     overall_confidence: 1.0,
     slots: {},
@@ -62,17 +62,17 @@ vi.mock("@/lib/services/pricing/resolvePricingForSlots", () => ({
   }),
 }));
 
-vi.mock("@/lib/services/slot-workflow", () => ({
+vi.mock("@/lib/services/workflow/slot-workflow", () => ({
   evaluateWorkflowTransition: vi.fn().mockResolvedValue({
     nextState: "collecting_slots",
   }),
 }));
 
-vi.mock("@/lib/services/memory", () => ({
+vi.mock("@/lib/services/memory/memory", () => ({
   buildMemory: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock("@/lib/services/predictive-routing", () => ({
+vi.mock("@/lib/services/memory/predictive-routing", () => ({
   buildPredictedContext: vi.fn().mockReturnValue({
     intentPrediction: { confidence: 0 },
     entityPrediction: { candidates: [] },
@@ -80,7 +80,7 @@ vi.mock("@/lib/services/predictive-routing", () => ({
   enrichF4Signals: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock("@/lib/services/comprehension", () => ({
+vi.mock("@/lib/services/extraction/comprehension", () => ({
   buildF4Signals: vi.fn().mockReturnValue({}),
   computeComprehensionScore: vi.fn().mockReturnValue(1.0),
   getF4State: vi.fn().mockReturnValue("NORMAL"),
@@ -105,15 +105,15 @@ vi.mock("@/lib/services/learning/admin", () => ({
   executeAdminCommand: vi.fn(),
 }));
 
-vi.mock("@/lib/services/admin-commands", () => ({
+vi.mock("@/lib/services/admin/admin-commands", () => ({
   handleAdminCommand: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock("@/lib/services/admin.service", () => ({
+vi.mock("@/lib/services/admin/admin.service", () => ({
   notifyAdmin: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/services/opportunity-engine", () => ({
+vi.mock("@/lib/services/learning/opportunity-engine", () => ({
   evaluateOpportunities: vi.fn().mockResolvedValue({ available: false, opportunities: [] }),
   isOpportunityQuery: vi.fn().mockReturnValue(false),
 }));
@@ -127,7 +127,7 @@ vi.mock("@/lib/utils/conversation-workflow", () => ({
   getWorkflow: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/services/context-memory", () => ({
+vi.mock("@/lib/services/memory/context-memory", () => ({
   loadContext: vi.fn().mockResolvedValue({}),
   mergeContext: vi.fn().mockResolvedValue(undefined),
   saveContext: vi.fn().mockResolvedValue(undefined),
@@ -156,7 +156,7 @@ vi.mock("@/lib/ai/extraction-schema", () => ({
   TripExtractionSchema: { safeParse: vi.fn().mockReturnValue({ success: false }) },
 }));
 
-vi.mock("@/lib/services/geo-engine", () => ({
+vi.mock("@/lib/services/geo/geo-engine", () => ({
   resolveGeoRoute: vi.fn(),
 }));
 

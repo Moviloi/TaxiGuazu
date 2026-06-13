@@ -1,10 +1,10 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { getChatSession, insertMessage, updateOpportunityLogResponse } from "@/lib/db/database";
-import { clearPendingOpportunity } from "@/lib/db/domains/learning";
+import { getChatSession, insertMessage, updateOpportunityLogResponse, clearPendingOpportunity } from "@/lib/db/database";
 import { resetToIdle } from "@/lib/services/workflow/conversation-workflow";
 import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
 import { buildOpportunityAcceptedMessage, buildOpportunityDeclinedMessage } from "@/lib/ai/response-builder";
 import { logUserResponse } from "@/lib/services/learning/event-tracking";
+import { log } from "@/lib/utils/logger";
 
 export async function handleOpportunityResponse(
   phone: string,
@@ -21,7 +21,7 @@ export async function handleOpportunityResponse(
   try {
     pending = JSON.parse(session.pending_opportunity);
   } catch {
-    console.log(`[OPPORTUNITY] Invalid pending_opportunity JSON for ******${phone.slice(-4)}`);
+    log.info(`[OPPORTUNITY] Invalid pending_opportunity JSON for ******${phone.slice(-4)}`);
     await clearPendingOpportunity(phone);
     await resetToIdle(conversationId);
     return false;
@@ -29,7 +29,7 @@ export async function handleOpportunityResponse(
   const now = Math.floor(Date.now() / 1000);
 
   if (now > pending.expires_at) {
-    console.log(`[OPPORTUNITY] expired for ******${phone.slice(-4)} rule="${pending.label}"`);
+    log.info(`[OPPORTUNITY] expired for ******${phone.slice(-4)} rule="${pending.label}"`);
     await Promise.all([
       updateOpportunityLogResponse(pending.logId, "expired", now),
       clearPendingOpportunity(phone),
@@ -37,7 +37,7 @@ export async function handleOpportunityResponse(
     ]);
     logUserResponse(String(conversationId), "ignored", pending.label);
   } else if (isAffirmativeMessage(text)) {
-    console.log(`[OPPORTUNITY] accepted by ******${phone.slice(-4)} rule="${pending.label}"`);
+    log.info(`[OPPORTUNITY] accepted by ******${phone.slice(-4)} rule="${pending.label}"`);
     const infoMsg = buildOpportunityAcceptedMessage(pending.label);
     await Promise.all([
       updateOpportunityLogResponse(pending.logId, "accepted", now),
@@ -49,7 +49,7 @@ export async function handleOpportunityResponse(
     logUserResponse(String(conversationId), "accepted", pending.label);
     return true;
   } else if (isNegativeMessage(text)) {
-    console.log(`[OPPORTUNITY] declined by ******${phone.slice(-4)} rule="${pending.label}"`);
+    log.info(`[OPPORTUNITY] declined by ******${phone.slice(-4)} rule="${pending.label}"`);
     const declineMsg = buildOpportunityDeclinedMessage();
     await Promise.all([
       updateOpportunityLogResponse(pending.logId, "declined", now),
@@ -61,7 +61,7 @@ export async function handleOpportunityResponse(
     logUserResponse(String(conversationId), "declined", pending.label);
     return true;
   } else {
-    console.log(`[OPPORTUNITY] ignored for ******${phone.slice(-4)} rule="${pending.label}" — unrelated message`);
+    log.info(`[OPPORTUNITY] ignored for ******${phone.slice(-4)} rule="${pending.label}" — unrelated message`);
     await Promise.all([
       updateOpportunityLogResponse(pending.logId, "ignored", now),
       clearPendingOpportunity(phone),

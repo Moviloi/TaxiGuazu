@@ -5,7 +5,8 @@ import {
   setSurveyResponse,
   getTripById,
 } from "@/lib/db/database";
-import { handleLeadMessage } from "./lead.service";
+import { handleLeadMessage } from "../lead.service";
+import { log } from "@/lib/utils/logger";
 
 export async function sendPendingSurveys(): Promise<void> {
   const trips = await getTripsPendingSurvey();
@@ -26,11 +27,11 @@ Tu opinión nos ayuda a mejorar.`;
     ]);
 
     await markSurveySent(trip.trip_id);
-    console.log(`[SURVEY] Enviada trip=${trip.trip_id}`);
+    log.info(`[SURVEY] Enviada trip=${trip.trip_id}`);
   }
 
   if (trips.length > 0) {
-    console.log(`[SURVEY] ${trips.length} encuesta(s) enviada(s)`);
+    log.info(`[SURVEY] ${trips.length} encuesta(s) enviada(s)`);
   }
 }
 
@@ -76,5 +77,5 @@ export async function handleNewTripResponse(phone: string, buttonId: string): Pr
 
   const simulatedText = destMap[dest] || "Hola! Quiero info sobre un viaje";
   await handleLeadMessage(phone, simulatedText);
-  console.log(`[SURVEY] Post-encuesta: nuevo lead destino=${dest}`);
+  log.info(`[SURVEY] Post-encuesta: nuevo lead destino=${dest}`);
 }

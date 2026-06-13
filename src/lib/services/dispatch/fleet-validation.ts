@@ -4,8 +4,9 @@
 
 import { getMaxFleetCapacity, validateFleetCanHandle, findTariff, insertMessage } from "@/lib/db/database";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { notifyAdmin } from "@/lib/services/admin.service";
+import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { buildFleetCapacityMessage, buildFleetTariffMessage } from "@/lib/ai/response-builder";
+import { log } from "@/lib/utils/logger";
 
 export interface FleetValidationContext {
   phone: string;
@@ -36,7 +37,7 @@ async function rejectAndNotify(
   await insertMessage(context.convId, "assistant", clientMsg);
 
   const max = await getMaxFleetCapacity();
-  console.log(JSON.stringify({
+  log.info(JSON.stringify({
     event: logEvent,
     requested_pax: pax,
     max_pax: max,

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getEnv } from "@/config/env";
+import { log } from "@/lib/utils/logger";
 
 function getUrl(): string {
   const env = getEnv();
@@ -11,7 +12,7 @@ function getToken(): string | null {
     const env = getEnv();
     return env.WHATSAPP_TOKEN;
   } catch (e) {
-    console.error("[SENDER]", e instanceof Error ? e.message : String(e));
+    log.error("[SENDER]", e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -33,7 +34,7 @@ async function postToWhatsApp(payload: any): Promise<void> {
     });
   } catch (error: any) {
     const detail = error?.response?.data || error.message;
-    console.error(`[SEND ERROR]`, detail);
+    log.error(`[SEND ERROR]`, detail);
     throw new Error("WhatsApp send failed");
   }
 }
@@ -45,7 +46,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
     type: "text",
     text: { body: text },
   };
-  console.log(`[SEND] → ******${to.slice(-4)}: ${text.substring(0, 50)}`);
+  log.info(`[SEND] → ******${to.slice(-4)}: ${text.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }
 
@@ -75,7 +76,7 @@ export async function sendInteractiveList(
       },
     },
   };
-  console.log(`[SEND LIST] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
+  log.info(`[SEND LIST] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }
 
@@ -101,6 +102,6 @@ export async function sendInteractiveButtons(
       },
     },
   };
-  console.log(`[SEND BUTTONS] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
+  log.info(`[SEND BUTTONS] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }

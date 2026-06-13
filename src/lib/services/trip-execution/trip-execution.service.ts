@@ -6,14 +6,15 @@ import {
   insertMessage,
   setChatSessionWorkflowState,
   resetChatSession,
+  setPendingOpportunity,
 } from "@/lib/db/database";
-import { getDbv } from "@/lib/db/core/connection";
-import { setPendingOpportunity } from "@/lib/db/domains/learning";
-import type { ChatSessionRow, OpportunityContext } from "@/lib/db/types";
-import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
+import { getDb } from "@/lib/db/core/connection";
+import type { ChatSessionRow } from "@/lib/db/types";
+import type { OpportunityContext } from "@/lib/services/learning/opportunity-types";
+import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
 import { buildRouteKey, observe as observeLearning } from "@/lib/services/learning/fare-learning-engine";
-import { classifyTripLeg } from "@/lib/services/geo-engine";
-import { opportunityEngine } from "@/lib/services/opportunity-engine";
+import { classifyTripLeg } from "@/lib/services/geo/geo-engine";
+import { opportunityEngine } from "@/lib/services/learning/opportunity-engine";
 import { evaluateLearningPipeline } from "@/lib/services/learning/learning-pipeline.service";
 import { logOpportunityShown } from "@/lib/services/learning/event-tracking";
 import { buildOpportunityOfferMessage } from "@/lib/ai/response-builder";
@@ -25,6 +26,7 @@ import type { Lang } from "@/lib/ai/types";
 import { processLead } from "@/lib/core/pipeline";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
 import type { ConfirmedSlot } from "@/lib/ai/types";
+import { log } from "@/lib/utils/logger";
 
 export interface TripExecutionInput {
   conversationId: number;
@@ -154,7 +156,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     return { tripId, executed: false, dispatchResult };
   }
   const finalOpps = learningResult.rankedOpportunities;
-  const tx = await getDbv().transaction();
+  const tx = await getDb().transaction();
   try {
     for (const opp of finalOpps) {
       const oppMsg = buildOpportunityOfferMessage(opp.description);
@@ -171,7 +173,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     await tx.commit();
   } catch (e) {
     await tx.rollback();
-    console.error(`[OPPORTUNITY_ENGINE] Error en transacción, rolling back:`, e);
+    log.error(`[OPPORTUNITY_ENGINE] Error en transacción, rolling back:`, e);
     return { tripId, executed: false, dispatchResult };
   }
   for (const opp of finalOpps) {

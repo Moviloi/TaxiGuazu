@@ -2,7 +2,7 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getOrCreateConversation, getConversationByPhone, insertMessage } from "@/lib/db/database";
 import { resetToIdle } from "@/lib/services/workflow/conversation-workflow";
 import { HABLAR_HUMANO } from "@/lib/config/lead-constants";
-import { notifyAdmin } from "@/lib/services/admin.service";
+import { notifyAdmin } from "@/lib/services/admin/admin.service";
 
 export async function handleCommandShortcuts(
   phone: string,

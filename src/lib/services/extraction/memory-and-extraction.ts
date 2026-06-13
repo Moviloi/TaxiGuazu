@@ -1,28 +1,29 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { insertMessage, getChatSession, upsertChatSession } from "@/lib/db/database";
 import { updateChatSessionComprehension, insertF4Log, setChatSessionEscalationReason } from "@/lib/db/domains/learning";
-import { extractSlots } from "@/lib/services/extract-slots";
+import { extractSlots } from "@/lib/services/extraction/extract-slots";
 import { buildSlotClarify, buildEscalationMessage } from "@/lib/ai/response-builder";
-import { buildMemory } from "@/lib/services/memory";
-import { buildPredictedContext, enrichComprehensionSignals } from "@/lib/services/predictive-routing";
+import { buildMemory } from "@/lib/services/memory/memory";
+import { buildPredictedContext, enrichComprehensionSignals } from "@/lib/services/memory/predictive-routing";
 import { logIntentDetected, logEntityDetected, logEscalation } from "@/lib/services/learning/event-tracking";
 import { recordComprehensionOutcome, getComprehensionThresholdAdjustment } from "@/lib/services/learning/learning-utils";
-import { buildComprehensionSignals, computeComprehensionScore, getComprehensionState, getRecoveryMessage } from "@/lib/services/comprehension";
+import { buildComprehensionSignals, computeComprehensionScore, getComprehensionState, getRecoveryMessage } from "@/lib/services/extraction/comprehension";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
-import { evaluateWorkflowTransition } from "@/lib/services/slot-workflow";
+import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
+import { evaluateWorkflowTransition } from "@/lib/services/workflow/slot-workflow";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
 import { assertCoreRouterPolicy } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
 type CoreResult = ReturnType<typeof core>;
-import { calculateSlotConfidence } from "@/lib/services/confidence";
-import { loadContext, mergeContext } from "@/lib/services/context-memory";
+import { calculateSlotConfidence } from "@/lib/services/extraction/confidence";
+import { loadContext, mergeContext } from "@/lib/services/memory/context-memory";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
 import { loadPreviousSlots } from "@/lib/services/workflow/load-previous-slots";
 import { evaluateCompleteness } from "@/lib/services/workflow/evaluate-completeness";
-import { notifyAdmin } from "@/lib/services/admin.service";
+import { notifyAdmin } from "@/lib/services/admin/admin.service";
+import { log } from "@/lib/utils/logger";
 
 interface FallbackExtractionResult {
   pricing: PricingResult;
@@ -37,7 +38,7 @@ async function tryFallbackExtraction(
   prevConfidence: ExtractionResult | undefined,
 ): Promise<FallbackExtractionResult | null> {
   try {
-    console.log("[EXTRACTION] Intentando fallback regex...");
+    log.info("[EXTRACTION] Intentando fallback regex...");
     let originMatch: string | undefined;
     let destMatch: string | undefined;
     const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
@@ -63,7 +64,7 @@ async function tryFallbackExtraction(
     }
 
     if (originMatch && destMatch) {
-      console.log(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
+      log.info(`[EXTRACTION] Fallback: origin="${originMatch}" dest="${destMatch}"`);
       const ft = (await resolvePricingForSlots({ origin: originMatch, destination: destMatch, passengers: 1 })).pricingResult;
       if (ft.final_price > 0) {
         const slots: Record<string, { value: string | number; score: number; reason: string }> = {};
@@ -92,16 +93,16 @@ async function tryFallbackExtraction(
           `Ruta oficial: ${ft.origin.canonical_name} → ${ft.destination.canonical_name}.`,
           `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
         ].join('\n');
-        console.log("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.final_price);
+        log.info("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.final_price);
         return { pricing: ft, confidenceResult: fbConfidence, workflowResult: fbWorkflow, extractionNote: fbExtractionNote };
       }
-      console.log("[EXTRACTION] Fallback: tariff no encontrado");
+      log.info("[EXTRACTION] Fallback: tariff no encontrado");
     } else {
-      console.log("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto ni de session. textLen:", text.length, "originMatch:", originMatch, "destMatch:", destMatch);
+      log.info("[EXTRACTION] Fallback: no se pudo extraer origin/dest del texto ni de session. textLen:", text.length, "originMatch:", originMatch, "destMatch:", destMatch);
     }
     return null;
   } catch (e) {
-    console.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
+    log.error("[EXTRACTION] Fallback error:", e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -133,7 +134,7 @@ export async function handleMemoryAndExtraction(
 
   // COMPREHENSION CHECK
   {
-    console.log("[TRACE INPUT]", { event: "comprehension_check", phone: phone.slice(-4), textLen: text.length });
+    log.info("[TRACE INPUT]", { event: "comprehension_check", phone: phone.slice(-4), textLen: text.length });
     const f4Signals = enrichComprehensionSignals(
       buildComprehensionSignals({
         text,
@@ -149,7 +150,7 @@ export async function handleMemoryAndExtraction(
     const f4ThresholdAdj = await getComprehensionThresholdAdjustment();
     const f4State = getComprehensionState(f4Score, f4ThresholdAdj);
 
-    console.log("[TRACE COMPREHENSION]", {
+    log.info("[TRACE COMPREHENSION]", {
       state: f4State,
       score: f4Score,
       thresholdAdj: f4ThresholdAdj,
@@ -171,21 +172,21 @@ export async function handleMemoryAndExtraction(
       logEscalation(String(conversationId), reason, f4Score);
       await notifyAdmin(`⚠️ *ESCALACIÓN — Bajo nivel de comprensión*\n\nTeléfono: ******${phone.slice(-4)}\nScore: ${f4Score.toFixed(2)}`);
       const escMsg = buildEscalationMessage();
-      console.log("[TRACE RESPONSE]", { source: "COMPREHENSION_ESCALATION", text: escMsg });
+      log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_ESCALATION", text: escMsg });
       await sendWhatsAppMessage(phone, escMsg);
       await insertMessage(conversationId, "assistant", escMsg);
       return null;
     }
 
     if (f4State === "RECOVERY") {
-      console.log("[TRACE RECOVERY]", {
+      log.info("[TRACE RECOVERY]", {
         state: f4State,
         score: f4Score,
         phone: phone.slice(-4),
         textLen: text.length,
       });
       const recoveryMsg = getRecoveryMessage(f4State, f5Session);
-      console.log("[TRACE RESPONSE]", { source: "COMPREHENSION_RECOVERY", text: recoveryMsg });
+      log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_RECOVERY", text: recoveryMsg });
       await sendWhatsAppMessage(phone, recoveryMsg);
       await insertMessage(conversationId, "assistant", recoveryMsg);
       return null;
@@ -201,10 +202,10 @@ export async function handleMemoryAndExtraction(
   const coreDecisionEarly = leadCore;
   let prevSlotsEarly: Record<string, string> = {};
   try {
-    console.log("[EXTRACTION] Iniciando extraction, textLen:", text.length);
+    log.info("[EXTRACTION] Iniciando extraction, textLen:", text.length);
     const extractionGuard = assertCoreRouterPolicy();
     if (extractionGuard !== true) {
-      console.log("[BLOCKED] generateGroqExtraction", extractionGuard);
+      log.info("[BLOCKED] generateGroqExtraction", extractionGuard);
       return null;
     }
     const [prevSlotsEarlyResult, ctxMemory] = await Promise.all([
@@ -212,8 +213,8 @@ export async function handleMemoryAndExtraction(
       loadContext(phone),
     ]);
     prevSlotsEarly = prevSlotsEarlyResult;
-    console.log("[CONTEXT] cargado:", { origin: ctxMemory.origin, destination: ctxMemory.destination, intent: ctxMemory.intent });
-    console.log("[TRACE EXTRACTION START]", {
+    log.info("[CONTEXT] cargado:", { origin: ctxMemory.origin, destination: ctxMemory.destination, intent: ctxMemory.intent });
+    log.info("[TRACE EXTRACTION START]", {
       roleLock: coreDecisionEarly?.roleLock,
       slotStability: coreDecisionEarly?.slotStability,
       prevSlots: prevSlotsEarly,
@@ -223,7 +224,7 @@ export async function handleMemoryAndExtraction(
       slotStability: coreDecisionEarly.slotStability,
       prevSlots: prevSlotsEarly,
     });
-    console.log("[TRACE EXTRACTION RESULT]", {
+    log.info("[TRACE EXTRACTION RESULT]", {
       success: raw != null,
       raw: raw ? JSON.stringify(raw).substring(0, 200) : null,
     });
@@ -231,28 +232,28 @@ export async function handleMemoryAndExtraction(
     const completeness = evaluateCompleteness(raw);
     if (completeness.status === "ASK") {
       const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
-      console.log("[COMPLETENESS] bloqueado", { field: completeness.field });
+      log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
       await sendWhatsAppMessage(phone, msg);
       await insertMessage(conversationId, "assistant", msg);
       return null;
     }
 
     if (raw) {
-      console.log("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
+      log.info("[EXTRACTION] Groq response:", JSON.stringify(raw).substring(0, 120));
       parsed = TripExtractionSchema.safeParse(raw);
       if (parsed.success) {
-        console.log("[EXTRACTION] Parse exitoso, calculando confidence...");
+        log.info("[EXTRACTION] Parse exitoso, calculando confidence...");
         confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
         if (parsed.data.origin && parsed.data.destination) {
           const pax = parsed.data.passengers || 1;
-          console.log(`[EXTRACTION] Calculando precio: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
+          log.info(`[EXTRACTION] Calculando precio: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
           const resolved = await resolvePricingForSlots({ origin: parsed.data.origin, destination: parsed.data.destination, passengers: pax });
           pricing = resolved.pricingResult;
           if (resolved.divergence) {
-            console.log(`[PRICING] Divergence: v3=${resolved.divergence.v3Price} v2=${resolved.divergence.v2Price} level=${resolved.divergence.level}`);
+            log.info(`[PRICING] Divergence: v3=${resolved.divergence.v3Price} v2=${resolved.divergence.v2Price} level=${resolved.divergence.level}`);
           }
-          console.log(`[EXTRACTION] Pricing result: final_price=${pricing?.final_price} origin="${pricing?.origin.canonical_name}" dest="${pricing?.destination.canonical_name}"`);
+          log.info(`[EXTRACTION] Pricing result: final_price=${pricing?.final_price} origin="${pricing?.origin.canonical_name}" dest="${pricing?.destination.canonical_name}"`);
           if (pricing && pricing.final_price > 0) {
             parsed.data.price = pricing.final_price;
             confidenceResult.slots.price = { value: pricing.final_price, score: 1.0, reason: "backend_tariff_match" };
@@ -274,7 +275,7 @@ export async function handleMemoryAndExtraction(
               const fbResolved = await resolvePricingForSlots({ origin: fbOrigin, destination: fbDest, passengers: parsed.data.passengers || 1 });
               const fbPricing = fbResolved.pricingResult;
               if (fbPricing.final_price > 0) {
-                console.log(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbPricing.final_price}`);
+                log.info(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbPricing.final_price}`);
                 pricing = fbPricing;
                 parsed.data.origin = fbOrigin;
                 parsed.data.destination = fbDest;
@@ -323,20 +324,20 @@ export async function handleMemoryAndExtraction(
         }
 
         const mergedWithMemory = mergeContext(mergedSlotsForDb, ctxMemory, confidenceResult.overall_confidence);
-        console.log("[CONTEXT] merge completado:", Object.keys(mergedWithMemory).join(", "));
+        log.info("[CONTEXT] merge completado:", Object.keys(mergedWithMemory).join(", "));
 
         await upsertChatSession(phone, mergedWithMemory, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
 
         extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing);
-        console.log("[EXTRACTION] extractionNote generado, len:", extractionNote.length);
+        log.info("[EXTRACTION] extractionNote generado, len:", extractionNote.length);
       } else {
-        console.log("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
+        log.info("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
       }
     } else {
-      console.log("[EXTRACTION] generateGroqExtraction retornó null");
+      log.info("[EXTRACTION] generateGroqExtraction retornó null");
     }
   } catch (e) {
-    console.error("[EXTRACTION] error:", e instanceof Error ? e.message : String(e));
+    log.error("[EXTRACTION] error:", e instanceof Error ? e.message : String(e));
   }
 
   if (!extractionNote) {

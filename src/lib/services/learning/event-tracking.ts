@@ -1,5 +1,6 @@
 import { insertConversationEvent } from "@/lib/db/domains/learning";
 import type { DbExecutor } from "@/lib/db/core/connection";
+import { log } from "@/lib/utils/logger";
 
 export type LearningEventType =
   | "intent_detected"
@@ -20,7 +21,7 @@ export async function logEvent(
   try {
     await insertConversationEvent(sessionId, eventType, metadata ?? null, executor);
   } catch (e) {
-    console.error("[LEARNING_EVENT] error logging event:", e);
+    log.error("[LEARNING_EVENT] error logging event:", e);
   }
 }
 

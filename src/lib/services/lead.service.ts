@@ -4,7 +4,7 @@ import { resetRequestState } from "@/lib/ai/guard";
 import { handleMessage } from "@/lib/ai/handler";
 import { core } from "@/lib/ai/core";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { notifyAdmin } from "@/lib/services/admin.service";
+import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 
 import { handleCommandShortcuts } from "@/lib/services/workflow/command-shortcuts";
@@ -17,8 +17,9 @@ import { handlePolicyPipeline } from "@/lib/services/workflow/policy-pipeline";
 
 import type { PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
+import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
 import type { ExtractionContext } from "@/lib/ai/types";
+import { log } from "@/lib/utils/logger";
 
 // ── Domain interfaces (F.5 type-only, no logic moved) ──
 
@@ -45,8 +46,8 @@ export interface LeadExecutionResult {
 // if it fully handled the message (caller should return immediately).
 export async function handleLeadMessage(phone: string, text: string): Promise<void> {
   try {
-    console.log("[TRACE WEBHOOK MESSAGE]", { event: "message_received", phoneLen: phone.length, textLen: text.length });
-    console.log(`[DEBUG_LEAD] phone=******${phone.slice(-4)} textLen=${text.length}`);
+    log.info("[TRACE WEBHOOK MESSAGE]", { event: "message_received", phoneLen: phone.length, textLen: text.length });
+    log.info(`[DEBUG_LEAD] phone=******${phone.slice(-4)} textLen=${text.length}`);
     resetRequestState();
     handleMessage(text, "RESERVA");
     const leadCore = core(text);
@@ -97,21 +98,21 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     });
 
   } catch (e) {
-    console.error("[LEAD_ERROR]", e);
+    log.error("[LEAD_ERROR]", e);
     const errMsg = `⚠️ *Error en bot — cliente sin respuesta*\n\nTeléfono: ${phone}\nError: ${e instanceof Error ? e.message : String(e)}`;
     try {
       const errResp = buildGlobalErrorMessage();
-      console.log("[TRACE RESPONSE]", { source: "GLOBAL_ERROR", text: errResp });
+      log.info("[TRACE RESPONSE]", { source: "GLOBAL_ERROR", text: errResp });
       await sendWhatsAppMessage(phone, errResp);
       const conv = await getConversationByPhone(phone);
       if (conv) await insertMessage(conv.id, "assistant", "Error interno. Cliente derivado a operador.");
     } catch (e2) {
-      console.error("[LEAD_ERROR] fallback msg también falló:", e2);
+      log.error("[LEAD_ERROR] fallback msg también falló:", e2);
     }
     try {
       await notifyAdmin(errMsg);
     } catch (e3) {
-      console.error("[LEAD_ERROR] fallback admin notify también falló:", e3);
+      log.error("[LEAD_ERROR] fallback admin notify también falló:", e3);
     }
   }
 }

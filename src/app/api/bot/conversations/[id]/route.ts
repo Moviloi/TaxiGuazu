@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { takeConversation, releaseConversation, deleteConversation } from '@/lib/db/database';
 import { checkAdminAuth } from '@/lib/auth';
+import { log } from "@/lib/utils/logger";
 
 export async function POST(
   request: NextRequest,
@@ -26,7 +27,7 @@ export async function POST(
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
   } catch (error) {
-    console.error('Error updating conversation:', error);
+    log.error('Error updating conversation:', error);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
@@ -44,7 +45,7 @@ export async function DELETE(
     await deleteConversation(convId);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('Error deleting conversation:', error);
+    log.error('Error deleting conversation:', error);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }

@@ -4,9 +4,9 @@ import {
   computeComprehensionScore,
   getComprehensionState,
   getRecoveryMessage,
-} from "@/lib/services/comprehension";
+} from "@/lib/services/extraction/comprehension";
 import type { ChatSessionRow } from "@/lib/db/types";
-import type { ComprehensionState } from "@/lib/services/comprehension";
+import type { ComprehensionState } from "@/lib/services/extraction/comprehension";
 
 function session(overrides?: Partial<ChatSessionRow>): ChatSessionRow {
   return {

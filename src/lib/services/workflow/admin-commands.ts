@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getOrCreateConversation, getConversationByPhone, insertMessage, getDriverByPhone, updateDriverShiftIfNull } from "@/lib/db/database";
 import { buildShiftActivationMsg, buildShiftEndPrompt } from "@/lib/services/dispatch/shift-utils";
-import { handleAdminCommand } from "@/lib/services/admin-commands";
+import { handleAdminCommand } from "@/lib/services/admin/admin-commands";
 import { isAdminCommand, parseAdminCommand, executeAdminCommand } from "@/lib/services/learning/admin";
 
 export async function handleAdminCommands(

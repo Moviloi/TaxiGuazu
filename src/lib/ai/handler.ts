@@ -18,6 +18,7 @@ import { policyAhora } from "./policy-ahora";
 import { policyReserva } from "./policy-reserva";
 import { assertOutputSource, assertPipelineComplete, setRequestState } from "./guard";
 import type { HandleMessageResult, HandlerContext, Mode } from "./types";
+import { log } from "@/lib/utils/logger";
 
 export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): HandleMessageResult {
   const coreDecision = core(input);
@@ -34,14 +35,14 @@ export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): 
 
   setRequestState(decision.core, decision, policy);
 
-  console.log(
+  log.info(
     `[CORE] intent=${decision.core.intent} confidence=${decision.core.confidence.toFixed(2)} facts=[${decision.core.facts.join(",")}]`,
   );
-  console.log(`[ROUTER] mode=${mode} outputType=${decision.decision} reason="${decision.reason}"`);
-  console.log(
+  log.info(`[ROUTER] mode=${mode} outputType=${decision.decision} reason="${decision.reason}"`);
+  log.info(
     `[POLICY] mode=${policy.mode} hint="${policy.policyHint}" requiresConfirmation=${policy.requiresConfirmation}`,
   );
-  console.log(`[OUTPUT_SOURCE]=POLICY`);
+  log.info(`[OUTPUT_SOURCE]=POLICY`);
 
   return { decision, policy };
 }

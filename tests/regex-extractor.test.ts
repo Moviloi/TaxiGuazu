@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { regexExtractSlots } from "../src/lib/services/regex-extractor";
+import { regexExtractSlots } from "../src/lib/services/extraction/regex-extractor";
 
 describe("regexExtractSlots", () => {
   it("CASE 1: estoy en el aeropuerto quiero ir al centro", () => {

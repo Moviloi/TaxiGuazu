@@ -1,5 +1,5 @@
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/slot-workflow";
+import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
 import type { PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
 
 const DESCRIPTIVE_PREFIX: Record<string, string> = {

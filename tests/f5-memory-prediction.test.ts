@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { buildMemory, buildShortTermBuffer, buildSessionMemory, getEntityBias, extractEntities } from "@/lib/services/memory";
-import { predictEntity, predictIntent, enrichComprehensionSignals, buildPredictedContext, computeMemoryBoost } from "@/lib/services/predictive-routing";
-import type { ComprehensionSignals } from "@/lib/services/comprehension";
+import { buildMemory, buildShortTermBuffer, buildSessionMemory, getEntityBias, extractEntities } from "@/lib/services/memory/memory";
+import { predictEntity, predictIntent, enrichComprehensionSignals, buildPredictedContext, computeMemoryBoost } from "@/lib/services/memory/predictive-routing";
+import type { ComprehensionSignals } from "@/lib/services/extraction/comprehension";
 
 const emptyMsg = (i: number) => ({ id: i, conversation_id: 1, role: "user" as const, content: "", created_at: 1000 + i });
 

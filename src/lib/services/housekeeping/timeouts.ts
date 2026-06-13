@@ -13,12 +13,17 @@ import {
   getConnectionValueFlag,
   setConnectionFlag,
   setConnectionValue,
+  getTripsWithMissingCommission,
+  getStaleWorkflows,
 } from "@/lib/db/database";
-import { getDbv } from "@/lib/db/core/connection";
-import { notifyAdmin } from "@/lib/services/admin.service";
+import { getDb } from "@/lib/db/core/connection";
+import { logLearningError } from "@/lib/services/learning/policy-engine";
+import { insertHousekeepingLog } from "@/lib/db/domains/learning";
+import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { executeEscalation } from "@/lib/services/dispatch/dispatch.service";
-import { sendPendingSurveys } from "@/lib/services/survey.service";
+import { sendPendingSurveys } from "@/lib/services/trip-execution/survey.service";
+import { log } from "@/lib/utils/logger";
 import {
   TIMEOUT_NIVEL_1_MS,
   TIMEOUT_NIVEL_2_MS,
@@ -96,7 +101,7 @@ Quedan 24hs para el viaje a *${trip.destination}*
 
     await setConnectionFlag(`${reconfKey}_${trip.trip_id}`);
 
-    console.log(`[CRON] Reconfirmación 24hs enviada a ******${driver.phone.slice(-4)} para trip ${trip.trip_id}`);
+    log.info(`[CRON] Reconfirmación 24hs enviada a ******${driver.phone.slice(-4)} para trip ${trip.trip_id}`);
   }
 }
 
@@ -121,7 +126,7 @@ Cualquier cambio, avisanos por este chat.`);
 
     await setConnectionFlag(`${felizKey}_${trip.trip_id}`);
 
-    console.log(`[CRON] Mensaje felicidad 12hs enviado a ******${trip.client_phone.slice(-4)} para trip ${trip.trip_id}`);
+    log.info(`[CRON] Mensaje felicidad 12hs enviado a ******${trip.client_phone.slice(-4)} para trip ${trip.trip_id}`);
   }
 }
 
@@ -150,7 +155,7 @@ Comisión: $${commission.toLocaleString("es-AR")}
 
     await setConnectionFlag(`${cierreKey}_${trip.trip_id}`);
 
-    console.log(`[CRON] Cierre chofer enviado a ******${trip.assigned_driver_phone.slice(-4)} para trip ${trip.trip_id}`);
+    log.info(`[CRON] Cierre chofer enviado a ******${trip.assigned_driver_phone.slice(-4)} para trip ${trip.trip_id}`);
   }
 }
 
@@ -159,12 +164,9 @@ async function checkDiscrepanciaComision(): Promise<void> {
   const cutoff = Math.floor(Date.now() / 1000) - CRON_24H_S;
   const discreKey = "last_discre_msg";
 
-  const trips = await getDbv().execute({
-    sql: "SELECT * FROM trips WHERE status = 'completado' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
-    args: [cutoff],
-  });
+  const trips = await getTripsWithMissingCommission(cutoff);
 
-  for (const row of trips.rows as any[]) {
+  for (const row of trips) {
     const tripId = row.trip_id;
 
     if (await getConnectionValueFlag(`${discreKey}_${tripId}`)) continue;
@@ -184,7 +186,7 @@ Hace más de 24hs del viaje y el chofer no declaró la comisión.`);
 
     await setConnectionFlag(`${discreKey}_${tripId}`);
 
-    console.log(`[CRON] Discrepancia comisión notificada para trip ${tripId}`);
+    log.info(`[CRON] Discrepancia comisión notificada para trip ${tripId}`);
   }
 }
 
@@ -207,7 +209,7 @@ async function checkDolarApiNotification(): Promise<void> {
       dolarVenta = blue.venta;
     }
   } catch (e) {
-    console.error("[DOLARAPI] Error fetching USD:", e);
+    log.error("[DOLARAPI] Error fetching USD:", e);
   }
 
   try {
@@ -219,7 +221,7 @@ async function checkDolarApiNotification(): Promise<void> {
       realArs = `$${brlToArs}`;
     }
   } catch (e) {
-    console.error("[DOLARAPI] Error fetching BRL:", e);
+    log.error("[DOLARAPI] Error fetching BRL:", e);
   }
 
   await notifyAdmin(`📊 *Cotizaciones del día* (${today})
@@ -231,7 +233,7 @@ Usá .env: COTIZACION_DOLAR y COTIZACION_REAL`);
 
   await setConnectionValue("dolar_last_fetch_date", today);
 
-  console.log(`[DOLARAPI] Cotizaciones notificadas para ${today}`);
+  log.info(`[DOLARAPI] Cotizaciones notificadas para ${today}`);
 }
 
 // === SESSION CLEANUP DIARIO ===
@@ -245,26 +247,54 @@ async function checkSessionCleanup(): Promise<void> {
   // 1. Archive trips with past scheduled_at that weren't completed
   const expiredTrips = await getExpiredTrips();
   for (const t of expiredTrips) {
-    console.log(`[CLEANUP] Archivando trip expirado ${t.trip_id}`);
+    log.info(`[CLEANUP] Archivando trip expirado ${t.trip_id}`);
     await updateTripState(t.trip_id, "completado");
   }
 
   // 2. Close orphaned workflows (active but no activity >24h)
       // consulta chat_sessions (SoT) con JOIN a conversations.
   const staleCutoff = now - STALE_WORKFLOW_THRESHOLD_S;
-  const stale = await getDbv().execute({
-    sql: `SELECT c.id as conversation_id
-          FROM chat_sessions cs
-          JOIN conversations c ON c.phone = cs.phone
-          WHERE cs.workflow_state != 'closed' AND cs.updated_at < ?`,
-    args: [staleCutoff],
-  });
-  for (const w of stale.rows as any[]) {
-    console.log(`[CLEANUP] Cerrando workflow huérfano conv ${w.conversation_id}`);
+  const stale = await getStaleWorkflows(staleCutoff);
+  for (const w of stale) {
+    log.info(`[CLEANUP] Cerrando workflow huérfano conv ${w.conversation_id}`);
     await closeWorkflow(w.conversation_id);
   }
 
   await setConnectionValue("last_session_cleanup_date", today);
 
-  console.log(`[CLEANUP] Ejecutado para ${today}: ${expiredTrips.length} trips, ${stale.rows.length} workflows`);
+  log.info(`[CLEANUP] Ejecutado para ${today}: ${expiredTrips.length} trips, ${stale.length} workflows`);
+}
+
+async function logCleanup(job: string, rowsDeleted: number, duration: number): Promise<void> {
+  await insertHousekeepingLog(job, rowsDeleted, duration);
+}
+
+export async function runHousekeeping(): Promise<void> {
+  const db = getDb();
+  const cutoff = Math.floor(Date.now() / 1000) - 30 * 86400;
+
+  for (const { sql, job } of [
+    { sql: "DELETE FROM system_metrics WHERE recorded_at < ?", job: "system_metrics" },
+    { sql: "DELETE FROM simulations WHERE timestamp < ?", job: "simulations" },
+    { sql: "DELETE FROM f9_events WHERE timestamp < ?", job: "f9_events" },
+    { sql: "DELETE FROM f9_error_log WHERE created_at < ?", job: "f9_error_log" },
+    { sql: "DELETE FROM f9_drift_log WHERE timestamp < ?", job: "f9_drift_log" },
+    { sql: "DELETE FROM policy_results WHERE timestamp < ?", job: "policy_results" },
+    { sql: "DELETE FROM conversation_f4_log WHERE timestamp < ?", job: "conversation_f4_log" },
+  ]) {
+    const start = Date.now();
+    try {
+      const rs = await db.execute({ sql, args: [cutoff] });
+      const rowsDeleted = Number(rs.rowsAffected ?? 0);
+      const duration = Date.now() - start;
+
+      if (rowsDeleted > 0) {
+        await logCleanup(job, rowsDeleted, duration);
+      }
+    } catch (e) {
+      const duration = Date.now() - start;
+      await logLearningError(`housekeeping:${job}`, e);
+      await logCleanup(job, 0, duration);
+    }
+  }
 }

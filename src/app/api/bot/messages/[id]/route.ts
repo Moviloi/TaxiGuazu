@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMessages, insertMessage, getConversationById } from '@/lib/db/database';
 import { sendWhatsAppMessage } from '@/lib/whatsapp/sender';
 import { checkAdminAuth } from '@/lib/auth';
+import { log } from "@/lib/utils/logger";
 
 export async function GET(
   request: NextRequest,
@@ -16,7 +17,7 @@ export async function GET(
     const messages = await getMessages(convId);
     return NextResponse.json({ messages });
   } catch (error) {
-    console.error('Error fetching messages:', error);
+    log.error('Error fetching messages:', error);
     return NextResponse.json({ messages: [], error: 'Error interno' }, { status: 500 });
   }
 }
@@ -49,7 +50,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true, messageId });
   } catch (error) {
-    console.error('Error posting message:', error);
+    log.error('Error posting message:', error);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }

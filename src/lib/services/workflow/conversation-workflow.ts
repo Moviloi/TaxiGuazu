@@ -12,7 +12,8 @@ import {
   getConversationById,
   setChatSessionWorkflowState,
 } from "@/lib/db/database";
-import { getDbv } from "@/lib/db/core/connection";
+import { getDb } from "@/lib/db/core/connection";
+import { log } from "@/lib/utils/logger";
 
 export type WorkflowState =
   | "idle"
@@ -58,7 +59,7 @@ async function transitionTo(phone: string, newState: WorkflowState): Promise<voi
   const current = (session?.workflow_state || "idle") as WorkflowState;
   const allowed = VALID_TRANSITIONS[current];
   if (allowed && !allowed.includes(newState)) {
-    console.warn(`[STATEMACHINE] Transición inválida: ${current} → ${newState}`);
+    log.warn(`[STATEMACHINE] Transición inválida: ${current} → ${newState}`);
   }
   await setChatSessionWorkflowState(phone, newState);
 }
@@ -107,7 +108,7 @@ export async function isWorkflowActive(convId: number): Promise<boolean> {
 
 export async function getExpiredByState(state: WorkflowState, timeoutMs: number): Promise<WorkflowContext[]> {
   const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const db = getDbv();
+  const db = getDb();
   const rs = await db.execute({
     sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
           FROM chat_sessions cs
@@ -124,7 +125,7 @@ export async function getExpiredByState(state: WorkflowState, timeoutMs: number)
 
 export async function getStaleWorkflows(timeoutMs: number): Promise<WorkflowContext[]> {
   const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const db = getDbv();
+  const db = getDb();
   const rs = await db.execute({
     sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
           FROM chat_sessions cs
@@ -140,7 +141,7 @@ export async function getStaleWorkflows(timeoutMs: number): Promise<WorkflowCont
 }
 
 export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
-  const db = getDbv();
+  const db = getDb();
   const rs = await db.execute({
     sql: `UPDATE chat_sessions
           SET workflow_state = 'closed', updated_at = unixepoch()
@@ -148,6 +149,6 @@ export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
     args: [phone],
   });
   const ok = rs.rowsAffected > 0;
-  console.log(`[ASSIGN] rowsAffected=${rs.rowsAffected} ok=${ok}`);
+  log.info(`[ASSIGN] rowsAffected=${rs.rowsAffected} ok=${ok}`);
   return ok;
 }

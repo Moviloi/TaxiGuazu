@@ -281,38 +281,7 @@ export interface ProcessedMessageRow {
   payload_hash: string | null;
 }
 
-export type OpportunityContext = {
-  tripId: string;
-  clientPhone: string;
-  origin: string;
-  destination: string;
-  passengers: number;
-  tariffId: number | null;
-  price: number;
-  piso: number;
-  urgency: string;
-  conversationId: number;
-  tripLegType: "airport_to_hotel" | "hotel_to_airport" | "airport_to_airport" | "hotel_to_hotel" | "other";
-  hotelZone: boolean;
-  intentKeywords: string[];
-  entityMatches: string[];
-  hasPendingOpportunity: boolean;
-  memoryBoost?: number;
-}
-
 export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";
-
-export interface Opportunity {
-  type: OpportunityType;
-  ruleId: number | null;
-  label: string;
-  description: string;
-  originalPrice: number;
-  offeredPrice: number;
-  savings: number;
-  priority: number;
-  logId: number;
-}
 
 export interface OpportunityRuleRow {
   id: number;

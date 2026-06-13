@@ -10,6 +10,7 @@ import { getChatSession, resetChatSession, updateChatSessionWorkflow } from "@/l
 import { getActiveTripByPhone } from "@/lib/db/database";
 import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
+import { log } from "@/lib/utils/logger";
 
 export type SlotWorkflowState = "idle" | "collecting_slots" | "awaiting_confirmation" | "closed";
 
@@ -34,7 +35,7 @@ async function checkSessionExpiry(phone: string): Promise<boolean> {
   // Check if there's an active trip with scheduled_at in the past
   const trip = await getActiveTripByPhone(phone);
   if (trip && trip.scheduled_at && trip.scheduled_at < now) {
-    console.log(`[SLOT_STATE] Trip ${trip.trip_id} expired, resetting session`);
+    log.info(`[SLOT_STATE] Trip ${trip.trip_id} expired, resetting session`);
     await resetChatSession(phone);
     return true;
   }
@@ -44,7 +45,7 @@ async function checkSessionExpiry(phone: string): Promise<boolean> {
   if (session && session.updated_at) {
     const inactiveFor = now - session.updated_at;
     if (inactiveFor > SESSION_INACTIVITY_48H_S) {
-      console.log(`[SLOT_STATE] Session stale (>48h inactivity), resetting`);
+      log.info(`[SLOT_STATE] Session stale (>48h inactivity), resetting`);
       await resetChatSession(phone);
       return true;
     }
@@ -99,7 +100,7 @@ export async function evaluateWorkflowTransition(
   // Validate transition
   const allowed = VALID_SLOT_TRANSITIONS[currentState];
   if (allowed && !allowed.includes(newState)) {
-    console.warn(`[SLOT_STATE] Invalid transition: ${currentState} → ${newState}`);
+    log.warn(`[SLOT_STATE] Invalid transition: ${currentState} → ${newState}`);
     newState = currentState;
   }
 

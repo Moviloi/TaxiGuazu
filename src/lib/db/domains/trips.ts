@@ -1,14 +1,23 @@
 import { query, queryOne } from "../core/helpers";
-import { getDbv, ensureSchema } from "../core/connection";
+import { getDb, ensureSchema } from "../core/connection";
 import type { TripRow, TripPhase, TripClosureReason, TariffRow } from "../types";
-import { getDriverDiscountForTariff } from "../database";
+import { log } from "@/lib/utils/logger";
+
+async function getDriverDiscountForTariff(driverPhone: string, tariffId: number): Promise<number | null> {
+  const rows = await getDb().execute({
+    sql: "SELECT discount_pct FROM driver_discounts WHERE driver_phone = ? AND tariff_id = ? AND active = 1 AND (valid_until IS NULL OR valid_until > unixepoch())",
+    args: [driverPhone, tariffId],
+  });
+  const row = (rows.rows as any[])[0];
+  return row?.discount_pct ?? null;
+}
 
 // ========== TRIPS ==========
 
 export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number, flightNumber?: string, status?: string): Promise<void> {
   const tripStatus = status || "consulta";
   await ensureSchema();
-  await getDbv().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, tripStatus, scheduledAt || null, flightNumber || null] });
+  await getDb().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, tripStatus, scheduledAt || null, flightNumber || null] });
   await syncTripPhaseFromLegacyStatus(tripId, tripStatus);
 }
 
@@ -21,11 +30,11 @@ export async function getActiveTripByPhone(clientPhone: string): Promise<TripRow
     "SELECT * FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL) ORDER BY created_at DESC LIMIT 1",
     [clientPhone]
   );
-  const legacyRs = await getDbv().execute({
+  const legacyRs = await getDb().execute({
     sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
     args: [clientPhone],
   });
-  const phaseRs = await getDbv().execute({
+  const phaseRs = await getDb().execute({
     sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL)",
     args: [clientPhone],
   });
@@ -48,7 +57,7 @@ export async function getTripByAssignedDriver(driverPhone: string): Promise<Trip
 
 export async function updateTripState(tripId: string, newState: string): Promise<void> {
   await ensureSchema();
-  await getDbv().execute({ sql: "UPDATE trips SET status = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [newState, tripId] });
+  await getDb().execute({ sql: "UPDATE trips SET status = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [newState, tripId] });
   await syncTripPhaseFromLegacyStatus(tripId, newState);
 }
 
@@ -69,7 +78,7 @@ export async function assignDriverToTrip(tripId: string, driverPhone: string): P
 
   const commission = price - payout;
 
-  await getDbv().execute({
+  await getDb().execute({
     sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', commission_amount = ?, driver_payout = ?, updated_at = unixepoch() WHERE trip_id = ?",
     args: [driverPhone, commission, payout, tripId],
   });
@@ -79,7 +88,7 @@ export async function assignDriverToTrip(tripId: string, driverPhone: string): P
 
 export async function completeTrip(tripId: string): Promise<void> {
   await ensureSchema();
-  await getDbv().execute({
+  await getDb().execute({
     sql: "UPDATE trips SET status = 'completado', confirmed_at = unixepoch(), updated_at = unixepoch() WHERE trip_id = ?",
     args: [tripId],
   });
@@ -106,7 +115,7 @@ function checkTripPhaseDivergence(trip: TripRow, source: string): void {
   const expected = LEGACY_STATUS_TO_PHASE[trip.status || ""];
   if (expected && expected.phase !== trip.trip_phase && !divergenceLogged.has(trip.trip_id)) {
     divergenceLogged.add(trip.trip_id);
-    console.warn("[diagnostic] trip_phase_divergence", JSON.stringify({
+    log.warn("[diagnostic] trip_phase_divergence", JSON.stringify({
       trip_id: trip.trip_id,
       legacy_status: trip.status,
       trip_phase: trip.trip_phase,
@@ -129,7 +138,7 @@ export async function syncTripPhaseFromLegacyStatus(tripId: string, status: stri
     const key = `${tripId}:${status}`;
     if (!phaseUnknownStatusLogged.has(key)) {
       phaseUnknownStatusLogged.add(key);
-      console.warn("[metric] trip_phase_unknown_status", JSON.stringify({
+      log.warn("[metric] trip_phase_unknown_status", JSON.stringify({
         trip_id: tripId,
         status,
       }));
@@ -138,7 +147,7 @@ export async function syncTripPhaseFromLegacyStatus(tripId: string, status: stri
   }
 
   await ensureSchema();
-  const rs = await getDbv().execute({
+  const rs = await getDb().execute({
     sql: "SELECT trip_phase, closure_reason FROM trips WHERE trip_id = ?",
     args: [tripId],
   });
@@ -150,14 +159,14 @@ export async function syncTripPhaseFromLegacyStatus(tripId: string, status: stri
 
   if (currentPhase && currentPhase !== mapping.phase && !divergenceLogged.has(tripId)) {
     divergenceLogged.add(tripId);
-    console.warn("[metric] trip_phase_divergence", JSON.stringify({
+    log.warn("[metric] trip_phase_divergence", JSON.stringify({
       trip_id: tripId,
       status,
       trip_phase: currentPhase,
     }));
   }
 
-  await getDbv().execute({
+  await getDb().execute({
     sql: "UPDATE trips SET trip_phase = ?, closure_reason = ?, updated_at = unixepoch() WHERE trip_id = ?",
     args: [mapping.phase, expectedReason, tripId],
   });
@@ -165,7 +174,7 @@ export async function syncTripPhaseFromLegacyStatus(tripId: string, status: stri
   const syncKey = `${tripId}:${status}`;
   if (!phaseSyncLogged.has(syncKey)) {
     phaseSyncLogged.add(syncKey);
-    console.log("[metric] trip_phase_sync", JSON.stringify({
+    log.info("[metric] trip_phase_sync", JSON.stringify({
       trip_id: tripId,
       status,
       trip_phase: mapping.phase,
@@ -175,7 +184,7 @@ export async function syncTripPhaseFromLegacyStatus(tripId: string, status: stri
 
 export async function getTripPhase(tripId: string): Promise<TripPhase | null> {
   await ensureSchema();
-  const rs = await getDbv().execute({
+  const rs = await getDb().execute({
     sql: "SELECT trip_phase FROM trips WHERE trip_id = ?",
     args: [tripId],
   });
@@ -198,7 +207,7 @@ export async function validateReaderConsistency(
   const key = `${source}:${expectedKey}`;
   if (legacyCount !== phaseCount && !validationMismatchLogged.has(key)) {
     validationMismatchLogged.add(key);
-    console.warn("[metric] trip_phase_reader_validation_mismatch", JSON.stringify({
+    log.warn("[metric] trip_phase_reader_validation_mismatch", JSON.stringify({
       source,
       legacy_count: legacyCount,
       phase_count: phaseCount,
@@ -209,11 +218,11 @@ export async function validateReaderConsistency(
 
 export async function reportTripPhaseNullCount(source: string): Promise<number> {
   await ensureSchema();
-  const rs = await getDbv().execute("SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IS NULL");
+  const rs = await getDb().execute("SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IS NULL");
   const cnt = Number((rs.rows[0] as any)?.cnt ?? 0);
   if (!phaseNullLogged.has(source)) {
     phaseNullLogged.add(source);
-    console.log("[metric] trip_phase_null_count", JSON.stringify({
+    log.info("[metric] trip_phase_null_count", JSON.stringify({
       source,
       null_count: cnt,
     }));
@@ -225,7 +234,7 @@ export async function reportTripPhaseNullCount(source: string): Promise<number> 
 
 export async function getActiveTripsByClient(clientPhone: string): Promise<TripRow[]> {
   const trips = await query<TripRow>("SELECT * FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL) ORDER BY created_at ASC", [clientPhone]);
-  const legacyRs = await getDbv().execute({
+  const legacyRs = await getDb().execute({
     sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
     args: [clientPhone],
   });
@@ -248,15 +257,15 @@ export async function updateTripTariff(tripId: string, tariffId: number, pisoBas
   const tariff = await queryOne<TariffRow>("SELECT * FROM tariffs WHERE id = ?", [tariffId]);
   const price = tariff ? (pax > 4 ? tariff.price_6p : tariff.price_4p) : (trip?.price_base ?? 0);
   const garantizado = Math.round(price * 0.85);
-  await getDbv().execute({
+  await getDb().execute({
     sql: "UPDATE trips SET tariff_id = ?, piso_base = ?, garantizado_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
     args: [tariffId, pisoBase, garantizado, tripId],
   });
 }
 
-export async function setComisionDeclarada(tripId: string): Promise<void> {
+export async function setCommissionDeclared(tripId: string): Promise<void> {
   await ensureSchema();
-  await getDbv().execute({
+  await getDb().execute({
     sql: "UPDATE trips SET comision_declarada = 1, updated_at = unixepoch() WHERE trip_id = ?",
     args: [tripId],
   });
@@ -279,11 +288,11 @@ export async function getTripsPendingCloseOut(): Promise<TripRow[]> {
     "SELECT * FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ? ORDER BY confirmed_at",
     [cutoff]
   );
-  const legacyRs = await getDbv().execute({
+  const legacyRs = await getDb().execute({
     sql: "SELECT COUNT(*) as cnt FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
     args: [cutoff],
   });
-  const phaseRs = await getDbv().execute({
+  const phaseRs = await getDb().execute({
     sql: "SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
     args: [cutoff],
   });

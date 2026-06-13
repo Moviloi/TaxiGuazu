@@ -1,9 +1,9 @@
 import type { InValue } from "@libsql/client";
-import { ensureSchema, getDbv } from "./connection";
+import { ensureSchema, getDb } from "./connection";
 
 export async function query<T>(sql: string, args?: InValue[]): Promise<T[]> {
   await ensureSchema();
-  const rs = await getDbv().execute({ sql, args: args ?? [] });
+  const rs = await getDb().execute({ sql, args: args ?? [] });
   return rs.rows as unknown as T[];
 }
 

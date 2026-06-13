@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage } from "@/lib/services/lead.service";
 import { checkAdminAuth } from "@/lib/auth";
+import { log } from "@/lib/utils/logger";
 
 export async function POST(request: NextRequest) {
   const auth = checkAdminAuth(request);
@@ -14,12 +15,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Faltan phone o text" }, { status: 400 });
     }
 
-    console.log(`[SIMULATE] event=message_received phone=******${phone.slice(-4)} len=${text.length}`);
+    log.info(`[SIMULATE] event=message_received phone=******${phone.slice(-4)} len=${text.length}`);
     await handleLeadMessage(phone, text);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("[SIMULATE] Error:", error);
+    log.error("[SIMULATE] Error:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

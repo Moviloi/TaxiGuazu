@@ -1,11 +1,15 @@
 // ARCHITECTURE NOTE: Opportunity domain. Congelado durante Conversation Core MVP.
 // Flujo independiente gestionado por lead.service.ts. No pasa por pipeline ni policies.
-import type { ProviderAdjustmentRow, PromotionRow, PackageRow, OpportunityContext, Opportunity, OpportunityRuleRow } from "@/lib/db/types";
-import type { PricingResult } from "./pricing-engine";
+import type { ProviderAdjustmentRow, PromotionRow, PackageRow, OpportunityRuleRow } from "@/lib/db/types";
+import type { OpportunityContext, Opportunity, OpportunityOffer, OpportunityResult } from "@/lib/services/learning/opportunity-types";
+
+export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";
+import type { PricingResult } from "../pricing/pricing-engine";
 import { queryOne } from "@/lib/db/core/helpers";
 import { getActiveComplementRules, insertOpportunityLog } from "@/lib/db/database";
 import { getEntityWeight } from "@/lib/services/learning/learning-utils";
 import { resolveEntityFromCatalog } from "@/lib/config/entity-catalog";
+import { log } from "@/lib/utils/logger";
 
 // ── Legacy complement opportunities (post-confirmation cross-sell) ──
 
@@ -66,13 +70,13 @@ function matchRule(rule: OpportunityRuleRow, context: OpportunityContext): boole
 export class OpportunityEngine {
   async evaluate(context: OpportunityContext, executor?: any): Promise<Opportunity[]> {
     if (context.hasPendingOpportunity) {
-      console.log(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=0 (pending opportunity exists)`);
+      log.info(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=0 (pending opportunity exists)`);
       return [];
     }
 
     const rules = await getActiveComplementRules();
     if (rules.length === 0) {
-      console.log(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=0 (no active complements)`);
+      log.info(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=0 (no active complements)`);
       return [];
     }
 
@@ -89,7 +93,7 @@ export class OpportunityEngine {
     });
 
     if (matched.length === 0) {
-      console.log(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=0 (no matching rules)`);
+      log.info(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=0 (no matching rules)`);
       return [];
     }
 
@@ -121,7 +125,7 @@ export class OpportunityEngine {
       });
     }
 
-    console.log(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=${opportunities.length} top="${top3.map((r) => r.label).join(", ")}"`);
+    log.info(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=${opportunities.length} top="${top3.map((r) => r.label).join(", ")}"`);
     return opportunities;
   }
 }
@@ -129,17 +133,6 @@ export class OpportunityEngine {
 export const opportunityEngine = new OpportunityEngine();
 
 // ── New commercial opportunity evaluation (pricing-aware) ──
-
-export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";
-
-export interface OpportunityOffer {
-  type: OpportunityType;
-  label: string;
-  description: string | null;
-  savings: number;
-  already_applied: boolean;
-  valid_until: number | null;
-}
 
 export interface OpportunityInput {
   pricingResult: PricingResult;
@@ -150,11 +143,6 @@ export interface OpportunityInput {
     passengers: number;
   };
   userIntent: string;
-}
-
-export interface OpportunityResult {
-  available: boolean;
-  opportunities: OpportunityOffer[];
 }
 
 const OPPORTUNITY_KEYWORDS = /\b(descuento|promo|beneficio|oferta|mejor precio|más barato|rebaja|promoción|descuentito|economic|economico|más económico)\b/i;
@@ -266,6 +254,4 @@ export async function evaluateOpportunities(input: OpportunityInput): Promise<Op
   };
 }
 
-// Re-exportado desde response-builder para mantener compatibilidad de imports.
-// v5.0 A5: La implementación vive en response-builder.ts.
-export { formatOpportunityResponse } from "@/lib/ai/response-builder";
+

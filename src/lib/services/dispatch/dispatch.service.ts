@@ -22,14 +22,15 @@ import {
   updateTripState,
   findTariff,
   getTariffById,
+  debugGetActiveDriversWithConversationStatus,
 } from "@/lib/db/database";
-import { getDbv } from "@/lib/db/core/connection";
-import { getConnectionCache } from "@/lib/db/domains/learning";
+import { getConnectionCache } from "@/lib/db/domains/connection-state";
 import type { DriverRow, PackagePriceRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
-import { notifyAdmin } from "@/lib/services/admin.service";
+import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver, closeWorkflow } from "@/lib/services/workflow/conversation-workflow";
+import { log } from "@/lib/utils/logger";
 
 export type DispatchLevel = "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver";
 
@@ -244,20 +245,9 @@ export async function broadcastTripToDrivers(
   if (drivers.length === 0) {
     try {
       const cutoff = Math.floor(Date.now() / 1000) - 86400;
-      await getDbv().execute({
-        sql: `SELECT d.phone, d.name, d.status, d.tier, d.country,
-          c.phone as conv_phone, c.last_message_at,
-          CASE WHEN c.phone IS NULL THEN 'no_join'
-               WHEN c.last_message_at IS NULL THEN 'no_msg'
-               WHEN c.last_message_at <= ? THEN 'expired'
-               ELSE 'ok' END as conv_status
-          FROM drivers d
-          LEFT JOIN conversations c ON c.phone = d.phone
-          WHERE d.status = 'active'`,
-        args: [cutoff],
-      });
-      console.log("[BROADCAST_DEBUG] No active drivers found via getAvailableDrivers");
-    } catch (e) { console.error("[BROADCAST_DEBUG] error:", e); }
+      await debugGetActiveDriversWithConversationStatus(cutoff);
+      log.info("[BROADCAST_DEBUG] No active drivers found via getAvailableDrivers");
+    } catch (e) { log.error("[BROADCAST_DEBUG] error:", e); }
 
     await notifyAdmin(`🚕 *VIAJE SIN CHOFER DISPONIBLE*
 
@@ -288,7 +278,7 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
         const bp = passengersNum > 4 ? (row.base_price_6p ?? null) : (row.base_price_4p ?? null);
         pisoLow = bp ? Math.round(bp * 0.8) : null;
       }
-    } catch (e) { console.error("[broadcastTripToDrivers] load base_price error:", e); }
+    } catch (e) { log.error("[broadcastTripToDrivers] load base_price error:", e); }
   }
 
   // Batch-fetch package prices for drivers that need them
@@ -318,7 +308,7 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
     const before = eligible.length;
     eligible = eligible.filter((d) => d.tier === "low");
     if (eligible.length !== before) {
-      console.log(`[MARGIN] Margen $${margin} < $${MIN_MARGIN}. Filtrados no-low, quedan ${eligible.length}/${before}`);
+      log.info(`[MARGIN] Margen $${margin} < $${MIN_MARGIN}. Filtrados no-low, quedan ${eligible.length}/${before}`);
     }
   }
 
@@ -350,7 +340,7 @@ Ningún chofer tiene un piso menor o igual a $${effectivePayout}. Reasigná manu
       return false;
     });
     if (eligible.length !== before) {
-      console.log(`[SHIFT] Filtrados ${before - eligible.length} choferes fuera de turno (${shiftClass})`);
+      log.info(`[SHIFT] Filtrados ${before - eligible.length} choferes fuera de turno (${shiftClass})`);
     }
   }
 
@@ -401,12 +391,12 @@ Valor garantizado: $${driver.actual_payout.toLocaleString("es-AR")}${passengers 
     return sendInteractiveButtons(driver.phone, body, [
       { id: `aceptar_${convId}`, title: "✅ Aceptar" },
     ]).then(() => incrementOfferReceived(driver.phone))
-      .catch((e) => console.error(`[BROADCAST] Failed to send to driver:`, e));
+      .catch((e) => log.error(`[BROADCAST] Failed to send to driver:`, e));
   }));
 
   const tierCounts = { low: 0, normal: 0, premium: 0 };
   for (const d of eligible) tierCounts[d.tier as keyof typeof tierCounts] = (tierCounts[d.tier as keyof typeof tierCounts] || 0) + 1;
-  console.log(`[BROADCAST] ${label} notificado a ${eligible.length}/${drivers.length} (${country}) ${packageType || "simple"} turno=${shiftClass} payout=$${effectivePayout} piso=$${tripPiso} tiers=${JSON.stringify(tierCounts)}`);
+  log.info(`[BROADCAST] ${label} notificado a ${eligible.length}/${drivers.length} (${country}) ${packageType || "simple"} turno=${shiftClass} payout=$${effectivePayout} piso=$${tripPiso} tiers=${JSON.stringify(tierCounts)}`);
 }
 
 // ── Driver helpers ──

@@ -3,8 +3,8 @@
 // INPUT: raw origin/destination strings + passenger count
 // OUTPUT: canonical PricingResult + optional tariff divergence info
 
-import { calculatePrice, type PricingResult } from "@/lib/services/pricing-engine";
-import { resolveTariff } from "@/lib/services/tariff-resolver";
+import { calculatePrice, type PricingResult } from "@/lib/services/pricing/pricing-engine";
+import { resolveTariff } from "@/lib/services/pricing/tariff-resolver";
 
 export type { PricingResult };
 
