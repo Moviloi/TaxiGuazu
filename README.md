@@ -39,31 +39,56 @@ Variables requeridas:
 src/
 ├── app/
 │   ├── api/
-│   │   ├── bot/                 # API routes del dashboard
-│   │   └── whatsapp/webhook/    # Webhook entrante de Meta
-│   └── page.tsx                 # Dashboard (cliente React)
+│   │   ├── bot/                    # API routes del dashboard
+│   │   └── whatsapp/webhook/       # Webhook entrante de Meta
+│   └── page.tsx                    # Dashboard (cliente React)
 ├── config/
-│   ├── constants.ts             # Constantes de la app
-│   └── env.ts                   # Validación Zod de env vars
-└── lib/
-    ├── ai/                      # Groq + extracción de datos
-    │   ├── core.ts              #   Detección de intent + role lock
-    │   ├── router.ts            #   Enrutamiento a policy según modo
-    │   ├── handler.ts           #   Pipeline CORE → ROUTER → POLICY
-    │   ├── guard.ts             #   Safety guardrails (assert output source)
-    │   └── policy-reserva.ts    #   Policy RESERVA (respuesta sin LLM)
-    ├── db/                      # SQLite/Turso (database.ts + types.ts)
-    ├── services/                # Lógica de negocio por dominio
-    │   ├── lead.service.ts      #   Detección: orquestación entrada (único punto)
-    │   ├── context-memory.ts     #   Persistencia de estado de sesión
-    │   ├── confidence.ts        #   Cálculo de confianza de extracción
-    │   ├── geo-engine.ts         #   Resolución geográfica (zonas, expansión)
-    │   ├── pricing/             #   Motor de precios (facade + resolución tarifas)
-    │   ├── dispatch/            #   Asignación multi-nivel a choferes
-    │   ├── trip-execution/      #   Ejecución de viajes (confirmación, llegada, post-servicio)
-    │   └── learning/            #   Pipeline de aprendizaje (oportunidades, policy, adaptación)
-    ├── utils/                   # clamp.ts
-    └── whatsapp/                # Cliente WhatsApp Cloud API
+│   ├── constants.ts                # Constantes de la app
+│   └── env.ts                      # Validación Zod de env vars
+├── lib/
+│   ├── ai/                         # Groq + detección de intent + policies
+│   │   ├── core.ts                 #   Detección de intent + role lock
+│   │   ├── router.ts               #   Enrutamiento según modo
+│   │   ├── handler.ts              #   Pipeline CORE → ROUTER → POLICY
+│   │   ├── guard.ts                #   Safety guardrails (assert output source)
+│   │   ├── groq.ts                 #   Cliente Groq (Llama)
+│   │   ├── patterns.ts             #   Patrones de texto para respuestas
+│   │   ├── response-builder.ts     #   Builder de respuestas
+│   │   ├── policy-ahora.ts         #   Policy AHORA (respuesta inmediata)
+│   │   ├── policy-reserva.ts       #   Policy RESERVA (respuesta sin LLM)
+│   │   ├── extraction-schema.ts    #   Schema de extracción de datos
+│   │   ├── extraction-prompt.ts    #   Prompt de extracción
+│   │   └── laterals/               #   Manejo de laterales en conversación
+│   ├── core/
+│   │   └── pipeline.ts             # Pipeline principal de procesamiento
+│   ├── db/
+│   │   ├── database.ts             # Facade de acceso a DB
+│   │   ├── types.ts                # Tipos compartidos de DB
+│   │   ├── core/
+│   │   │   ├── connection.ts       # Conexión SQLite/Turso + schema
+│   │   │   └── helpers.ts          # Helpers de query
+│   │   └── domains/
+│   │       ├── connection-state.ts  # Estado de conexión WhatsApp
+│   │       ├── learning.ts          # Tablas del subsistema de aprendizaje
+│   │       └── trips.ts             # Operaciones sobre viajes
+│   ├── services/                   # Lógica de negocio por dominio
+│   │   ├── lead.service.ts         # Orquestador de entrada de mensajes
+│   │   ├── admin/                  # Notificaciones + comandos admin
+│   │   ├── dispatch/               # Asignación multi-nivel a choferes
+│   │   ├── extraction/             # Extracción de datos + comprensión
+│   │   ├── geo/                    # Resolución geográfica (zonas, ubicaciones)
+│   │   ├── housekeeping/           # Cron jobs + limpieza de datos
+│   │   ├── i18n/                   # Detección de idioma
+│   │   ├── learning/               # Pipeline de aprendizaje (oportunidades, policy, adaptación)
+│   │   ├── memory/                 # Memoria de sesión y predicción
+│   │   ├── pricing/                # Motor de precios (tarifas, reglas comerciales)
+│   │   ├── trip-execution/         # Ejecución de viajes + encuestas post-servicio
+│   │   └── workflow/               # Workflow de conversación (slots, oportunidades, comandos)
+│   ├── utils/
+│   │   ├── clamp.ts                # Clamping numérico
+│   │   └── logger.ts               # Logging centralizado (log.debug/info/warn/error)
+│   └── whatsapp/
+│       └── sender.ts               # Cliente WhatsApp Cloud API
 ```
 
 ## Flujo de mensaje
@@ -84,12 +109,23 @@ AI Pipeline (lib/ai/)
   • POLICY: generación de respuesta sin LLM (basada en reglas)
      │
      ▼
-Execution Domains (lib/services/)
-  • pricing/     → Cálculo de precio + resolución de tarifas
+Workflow / Extraction (lib/services/workflow/ + extraction/)
+  • Workflow de slots y estados de conversación
+  • Extracción de datos del mensaje (entidades, slots, confianza)
+  • Comprensión y memoria de sesión
+     │
+     ▼
+Domain Services (lib/services/pricing/ + dispatch/ + trip-execution/ + learning/)
+  • pricing/     → Cálculo de precio + resolución de tarifas + reglas comerciales
   • dispatch/    → Asignación a choferes (nivel_1 → nivel_2 → broadcast)
-  • trip-execution/ → Confirmación, llegada, post-servicio
-  • learning/    → Oportunidades, policy engine, adaptación
-  • persistence  → DB (SQLite/Turso via database.ts)
+  • trip-execution/ → Confirmación, llegada, post-servicio, encuestas
+  • learning/    → Oportunidades, policy engine, adaptación, experimentos
+     │
+     ▼
+Database Domains (lib/db/domains/ + lib/db/database.ts)
+  • connection-state/  → Estado de conexión WhatsApp
+  • trips/            → Operaciones CRUD de viajes
+  • learning/         → Tablas de aprendizaje (políticas, métricas, eventos)
 ```
 
 ## Dispatch

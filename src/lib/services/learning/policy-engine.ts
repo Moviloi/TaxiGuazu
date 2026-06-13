@@ -1,21 +1,9 @@
 import type { LearningDecision, SystemLoad, PolicyEngineResult, Policy, PolicyCondition, PolicyAction, PolicyResult, SimulationResult, SafetyGuardrail } from "./types";
 import { getEconomicProfile } from "./economics";
 import { clamp01 } from "@/lib/utils/clamp";
-import { insertF9ErrorLog } from "@/lib/db/domains/learning";
-import { log } from "@/lib/utils/logger";
+import { logLearningError } from "@/lib/services/shared/error-logger";
 
-// ── Error Logging ──
-
-export async function logLearningError(component: string, error: unknown): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error);
-  const stack = error instanceof Error ? (error.stack ?? null) : null;
-  try {
-    await insertF9ErrorLog(component, message, stack);
-  } catch (logError) {
-    log.error(`[LEARNING_ERROR] Fallo al loggear error de ${component}:`, logError);
-    log.error(`[LEARNING_ERROR] Error original:`, error);
-  }
-}
+export { logLearningError };
 
 // ── Policies ──
 
@@ -94,7 +82,7 @@ async function loadPolicies(): Promise<Policy[]> {
   }
 }
 
-export async function evaluatePolicies(
+async function evaluatePolicies(
   f7Decision: LearningDecision,
   load: SystemLoad,
   intent: string,
@@ -137,7 +125,7 @@ export async function seedPolicies(): Promise<void> {
 
 // ── Simulation ──
 
-export function simulateOpportunity(f7Decision: LearningDecision): SimulationResult | null {
+function simulateOpportunity(f7Decision: LearningDecision): SimulationResult | null {
   if (!f7Decision.selected) return null;
 
   const profile = getEconomicProfile(f7Decision.selected.label);
@@ -151,7 +139,7 @@ export function simulateOpportunity(f7Decision: LearningDecision): SimulationRes
   return { expectedConversion, expectedRevenue, systemImpactScore, riskLevel };
 }
 
-export async function logSimulation(
+async function logSimulation(
   sessionId: string,
   opportunityLabel: string,
   result: SimulationResult,
@@ -181,7 +169,7 @@ const DEFAULT_EXPERIMENTS: ExperimentConfig[] = [
   },
 ];
 
-export function assignVariant(phone: string, experimentId: string): string | null {
+function assignVariant(phone: string, experimentId: string): string | null {
   const exp = DEFAULT_EXPERIMENTS.find((e) => e.id === experimentId);
   if (!exp || !exp.active) return null;
 
@@ -194,23 +182,6 @@ export function assignVariant(phone: string, experimentId: string): string | nul
     if (bucket < cumulative) return v.id;
   }
   return exp.variants[0]?.id ?? null;
-}
-
-export async function recordPolicyResult(
-  policyId: string,
-  variant: string | null,
-  revenue: number,
-  conversion: boolean,
-): Promise<void> {
-  const { insertPolicyResult } = await import("@/lib/db/domains/learning");
-  await insertPolicyResult(policyId, variant, revenue, conversion);
-}
-
-export async function getWinningVariant(
-  experimentId: string,
-): Promise<{ variantId: string; score: number } | null> {
-  const { getWinningPolicyVariant } = await import("@/lib/db/domains/learning");
-  return getWinningPolicyVariant(experimentId);
 }
 
 // ── Guardrails ──
@@ -257,7 +228,7 @@ function matchGuardrailCondition(condition: PolicyCondition[], context: Record<s
   });
 }
 
-export async function evaluateGuardrails(
+async function evaluateGuardrails(
   load: SystemLoad,
   escalationRate: number,
   revenueDrop: boolean,

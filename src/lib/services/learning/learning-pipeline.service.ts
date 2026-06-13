@@ -3,22 +3,23 @@ import { adjustOpportunityRanking } from "@/lib/services/learning/routing";
 import { getSystemLoad, computeGlobalMetrics } from "@/lib/services/learning/system-load";
 import { runPolicyEngine, seedPolicies, logLearningError } from "@/lib/services/learning/policy-engine";
 import { runAdaptation } from "@/lib/services/learning/adaptation";
-import { insertDecisionLog } from "@/lib/db/domains/learning";
+import { insertDecisionLog } from "@/lib/db/database";
 import type { Opportunity } from "@/lib/services/learning/opportunity-types";
 import type { ScoredOpportunity, LearningDecision, PolicyEngineResult } from "@/lib/services/learning/types";
 
-export interface DecisionLogEntry {
-  sessionId: string;
-  selectedOpportunity: string;
-  candidateOpportunities: string;
-  utilityScore: number;
-  loadAdjusted: boolean;
-  policyOverride: boolean;
-  guardrails: string;
-  policies: string;
+export interface LearningInput {
+  opportunities: Opportunity[];
+  conversationId: string;
+  phone: string;
+  intent: string;
 }
 
-export async function logDecision(
+export interface LearningOutput {
+  rankedOpportunities: ScoredOpportunity[];
+  blocked: boolean;
+}
+
+async function logDecision(
   sessionId: string,
   f7Decision: LearningDecision,
   f8Result: PolicyEngineResult,
@@ -33,18 +34,6 @@ export async function logDecision(
     guardrails: JSON.stringify(f8Result.activeGuardrails.map((g) => ({ id: g.id, name: g.name, level: g.level }))),
     policies: JSON.stringify(f8Result.policyResults.map((p) => ({ id: p.policyId, name: p.policyName, matched: p.matched, action: p.action }))),
   });
-}
-
-export interface LearningInput {
-  opportunities: Opportunity[];
-  conversationId: string;
-  phone: string;
-  intent: string;
-}
-
-export interface LearningOutput {
-  rankedOpportunities: ScoredOpportunity[];
-  blocked: boolean;
 }
 
 export async function evaluateLearningPipeline(input: LearningInput): Promise<LearningOutput> {

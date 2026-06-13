@@ -19,15 +19,7 @@ export function recordOutcome(outcome: TripOutcome): void {
   }
 }
 
-export function getOutcomes(routeKey: string): TripOutcome[] {
-  return outcomes.filter((o) => o.routeKey === routeKey);
-}
-
-export function getRecentOutcomes(routeKey: string, count: number = 10): TripOutcome[] {
-  return getOutcomes(routeKey).slice(-count);
-}
-
-export function getAllOutcomes(): TripOutcome[] {
+function getAllOutcomes(): TripOutcome[] {
   return [...outcomes];
 }
 
@@ -125,7 +117,7 @@ function getAllRecentByRoute(): Record<string, TripOutcome[]> {
 function getAllRecentOutcomes(maxPerRoute: number = 20): TripOutcome[] {
   const recent: TripOutcome[] = [];
   const seen: Record<string, number> = {};
-  const all = [...getAllOutcomes()].reverse();
+  const all = getAllOutcomes().reverse();
   for (const o of all) {
     if ((seen[o.routeKey] ?? 0) >= maxPerRoute) continue;
     seen[o.routeKey] = (seen[o.routeKey] ?? 0) + 1;

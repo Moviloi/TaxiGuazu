@@ -50,36 +50,6 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
   await postToWhatsApp(payload);
 }
 
-export async function sendInteractiveList(
-  to: string,
-  bodyText: string,
-  buttonLabel: string,
-  sections: { title: string; rows: { id: string; title: string; description?: string }[] }[]
-): Promise<void> {
-  const payload = {
-    messaging_product: "whatsapp",
-    to: normalizeRecipient(to),
-    type: "interactive",
-    interactive: {
-      type: "list",
-      body: { text: bodyText.substring(0, 1024) },
-      action: {
-        button: buttonLabel.substring(0, 20),
-        sections: sections.map((s) => ({
-          title: s.title.substring(0, 24),
-          rows: s.rows.map((r) => ({
-            id: r.id.substring(0, 256),
-            title: r.title.substring(0, 24),
-            description: r.description ? r.description.substring(0, 72) : undefined,
-          })),
-        })),
-      },
-    },
-  };
-  log.info(`[SEND LIST] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
-  await postToWhatsApp(payload);
-}
-
 export async function sendInteractiveButtons(
   to: string,
   bodyText: string,

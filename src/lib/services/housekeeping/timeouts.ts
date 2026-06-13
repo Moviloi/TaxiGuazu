@@ -16,9 +16,7 @@ import {
   getTripsWithMissingCommission,
   getStaleWorkflows,
 } from "@/lib/db/database";
-import { getDb } from "@/lib/db/core/connection";
-import { logLearningError } from "@/lib/services/learning/policy-engine";
-import { insertHousekeepingLog } from "@/lib/db/domains/learning";
+import { insertHousekeepingLog, cleanupOldLearningRecords } from "@/lib/db/database";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { executeEscalation } from "@/lib/services/dispatch/dispatch.service";
@@ -65,6 +63,7 @@ export async function checkTimeouts(): Promise<void> {
   await checkDiscrepanciaComision();
   await checkDolarApiNotification();
   await checkSessionCleanup();
+  await runHousekeeping();
 }
 
 // === RECONFIRMACIÓN 24HS ===
@@ -269,32 +268,13 @@ async function logCleanup(job: string, rowsDeleted: number, duration: number): P
   await insertHousekeepingLog(job, rowsDeleted, duration);
 }
 
-export async function runHousekeeping(): Promise<void> {
-  const db = getDb();
+async function runHousekeeping(): Promise<void> {
   const cutoff = Math.floor(Date.now() / 1000) - 30 * 86400;
+  const results = await cleanupOldLearningRecords(cutoff);
 
-  for (const { sql, job } of [
-    { sql: "DELETE FROM system_metrics WHERE recorded_at < ?", job: "system_metrics" },
-    { sql: "DELETE FROM simulations WHERE timestamp < ?", job: "simulations" },
-    { sql: "DELETE FROM f9_events WHERE timestamp < ?", job: "f9_events" },
-    { sql: "DELETE FROM f9_error_log WHERE created_at < ?", job: "f9_error_log" },
-    { sql: "DELETE FROM f9_drift_log WHERE timestamp < ?", job: "f9_drift_log" },
-    { sql: "DELETE FROM policy_results WHERE timestamp < ?", job: "policy_results" },
-    { sql: "DELETE FROM conversation_f4_log WHERE timestamp < ?", job: "conversation_f4_log" },
-  ]) {
-    const start = Date.now();
-    try {
-      const rs = await db.execute({ sql, args: [cutoff] });
-      const rowsDeleted = Number(rs.rowsAffected ?? 0);
-      const duration = Date.now() - start;
-
-      if (rowsDeleted > 0) {
-        await logCleanup(job, rowsDeleted, duration);
-      }
-    } catch (e) {
-      const duration = Date.now() - start;
-      await logLearningError(`housekeeping:${job}`, e);
-      await logCleanup(job, 0, duration);
+  for (const { job, rowsDeleted, duration } of results) {
+    if (rowsDeleted > 0) {
+      await logCleanup(job, rowsDeleted, duration);
     }
   }
 }

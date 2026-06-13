@@ -24,7 +24,7 @@ import {
   getTariffById,
   debugGetActiveDriversWithConversationStatus,
 } from "@/lib/db/database";
-import { getConnectionCache } from "@/lib/db/domains/connection-state";
+import { getConnectionCache } from "@/lib/db/database";
 import type { DriverRow, PackagePriceRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
@@ -179,7 +179,8 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
     const dualValue = await getConnectionCache(`contingency_dual_${input.conversationId}`);
     const dualRow = dualValue ? { value: dualValue } : null;
     if (dualRow) {
-      const dual = JSON.parse(dualRow.value);
+      let dual: Record<string, any>;
+      try { dual = JSON.parse(dualRow.value); } catch { return; }
       if (trip) await updateTripState(trip.trip_id, "cancelado");
       await updateTripState(dual.tripA_id, "cancelado");
       await sendWhatsAppMessage(dual.driverA_phone, "❌ El segundo auto no se confirmó a tiempo. El viaje compartido se cancela. Disculpá las molestias.");
@@ -401,7 +402,7 @@ Valor garantizado: $${driver.actual_payout.toLocaleString("es-AR")}${passengers 
 
 // ── Driver helpers ──
 
-export async function getPrincipal2(): Promise<DriverRow | null> {
+async function getPrincipal2(): Promise<DriverRow | null> {
   const p2 = await getPrincipal2Driver();
   if (p2) return p2;
   try {

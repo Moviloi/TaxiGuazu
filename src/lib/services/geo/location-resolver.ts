@@ -3,7 +3,7 @@
 // Location resolution should eventually be unified into a single geo service.
 // No changes until Geo domain is unblocked for refactor.
 
-import { queryOne } from "@/lib/db/core/helpers";
+import { findPlaceByAlias, findPlaceByName } from "@/lib/db/database";
 
 export interface ResolveLocationResult {
   place_id: string | null;
@@ -31,48 +31,26 @@ export async function resolveLocation(text: string): Promise<ResolveLocationResu
   const raw = text.trim();
 
   // 1. Exact alias match → place
-  const byAlias = await queryOne<{ place_id: string; canonical_name: string; operational_zone: string | null }>(
-    `SELECT p.place_id, p.canonical_name, p.operational_zone
-     FROM aliases a JOIN places p ON p.place_id = a.place_id
-     WHERE LOWER(a.alias) = ? AND p.active = 1
-     LIMIT 1`,
-    [normalize(raw)]
-  );
+  const byAlias = await findPlaceByAlias(normalize(raw));
   if (byAlias) {
     return { ...byAlias, confidence: "alias" };
   }
 
   // 2. Exact canonical name match → place
-  const byName = await queryOne<{ place_id: string; canonical_name: string; operational_zone: string | null }>(
-    `SELECT place_id, canonical_name, operational_zone FROM places
-     WHERE LOWER(canonical_name) = ? AND active = 1
-     LIMIT 1`,
-    [normalize(raw)]
-  );
+  const byName = await findPlaceByName(normalize(raw));
   if (byName) {
     return { ...byName, confidence: "exact" };
   }
 
   // 3. Fuzzy alias match (accent-insensitive)
   const normalizedNoAccent = removeAccents(normalize(raw));
-  const fuzzyAlias = await queryOne<{ place_id: string; canonical_name: string; operational_zone: string | null }>(
-    `SELECT p.place_id, p.canonical_name, p.operational_zone
-     FROM aliases a JOIN places p ON p.place_id = a.place_id
-     WHERE LOWER(a.alias) = ? AND p.active = 1
-     LIMIT 1`,
-    [normalizedNoAccent]
-  );
+  const fuzzyAlias = await findPlaceByAlias(normalizedNoAccent);
   if (fuzzyAlias) {
     return { ...fuzzyAlias, confidence: "fuzzy" };
   }
 
   // 4. Fuzzy canonical name match (accent-insensitive)
-  const fuzzyName = await queryOne<{ place_id: string; canonical_name: string; operational_zone: string | null }>(
-    `SELECT place_id, canonical_name, operational_zone FROM places
-     WHERE LOWER(canonical_name) = ? AND active = 1
-     LIMIT 1`,
-    [normalizedNoAccent]
-  );
+  const fuzzyName = await findPlaceByName(normalizedNoAccent);
   if (fuzzyName) {
     return { ...fuzzyName, confidence: "fuzzy" };
   }

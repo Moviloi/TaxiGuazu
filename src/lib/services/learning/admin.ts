@@ -1,4 +1,4 @@
-import { insertF9AdminCommand } from "@/lib/db/domains/learning";
+import { insertF9AdminCommand } from "@/lib/db/database";
 import { adjustWeight, setWeight } from "./learning-utils";
 import type { AdminCommandAction } from "./types";
 

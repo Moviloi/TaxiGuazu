@@ -240,7 +240,8 @@ Hora: ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-dig
     log.info(`[CONTINGENCIA] Trip A asignado, esperando Trip B para msg combinado`);
   } else if (hasDualActive) {
     // Dual contingency Trip B — both assigned, send combined message
-    const dual = JSON.parse(await getConnectionValue(`contingency_dual_${convId}`) || "{}");
+    let dual: Record<string, any> = {};
+    try { dual = JSON.parse(await getConnectionValue(`contingency_dual_${convId}`) || "{}"); } catch { dual = {}; }
     const combinedMsg = `✅ *Tenemos los dos autos confirmados*
 
 ${dual.driverA_name} ya lleva ${dual.paxA} pasajeros y ${driverName} lleva los ${dual.paxB} restantes. Ambos te escriben al WhatsApp en este instante para coordinar la puerta de salida. El pago lo arreglás directamente con cada uno en efectivo.`;
@@ -276,7 +277,8 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
 
   // Contingency sequel: if there's a pending Trip B, dispatch it now
   if (hasPendingB) {
-    const bData = JSON.parse(await getConnectionValue(`contingency_pending_B_${convId}`) || "{}");
+    let bData: Record<string, any> = {};
+    try { bData = JSON.parse(await getConnectionValue(`contingency_pending_B_${convId}`) || "{}"); } catch { bData = {}; }
     await deleteConnectionKey(`contingency_pending_B_${convId}`);
 
     const tripBConv = await getConversationByPhone(workflow.phone);
@@ -466,7 +468,8 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
     return;
   }
 
-  const origData = JSON.parse(dataValue);
+  let origData: Record<string, any>;
+  try { origData = JSON.parse(dataValue); } catch { return; }
   await deleteConnectionKey(`contingency_data_${convId}`);
   await deleteConnectionKey(`contingency_offered_${convId}`);
 

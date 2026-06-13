@@ -4,11 +4,10 @@ import type { TripRow, TripPhase, TripClosureReason, TariffRow } from "../types"
 import { log } from "@/lib/utils/logger";
 
 async function getDriverDiscountForTariff(driverPhone: string, tariffId: number): Promise<number | null> {
-  const rows = await getDb().execute({
-    sql: "SELECT discount_pct FROM driver_discounts WHERE driver_phone = ? AND tariff_id = ? AND active = 1 AND (valid_until IS NULL OR valid_until > unixepoch())",
-    args: [driverPhone, tariffId],
-  });
-  const row = (rows.rows as any[])[0];
+  const row = await queryOne<{ discount_pct: number }>(
+    "SELECT discount_pct FROM driver_discounts WHERE driver_phone = ? AND tariff_id = ? AND active = 1 AND (valid_until IS NULL OR valid_until > unixepoch())",
+    [driverPhone, tariffId],
+  );
   return row?.discount_pct ?? null;
 }
 
@@ -30,18 +29,18 @@ export async function getActiveTripByPhone(clientPhone: string): Promise<TripRow
     "SELECT * FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL) ORDER BY created_at DESC LIMIT 1",
     [clientPhone]
   );
-  const legacyRs = await getDb().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
-    args: [clientPhone],
-  });
-  const phaseRs = await getDb().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL)",
-    args: [clientPhone],
-  });
+  const legacyRow = await queryOne<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
+    [clientPhone],
+  );
+  const phaseRow = await queryOne<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL)",
+    [clientPhone],
+  );
   await validateReaderConsistency(
     "getActiveTripByPhone",
-    Number((legacyRs.rows[0] as any)?.cnt ?? 0),
-    Number((phaseRs.rows[0] as any)?.cnt ?? 0),
+    Number(legacyRow?.cnt ?? 0),
+    Number(phaseRow?.cnt ?? 0),
     ["DRAFT", "QUOTED", "CONFIRMED", "ASSIGNED", "IN_PROGRESS"]
   );
   await reportTripPhaseNullCount("getActiveTripByPhone");
@@ -147,11 +146,10 @@ export async function syncTripPhaseFromLegacyStatus(tripId: string, status: stri
   }
 
   await ensureSchema();
-  const rs = await getDb().execute({
-    sql: "SELECT trip_phase, closure_reason FROM trips WHERE trip_id = ?",
-    args: [tripId],
-  });
-  const row = rs.rows[0] as any;
+  const row = await queryOne<{ trip_phase: string | null; closure_reason: string | null }>(
+    "SELECT trip_phase, closure_reason FROM trips WHERE trip_id = ?",
+    [tripId],
+  );
   if (!row) return;
 
   const currentPhase = row.trip_phase as TripPhase | null;
@@ -184,12 +182,11 @@ export async function syncTripPhaseFromLegacyStatus(tripId: string, status: stri
 
 export async function getTripPhase(tripId: string): Promise<TripPhase | null> {
   await ensureSchema();
-  const rs = await getDb().execute({
-    sql: "SELECT trip_phase FROM trips WHERE trip_id = ?",
-    args: [tripId],
-  });
-  const val = (rs.rows[0] as any)?.trip_phase;
-  return val ? (val as TripPhase) : null;
+  const row = await queryOne<{ trip_phase: TripPhase }>(
+    "SELECT trip_phase FROM trips WHERE trip_id = ?",
+    [tripId],
+  );
+  return row?.trip_phase ?? null;
 }
 
 // ========== READER VALIDATION ==========
@@ -218,8 +215,8 @@ export async function validateReaderConsistency(
 
 export async function reportTripPhaseNullCount(source: string): Promise<number> {
   await ensureSchema();
-  const rs = await getDb().execute("SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IS NULL");
-  const cnt = Number((rs.rows[0] as any)?.cnt ?? 0);
+  const row = await queryOne<{ cnt: number }>("SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IS NULL");
+  const cnt = Number(row?.cnt ?? 0);
   if (!phaseNullLogged.has(source)) {
     phaseNullLogged.add(source);
     log.info("[metric] trip_phase_null_count", JSON.stringify({
@@ -234,13 +231,13 @@ export async function reportTripPhaseNullCount(source: string): Promise<number> 
 
 export async function getActiveTripsByClient(clientPhone: string): Promise<TripRow[]> {
   const trips = await query<TripRow>("SELECT * FROM trips WHERE client_phone = ? AND (trip_phase != 'CLOSED' OR trip_phase IS NULL) ORDER BY created_at ASC", [clientPhone]);
-  const legacyRs = await getDb().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
-    args: [clientPhone],
-  });
+  const legacyRow = await queryOne<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM trips WHERE client_phone = ? AND status NOT IN ('completado','cancelado')",
+    [clientPhone],
+  );
   await validateReaderConsistency(
     "getActiveTripsByClient",
-    Number((legacyRs.rows[0] as any)?.cnt ?? 0),
+    Number(legacyRow?.cnt ?? 0),
     trips.length,
     ["DRAFT", "QUOTED", "CONFIRMED", "ASSIGNED", "IN_PROGRESS"]
   );
@@ -288,18 +285,18 @@ export async function getTripsPendingCloseOut(): Promise<TripRow[]> {
     "SELECT * FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ? ORDER BY confirmed_at",
     [cutoff]
   );
-  const legacyRs = await getDb().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
-    args: [cutoff],
-  });
-  const phaseRs = await getDb().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
-    args: [cutoff],
-  });
+  const legacyRow = await queryOne<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
+    [cutoff],
+  );
+  const phaseRow = await queryOne<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (comision_declarada IS NULL OR comision_declarada = 0) AND confirmed_at IS NOT NULL AND confirmed_at < ?",
+    [cutoff],
+  );
   await validateReaderConsistency(
     "getTripsPendingCloseOut",
-    Number((legacyRs.rows[0] as any)?.cnt ?? 0),
-    Number((phaseRs.rows[0] as any)?.cnt ?? 0),
+    Number(legacyRow?.cnt ?? 0),
+    Number(phaseRow?.cnt ?? 0),
     ["ASSIGNED", "CLOSED"]
   );
   await reportTripPhaseNullCount("getTripsPendingCloseOut");
@@ -311,4 +308,76 @@ export async function getExpiredTrips(): Promise<TripRow[]> {
   const trips = await query<TripRow>("SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at < ? AND status NOT IN ('completado','cancelado')", [now]);
   checkDivergenceForTrips(trips, "getExpiredTrips");
   return trips;
+}
+
+// ========== WORKFLOW STATE QUERIES ==========
+
+export async function getExpiredByState(
+  state: string, timeoutMs: number,
+): Promise<{ conversationId: number; phone: string; workflowState: string }[]> {
+  const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
+  const rs = await getDb().execute({
+    sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
+          FROM chat_sessions cs
+          JOIN conversations c ON c.phone = cs.phone
+          WHERE cs.workflow_state = ? AND cs.updated_at < ?`,
+    args: [state, cutoff],
+  });
+  const rows = rs.rows as unknown as { conversation_id: number; phone: string; workflow_state: string }[];
+  return rows.map((row) => ({
+    conversationId: row.conversation_id,
+    phone: row.phone,
+    workflowState: row.workflow_state,
+  }));
+}
+
+export async function getStaleWorkflowsFromDb(
+  timeoutMs: number,
+): Promise<{ conversationId: number; phone: string; workflowState: string }[]> {
+  const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
+  const rs = await getDb().execute({
+    sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
+          FROM chat_sessions cs
+          JOIN conversations c ON c.phone = cs.phone
+          WHERE cs.workflow_state != 'closed' AND cs.updated_at < ?`,
+    args: [cutoff],
+  });
+  const rows = rs.rows as unknown as { conversation_id: number; phone: string; workflow_state: string }[];
+  return rows.map((row) => ({
+    conversationId: row.conversation_id,
+    phone: row.phone,
+    workflowState: row.workflow_state,
+  }));
+}
+
+export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
+  const rs = await getDb().execute({
+    sql: `UPDATE chat_sessions
+          SET workflow_state = 'closed', updated_at = unixepoch()
+          WHERE phone = ? AND workflow_state IN ('nivel_1','nivel_2','nivel_3','waiting_driver')`,
+    args: [phone],
+  });
+  return rs.rowsAffected > 0;
+}
+
+// ========== TARIFF QUERIES ==========
+
+export async function findTariffRow(opts: {
+  originPlaceId?: string | null;
+  destPlaceId?: string | null;
+  originZoneId?: string | null;
+  destZoneId?: string | null;
+}): Promise<TariffRow | null> {
+  return queryOne<TariffRow>(
+    `SELECT * FROM tariffs WHERE active = 1
+     AND (CASE WHEN ? IS NULL THEN origin_place_id IS NULL ELSE origin_place_id = ? END)
+     AND (CASE WHEN ? IS NULL THEN destination_place_id IS NULL ELSE destination_place_id = ? END)
+     AND (CASE WHEN ? IS NULL THEN origin_zone_id IS NULL ELSE origin_zone_id = ? END)
+     AND (CASE WHEN ? IS NULL THEN destination_zone_id IS NULL ELSE destination_zone_id = ? END)
+     LIMIT 1`,
+    [opts.originPlaceId ?? null, opts.originPlaceId ?? null,
+     opts.destPlaceId ?? null, opts.destPlaceId ?? null,
+     opts.originZoneId ?? null, opts.originZoneId ?? null,
+     opts.destZoneId ?? null, opts.destZoneId ?? null]
+  );
 }

@@ -1,5 +1,4 @@
-import { insertConversationEvent } from "@/lib/db/domains/learning";
-import type { DbExecutor } from "@/lib/db/core/connection";
+import { insertConversationEvent, type DbExecutor } from "@/lib/db/database";
 import { log } from "@/lib/utils/logger";
 
 export type LearningEventType =
@@ -69,9 +68,4 @@ export async function logEscalation(
   await logEvent(sessionId, "escalated_to_human", { reason, score });
 }
 
-export async function logTripCompleted(
-  sessionId: string,
-  tripId: string,
-): Promise<void> {
-  await logEvent(sessionId, "trip_completed", { tripId });
-}
+

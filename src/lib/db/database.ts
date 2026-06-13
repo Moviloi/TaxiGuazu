@@ -3,7 +3,6 @@ import type {
   MessageRow,
   TripRow,
   DriverRow,
-  DriverInvitationRow,
   DriverCodeRow,
   ClientPreferredDriverRow,
   ReservationSlotRow,
@@ -12,6 +11,7 @@ import type {
   LocationAliasRow,
   ChatSessionRow,
   OpportunityRuleRow,
+  PackagePriceRow,
 } from "./types";
 
 import { getDb, ensureSchema, type DbExecutor } from "./core/connection";
@@ -56,7 +56,7 @@ export async function listConversations(): Promise<ConversationWithPreview[]> {
   `);
 }
 
-export async function updateConversationActivity(phone: string): Promise<void> {
+async function updateConversationActivity(phone: string): Promise<void> {
   await ensureSchema();
   await getDb().execute({ sql: "UPDATE conversations SET last_message_at = unixepoch() WHERE phone = ?", args: [phone] });
 }
@@ -117,14 +117,6 @@ export async function clearConversationHistory(convId: number): Promise<void> {
 }
 
 // ========== LEADS ==========
-
-export async function createLead(convId: number, clientPhone: string, origin: string, destination: string, price?: number, passengers?: number): Promise<void> {
-  await ensureSchema();
-  await getDb().execute({
-    sql: "INSERT OR REPLACE INTO leads (conv_id, client_phone, origin, destination, price, passengers) VALUES (?, ?, ?, ?, ?, ?)",
-    args: [convId, clientPhone, origin, destination, price || null, passengers || null],
-  });
-}
 
 export async function getLeadByConv(convId: number): Promise<LeadRow | null> {
   return queryOne<LeadRow>("SELECT * FROM leads WHERE conv_id = ?", [convId]);
@@ -356,40 +348,6 @@ export async function getAvailableDrivers(filters?: { minCapacity?: number; coun
     [cutoff, strictFilter, strictFilter, relaxedFilter, relaxedFilter, countryFilter, countryFilter]);
 }
 
-// ========== DRIVER INVITATIONS ==========
-
-export async function getDriverInvitationByCode(code: string): Promise<DriverInvitationRow | null> {
-  return queryOne<DriverInvitationRow>("SELECT * FROM driver_invitations WHERE code = ?", [code.toLowerCase().trim()]);
-}
-
-export async function createDriverInvitation(
-  code: string,
-  createdBy: string,
-  opts?: { phone?: string; expiresAt?: number }
-): Promise<{ ok: boolean; error?: string; invitation?: DriverInvitationRow }> {
-  await ensureSchema();
-  const cleaned = code.toLowerCase().trim();
-  if (!cleaned) return { ok: false, error: "Código vacío" };
-
-  const existing = await getDriverInvitationByCode(cleaned);
-  if (existing) return { ok: false, error: "Código ya existe" };
-
-  let fullPhone: string | null = null;
-  if (opts?.phone) {
-    const digits = opts.phone.replace(/\D/g, "");
-    if (digits.length < 10) return { ok: false, error: "Teléfono inválido" };
-    fullPhone = digits.startsWith("54") ? `+${digits}` : `+54${digits}`;
-  }
-
-  await getDb().execute({
-    sql: "INSERT INTO driver_invitations (code, phone, created_by, expires_at) VALUES (?, ?, ?, ?)",
-    args: [cleaned, fullPhone, createdBy, opts?.expiresAt ?? null],
-  });
-
-  const invitation = await getDriverInvitationByCode(cleaned);
-  return { ok: true, invitation: invitation ?? undefined };
-}
-
 // ========== PREFERRED DRIVERS ==========
 
 export async function getClientPreferredDriver(clientPhone: string): Promise<ClientPreferredDriverRow | null> {
@@ -434,24 +392,38 @@ export async function setPackagePrice(driverPhone: string, packageType: string, 
   });
 }
 
+export async function getPackagePrices(phones: string[], packageType: string): Promise<Map<string, PackagePriceRow>> {
+  if (phones.length === 0) return new Map();
+  const placeholders = phones.map(() => "?").join(",");
+  const rows = await query<PackagePriceRow>(
+    `SELECT * FROM package_prices WHERE driver_phone IN (${placeholders}) AND package_type = ?`,
+    [...phones, packageType],
+  );
+  const map = new Map<string, PackagePriceRow>();
+  for (const row of rows) {
+    map.set(row.driver_phone, row);
+  }
+  return map;
+}
+
 // ========== SURVEY ==========
 
 export async function getTripsPendingSurvey(): Promise<TripRow[]> {
   const cutoff = Math.floor(Date.now() / 1000);
   const trips = await query<TripRow>("SELECT * FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?) ORDER BY confirmed_at ASC LIMIT 10", [cutoff]);
   // Phase-based primary with reconfirmado_24hs exclusion; legacy + phase COUNT for cross-validation.
-  const legacyRs = await getDb().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?)",
-    args: [cutoff],
-  });
-  const phaseRs = await getDb().execute({
-    sql: "SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?)",
-    args: [cutoff],
-  });
+  const legacyRow = await queryOne<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?)",
+    [cutoff],
+  );
+  const phaseRow = await queryOne<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?)",
+    [cutoff],
+  );
   await validateReaderConsistency(
     "getTripsPendingSurvey",
-    Number((legacyRs.rows[0] as any)?.cnt ?? 0),
-    Number((phaseRs.rows[0] as any)?.cnt ?? 0),
+    Number(legacyRow?.cnt ?? 0),
+    Number(phaseRow?.cnt ?? 0),
     ["ASSIGNED", "CLOSED"]
   );
   await reportTripPhaseNullCount("getTripsPendingSurvey");
@@ -534,11 +506,10 @@ export async function deleteReservationSlot(id: number): Promise<boolean> {
 // ========== TARIFFS ==========
 
 export async function getTariffById(tariffId: number): Promise<{ base_price_4p: number | null; base_price_6p: number | null } | null> {
-  const rs = await getDb().execute({
-    sql: "SELECT base_price_4p, base_price_6p FROM tariffs WHERE id = ?",
-    args: [tariffId],
-  });
-  return (rs.rows[0] as any) ?? null;
+  return queryOne<{ base_price_4p: number | null; base_price_6p: number | null }>(
+    "SELECT base_price_4p, base_price_6p FROM tariffs WHERE id = ?",
+    [tariffId],
+  );
 }
 
 interface TariffWithPrice extends TariffRow {
@@ -615,10 +586,13 @@ export async function upsertChatSession(
   const existing = await getChatSession(phone);
   const now = Math.floor(Date.now() / 1000);
   if (existing) {
-    const oldSlots = JSON.parse(existing.slots || "{}");
+    let oldSlots: Record<string, any> = {};
+    try { oldSlots = JSON.parse(existing.slots || "{}"); } catch { oldSlots = {}; }
     const merged = { ...oldSlots, ...slots };
+    let baseConfidence: Record<string, number> = {};
+    try { baseConfidence = JSON.parse(existing.confidence || "{}"); } catch { baseConfidence = {}; }
     const mergedConfidence = confidence
-      ? { ...JSON.parse(existing.confidence || "{}"), ...confidence }
+      ? { ...baseConfidence, ...confidence }
       : existing.confidence;
     await getDb().execute({
       sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, workflow_state = ?, clarify_field = ?, updated_at = ? WHERE phone = ?`,
@@ -670,31 +644,6 @@ export async function clearPendingOpportunity(phone: string): Promise<void> {
     sql: "UPDATE chat_sessions SET pending_opportunity = NULL, updated_at = unixepoch() WHERE phone = ?",
     args: [phone],
   });
-}
-
-export async function createDriverDiscount(driverPhone: string, tariffId: number, discountPct: number, validUntilDays?: number): Promise<{ ok: boolean; error?: string }> {
-  await ensureSchema();
-  // Check max 4 active discounts per driver
-  const count = await getDb().execute({
-    sql: `SELECT COUNT(*) as c FROM driver_discounts WHERE driver_phone = ? AND active = 1 AND (valid_until IS NULL OR valid_until > unixepoch())`,
-    args: [driverPhone],
-  });
-  if ((count.rows as any[])[0].c >= 4) {
-    return { ok: false, error: "Ya tenés 4 descuentos activos. Eliminá uno antes de agregar otro." };
-  }
-  let validUntil: number | null = null;
-  if (validUntilDays && validUntilDays > 0) {
-    validUntil = Math.floor(Date.now() / 1000) + validUntilDays * 86400;
-  }
-  try {
-    await getDb().execute({
-      sql: "INSERT INTO driver_discounts (driver_phone, tariff_id, discount_pct, valid_until) VALUES (?, ?, ?, ?)",
-      args: [driverPhone, tariffId, discountPct, validUntil],
-    });
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e.message };
-  }
 }
 
 export async function setCustomerName(phone: string, name: string): Promise<void> {
@@ -767,6 +716,15 @@ export async function updateOpportunityLogResponse(
   });
 }
 
+// ── Transaction helper ──
+
+export async function createTransaction() {
+  return getDb().transaction();
+}
+
+export { queryOne } from "./core/helpers";
+export type { DbExecutor } from "./core/connection";
+
 export {
   getConnectionState,
   setConnectionState,
@@ -775,6 +733,7 @@ export {
   setConnectionFlag,
   setConnectionValue,
   deleteConnectionKey,
+  getConnectionCache,
 } from "./domains/connection-state";
 export {
   createTrip,
@@ -792,4 +751,41 @@ export {
   getTripsByScheduledAtWindow,
   getTripsPendingCloseOut,
   getExpiredTrips,
+  getExpiredByState,
+  getStaleWorkflowsFromDb,
+  assignWorkflowAtomic,
+  findTariffRow,
 } from "./domains/trips";
+export {
+  getLearningWeight,
+  setLearningWeight,
+  insertConversionOutcome,
+  insertF9Event,
+  insertF9ErrorLog,
+  insertF9DriftLog,
+  insertF9AdminCommand,
+  insertConversationEvent,
+  insertDecisionLog,
+  insertSimulation,
+  insertPolicyResult,
+  getWinningPolicyVariant,
+  getSystemMetricsTotalRevenue,
+  insertSystemMetrics,
+  countActiveDrivers,
+  getAvgConversionRate,
+  getAvgEscalationRate,
+  insertF4Log,
+  insertHousekeepingLog,
+  updateChatSessionComprehension,
+  setChatSessionEscalationReason,
+  countHumanOperators,
+  getAllPolicies,
+  insertOrIgnorePolicy,
+  countActiveConversations,
+  cleanupOldLearningRecords,
+} from "./domains/learning";
+export {
+  findPlaceByAlias,
+  findPlaceByName,
+  getOperationalZone,
+} from "./domains/geo";

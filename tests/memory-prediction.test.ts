@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMemory, buildShortTermBuffer, buildSessionMemory, getEntityBias, extractEntities } from "@/lib/services/memory/memory";
+import { buildMemory, buildShortTermBuffer, buildSessionMemory, getEntityBias } from "@/lib/services/memory/memory";
 import { predictEntity, predictIntent, enrichComprehensionSignals, buildPredictedContext, computeMemoryBoost } from "@/lib/services/memory/predictive-routing";
 import type { ComprehensionSignals } from "@/lib/services/extraction/comprehension";
 
@@ -9,7 +9,7 @@ function msg(content: string, role: "user" | "assistant" = "user") {
   return { id: 1, conversation_id: 1, role, content, created_at: 1000 };
 }
 
-describe("F5 — Memory Layer", () => {
+describe("Memory Layer", () => {
   describe("buildSessionMemory", () => {
     it("extracts last entities from all user messages", () => {
       const history = [msg("quiero ir a rafain"), msg("confirmo")];
@@ -79,7 +79,7 @@ describe("F5 — Memory Layer", () => {
   });
 });
 
-describe("F5 — Predictive Routing", () => {
+describe("Predictive Routing", () => {
   describe("predictEntity", () => {
     it("exact match → high confidence candidates", () => {
       const mem = buildMemory(null, [emptyMsg(1)]);

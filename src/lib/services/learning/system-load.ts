@@ -1,5 +1,5 @@
 import type { SystemLoad, GlobalSystemMetrics } from "./types";
-import { countActiveDrivers, countHumanOperators, countActiveConversations, getSystemMetricsTotalRevenue, getAvgConversionRate, getAvgEscalationRate, insertSystemMetrics } from "@/lib/db/domains/learning";
+import { countActiveDrivers, countHumanOperators, countActiveConversations, getSystemMetricsTotalRevenue, getAvgConversionRate, getAvgEscalationRate } from "@/lib/db/database";
 
 export async function getSystemLoad(): Promise<SystemLoad> {
   const [driversAvailable, operatorsAvailable, queueLength] = await Promise.all([
@@ -43,6 +43,4 @@ export async function computeGlobalMetrics(): Promise<GlobalSystemMetrics> {
   };
 }
 
-export async function recordSystemMetrics(metrics: GlobalSystemMetrics): Promise<void> {
-  await insertSystemMetrics(metrics.totalRevenue, metrics.conversionRate, metrics.fleetUtilization, metrics.escalationRate);
-}
+

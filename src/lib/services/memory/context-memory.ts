@@ -2,7 +2,7 @@
 // maintains partial trip state (slots + intent + zone + confidence + timestamps)
 // across turns, enabling multi-turn natural conversation.
 
-import { getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
+import { getChatSession, upsertChatSession } from "@/lib/db/database";
 import { type ZoneResolution, type ZoneExpansionResult, type ProximityScore } from "@/lib/services/geo/geo-engine";
 
 type FareCategory = "LOW" | "MEDIUM" | "MEDIUM+" | "HIGH" | "VARIABLE";
@@ -159,6 +159,4 @@ export async function saveContext(phone: string, input: ContextSaveInput): Promi
   await upsertChatSession(phone, mergedSlots, undefined, undefined, undefined);
 }
 
-export async function resetContext(phone: string): Promise<void> {
-  await resetChatSession(phone);
-}
+

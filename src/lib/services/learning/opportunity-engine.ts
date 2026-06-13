@@ -5,7 +5,7 @@ import type { OpportunityContext, Opportunity, OpportunityOffer, OpportunityResu
 
 export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";
 import type { PricingResult } from "../pricing/pricing-engine";
-import { queryOne } from "@/lib/db/core/helpers";
+import { queryOne } from "@/lib/db/database";
 import { getActiveComplementRules, insertOpportunityLog } from "@/lib/db/database";
 import { getEntityWeight } from "@/lib/services/learning/learning-utils";
 import { resolveEntityFromCatalog } from "@/lib/config/entity-catalog";
@@ -67,7 +67,7 @@ function matchRule(rule: OpportunityRuleRow, context: OpportunityContext): boole
   return false;
 }
 
-export class OpportunityEngine {
+class OpportunityEngine {
   async evaluate(context: OpportunityContext, executor?: any): Promise<Opportunity[]> {
     if (context.hasPendingOpportunity) {
       log.info(`[OPPORTUNITY_ENGINE] evaluate context={tripId=${context.tripId}} result_count=0 (pending opportunity exists)`);

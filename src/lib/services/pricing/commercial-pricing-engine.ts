@@ -5,7 +5,7 @@
 // Future: integrate commercial rules into a unified pricing service.
 
 import type { PromotionRow, PackageRow, ProviderAdjustmentRow } from "@/lib/db/types";
-import { queryOne } from "@/lib/db/core/helpers";
+import { queryOne } from "@/lib/db/database";
 
 // ── Types ──
 

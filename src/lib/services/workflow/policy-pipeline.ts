@@ -10,7 +10,7 @@ import { saveContext } from "@/lib/services/memory/context-memory";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { isAffirmativeMessage } from "@/lib/ai/patterns";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
-import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
+import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import type { ExtractionContext } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";

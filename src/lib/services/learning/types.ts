@@ -13,15 +13,6 @@ export interface OpportunityEconomics {
 
 export type HumanFeedbackType = "good_offer" | "bad_offer" | "wrong_route" | "high_value_missed" | "spam_detected";
 
-export interface HumanFeedbackRow {
-  id: number;
-  session_id: string;
-  feedback_type: HumanFeedbackType;
-  entity: string | null;
-  operator_id: string;
-  timestamp: number;
-}
-
 export interface SystemLoad {
   driversAvailable: number;
   operatorsAvailable: number;
@@ -99,13 +90,6 @@ export interface SimulationResult {
   riskLevel: "low" | "medium" | "high";
 }
 
-export interface ExperimentVariant {
-  id: string;
-  name: string;
-  trafficPercent: number;
-  policyOverrides: Partial<Policy>[];
-}
-
 export type GuardrailLevel = "critical" | "warning" | "info";
 
 export interface SafetyGuardrail {
@@ -162,15 +146,6 @@ export interface LearningEvent {
 
 export type DriftSeverity = "low" | "medium" | "high" | "critical";
 
-export interface LearningDrift {
-  id?: number;
-  metric: string;
-  entity: string;
-  driftValue: number;
-  severity: DriftSeverity;
-  timestamp?: number;
-}
-
 export type AdminCommandAction =
   | "update_price"
   | "reclassify_entity"
@@ -178,10 +153,4 @@ export type AdminCommandAction =
   | "optimize_routing"
   | "adjust_weight";
 
-export interface ParsedAdminCommand {
-  original: string;
-  action: AdminCommandAction;
-  target: string;
-  value: unknown;
-  author: string;
-}
+

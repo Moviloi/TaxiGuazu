@@ -5,7 +5,7 @@
 
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs } from "@/lib/db/database";
-import { TIERS } from "@/config/constants";
+import { TIERS, type Tier } from "@/config/constants";
 import { ADMIN_PHONE } from "./admin.service";
 
 export async function handleAdminCommand(phone: string, text: string): Promise<boolean> {
@@ -420,7 +420,7 @@ async function handleSetTier(phone: string, text: string): Promise<void> {
   const code = parts[1].toLowerCase();
   const tier = parts[2].toLowerCase();
 
-  if (!TIERS.includes(tier as any)) {
+  if (!TIERS.includes(tier as Tier)) {
     await sendWhatsAppMessage(phone, `❌ Tier inválido. Tiers válidos: ${TIERS.join(', ')}`);
     return;
   }

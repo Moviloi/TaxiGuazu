@@ -29,18 +29,6 @@ export function setRequestState(core: CoreDecision, final: FinalDecision, policy
   policyState = policy;
 }
 
-export function getCoreState(): CoreDecision | null {
-  return coreState;
-}
-
-export function getFinalState(): FinalDecision | null {
-  return finalState;
-}
-
-export function getPolicyState(): PolicyOutput | null {
-  return policyState;
-}
-
 export function assertCoreRouterPolicy(): true | BlockResult {
   if (!coreState || !finalState || !policyState) {
     const block: BlockResult = {

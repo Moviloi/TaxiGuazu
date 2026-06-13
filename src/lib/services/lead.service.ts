@@ -1,4 +1,4 @@
-import { getConversationByPhone, insertMessage } from "@/lib/db/database";
+import { getConversationByPhone, insertMessage, getChatSession } from "@/lib/db/database";
 import { buildGlobalErrorMessage } from "@/lib/ai/response-builder";
 import { resetRequestState } from "@/lib/ai/guard";
 import { handleMessage } from "@/lib/ai/handler";
@@ -12,34 +12,16 @@ import { handleResponseReset } from "@/lib/services/workflow/response-reset";
 import { handleAdminCommands } from "@/lib/services/workflow/admin-commands";
 import { handleConversationSetup } from "@/lib/services/workflow/conversation-setup";
 import { handleOpportunityResponse } from "@/lib/services/workflow/opportunity-response";
-import { handleMemoryAndExtraction } from "@/lib/services/extraction/memory-and-extraction";
 import { handlePolicyPipeline } from "@/lib/services/workflow/policy-pipeline";
+import { buildMemory } from "@/lib/services/memory/memory";
+import { buildPredictedContext } from "@/lib/services/memory/predictive-routing";
+import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/event-tracking";
+import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
+import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
 
-import type { PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
-import type { ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
-import type { ExtractionContext } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 
 // ── Domain interfaces (F.5 type-only, no logic moved) ──
-
-export interface LeadProcessingContext {
-  phone: string;
-  text: string;
-  conversation: { id: number };
-  history: any[];
-  customerName: string | null;
-  leadCore: ReturnType<typeof core>;
-  pricing?: PricingResult;
-  confidenceResult?: ExtractionResult;
-  workflowResult?: SlotWorkflowContext;
-  extractionCtx?: ExtractionContext;
-}
-
-export interface LeadExecutionResult {
-  success: boolean;
-  path: string;
-}
 
 // ── COORDINATOR ──
 // Routes the webhook message through sub-handlers. Each handler returns true
@@ -73,7 +55,20 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (await handleOpportunityResponse(phone, text, conversation.id, workflow)) return;
 
     // ── ZONE: MEMORY + COMPREHENSION + EXTRACTION ──
-    const extractionResult = await handleMemoryAndExtraction(
+    const f5Session = await getChatSession(phone);
+    const f5Memory = buildMemory(f5Session, history);
+    const f5Context = buildPredictedContext(text, leadCore.intent, f5Memory);
+    logIntentDetected(String(conversation.id), leadCore.intent, f5Context.intentPrediction.confidence);
+    const detectedEntities = f5Context.entityPrediction.candidates;
+    if (detectedEntities.length > 0) logEntityDetected(String(conversation.id), detectedEntities);
+
+    const halted = await runComprehensionCheck({
+      phone, text, conversationId: conversation.id, leadCore,
+      predictedContext: f5Context, session: f5Session,
+    });
+    if (halted) return;
+
+    const extractionResult = await runExtractionPipeline(
       phone, text, conversation.id, leadCore, history, customerName,
     );
     if (!extractionResult) return;

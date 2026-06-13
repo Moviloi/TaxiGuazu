@@ -1,4 +1,4 @@
-// ⚠️ Geo Engine — legacy geographic reasoning engine.
+// ⚠️ Geo Engine — geographic reasoning engine.
 // DEPRECATED: Location resolution lives in location-resolver.ts.
 // Legacy — route/proximity logic only.
 // Only route/proximity logic should survive long-term.

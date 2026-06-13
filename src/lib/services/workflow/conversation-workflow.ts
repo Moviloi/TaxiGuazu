@@ -11,8 +11,10 @@ import {
   getChatSession,
   getConversationById,
   setChatSessionWorkflowState,
+  getExpiredByState as getExpiredByStateFromDb,
+  getStaleWorkflowsFromDb,
+  assignWorkflowAtomic as assignWorkflowAtomicFromDb,
 } from "@/lib/db/database";
-import { getDb } from "@/lib/db/core/connection";
 import { log } from "@/lib/utils/logger";
 
 export type WorkflowState =
@@ -100,55 +102,26 @@ export async function resetToIdle(convId: number): Promise<void> {
   await transitionTo(conv.phone, "idle");
 }
 
-export async function isWorkflowActive(convId: number): Promise<boolean> {
-  const ctx = await getWorkflow(convId);
-  if (!ctx) return false;
-  return ctx.state !== "idle" && ctx.state !== "closed";
-}
-
 export async function getExpiredByState(state: WorkflowState, timeoutMs: number): Promise<WorkflowContext[]> {
-  const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const db = getDb();
-  const rs = await db.execute({
-    sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
-          FROM chat_sessions cs
-          JOIN conversations c ON c.phone = cs.phone
-          WHERE cs.workflow_state = ? AND cs.updated_at < ?`,
-    args: [state, cutoff],
-  });
-  return (rs.rows as any[]).map((row) => ({
-    conversationId: row.conversation_id,
+  const rows = await getExpiredByStateFromDb(state, timeoutMs);
+  return rows.map((row) => ({
+    conversationId: row.conversationId,
     phone: row.phone,
-    state: row.workflow_state as WorkflowState,
+    state: row.workflowState as WorkflowState,
   }));
 }
 
 export async function getStaleWorkflows(timeoutMs: number): Promise<WorkflowContext[]> {
-  const cutoff = Math.floor((Date.now() - timeoutMs) / 1000);
-  const db = getDb();
-  const rs = await db.execute({
-    sql: `SELECT cs.phone, cs.workflow_state, c.id as conversation_id
-          FROM chat_sessions cs
-          JOIN conversations c ON c.phone = cs.phone
-          WHERE cs.workflow_state != 'closed' AND cs.updated_at < ?`,
-    args: [cutoff],
-  });
-  return (rs.rows as any[]).map((row) => ({
-    conversationId: row.conversation_id,
+  const rows = await getStaleWorkflowsFromDb(timeoutMs);
+  return rows.map((row) => ({
+    conversationId: row.conversationId,
     phone: row.phone,
-    state: row.workflow_state as WorkflowState,
+    state: row.workflowState as WorkflowState,
   }));
 }
 
 export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
-  const db = getDb();
-  const rs = await db.execute({
-    sql: `UPDATE chat_sessions
-          SET workflow_state = 'closed', updated_at = unixepoch()
-          WHERE phone = ? AND workflow_state IN ('nivel_1','nivel_2','nivel_3','waiting_driver')`,
-    args: [phone],
-  });
-  const ok = rs.rowsAffected > 0;
-  log.info(`[ASSIGN] rowsAffected=${rs.rowsAffected} ok=${ok}`);
+  const ok = await assignWorkflowAtomicFromDb(phone);
+  log.info(`[ASSIGN] rowsAffected=${ok ? 1 : 0} ok=${ok}`);
   return ok;
 }

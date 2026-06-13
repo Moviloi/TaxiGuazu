@@ -197,10 +197,6 @@ export interface DriverDiscountRow {
   created_at: number | null;
 }
 
-export interface DriverDiscountWithDriverRow extends DriverDiscountRow {
-  driver_name: string;
-}
-
 export interface PromotionRow {
   id: number;
   source: string;
@@ -271,14 +267,6 @@ export interface ChatSessionRow {
   comprehension_score: number | null;
   escalation_reason: string | null;
   updated_at: number;
-}
-
-export interface ProcessedMessageRow {
-  message_id: string;
-  phone: string | null;
-  message_type: string | null;
-  processed_at: number;
-  payload_hash: string | null;
 }
 
 export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";

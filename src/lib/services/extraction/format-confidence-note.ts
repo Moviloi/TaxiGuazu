@@ -1,6 +1,6 @@
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
-import type { PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
+import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 
 const DESCRIPTIVE_PREFIX: Record<string, string> = {
   "Puerto Iguazú": "Ciudad de Puerto Iguazú",

@@ -15,7 +15,7 @@ vi.mock("../src/lib/services/geo/location-resolver", () => ({
 
 const { resolveLocation } = await import("../src/lib/services/geo/location-resolver");
 
-function mockResolveLocation(result: Partial<ReturnType<typeof resolveLocation extends (...args: any[]) => infer R ? R : never>>) {
+function mockResolveLocation(result: Record<string, unknown>) {
   (resolveLocation as any).mockResolvedValue(result);
 }
 

@@ -1,4 +1,5 @@
 import { getDb } from "../core/connection";
+import { queryOne } from "../core/helpers";
 import type { DbExecutor } from "../core/connection";
 
 // ========== learning_weights ==========
@@ -100,7 +101,7 @@ export async function insertConversationEvent(
 
 export async function insertDecisionLog(entry: {
   sessionId: string;
-  selectedOpportunity: string;
+  selectedOpportunity: string | null;
   candidateOpportunities: string;
   utilityScore: number;
   loadAdjusted: boolean;
@@ -171,10 +172,10 @@ export async function getWinningPolicyVariant(
 // ========== system_metrics ==========
 
 export async function getSystemMetricsTotalRevenue(): Promise<number> {
-  const rs = await getDb().execute(
+  const row = await queryOne<{ total: number }>(
     "SELECT COALESCE(SUM(revenue_total), 0) as total FROM system_metrics",
   );
-  return Number((rs.rows[0] as any)?.total ?? 0);
+  return Number(row?.total ?? 0);
 }
 
 export async function insertSystemMetrics(
@@ -190,26 +191,26 @@ export async function insertSystemMetrics(
 // ========== aggregated queries ==========
 
 export async function countActiveDrivers(): Promise<number> {
-  const rs = await getDb().execute(
+  const row = await queryOne<{ c: number }>(
     "SELECT COUNT(*) as c FROM drivers WHERE status = 'active'",
   );
-  return Number((rs.rows[0] as any)?.c ?? 0);
+  return Number(row?.c ?? 0);
 }
 
 export async function getAvgConversionRate(sinceTimestamp: number): Promise<number> {
-  const rs = await getDb().execute({
-    sql: "SELECT AVG(conversion) as rate FROM policy_results WHERE timestamp > ?",
-    args: [sinceTimestamp],
-  });
-  return Number((rs.rows[0] as any)?.rate ?? 0);
+  const row = await queryOne<{ rate: number }>(
+    "SELECT AVG(conversion) as rate FROM policy_results WHERE timestamp > ?",
+    [sinceTimestamp],
+  );
+  return Number(row?.rate ?? 0);
 }
 
 export async function getAvgEscalationRate(sinceTimestamp: number): Promise<number> {
-  const rs = await getDb().execute({
-    sql: "SELECT AVG(escalation_rate) as rate FROM system_metrics WHERE recorded_at > ?",
-    args: [sinceTimestamp],
-  });
-  return Number((rs.rows[0] as any)?.rate ?? 0);
+  const row = await queryOne<{ rate: number }>(
+    "SELECT AVG(escalation_rate) as rate FROM system_metrics WHERE recorded_at > ?",
+    [sinceTimestamp],
+  );
+  return Number(row?.rate ?? 0);
 }
 
 // ========== conversation_f4_log ==========
@@ -255,10 +256,10 @@ export async function setChatSessionEscalationReason(phone: string, reason: stri
 // ========== conversation system-load queries ==========
 
 export async function countHumanOperators(): Promise<number> {
-  const rs = await getDb().execute(
+  const row = await queryOne<{ c: number }>(
     "SELECT COUNT(*) as c FROM conversations WHERE mode = 'HUMAN' AND taken_by_human = 1",
   );
-  return Number((rs.rows[0] as any)?.c ?? 0);
+  return Number(row?.c ?? 0);
 }
 
 // ========== policies ==========
@@ -287,9 +288,40 @@ export async function insertOrIgnorePolicy(
 }
 
 export async function countActiveConversations(sinceTimestamp: number): Promise<number> {
-  const rs = await getDb().execute({
-    sql: "SELECT COUNT(*) as c FROM conversations WHERE mode = 'AI' AND taken_by_human = 0 AND last_message_at > ?",
-    args: [sinceTimestamp],
-  });
-  return Number((rs.rows[0] as any)?.c ?? 0);
+  const row = await queryOne<{ c: number }>(
+    "SELECT COUNT(*) as c FROM conversations WHERE mode = 'AI' AND taken_by_human = 0 AND last_message_at > ?",
+    [sinceTimestamp],
+  );
+  return Number(row?.c ?? 0);
+}
+
+// ========== CLEANUP ==========
+
+interface CleanupResult {
+  job: string;
+  rowsDeleted: number;
+  duration: number;
+}
+
+export async function cleanupOldLearningRecords(cutoff: number): Promise<CleanupResult[]> {
+  const results: CleanupResult[] = [];
+  for (const { sql, job } of [
+    { sql: "DELETE FROM system_metrics WHERE recorded_at < ?", job: "system_metrics" },
+    { sql: "DELETE FROM simulations WHERE timestamp < ?", job: "simulations" },
+    { sql: "DELETE FROM f9_events WHERE timestamp < ?", job: "f9_events" },
+    { sql: "DELETE FROM f9_error_log WHERE created_at < ?", job: "f9_error_log" },
+    { sql: "DELETE FROM f9_drift_log WHERE timestamp < ?", job: "f9_drift_log" },
+    { sql: "DELETE FROM policy_results WHERE timestamp < ?", job: "policy_results" },
+    { sql: "DELETE FROM conversation_f4_log WHERE timestamp < ?", job: "conversation_f4_log" },
+  ]) {
+    const start = Date.now();
+    try {
+      const rs = await getDb().execute({ sql, args: [cutoff] });
+      const rowsDeleted = Number(rs.rowsAffected ?? 0);
+      results.push({ job, rowsDeleted, duration: Date.now() - start });
+    } catch {
+      results.push({ job, rowsDeleted: 0, duration: Date.now() - start });
+    }
+  }
+  return results;
 }

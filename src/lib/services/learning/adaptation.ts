@@ -1,14 +1,13 @@
-import type { LearningDecision, PolicyEngineResult, DriftSeverity, LearningEvent, LearningEventSource } from "./types";
+import type { LearningDecision, PolicyEngineResult, DriftSeverity, LearningEvent } from "./types";
 import { logLearningError } from "./policy-engine";
-import { runHousekeeping } from "../housekeeping/timeouts";
-import { adjustWeight, setWeight } from "./learning-utils";
-import { insertF9DriftLog, insertF9Event } from "@/lib/db/domains/learning";
+import { adjustWeight } from "./learning-utils";
+import { insertF9DriftLog, insertF9Event } from "@/lib/db/database";
 import { clamp01 } from "@/lib/utils/clamp";
 import { log } from "@/lib/utils/logger";
 
 // ── Learning ──
 
-export async function adjustPricing(entity: string, conversionRate: number, expectedRate: number): Promise<void> {
+async function adjustPricing(entity: string, conversionRate: number, expectedRate: number): Promise<void> {
   const drift = conversionRate - expectedRate;
 
   if (drift < -0.1) {
@@ -20,17 +19,7 @@ export async function adjustPricing(entity: string, conversionRate: number, expe
   }
 }
 
-export async function adjustEntityClassification(entity: string, confusionScore: number): Promise<void> {
-  if (confusionScore > 0.6) {
-    log.info(`[LEARNING] Alta confusión para entidad "${entity}" (${confusionScore.toFixed(2)}), marcando como ambigua`);
-    await setWeight(`entity_ambiguous:${entity}`, 1);
-  } else if (confusionScore < 0.2) {
-    log.info(`[LEARNING] Baja confusión para entidad "${entity}", reforzando clasificación`);
-    await adjustWeight(`entity_ambiguous:${entity}`, -1, 0.1);
-  }
-}
-
-export async function adjustPolicyPerformance(
+async function adjustPolicyPerformance(
   policyId: string, performanceScore: number, threshold: number,
 ): Promise<void> {
   if (performanceScore < threshold) {
@@ -42,7 +31,7 @@ export async function adjustPolicyPerformance(
   }
 }
 
-export async function recordDrift(
+async function recordDrift(
   metric: string, entity: string, driftValue: number, severity: DriftSeverity,
   sessionId?: string, policyId?: string,
 ): Promise<void> {
@@ -56,23 +45,7 @@ export async function recordDrift(
 
 const DRIFT_THRESHOLD = 0.3;
 
-export async function detectPredictionDrift(
-  entity: string, predicted: number, actual: number | undefined,
-  sessionId?: string,
-): Promise<void> {
-  if (actual === undefined) return;
-  const drift = clamp01(Math.abs(predicted - actual));
-  if (drift <= DRIFT_THRESHOLD) return;
-
-  const severity: DriftSeverity = drift > 0.6 ? "critical" : drift > 0.45 ? "high" : "medium";
-  await recordDrift("prediction", entity, drift, severity, sessionId);
-
-  if (severity === "high" || severity === "critical") {
-    await adjustPricing(entity, actual, predicted);
-  }
-}
-
-export async function detectConversionDrift(
+async function detectConversionDrift(
   entity: string, conversionRate: number, expectedRate: number,
   sessionId?: string,
 ): Promise<void> {
@@ -84,17 +57,7 @@ export async function detectConversionDrift(
   await adjustPricing(entity, conversionRate, expectedRate);
 }
 
-export async function detectEntityConfusion(
-  entity: string, confusionScore: number,
-  sessionId?: string,
-): Promise<void> {
-  if (confusionScore <= 0.3) return;
-  const severity: DriftSeverity = confusionScore > 0.7 ? "critical" : "high";
-  await recordDrift("entity_confusion", entity, confusionScore, severity, sessionId);
-  await adjustEntityClassification(entity, confusionScore);
-}
-
-export async function detectPolicyDrift(
+async function detectPolicyDrift(
   policyId: string, performanceScore: number, threshold: number,
   sessionId?: string,
 ): Promise<void> {
@@ -107,7 +70,7 @@ export async function detectPolicyDrift(
 
 // ── Events ──
 
-export async function logLearningEvent(event: Omit<LearningEvent, "id">): Promise<void> {
+async function logLearningEvent(event: Omit<LearningEvent, "id">): Promise<void> {
   await insertF9Event({
     sessionId: event.sessionId,
     type: event.type,
@@ -118,41 +81,6 @@ export async function logLearningEvent(event: Omit<LearningEvent, "id">): Promis
     revenue: event.revenue,
     timestamp: event.timestamp,
     source: event.source,
-  });
-}
-
-export async function logConversion(
-  sessionId: string, entity: string, revenue: number, source: LearningEventSource,
-): Promise<void> {
-  await logLearningEvent({
-    sessionId, type: "conversion", entity, revenue, timestamp: Math.floor(Date.now() / 1000), source,
-  });
-}
-
-export async function logCancelledTrip(
-  sessionId: string, entity: string, source: LearningEventSource,
-): Promise<void> {
-  await logLearningEvent({
-    sessionId, type: "cancelled_trip", entity, timestamp: Math.floor(Date.now() / 1000), source,
-  });
-}
-
-export async function logPredictionError(
-  sessionId: string, entity: string, predicted: number, actual: number, source: LearningEventSource,
-): Promise<void> {
-  await logLearningEvent({
-    sessionId, type: "prediction_error", entity,
-    predictedValue: predicted, actualValue: actual,
-    timestamp: Math.floor(Date.now() / 1000), source,
-  });
-}
-
-export async function logManualOverride(
-  sessionId: string, entity: string, intent: string, source: LearningEventSource,
-): Promise<void> {
-  await logLearningEvent({
-    sessionId, type: "manual_override", entity, intent,
-    timestamp: Math.floor(Date.now() / 1000), source,
   });
 }
 
@@ -202,6 +130,4 @@ export async function runAdaptation(
     await logLearningError("adaptation-orchestrator", e);
     log.error(`[LEARNING] Error en meta-governanza:`, e);
   }
-
-  runHousekeeping().catch((e) => logLearningError("housekeeping", e));
 }

@@ -8,7 +8,7 @@ import {
   resetChatSession,
   setPendingOpportunity,
 } from "@/lib/db/database";
-import { getDb } from "@/lib/db/core/connection";
+import { createTransaction } from "@/lib/db/database";
 import type { ChatSessionRow } from "@/lib/db/types";
 import type { OpportunityContext } from "@/lib/services/learning/opportunity-types";
 import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
@@ -21,7 +21,7 @@ import { buildOpportunityOfferMessage } from "@/lib/ai/response-builder";
 import { executeDispatch } from "@/lib/services/dispatch/dispatch.service";
 import type { DispatchResult } from "@/lib/services/dispatch/dispatch.service";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import type { PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
+import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import type { Lang } from "@/lib/ai/types";
 import { processLead } from "@/lib/core/pipeline";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
@@ -156,7 +156,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     return { tripId, executed: false, dispatchResult };
   }
   const finalOpps = learningResult.rankedOpportunities;
-  const tx = await getDb().transaction();
+  const tx = await createTransaction();
   try {
     for (const opp of finalOpps) {
       const oppMsg = buildOpportunityOfferMessage(opp.description);

@@ -45,9 +45,6 @@ export async function deleteConnectionKey(key: string): Promise<void> {
 }
 
 export async function getConnectionCache(key: string): Promise<string | null> {
-  const rs = await getDb().execute({
-    sql: "SELECT value FROM connection_cache WHERE key = ?",
-    args: [key],
-  });
-  return (rs.rows[0] as any)?.value ?? null;
+  const row = await queryOne<{ value: string }>("SELECT value FROM connection_cache WHERE key = ?", [key]);
+  return row?.value ?? null;
 }

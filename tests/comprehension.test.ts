@@ -10,27 +10,25 @@ import type { ComprehensionState } from "@/lib/services/extraction/comprehension
 
 function session(overrides?: Partial<ChatSessionRow>): ChatSessionRow {
   return {
-    id: 1,
-    conversation_id: 1,
     phone: "5491123456789",
-    name: null,
-    mode: "AI",
-    taken_by_human: 0,
-    human_operator_phone: null,
     slots: null,
-    origin: null,
-    destination: null,
-    created_at: 1000,
-    updated_at: 1000,
+    confidence: null,
+    confirmed_fields: null,
+    source_message_ids: null,
+    extraction_count: 0,
+    last_extracted_at: null,
+    workflow_state: "idle",
+    clarify_field: null,
     pending_opportunity: null,
     f4_state: null,
     comprehension_score: null,
     escalation_reason: null,
+    updated_at: 1000,
     ...overrides,
   };
 }
 
-describe("F4 — Comprehension Engine", () => {
+describe("Comprehension Engine", () => {
   describe("buildComprehensionSignals", () => {
     it("BOOKING intent with known entity → high intent + entity confidence", () => {
       const s = session({ slots: JSON.stringify({ origin: "Hotel Rafain", destination: "Aeropuerto" }) });
@@ -165,7 +163,7 @@ describe("F4 — Comprehension Engine", () => {
     });
   });
 
-  describe("F4 — Integration scenarios", () => {
+  describe("Integration scenarios", () => {
     it("FULL_CONTROL: BOOKING + rafain entity + both slots + high extraction confidence", () => {
       const s = session({ slots: JSON.stringify({ origin: "Hotel Rafain", destination: "Aeropuerto Iguazú" }), confidence: JSON.stringify({ origin: 0.9, destination: 0.8 }) });
       const signals = buildComprehensionSignals({ text: "necesito ir a rafain", coreIntent: "BOOKING", slotStability: { origin: "locked", destination: "locked" }, session: s });

@@ -2,7 +2,7 @@
 // Consumed by objectives and learning/admin modules.
 // Changes here can ripple into frozen modules. Only modify for critical fixes.
 
-import { getLearningWeight, setLearningWeight, insertConversionOutcome } from "@/lib/db/domains/learning";
+import { getLearningWeight, setLearningWeight } from "@/lib/db/database";
 
 export async function getWeight(key: string): Promise<number> {
   return getLearningWeight(key);
@@ -21,34 +21,6 @@ export async function adjustWeight(
   const newValue = Math.max(-1, Math.min(1, current + delta * learningRate));
   await setWeight(key, newValue);
   return newValue;
-}
-
-export async function processConversion(
-  sessionId: string,
-  params: {
-    entity: string;
-    intent: string;
-    accepted: boolean;
-    resultedInTrip: boolean;
-    escalated: boolean;
-    opportunityType: string;
-  },
-): Promise<void> {
-  const successScore = (params.accepted ? 1 : 0) + (params.resultedInTrip ? 1 : 0) - (params.escalated ? 1 : 0);
-
-  await insertConversionOutcome(sessionId, params.entity, params.intent, successScore, params.opportunityType);
-
-  const lr = 0.03;
-
-  const intentKey = `intent_weight:${params.intent}`;
-  await adjustWeight(intentKey, successScore, lr);
-
-  const entityKey = `entity_weight:${params.entity}`;
-  await adjustWeight(entityKey, successScore, lr);
-}
-
-export async function getIntentWeight(intent: string): Promise<number> {
-  return getWeight(`intent_weight:${intent}`);
 }
 
 export async function getEntityWeight(entity: string): Promise<number> {

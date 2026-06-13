@@ -115,10 +115,6 @@ export function getAllDomainPatterns(): RegExp[] {
   return result;
 }
 
-export function getEntityByKey(key: string): EntityCatalogEntry | undefined {
-  return ENTITY_CATALOG.find((e) => e.key === key);
-}
-
 export function resolveEntityFromCatalog(text: string): { matched: boolean; domains: EntityDomain[]; ambiguous: boolean } {
   for (const entry of ENTITY_CATALOG) {
     for (const pattern of entry.patterns) {

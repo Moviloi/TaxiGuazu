@@ -35,7 +35,7 @@ const DEFAULT_SEMANTIC_MEMORY: SemanticMemory = {
   ),
 };
 
-export function extractEntities(text: string): string[] {
+function extractEntities(text: string): string[] {
   return extractEntitiesFromCatalog(text);
 }
 
@@ -88,7 +88,4 @@ export function getEntityBias(memory: Memory): string[] {
   return [...new Set([...fromSession, ...fromAssociations])];
 }
 
-export function getRecentEntityMentions(memory: Memory): string[] {
-  const recentText = memory.shortTermMemory.messages.map((m) => m.content).join(" ");
-  return extractEntities(recentText);
-}
+

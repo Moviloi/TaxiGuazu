@@ -6,7 +6,7 @@ const WEIGHT_KEYS: (keyof ObjectiveWeights)[] = [
   "conversion", "revenue", "satisfaction", "efficiency", "escalationCost",
 ];
 
-export function normalizeWeights(weights: ObjectiveWeights): ObjectiveWeights {
+function normalizeWeights(weights: ObjectiveWeights): ObjectiveWeights {
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   if (total === 0) return { ...DEFAULT_OBJECTIVE_WEIGHTS };
   const normalized: ObjectiveWeights = {} as ObjectiveWeights;

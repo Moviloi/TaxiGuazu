@@ -13,18 +13,12 @@ export interface ComprehensionSignals {
   conversationStability: number;
 }
 
-export interface ComprehensionResult {
-  score: number;
-  state: ComprehensionState;
-  signals: ComprehensionSignals;
-}
-
 export interface EffectiveSlots {
   origin: string | null;
   destination: string | null;
 }
 
-export function buildEffectiveSlots(session: ChatSessionRow | null, roleLock: RoleLock): EffectiveSlots {
+function buildEffectiveSlots(session: ChatSessionRow | null, roleLock: RoleLock): EffectiveSlots {
   let sessionOrigin: string | null = null;
   let sessionDest: string | null = null;
   if (session?.slots) {

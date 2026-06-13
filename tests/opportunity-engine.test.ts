@@ -11,6 +11,10 @@ vi.mock("../src/lib/db/core/connection", () => ({
 vi.mock("../src/lib/db/database", () => ({
   getActiveComplementRules: vi.fn(async () => []),
   insertOpportunityLog: vi.fn(async () => 1),
+  queryOne: vi.fn(async () => {
+    const rs = await mockDb.execute();
+    return rs?.rows?.[0] ?? null;
+  }),
 }));
 
 import {
@@ -24,12 +28,13 @@ const basePricing = {
   final_price: 12000,
   base_price: 10000,
   markup: 2000,
-  adjustments: [],
+  adjustments: [] as never[],
   tariff_id: 1,
-  source: "standard",
-  explanation: [],
-  origin: { place_id: "place_1", canonical_name: "Puerto Iguazú" },
-  destination: { place_id: "place_2", canonical_name: "Cataratas" },
+  level: "standard" as string,
+  source: "standard" as "standard" | "promotion" | "provider_adjustment" | "package" | "tg_campaign",
+  explanation: [] as never[],
+  origin: { place_id: "place_1" as string | null, canonical_name: "Puerto Iguazú" as string | null, operational_zone: null as string | null },
+  destination: { place_id: "place_2" as string | null, canonical_name: "Cataratas" as string | null, operational_zone: null as string | null },
 };
 
 const baseTrip = {

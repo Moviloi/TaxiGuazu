@@ -1,33 +1,25 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { insertMessage, getChatSession, upsertChatSession } from "@/lib/db/database";
-import { updateChatSessionComprehension, insertF4Log, setChatSessionEscalationReason } from "@/lib/db/domains/learning";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
-import { buildSlotClarify, buildEscalationMessage } from "@/lib/ai/response-builder";
-import { buildMemory } from "@/lib/services/memory/memory";
-import { buildPredictedContext, enrichComprehensionSignals } from "@/lib/services/memory/predictive-routing";
-import { logIntentDetected, logEntityDetected, logEscalation } from "@/lib/services/learning/event-tracking";
-import { recordComprehensionOutcome, getComprehensionThresholdAdjustment } from "@/lib/services/learning/learning-utils";
-import { buildComprehensionSignals, computeComprehensionScore, getComprehensionState, getRecoveryMessage } from "@/lib/services/extraction/comprehension";
+import { buildSlotClarify } from "@/lib/ai/response-builder";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
-import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
+import type { TripExtraction, ExtractionResult as ExtractionSchemaResult } from "@/lib/ai/extraction-schema";
 import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
 import { evaluateWorkflowTransition } from "@/lib/services/workflow/slot-workflow";
-import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolvePricingForSlots";
+import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import { assertCoreRouterPolicy } from "@/lib/ai/guard";
-import { core } from "@/lib/ai/core";
-type CoreResult = ReturnType<typeof core>;
+import type { CoreDecision } from "@/lib/ai/types";
 import { calculateSlotConfidence } from "@/lib/services/extraction/confidence";
 import { loadContext, mergeContext } from "@/lib/services/memory/context-memory";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
 import { loadPreviousSlots } from "@/lib/services/workflow/load-previous-slots";
 import { evaluateCompleteness } from "@/lib/services/workflow/evaluate-completeness";
-import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { log } from "@/lib/utils/logger";
 
 interface FallbackExtractionResult {
   pricing: PricingResult;
-  confidenceResult: ExtractionResult;
+  confidenceResult: ExtractionSchemaResult;
   workflowResult: SlotWorkflowContext;
   extractionNote: string;
 }
@@ -35,7 +27,7 @@ interface FallbackExtractionResult {
 async function tryFallbackExtraction(
   text: string,
   phone: string,
-  prevConfidence: ExtractionResult | undefined,
+  prevConfidence: ExtractionSchemaResult | undefined,
 ): Promise<FallbackExtractionResult | null> {
   try {
     log.info("[EXTRACTION] Intentando fallback regex...");
@@ -74,7 +66,7 @@ async function tryFallbackExtraction(
         slots.origin = { value: ft.origin.canonical_name ?? originMatch, score: 1.0, reason: "regex_fallback" };
         slots.destination = { value: ft.destination.canonical_name ?? destMatch, score: 1.0, reason: "regex_fallback" };
         slots.price = { value: ft.final_price, score: 1.0, reason: "backend_tariff_match" };
-        const fbConfidence: ExtractionResult = {
+        const fbConfidence: ExtractionSchemaResult = {
           slots,
           overall_confidence: 1.0,
           action: "proceed",
@@ -107,97 +99,27 @@ async function tryFallbackExtraction(
   }
 }
 
-export interface MemoryAndExtractionResult {
+export interface ExtractionResult {
   extractionNote?: string;
   workflowResult?: SlotWorkflowContext;
   parsed?: { success: true; data: TripExtraction } | { success: false; error: any };
-  confidenceResult?: ExtractionResult;
+  confidenceResult?: ExtractionSchemaResult;
   pricing?: PricingResult;
   prevSlotsEarly: Record<string, string>;
 }
 
-export async function handleMemoryAndExtraction(
+export async function runExtractionPipeline(
   phone: string,
   text: string,
   conversationId: number,
-  leadCore: CoreResult,
+  leadCore: CoreDecision,
   history: any[],
   customerName: string | null,
-): Promise<MemoryAndExtractionResult | null> {
-  const f5Session = await getChatSession(phone);
-  const f5Core = leadCore;
-  const f5Memory = buildMemory(f5Session, history);
-  const f5Context = buildPredictedContext(text, f5Core.intent, f5Memory);
-  logIntentDetected(String(conversationId), f5Core.intent, f5Context.intentPrediction.confidence);
-  const detectedEntities = f5Context.entityPrediction.candidates;
-  if (detectedEntities.length > 0) logEntityDetected(String(conversationId), detectedEntities);
-
-  // COMPREHENSION CHECK
-  {
-    log.info("[TRACE INPUT]", { event: "comprehension_check", phone: phone.slice(-4), textLen: text.length });
-    const f4Signals = enrichComprehensionSignals(
-      buildComprehensionSignals({
-        text,
-        coreIntent: f5Core.intent,
-        slotStability: f5Core.slotStability,
-        roleLock: f5Core.roleLock,
-        session: f5Session,
-      }),
-      f5Context.entityPrediction,
-      f5Context.intentPrediction,
-    );
-    const f4Score = computeComprehensionScore(f4Signals);
-    const f4ThresholdAdj = await getComprehensionThresholdAdjustment();
-    const f4State = getComprehensionState(f4Score, f4ThresholdAdj);
-
-    log.info("[TRACE COMPREHENSION]", {
-      state: f4State,
-      score: f4Score,
-      thresholdAdj: f4ThresholdAdj,
-      intent: f5Core.intent,
-      roleLock: f5Core.roleLock,
-      slotStability: f5Core.slotStability,
-    });
-
-    await Promise.all([
-      updateChatSessionComprehension(phone, f4State, f4Score),
-      insertF4Log(String(conversationId), f4Score, f4State, null),
-    ]);
-
-    recordComprehensionOutcome(f4State === "ESCALATION");
-
-    if (f4State === "ESCALATION") {
-      const reason = `comprehension_score=${f4Score.toFixed(2)} state=${f4State}`;
-      await setChatSessionEscalationReason(phone, reason);
-      logEscalation(String(conversationId), reason, f4Score);
-      await notifyAdmin(`⚠️ *ESCALACIÓN — Bajo nivel de comprensión*\n\nTeléfono: ******${phone.slice(-4)}\nScore: ${f4Score.toFixed(2)}`);
-      const escMsg = buildEscalationMessage();
-      log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_ESCALATION", text: escMsg });
-      await sendWhatsAppMessage(phone, escMsg);
-      await insertMessage(conversationId, "assistant", escMsg);
-      return null;
-    }
-
-    if (f4State === "RECOVERY") {
-      log.info("[TRACE RECOVERY]", {
-        state: f4State,
-        score: f4Score,
-        phone: phone.slice(-4),
-        textLen: text.length,
-      });
-      const recoveryMsg = getRecoveryMessage(f4State, f5Session);
-      log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_RECOVERY", text: recoveryMsg });
-      await sendWhatsAppMessage(phone, recoveryMsg);
-      await insertMessage(conversationId, "assistant", recoveryMsg);
-      return null;
-    }
-  }
-
-  // CONFIDENCE-BASED EXTRACTION
+): Promise<ExtractionResult | null> {
   let extractionNote: string | undefined;
   let workflowResult: SlotWorkflowContext | undefined;
   let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
-  let confidenceResult: ExtractionResult | undefined;
+  let confidenceResult: ExtractionSchemaResult | undefined;
   let pricing: PricingResult | undefined;
   const coreDecisionEarly = leadCore;
   let prevSlotsEarly: Record<string, string> = {};

@@ -5,28 +5,8 @@
 // Future: merge v2/v3 tariff resolution into a unified pricing service.
 
 import type { TariffRow, TariffV2Match } from "@/lib/db/types";
-import { queryOne } from "@/lib/db/core/helpers";
+import { findTariffRow, getOperationalZone } from "@/lib/db/database";
 import { resolveLocation } from "../geo/location-resolver";
-
-async function findTariffRow(opts: {
-  originPlaceId?: string | null;
-  destPlaceId?: string | null;
-  originZoneId?: string | null;
-  destZoneId?: string | null;
-}): Promise<TariffRow | null> {
-  return queryOne<TariffRow>(
-    `SELECT * FROM tariffs WHERE active = 1
-     AND (CASE WHEN ? IS NULL THEN origin_place_id IS NULL ELSE origin_place_id = ? END)
-     AND (CASE WHEN ? IS NULL THEN destination_place_id IS NULL ELSE destination_place_id = ? END)
-     AND (CASE WHEN ? IS NULL THEN origin_zone_id IS NULL ELSE origin_zone_id = ? END)
-     AND (CASE WHEN ? IS NULL THEN destination_zone_id IS NULL ELSE destination_zone_id = ? END)
-     LIMIT 1`,
-    [opts.originPlaceId ?? null, opts.originPlaceId ?? null,
-     opts.destPlaceId ?? null, opts.destPlaceId ?? null,
-     opts.originZoneId ?? null, opts.originZoneId ?? null,
-     opts.destZoneId ?? null, opts.destZoneId ?? null]
-  );
-}
 
 function buildMatch(row: TariffRow, level: TariffV2Match["level"], pax: number): TariffV2Match {
   const price = pax > 4 ? row.price_6p : row.price_4p;
@@ -112,12 +92,8 @@ export async function resolveTariffByPlaceIds(
   const paxNum = Math.max(1, Math.min(pax || 1, 6));
   const dId = destinationPlaceId;
 
-  const originZone = await queryOne<{ operational_zone: string | null }>(
-    "SELECT operational_zone FROM places WHERE place_id = ?", [originPlaceId]
-  );
-  const destZone = await queryOne<{ operational_zone: string | null }>(
-    "SELECT operational_zone FROM places WHERE place_id = ?", [dId]
-  );
+  const originZone = await getOperationalZone(originPlaceId);
+  const destZone = await getOperationalZone(dId);
   const originZoneId = originZone?.operational_zone ?? null;
   const destZoneId = destZone?.operational_zone ?? null;
 

@@ -1,4 +1,4 @@
-export function computeShiftEnd(shift: string): Date | null {
+function computeShiftEnd(shift: string): Date | null {
   if (shift !== "day" && shift !== "night") return null;
   const now = new Date();
   const endHour = shift === "day" ? 18 : 6;
