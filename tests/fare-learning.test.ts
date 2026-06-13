@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { recordOutcome, getAllOutcomes, clearOutcomes, getOutcomeCount } from "../src/lib/services/tripOutcomeTracker";
+import { recordOutcome, getAllOutcomes, clearOutcomes, getOutcomeCount } from "../src/lib/services/trip-outcome-tracker";
 import { observe, computeWeights, buildRouteKey, applyWeights } from "../src/lib/services/learning/fare-learning-engine";
 
 describe("tripOutcomeTracker", () => {

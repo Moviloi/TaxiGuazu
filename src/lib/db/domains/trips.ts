@@ -52,11 +52,6 @@ export async function updateTripState(tripId: string, newState: string): Promise
   await syncTripPhaseFromLegacyStatus(tripId, newState);
 }
 
-export async function updateTripDiscountExplicit(tripId: string, discountPercent: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({ sql: "UPDATE trips SET discount_explicit = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [discountPercent, tripId] });
-}
-
 export async function assignDriverToTrip(tripId: string, driverPhone: string): Promise<{ commission: number; payout: number } | null> {
   await ensureSchema();
   const trip = await getTripById(tripId);
@@ -91,7 +86,7 @@ export async function completeTrip(tripId: string): Promise<void> {
   await syncTripPhaseFromLegacyStatus(tripId, "completado");
 }
 
-// ========== TRIP MODEL V3 (Fase 4A + 4B) ==========
+// ========== TRIP MODEL V3 ==========
 
 const LEGACY_STATUS_TO_PHASE: Record<string, { phase: TripPhase; reason?: TripClosureReason }> = {
   consulta: { phase: "QUOTED" },
@@ -188,29 +183,7 @@ export async function getTripPhase(tripId: string): Promise<TripPhase | null> {
   return val ? (val as TripPhase) : null;
 }
 
-export async function setTripPhase(tripId: string, phase: TripPhase): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET trip_phase = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [phase, tripId],
-  });
-}
-
-export async function closeTrip(tripId: string, reason: TripClosureReason): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET trip_phase = 'CLOSED', closure_reason = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [reason, tripId],
-  });
-}
-
-export async function getTripByIdWithDiagnostics(tripId: string, source: string): Promise<TripRow | null> {
-  const trip = await getTripById(tripId);
-  if (trip) checkTripPhaseDivergence(trip, source);
-  return trip;
-}
-
-// ========== FASE 4C — READER VALIDATION ==========
+// ========== READER VALIDATION ==========
 
 const validationMismatchLogged = new Set<string>();
 const phaseNullLogged = new Set<string>();
@@ -281,62 +254,6 @@ export async function updateTripTariff(tripId: string, tariffId: number, pisoBas
   });
 }
 
-export async function updateTripScheduledAt(tripId: string, scheduledAt: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET scheduled_at = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [scheduledAt, tripId],
-  });
-}
-
-export async function updateTripFlight(tripId: string, flightNumber: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET flight_number = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [flightNumber, tripId],
-  });
-}
-
-export async function updateTripPassengers(tripId: string, passengers: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET passengers = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [passengers, tripId],
-  });
-}
-
-export async function updateTripOrigin(tripId: string, origin: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET origin = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [origin, tripId],
-  });
-}
-
-export async function updateTripDestination(tripId: string, destination: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET destination = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [destination, tripId],
-  });
-}
-
-export async function updateTripPriceBase(tripId: string, price: number): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET price_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [price, tripId],
-  });
-}
-
-export async function updateTripHotel(tripId: string, hotel: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE trips SET hotel_destination = ?, updated_at = unixepoch() WHERE trip_id = ?",
-    args: [hotel, tripId],
-  });
-}
-
 export async function setComisionDeclarada(tripId: string): Promise<void> {
   await ensureSchema();
   await getDbv().execute({
@@ -378,17 +295,6 @@ export async function getTripsPendingCloseOut(): Promise<TripRow[]> {
   );
   await reportTripPhaseNullCount("getTripsPendingCloseOut");
   return trips;
-}
-
-export async function getTripsScheduledForDate(dateStr: string): Promise<TripRow[]> {
-  const startOfDay = Math.floor(new Date(dateStr + "T00:00:00").getTime() / 1000);
-  const endOfDay = Math.floor(new Date(dateStr + "T23:59:59").getTime() / 1000);
-  return query<TripRow>("SELECT * FROM trips WHERE scheduled_at >= ? AND scheduled_at <= ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at", [startOfDay, endOfDay]);
-}
-
-export async function getUpcomingReservations(limit = 20): Promise<TripRow[]> {
-  const now = Math.floor(Date.now() / 1000);
-  return query<TripRow>("SELECT * FROM trips WHERE scheduled_at IS NOT NULL AND scheduled_at > ? AND status NOT IN ('completado','cancelado') ORDER BY scheduled_at ASC LIMIT ?", [now, limit]);
 }
 
 export async function getExpiredTrips(): Promise<TripRow[]> {

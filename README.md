@@ -55,14 +55,14 @@ src/
     ├── db/                      # SQLite/Turso (database.ts + types.ts)
     ├── services/                # Lógica de negocio por dominio
     │   ├── lead.service.ts      #   Detección: orquestación entrada (único punto)
-    │   ├── contextMemory.ts     #   Persistencia de estado de sesión
+    │   ├── context-memory.ts     #   Persistencia de estado de sesión
     │   ├── confidence.ts        #   Cálculo de confianza de extracción
-    │   ├── geoEngine.ts         #   Resolución geográfica (zonas, expansión)
+    │   ├── geo-engine.ts         #   Resolución geográfica (zonas, expansión)
     │   ├── pricing/             #   Motor de precios (facade + resolución tarifas)
     │   ├── dispatch/            #   Asignación multi-nivel a choferes
     │   ├── trip-execution/      #   Ejecución de viajes (confirmación, llegada, post-servicio)
     │   └── learning/            #   Pipeline de aprendizaje (oportunidades, policy, adaptación)
-    ├── utils/                   # Timeouts, dispatch workflow
+    ├── utils/                   # clamp.ts
     └── whatsapp/                # Cliente WhatsApp Cloud API
 ```
 

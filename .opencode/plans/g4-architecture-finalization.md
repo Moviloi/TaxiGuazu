@@ -249,13 +249,13 @@ ai/response-builder.ts → imports OpportunityResult from services/opportunity-e
 
 | # | Task | Files | Effort | Impact |
 |---|------|-------|--------|--------|
-| 1a | Remove 38 dead exports from database.ts and connection.ts | database.ts, connection.ts | 10 min | Removes broken `getPackagePrices` import; reduces barrel bloat |
-| 1b | Remove duplicate `clearPendingOpportunity` from domains/learning.ts | domains/learning.ts | 1 min | Eliminates dead code |
-| 1c | Rename 6 camelCase files to kebab-case | 6 files + update all importers | 15 min | Consistent naming |
-| 1d | Fix stale README path (`@/lib/utils/` → `@/lib/services/workflow/`) | README.md | 2 min | Accurate docs |
-| 1e | Fix typo `Oportunity` → `Opportunity` in comment | opportunity-engine.ts | 1 min | Comment fix |
-| 1f | Remove stale "Fase 3 v5.0", "Fase 4D", "v5.7" versioned comments | database.ts, trips.ts, pipeline.ts, core.ts | 10 min | Cleaner code |
-| 1g | Resolve pipeline.ts AHORA comment contradiction | pipeline.ts | 2 min | Accurate comment |
+| 1a | Remove 38 dead exports from database.ts and connection.ts | database.ts, connection.ts, trips.ts, connection-state.ts | 10 min | Removed 33 dead exports (~222 lines); kept validateReaderConsistency + reportTripPhaseNullCount (have callers) |
+| 1b | Remove duplicate `clearPendingOpportunity` from database.ts | database.ts | 1 min | Removed duplicate; fixed opportunity-response.ts import |
+| 1c | Rename 6 camelCase files to kebab-case | 6 files + 11 importer files, 4 test files | 15 min | ✅ done |
+| 1d | Fix stale README path (`@/lib/utils/` → describe utils, `contextMemory` → `context-memory`, `geoEngine` → `geo-engine`) | README.md | 2 min | ✅ done |
+| 1e | Fix typo `Oportunity` → `Opportunity` in comment | opportunity-engine.ts | 1 min | ✅ done |
+| 1f | Remove stale "Fase 3 v5.0", "Fase 4D", "v5.7" versioned comments | database.ts, trips.ts, pipeline.ts, core.ts | 10 min | ✅ done (7 comments updated) |
+| 1g | Resolve pipeline.ts AHORA comment contradiction | pipeline.ts | 2 min | ✅ done |
 
 ### Tier 2 — Controlled refactors (behavior-preserving, needs review)
 
@@ -295,9 +295,9 @@ ai/response-builder.ts → imports OpportunityResult from services/opportunity-e
 ## 7. Recommended Execution Order
 
 Immediate (Tier 1 — <30 min total):
-1. Dead export removal (1a, 1b)
-2. camelCase → kebab-case (1c)
-3. README fix + typo fix + comment cleanup (1d, 1e, 1f, 1g)
+1. ✅ Dead export removal (1a, 1b)
+2. ✅ camelCase → kebab-case (1c)
+3. ✅ README fix + typo fix + comment cleanup (1d, 1e, 1f, 1g)
 4. Run `npm test` + `npx tsc --noEmit` to validate
 
 Short-term (Tier 2 — <2h total):

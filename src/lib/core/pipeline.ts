@@ -51,8 +51,8 @@ export type ProcessLeadResult = "completed" | "incomplete" | "error";
  * handler recibe el texto + contexto de extracción, ejecuta core → router → policy,
  * y policy produce finalResponse + metadata de ejecución (needsGeo, needsSaveContext).
  *
- * Mode is hardcoded to "RESERVA" (AHORA is legacy/deprecated and not routed via this pipeline).
- * When AHORA is revived, ExecutionContext should carry an explicit mode field.
+ * Mode is hardcoded to "RESERVA" (AHORA flows bypass this pipeline entirely via policy-ahora.ts).
+ * TODO: Merge AHORA into pipeline with explicit mode field in ExecutionContext.
  */
 export async function processLead(
   execCtx: ExecutionContext,

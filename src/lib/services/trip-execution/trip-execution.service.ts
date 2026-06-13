@@ -12,7 +12,7 @@ import { setPendingOpportunity } from "@/lib/db/domains/learning";
 import type { ChatSessionRow, OpportunityContext } from "@/lib/db/types";
 import { ensureFleetCanHandle } from "@/lib/services/fleet-validation";
 import { buildRouteKey, observe as observeLearning } from "@/lib/services/learning/fare-learning-engine";
-import { classifyTripLeg } from "@/lib/services/geoEngine";
+import { classifyTripLeg } from "@/lib/services/geo-engine";
 import { opportunityEngine } from "@/lib/services/opportunity-engine";
 import { evaluateLearningPipeline } from "@/lib/services/learning/learning-pipeline.service";
 import { logOpportunityShown } from "@/lib/services/learning/event-tracking";

@@ -431,6 +431,4 @@ async function initSchema(): Promise<void> {
   ]);
 }
 
-export function getDbInstance(): LibSqlClient {
-  return getDbv();
-}
+

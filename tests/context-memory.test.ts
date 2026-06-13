@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mergeContext, type ConversationContext } from "../src/lib/services/contextMemory";
+import { mergeContext, type ConversationContext } from "../src/lib/services/context-memory";
 
 describe("contextMemory", () => {
   const empty: ConversationContext = { lastUpdate: 0 };

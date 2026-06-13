@@ -1,7 +1,7 @@
 // Fare Learning Engine — adjusts zone/proximity/border weights from historical trip outcomes.
 // Controlled feedback loop — no ML, just deterministic weight tuning.
 
-import { recordOutcome, getAllOutcomes, type TripOutcome } from "@/lib/services/tripOutcomeTracker";
+import { recordOutcome, getAllOutcomes, type TripOutcome } from "@/lib/services/trip-outcome-tracker";
 
 export interface LearningWeights {
   zoneAdjustments: Record<string, number>;

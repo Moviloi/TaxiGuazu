@@ -1,5 +1,6 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { getChatSession, insertMessage, clearPendingOpportunity, updateOpportunityLogResponse } from "@/lib/db/database";
+import { getChatSession, insertMessage, updateOpportunityLogResponse } from "@/lib/db/database";
+import { clearPendingOpportunity } from "@/lib/db/domains/learning";
 import { resetToIdle } from "@/lib/services/workflow/conversation-workflow";
 import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
 import { buildOpportunityAcceptedMessage, buildOpportunityDeclinedMessage } from "@/lib/ai/response-builder";

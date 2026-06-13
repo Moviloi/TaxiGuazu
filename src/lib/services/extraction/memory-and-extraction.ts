@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { insertMessage, getChatSession, upsertChatSession } from "@/lib/db/database";
 import { updateChatSessionComprehension, insertF4Log, setChatSessionEscalationReason } from "@/lib/db/domains/learning";
-import { extractSlots } from "@/lib/services/extractSlots";
+import { extractSlots } from "@/lib/services/extract-slots";
 import { buildSlotClarify, buildEscalationMessage } from "@/lib/ai/response-builder";
 import { buildMemory } from "@/lib/services/memory";
 import { buildPredictedContext, enrichComprehensionSignals } from "@/lib/services/predictive-routing";
@@ -17,7 +17,7 @@ import { assertCoreRouterPolicy } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
 type CoreResult = ReturnType<typeof core>;
 import { calculateSlotConfidence } from "@/lib/services/confidence";
-import { loadContext, mergeContext } from "@/lib/services/contextMemory";
+import { loadContext, mergeContext } from "@/lib/services/context-memory";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
 import { loadPreviousSlots } from "@/lib/services/workflow/load-previous-slots";

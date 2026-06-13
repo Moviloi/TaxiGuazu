@@ -1,4 +1,4 @@
-// ARCHITECTURE NOTE: Oportunity domain. Congelado durante Conversation Core MVP.
+// ARCHITECTURE NOTE: Opportunity domain. Congelado durante Conversation Core MVP.
 // Flujo independiente gestionado por lead.service.ts. No pasa por pipeline ni policies.
 import type { ProviderAdjustmentRow, PromotionRow, PackageRow, OpportunityContext, Opportunity, OpportunityRuleRow } from "@/lib/db/types";
 import type { PricingResult } from "./pricing-engine";

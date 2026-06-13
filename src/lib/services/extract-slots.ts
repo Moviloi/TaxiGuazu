@@ -7,8 +7,8 @@
 // If regex or entity produces at least one slot (origin OR destination),
 // the pipeline returns immediately — no LLM call.
 
-import { regexExtractSlots } from "./regexExtractor";
-import { entityExtractSlots } from "./entityExtractor";
+import { regexExtractSlots } from "./regex-extractor";
+import { entityExtractSlots } from "./entity-extractor";
 import { generateGroqExtraction } from "@/lib/ai/groq";
 import type { ExtractionContext } from "@/lib/ai/extraction-prompt";
 

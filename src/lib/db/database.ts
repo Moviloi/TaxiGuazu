@@ -3,19 +3,14 @@ import type {
   MessageRow,
   TripRow,
   DriverRow,
-  DriverStatus,
   DriverInvitationRow,
   DriverCodeRow,
   ClientPreferredDriverRow,
-  PackagePriceRow,
   ReservationSlotRow,
   TariffRow,
-  DriverDiscountRow,
-  DriverDiscountWithDriverRow,
   LeadRow,
   LocationAliasRow,
   ChatSessionRow,
-  ProcessedMessageRow,
   OpportunityRuleRow,
 } from "./types";
 
@@ -93,9 +88,9 @@ export async function setConversationTrip(conversationId: number, tripId: string
   await getDbv().execute({ sql: "UPDATE conversations SET trip_id = ? WHERE id = ?", args: [tripId, conversationId] });
 }
 
-// Nota Fase 3 v5.0: setConversationTripStatus eliminado — 0 callers (verificado).
+// setConversationTripStatus eliminado — 0 callers (verificado Phase G).
 // conversations.trip_status sigue existiendo en la tabla (DEFAULT 'consulta') y
-// es candidata a DROP COLUMN en Fase 6.
+// es candidata a DROP COLUMN.
 
 
 
@@ -161,26 +156,6 @@ export async function validateFleetCanHandle(pax: number): Promise<{ ok: boolean
   return { ok: pax <= max, max };
 }
 
-export async function listPendingDrivers(): Promise<DriverRow[]> {
-  return query<DriverRow>("SELECT * FROM drivers WHERE status = 'pending' ORDER BY created_at ASC");
-}
-
-export async function approveDriver(driverId: string, approvedBy: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE drivers SET status='active', approved_at=unixepoch(), approved_by=? WHERE driver_id=?",
-    args: [approvedBy, driverId],
-  });
-}
-
-export async function setDriverStatus(driverId: string, status: DriverStatus): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: "UPDATE drivers SET status=? WHERE driver_id=?",
-    args: [status, driverId],
-  });
-}
-
 export async function getPrincipalDriver(): Promise<DriverRow | null> {
   return queryOne<DriverRow>("SELECT * FROM drivers WHERE is_principal = 1 LIMIT 1");
 }
@@ -191,17 +166,6 @@ export async function getDriverByPhone(phone: string): Promise<DriverRow | null>
 
 export async function getPrincipal2Driver(): Promise<DriverRow | null> {
   return queryOne<DriverRow>("SELECT * FROM drivers WHERE is_principal2 = 1 LIMIT 1");
-}
-
-export async function registerDriver(phone: string, name?: string): Promise<DriverRow | null> {
-  const existing = await getDriverByPhone(phone);
-  if (existing) return existing;
-  const driverId = `driver_${Date.now()}`;
-  await getDbv().execute({
-    sql: "INSERT INTO drivers (driver_id, phone, name, active, status) VALUES (?, ?, ?, 0, 'pending')",
-    args: [driverId, phone, name || null],
-  });
-  return await getDriverByPhone(phone);
 }
 
 export async function createDriverCode(
@@ -270,25 +234,6 @@ export async function deactivateDriverByCode(code: string): Promise<boolean> {
 
 export async function getDriverCodeByCode(code: string): Promise<DriverCodeRow | null> {
   return queryOne<DriverCodeRow>("SELECT * FROM driver_codes WHERE code = ?", [code.toLowerCase().trim()]);
-}
-
-export async function registerDriverByCode(code: string, phone: string): Promise<DriverCodeRow | null> {
-  const existing = await getDriverCodeByCode(code);
-  if (!existing) return null;
-  if (existing.phone) return existing;
-
-  await getDbv().execute({
-    sql: "UPDATE driver_codes SET phone = ?, registered_at = unixepoch() WHERE code = ?",
-    args: [phone, code.toLowerCase().trim()],
-  });
-
-  const driverId = `driver_${Date.now()}`;
-  await getDbv().execute({
-    sql: "INSERT OR IGNORE INTO drivers (driver_id, phone, name, active, status) VALUES (?, ?, ?, 0, 'pending')",
-    args: [driverId, phone, existing.name],
-  });
-
-  return await getDriverCodeByCode(code);
 }
 
 export async function getDriverExpiry(phone: string): Promise<{ active: boolean; expiresAt: Date | null }> {
@@ -416,13 +361,6 @@ export async function getDriverInvitationByCode(code: string): Promise<DriverInv
   return queryOne<DriverInvitationRow>("SELECT * FROM driver_invitations WHERE code = ?", [code.toLowerCase().trim()]);
 }
 
-export async function listDriverInvitations(status?: DriverInvitationRow["status"]): Promise<DriverInvitationRow[]> {
-  if (status) {
-    return query<DriverInvitationRow>("SELECT * FROM driver_invitations WHERE status = ? ORDER BY created_at DESC", [status]);
-  }
-  return query<DriverInvitationRow>("SELECT * FROM driver_invitations ORDER BY created_at DESC");
-}
-
 export async function createDriverInvitation(
   code: string,
   createdBy: string,
@@ -451,73 +389,6 @@ export async function createDriverInvitation(
   return { ok: true, invitation: invitation ?? undefined };
 }
 
-export async function registerDriverFromInvitation(
-  code: string,
-  phone: string,
-  data: { name?: string; carType?: string; carCapacity?: number; color?: string; plate?: string; country?: string; tier?: string; shift?: string | null; paymentMethod?: string | null; idiom?: string | null }
-): Promise<{ ok: boolean; error?: string; driver?: DriverRow; invitation?: DriverInvitationRow }> {
-  await ensureSchema();
-  const cleaned = code.toLowerCase().trim();
-  const invitation = await getDriverInvitationByCode(cleaned);
-  if (!invitation) return { ok: false, error: "Invitación no encontrada" };
-  if (invitation.status !== "pending") return { ok: false, error: `Invitación ya ${invitation.status}` };
-
-  const now = Math.floor(Date.now() / 1000);
-  if (invitation.expires_at && invitation.expires_at < now) {
-    await getDbv().execute({
-      sql: "UPDATE driver_invitations SET status='expired' WHERE id=?",
-      args: [invitation.id],
-    });
-    return { ok: false, error: "Invitación expirada" };
-  }
-
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length < 10) return { ok: false, error: "Teléfono inválido" };
-  const fullPhone = digits.startsWith("54") ? `+${digits}` : `+54${digits}`;
-
-  if (invitation.phone && invitation.phone !== fullPhone) {
-    return { ok: false, error: "El teléfono no coincide con la invitación" };
-  }
-
-  const driverId = `driver_${Date.now()}`;
-  await getDbv().execute({
-    sql: `INSERT INTO drivers (driver_id, phone, name, active, car_type, car_capacity, color, plate, country, tier, shift, payment_method, idiom, status)
-          VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-    args: [
-      driverId, fullPhone, data.name || null,
-      data.carType || null, data.carCapacity ?? null,
-      data.color || null, data.plate || null,
-      data.country || "AR",
-      data.tier || "normal",
-      data.shift ?? "any",
-      data.paymentMethod ?? null,
-      data.idiom ?? null,
-    ],
-  });
-
-  await getDbv().execute({
-    sql: "UPDATE driver_invitations SET status='accepted', used_at=?, driver_id=? WHERE id=?",
-    args: [now, driverId, invitation.id],
-  });
-
-  const driver = await queryOne<DriverRow>("SELECT * FROM drivers WHERE driver_id = ?", [driverId]);
-  const updated = await getDriverInvitationByCode(cleaned);
-  return { ok: true, driver: driver ?? undefined, invitation: updated ?? undefined };
-}
-
-export async function revokeDriverInvitation(code: string): Promise<{ ok: boolean; error?: string }> {
-  await ensureSchema();
-  const cleaned = code.toLowerCase().trim();
-  const invitation = await getDriverInvitationByCode(cleaned);
-  if (!invitation) return { ok: false, error: "Invitación no encontrada" };
-  if (invitation.status !== "pending") return { ok: false, error: `Invitación ya ${invitation.status}` };
-  await getDbv().execute({
-    sql: "UPDATE driver_invitations SET status='revoked' WHERE id=?",
-    args: [invitation.id],
-  });
-  return { ok: true };
-}
-
 // ========== PREFERRED DRIVERS ==========
 
 export async function getClientPreferredDriver(clientPhone: string): Promise<ClientPreferredDriverRow | null> {
@@ -536,21 +407,9 @@ export async function setClientPreferredDriver(clientPhone: string, driverPhone:
   });
 }
 
-export async function setBackupDriver(clientPhone: string, driverPhone: string): Promise<void> {
-  await ensureSchema();
-  await getDbv().execute({
-    sql: `INSERT INTO client_preferred_drivers (client_phone, preferred_driver_phone, backup_driver_phone)
-          VALUES (?, ?, ?)
-          ON CONFLICT(client_phone) DO UPDATE SET
-            backup_driver_phone = excluded.backup_driver_phone,
-            updated_at = unixepoch()`,
-    args: [clientPhone, driverPhone, driverPhone],
-  });
-}
-
 // ========== WORKFLOWS ==========
 //
-// La tabla `workflows` quedó sin callers activos en Fase 3 v5.0.
+// La tabla `workflows` quedó sin callers activos (verificado Phase G).
 // La fuente única de verdad del workflow conversacional es ahora
 // `chat_sessions.workflow_state` (ver @/lib/utils/conversation-workflow).
 //
@@ -560,7 +419,7 @@ export async function setBackupDriver(clientPhone: string, driverPhone: string):
 // de estado de workflow pasa por `conversation-workflow.ts`.
 //
 // La tabla se conserva (con su migración `workflows_recreate`) sólo para
-// preservar datos históricos. Candidata a DROP en Fase 6.
+// preservar datos históricos. Candidata a DROP.
 
 // ========== PACKAGE PRICES ==========
 
@@ -574,16 +433,12 @@ export async function setPackagePrice(driverPhone: string, packageType: string, 
   });
 }
 
-export async function getPackagePrice(driverPhone: string, packageType: string): Promise<PackagePriceRow | null> {
-  return queryOne<PackagePriceRow>("SELECT * FROM package_prices WHERE driver_phone = ? AND package_type = ?", [driverPhone, packageType]);
-}
-
 // ========== SURVEY ==========
 
 export async function getTripsPendingSurvey(): Promise<TripRow[]> {
   const cutoff = Math.floor(Date.now() / 1000);
   const trips = await query<TripRow>("SELECT * FROM trips WHERE trip_phase IN ('ASSIGNED','CLOSED') AND status != 'reconfirmado_24hs' AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?) ORDER BY confirmed_at ASC LIMIT 10", [cutoff]);
-  // Fase 4D: phase-based primary with reconfirmado_24hs exclusion; legacy + phase COUNT for cross-validation.
+  // Phase-based primary with reconfirmado_24hs exclusion; legacy + phase COUNT for cross-validation.
   const legacyRs = await getDbv().execute({
     sql: "SELECT COUNT(*) as cnt FROM trips WHERE status IN ('completado', 'asignado_chofer') AND (survey_sent IS NULL OR survey_sent = 0) AND (confirmed_at IS NOT NULL AND confirmed_at < ?)",
     args: [cutoff],
@@ -629,10 +484,6 @@ export async function createReservationSlot(dayOfWeek: number, startTime: string
 
 export async function getActiveSlots(): Promise<ReservationSlotRow[]> {
   return query<ReservationSlotRow>("SELECT * FROM reservation_slots WHERE active = 1 ORDER BY day_of_week, start_time");
-}
-
-export async function getSlotsByDayOfWeek(dayOfWeek: number): Promise<ReservationSlotRow[]> {
-  return query<ReservationSlotRow>("SELECT * FROM reservation_slots WHERE day_of_week = ? AND active = 1 ORDER BY start_time", [dayOfWeek]);
 }
 
 export async function deleteReservationSlot(id: number): Promise<boolean> {
@@ -753,7 +604,7 @@ export async function updateChatSessionWorkflow(phone: string, workflowState: st
   });
 }
 
-// Fase 3 v5.0: setter dedicado para transiciones de despacho.
+// Setter dedicado para transiciones de despacho.
 // NO toca clarify_field/slots/confidence — sólo workflow_state y updated_at.
 export async function setChatSessionWorkflowState(phone: string, state: string, executor?: DbExecutor): Promise<void> {
   const db = executor ?? getDbv();
@@ -767,17 +618,6 @@ export async function resetChatSession(phone: string): Promise<void> {
   await getDbv().execute({ sql: "DELETE FROM chat_sessions WHERE phone = ?", args: [phone] });
 }
 
-interface DriverDiscountWithTariff extends DriverDiscountRow {
-  origin: string;
-  destination: string;
-}
-
-export async function getDiscountsForTariff(tariffId: number): Promise<DriverDiscountWithDriverRow[]> {
-  return query<DriverDiscountWithDriverRow>(`SELECT d.*, dr.name as driver_name FROM driver_discounts d
-    LEFT JOIN drivers dr ON dr.phone = d.driver_phone
-    WHERE d.tariff_id = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())`, [tariffId]);
-}
-
 export async function getDriverDiscountForTariff(driverPhone: string, tariffId: number): Promise<number | null> {
   const rows = await getDbv().execute({
     sql: "SELECT discount_pct FROM driver_discounts WHERE driver_phone = ? AND tariff_id = ? AND active = 1 AND (valid_until IS NULL OR valid_until > unixepoch())",
@@ -785,13 +625,6 @@ export async function getDriverDiscountForTariff(driverPhone: string, tariffId: 
   });
   const row = (rows.rows as any[])[0];
   return row?.discount_pct ?? null;
-}
-
-export async function getDriverDiscounts(driverPhone: string): Promise<DriverDiscountWithTariff[]> {
-  return query<DriverDiscountWithTariff>(`SELECT d.*, t.origin, t.destination FROM driver_discounts d
-    LEFT JOIN tariffs t ON t.id = d.tariff_id
-    WHERE d.driver_phone = ? AND d.active = 1 AND (d.valid_until IS NULL OR d.valid_until > unixepoch())
-    ORDER BY d.created_at DESC`, [driverPhone]);
 }
 
 export async function createDriverDiscount(driverPhone: string, tariffId: number, discountPct: number, validUntilDays?: number): Promise<{ ok: boolean; error?: string }> {
@@ -817,15 +650,6 @@ export async function createDriverDiscount(driverPhone: string, tariffId: number
   } catch (e: any) {
     return { ok: false, error: e.message };
   }
-}
-
-export async function deleteDriverDiscount(id: number, driverPhone: string): Promise<boolean> {
-  await ensureSchema();
-  const rs = await getDbv().execute({
-    sql: "DELETE FROM driver_discounts WHERE id = ? AND driver_phone = ?",
-    args: [id, driverPhone],
-  });
-  return rs.rowsAffected > 0;
 }
 
 export async function setCustomerName(phone: string, name: string): Promise<void> {
@@ -859,26 +683,6 @@ export async function tryRegisterMessage(
     args: [messageId, phone, messageType, payloadHash],
   });
   return rs.rowsAffected > 0;
-}
-
-export async function isMessageProcessed(messageId: string): Promise<boolean> {
-  const row = await queryOne<{ c: number }>(
-    "SELECT COUNT(*) as c FROM processed_messages WHERE message_id = ?",
-    [messageId],
-  );
-  return (row?.c ?? 0) > 0;
-}
-
-export async function getProcessedMessage(messageId: string): Promise<ProcessedMessageRow | null> {
-  return queryOne<ProcessedMessageRow>(
-    "SELECT message_id, phone, message_type, processed_at, payload_hash FROM processed_messages WHERE message_id = ?",
-    [messageId],
-  );
-}
-
-export async function countProcessedMessages(): Promise<number> {
-  const row = await queryOne<{ c: number }>("SELECT COUNT(*) as c FROM processed_messages");
-  return row?.c ?? 0;
 }
 
 export async function getActiveComplementRules(): Promise<OpportunityRuleRow[]> {
@@ -918,17 +722,9 @@ export async function updateOpportunityLogResponse(
   });
 }
 
-export async function clearPendingOpportunity(phone: string): Promise<void> {
-  await getDbv().execute({
-    sql: "UPDATE chat_sessions SET pending_opportunity = NULL, updated_at = unixepoch() WHERE phone = ?",
-    args: [phone],
-  });
-}
-
 export {
   getConnectionState,
   setConnectionState,
-  setConnectionStateBatch,
   getConnectionValue,
   getConnectionValueFlag,
   setConnectionFlag,
@@ -941,29 +737,14 @@ export {
   getActiveTripByPhone,
   getTripByAssignedDriver,
   updateTripState,
-  updateTripDiscountExplicit,
   assignDriverToTrip,
   completeTrip,
   syncTripPhaseFromLegacyStatus,
   getTripPhase,
-  setTripPhase,
-  closeTrip,
-  getTripByIdWithDiagnostics,
-  validateReaderConsistency,
-  reportTripPhaseNullCount,
   getActiveTripsByClient,
   updateTripTariff,
-  updateTripScheduledAt,
-  updateTripFlight,
-  updateTripPassengers,
-  updateTripOrigin,
-  updateTripDestination,
-  updateTripPriceBase,
-  updateTripHotel,
   setComisionDeclarada,
   getTripsByScheduledAtWindow,
   getTripsPendingCloseOut,
-  getTripsScheduledForDate,
-  getUpcomingReservations,
   getExpiredTrips,
 } from "./domains/trips";

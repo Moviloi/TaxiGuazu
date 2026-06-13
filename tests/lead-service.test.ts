@@ -45,7 +45,7 @@ vi.mock("@/lib/ai/guard", () => ({
   assertCoreRouterPolicy: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("@/lib/services/extractSlots", () => ({
+vi.mock("@/lib/services/extract-slots", () => ({
   extractSlots: vi.fn().mockResolvedValue(null),
 }));
 
@@ -127,7 +127,7 @@ vi.mock("@/lib/utils/conversation-workflow", () => ({
   getWorkflow: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/services/contextMemory", () => ({
+vi.mock("@/lib/services/context-memory", () => ({
   loadContext: vi.fn().mockResolvedValue({}),
   mergeContext: vi.fn().mockResolvedValue(undefined),
   saveContext: vi.fn().mockResolvedValue(undefined),
@@ -156,7 +156,7 @@ vi.mock("@/lib/ai/extraction-schema", () => ({
   TripExtractionSchema: { safeParse: vi.fn().mockReturnValue({ success: false }) },
 }));
 
-vi.mock("@/lib/services/geoEngine", () => ({
+vi.mock("@/lib/services/geo-engine", () => ({
   resolveGeoRoute: vi.fn(),
 }));
 
