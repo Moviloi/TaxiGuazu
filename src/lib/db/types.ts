@@ -245,10 +245,14 @@ export interface LeadRow {
   created_at: number | null;
 }
 
-export interface LocationAliasRow {
+export interface AliasLookupRow {
   alias: string;
   canonical_name: string;
+  place_id: string | null;
+  normalized_alias: string;
   location_code: string | null;
+  active: number;
+  source: string;
   created_at: number;
 }
 

@@ -174,12 +174,19 @@ async function initSchema(): Promise<void> {
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','expired','revoked'))
     )`,
     `CREATE INDEX IF NOT EXISTS idx_driver_invitations_status ON driver_invitations(status, created_at)`,
-    `CREATE TABLE IF NOT EXISTS location_aliases (
+    `CREATE TABLE IF NOT EXISTS alias_lookup (
       alias TEXT PRIMARY KEY,
       canonical_name TEXT NOT NULL,
+      place_id TEXT,
+      normalized_alias TEXT NOT NULL DEFAULT """",
       location_code TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','fuzzy','migration')),
       created_at INTEGER DEFAULT (unixepoch())
     )`,
+    `CREATE INDEX IF NOT EXISTS idx_alias_lookup_canonical ON alias_lookup(canonical_name)`,
+    `CREATE INDEX IF NOT EXISTS idx_alias_lookup_normalized ON alias_lookup(normalized_alias)`,
+    `CREATE VIEW IF NOT EXISTS location_aliases AS SELECT alias, canonical_name, location_code, created_at FROM alias_lookup WHERE active = 1`,
     `CREATE TABLE IF NOT EXISTS places (
       place_id TEXT PRIMARY KEY,
       canonical_name TEXT NOT NULL,

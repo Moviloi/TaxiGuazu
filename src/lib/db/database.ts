@@ -8,7 +8,7 @@ import type {
   ReservationSlotRow,
   TariffRow,
   LeadRow,
-  LocationAliasRow,
+  AliasLookupRow,
   ChatSessionRow,
   OpportunityRuleRow,
   PackagePriceRow,
@@ -537,15 +537,15 @@ export async function searchTariffs(text: string): Promise<TariffRow[]> {
 export async function resolveAlias(text: string): Promise<{ resolved: boolean; names: string[] }> {
   if (!text) return { resolved: false, names: [] };
   const lower = text.toLowerCase().trim();
-  const direct = await query<LocationAliasRow>(
-    "SELECT canonical_name FROM location_aliases WHERE LOWER(alias) = ? LIMIT 5",
+  const direct = await query<AliasLookupRow>(
+    "SELECT canonical_name FROM alias_lookup WHERE LOWER(alias) = ? LIMIT 5",
     [lower]
   );
   if (direct.length > 0) return { resolved: true, names: [...new Set(direct.map(r => r.canonical_name))] };
 
   // Fuzzy fallback — Levenshtein ≤ 3 against all unique aliases
-  const all = await query<LocationAliasRow>(
-    "SELECT DISTINCT alias, canonical_name FROM location_aliases"
+  const all = await query<AliasLookupRow>(
+    "SELECT DISTINCT alias, canonical_name FROM alias_lookup"
   );
   let bestDist = Infinity;
   let bestAlias: string | undefined;
@@ -561,7 +561,7 @@ export async function resolveAlias(text: string): Promise<{ resolved: boolean; n
   if (bestDist <= 3 && bestCanonical && bestAlias) {
     // Auto-insert the new alias so future requests get exact match
     await getDb().execute({
-      sql: "INSERT OR IGNORE INTO location_aliases (alias, canonical_name) VALUES (?, ?)",
+      sql: "INSERT OR IGNORE INTO alias_lookup (alias, canonical_name) VALUES (?, ?)",
       args: [lower, bestCanonical],
     });
     return { resolved: true, names: [bestCanonical] };
