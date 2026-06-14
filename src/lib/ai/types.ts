@@ -110,3 +110,19 @@ export interface HandleMessageResult {
   decision: FinalDecision;
   policy: PolicyOutput;
 }
+
+// ─── Opportunity types (shared across ai/ and services/learning) ───
+
+export interface OpportunityOffer {
+  type: string;
+  label: string;
+  description: string | null;
+  savings: number;
+  already_applied: boolean;
+  valid_until: number | null;
+}
+
+export interface OpportunityResult {
+  available: boolean;
+  opportunities: OpportunityOffer[];
+}

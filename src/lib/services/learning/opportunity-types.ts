@@ -32,16 +32,4 @@ export interface Opportunity {
   logId: number;
 }
 
-export interface OpportunityOffer {
-  type: OpportunityType;
-  label: string;
-  description: string | null;
-  savings: number;
-  already_applied: boolean;
-  valid_until: number | null;
-}
-
-export interface OpportunityResult {
-  available: boolean;
-  opportunities: OpportunityOffer[];
-}
+export type { OpportunityOffer, OpportunityResult } from "@/lib/ai/types";

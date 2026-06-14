@@ -5,6 +5,35 @@
 
 import type { TripExtraction } from "@/lib/ai/extraction-schema";
 
+interface RouteParseResult {
+  origin: string | null;
+  destination: string | null;
+}
+
+const DIRECTION_RE = /(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i;
+const ORIGIN_FALLBACK_RE = /\b(aeropuerto|aero|igr|igu)\b/i;
+const DEST_FALLBACK_RE = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
+
+export function parseRouteFromText(text: string): RouteParseResult {
+  let origin: string | null = null;
+  let destination: string | null = null;
+
+  const dirMatch = text.match(DIRECTION_RE);
+  if (dirMatch) {
+    origin = dirMatch[1].trim();
+    destination = dirMatch[2].trim();
+  }
+
+  if (!origin || !destination) {
+    const originMatch = text.match(ORIGIN_FALLBACK_RE);
+    const destMatch = text.match(DEST_FALLBACK_RE);
+    if (originMatch) origin = originMatch[1];
+    if (destMatch) destination = destMatch[1];
+  }
+
+  return { origin, destination };
+}
+
 // Airport codes that can appear as standalone location mentions
 const AIRPORT_CODE_RE = /\b(IGR|IGU|AEP|EZE|FTE|COR|ROS|MDZ|BRC|BHI|CTC|CRD|REL|RES|SLA|UAQ|IRJ|PRA|NCJ)\b/i;
 

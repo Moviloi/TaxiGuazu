@@ -1,6 +1,7 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { insertMessage, getChatSession, upsertChatSession } from "@/lib/db/database";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
+import { parseRouteFromText } from "@/lib/services/extraction/regex-extractor";
 import { buildSlotClarify } from "@/lib/ai/response-builder";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
 import type { TripExtraction, ExtractionResult as ExtractionSchemaResult } from "@/lib/ai/extraction-schema";
@@ -31,19 +32,9 @@ async function tryFallbackExtraction(
 ): Promise<FallbackExtractionResult | null> {
   try {
     log.info("[EXTRACTION] Intentando fallback regex...");
-    let originMatch: string | undefined;
-    let destMatch: string | undefined;
-    const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
-    if (dirMatch) {
-      originMatch = dirMatch[1].trim();
-      destMatch = dirMatch[2].trim();
-    }
-    if (!originMatch || !destMatch) {
-      const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
-      const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-      originMatch = text.match(originRx)?.[1];
-      destMatch = text.match(destRx)?.[1];
-    }
+    const parsed = parseRouteFromText(text);
+    let originMatch = parsed.origin;
+    let destMatch = parsed.destination;
 
     if (!originMatch) {
       const session = await getChatSession(phone);
@@ -180,19 +171,9 @@ export async function runExtractionPipeline(
             parsed.data.price = pricing.final_price;
             confidenceResult.slots.price = { value: pricing.final_price, score: 1.0, reason: "backend_tariff_match" };
           } else if (parsed.data.origin || parsed.data.destination) {
-            let fbOrigin: string | undefined;
-            let fbDest: string | undefined;
-            const dirMatch = text.match(/(?:de|desde)\s+(.+?)\s+(?:a|hasta|para|hacia)\s+(.+?)(?:\s*[,;.!?]|\s*$)/i);
-            if (dirMatch) {
-              fbOrigin = dirMatch[1].trim();
-              fbDest = dirMatch[2].trim();
-            }
-            if (!fbOrigin || !fbDest) {
-              const originRx = /\b(aeropuerto|aero|igr|igu)\b/i;
-              const destRx = /\b(ciudad|la ciudad|a la ciudad|centro|centro iguazu|centro puerto|puerto iguazu|puerto|foz|cataratas)\b/i;
-              fbOrigin = text.match(originRx)?.[1];
-              fbDest = text.match(destRx)?.[1];
-            }
+            const route = parseRouteFromText(text);
+            const fbOrigin = route.origin;
+            const fbDest = route.destination;
             if (fbOrigin && fbDest) {
               const fbResolved = await resolvePricingForSlots({ origin: fbOrigin, destination: fbDest, passengers: parsed.data.passengers || 1 });
               const fbPricing = fbResolved.pricingResult;

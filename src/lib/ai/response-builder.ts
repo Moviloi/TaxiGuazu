@@ -8,8 +8,7 @@
 //   3. Fleet — capacidad, tarifa faltante
 //   4. Error — fallback, escalación, error global
 
-import type { FinalDecision, Lang } from "./types";
-import type { OpportunityResult } from "@/lib/services/learning/opportunity-types";
+import type { FinalDecision, Lang, OpportunityResult } from "./types";
 
 // ─── 1. CONVERSACIONAL ───────────────────────────────────────────────────────
 
