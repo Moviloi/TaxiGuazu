@@ -78,7 +78,7 @@ export function predictIntent(text: string, coreIntent: string, memory: Memory):
 }
 
 export interface EnrichedComprehensionSignals extends ComprehensionSignals {
-  f5Boost: number;
+  predictionBoost: number;
 }
 
 export function enrichComprehensionSignals(
@@ -89,7 +89,7 @@ export function enrichComprehensionSignals(
   let intentBoost = 0;
   let entityBoost = 0;
 
-  if (intentPrediction.confidence > 0.6) {
+  if (intentPrediction.confidence >= 0.6) {
     intentBoost = (signals.intentConfidence < 0.9)
       ? Math.min(0.15, (1 - signals.intentConfidence) * 0.3)
       : 0;
@@ -109,7 +109,7 @@ export function enrichComprehensionSignals(
     slotCompleteness: clamp01(signals.slotCompleteness),
     extractionConfidence: clamp01(signals.extractionConfidence),
     conversationStability: clamp01(signals.conversationStability),
-    f5Boost: predictionBoost,
+    predictionBoost,
   };
 }
 

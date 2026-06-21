@@ -6,9 +6,8 @@ vi.mock("@/lib/db/database", () => ({
   getActiveTripByPhone: vi.fn().mockResolvedValue(null),
   updateTripTariff: vi.fn().mockResolvedValue(undefined),
   insertMessage: vi.fn().mockResolvedValue(undefined),
-  setChatSessionWorkflowState: vi.fn().mockResolvedValue(undefined),
-  resetChatSession: vi.fn().mockResolvedValue(undefined),
   setPendingOpportunity: vi.fn().mockResolvedValue(undefined),
+  updateChatSessionConversation: vi.fn().mockResolvedValue(undefined),
   createTransaction: vi.fn().mockResolvedValue({ commit: vi.fn(), rollback: vi.fn() } as any),
 }));
 
@@ -62,7 +61,7 @@ import type { TripExecutionInput } from "@/lib/services/trip-execution/trip-exec
 import type { ExecutionDeps } from "@/lib/core/pipeline";
 import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
 import { processLead } from "@/lib/core/pipeline";
-import { resetChatSession, getActiveTripByPhone, createTrip, createTransaction } from "@/lib/db/database";
+import { updateChatSessionConversation, getActiveTripByPhone, createTrip, createTransaction } from "@/lib/db/database";
 import { evaluateLearningPipeline } from "@/lib/services/learning/learning-pipeline.service";
 import { opportunityEngine } from "@/lib/services/learning/opportunity-engine";
 
@@ -120,7 +119,7 @@ describe("executeTrip", () => {
     const result = await executeTrip(makeInput(), makeDeps());
 
     expect(result).toEqual({ tripId: null, executed: false });
-    expect(resetChatSession).toHaveBeenCalledWith("+54911");
+    expect(updateChatSessionConversation).toHaveBeenCalledWith("+54911", "idle", undefined);
   });
 
   it("pipeline not completed → returns not executed", async () => {
@@ -129,7 +128,7 @@ describe("executeTrip", () => {
     const result = await executeTrip(makeInput(), makeDeps());
 
     expect(result).toEqual({ tripId: null, executed: false });
-    expect(resetChatSession).toHaveBeenCalledWith("+54911");
+    expect(updateChatSessionConversation).toHaveBeenCalledWith("+54911", "idle", undefined);
   });
 
   it("trip creation returns null → returns not executed", async () => {
@@ -147,7 +146,7 @@ describe("executeTrip", () => {
 
     expect(result.executed).toBe(false);
     expect(result.tripId).toBeTruthy();
-    expect(resetChatSession).toHaveBeenCalled();
+    expect(updateChatSessionConversation).toHaveBeenCalledWith("+54911", "idle", undefined);
   });
 
   it("transaction error → rollback and return", async () => {

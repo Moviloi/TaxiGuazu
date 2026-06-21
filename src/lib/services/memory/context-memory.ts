@@ -155,7 +155,7 @@ export async function saveContext(phone: string, input: ContextSaveInput): Promi
   if (input.humanOverrideFlag != null) mergedSlots.humanOverrideFlag = input.humanOverrideFlag;
   if (input.tripOutcomeRef) mergedSlots.tripOutcomeRef = input.tripOutcomeRef;
 
-  // Persist via existing upsert (keeps workflow_state, etc.)
+  // Persist via existing upsert (keeps conversational_state, dispatch_state, etc.)
   await upsertChatSession(phone, mergedSlots, undefined, undefined, undefined);
 }
 

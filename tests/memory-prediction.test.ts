@@ -24,10 +24,10 @@ describe("Memory Layer", () => {
       expect(mem.lastDestination).toBe("Aeropuerto");
     });
 
-    it("reads f4_state from session", () => {
-      const session: any = { f4_state: "CLARIFICATION" };
+    it("reads comprehension_state from session", () => {
+      const session: any = { comprehension_state: "CLARIFICATION" };
       const mem = buildSessionMemory(session, [emptyMsg(1)]);
-      expect(mem.f4StateHistory).toContain("CLARIFICATION");
+      expect(mem.comprehensionStateHistory).toContain("CLARIFICATION");
     });
   });
 
@@ -136,14 +136,14 @@ describe("Predictive Routing", () => {
       const enriched = enrichComprehensionSignals(base, { candidates: ["rafain"], confidence: 0.85 }, { predictedIntent: "BOOKING", confidence: 0.82 });
       expect(enriched.intentConfidence).toBeGreaterThan(0.6);
       expect(enriched.entityConfidence).toBeGreaterThan(0.3);
-      expect(enriched.f5Boost).toBeGreaterThan(0);
+      expect(enriched.predictionBoost).toBeGreaterThan(0);
     });
 
     it("no boost when predictions have low confidence", () => {
       const enriched = enrichComprehensionSignals(base, { candidates: [], confidence: 0 }, { predictedIntent: "GREETING", confidence: 0.3 });
       expect(enriched.intentConfidence).toBe(0.6);
       expect(enriched.entityConfidence).toBe(0.3);
-      expect(enriched.f5Boost).toBe(0);
+      expect(enriched.predictionBoost).toBe(0);
     });
 
     it("caps boosted values at 1.0", () => {
@@ -163,17 +163,17 @@ describe("Predictive Routing", () => {
 
   describe("computeMemoryBoost", () => {
     it("repeated entities → 0.20 boost", () => {
-      const boost = computeMemoryBoost({ lastEntities: ["rafain"], lastIntent: "BOOKING", lastOrigin: null, lastDestination: null, lastOpportunity: null, f4StateHistory: [] }, ["rafain"]);
+      const boost = computeMemoryBoost({ lastEntities: ["rafain"], lastIntent: "BOOKING", lastOrigin: null, lastDestination: null, lastOpportunity: null, comprehensionStateHistory: [] }, ["rafain"]);
       expect(boost).toBe(0.20);
     });
 
     it("new entities → 0.10 boost", () => {
-      const boost = computeMemoryBoost({ lastEntities: ["cataratas"], lastIntent: null, lastOrigin: null, lastDestination: null, lastOpportunity: null, f4StateHistory: [] }, ["rafain"]);
+      const boost = computeMemoryBoost({ lastEntities: ["cataratas"], lastIntent: null, lastOrigin: null, lastDestination: null, lastOpportunity: null, comprehensionStateHistory: [] }, ["rafain"]);
       expect(boost).toBe(0.10);
     });
 
     it("no entity matches → 0 boost", () => {
-      const boost = computeMemoryBoost({ lastEntities: [], lastIntent: null, lastOrigin: null, lastDestination: null, lastOpportunity: null, f4StateHistory: [] }, []);
+      const boost = computeMemoryBoost({ lastEntities: [], lastIntent: null, lastOrigin: null, lastDestination: null, lastOpportunity: null, comprehensionStateHistory: [] }, []);
       expect(boost).toBe(0);
     });
   });

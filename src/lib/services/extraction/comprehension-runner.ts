@@ -5,6 +5,7 @@ import { enrichComprehensionSignals } from "@/lib/services/memory/predictive-rou
 import { logEscalation } from "@/lib/services/learning/event-tracking";
 import { recordComprehensionOutcome, getComprehensionThresholdAdjustment } from "@/lib/services/learning/learning-utils";
 import { buildComprehensionSignals, computeComprehensionScore, getComprehensionState, getRecoveryMessage } from "@/lib/services/extraction/comprehension";
+import { mapIntentToDomain } from "@/lib/ai/domain";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { log } from "@/lib/utils/logger";
 import type { CoreDecision } from "@/lib/ai/types";
@@ -18,48 +19,58 @@ export interface ComprehensionRunnerParams {
   leadCore: CoreDecision;
   predictedContext: PredictedContext;
   session: ChatSessionRow | null;
+  isFirstTurn?: boolean;
 }
 
 export async function runComprehensionCheck(params: ComprehensionRunnerParams): Promise<boolean> {
-  const { phone, text, conversationId, leadCore, predictedContext, session } = params;
+  const { phone, text, conversationId, leadCore, predictedContext, session, isFirstTurn } = params;
 
   log.info("[TRACE INPUT]", { event: "comprehension_check", phone: phone.slice(-4), textLen: text.length });
-  const f4Signals = enrichComprehensionSignals(
+  const domain = mapIntentToDomain(leadCore.intent);
+  const comprehensionSignals = enrichComprehensionSignals(
     buildComprehensionSignals({
       text,
       coreIntent: leadCore.intent,
+      coreConfidence: leadCore.confidence,
       slotStability: leadCore.slotStability,
       roleLock: leadCore.roleLock,
       session,
+      domain,
     }),
     predictedContext.entityPrediction,
     predictedContext.intentPrediction,
   );
-  const f4Score = computeComprehensionScore(f4Signals);
-  const f4ThresholdAdj = await getComprehensionThresholdAdjustment();
-  const f4State = getComprehensionState(f4Score, f4ThresholdAdj);
+  const comprehensionScore = computeComprehensionScore(comprehensionSignals, domain);
+  const thresholdAdjustment = await getComprehensionThresholdAdjustment();
+  const comprehensionState = getComprehensionState(comprehensionScore, thresholdAdjustment);
 
   log.info("[TRACE COMPREHENSION]", {
-    state: f4State,
-    score: f4Score,
-    thresholdAdj: f4ThresholdAdj,
+    state: comprehensionState,
+    score: comprehensionScore,
+    thresholdAdj: thresholdAdjustment,
     intent: leadCore.intent,
+    domain,
     roleLock: leadCore.roleLock,
     slotStability: leadCore.slotStability,
+    isFirstTurn,
   });
 
+  const resolvedState = (isFirstTurn && comprehensionState === "RECOVERY") ? "CLARIFICATION"
+    : (isFirstTurn && comprehensionState === "ESCALATION") ? "RECOVERY"
+    : comprehensionState;
+
   await Promise.all([
-    updateChatSessionComprehension(phone, f4State, f4Score),
-    insertF4Log(String(conversationId), f4Score, f4State, null),
+    updateChatSessionComprehension(phone, resolvedState, comprehensionScore),
+    insertF4Log(String(conversationId), comprehensionScore, resolvedState, null),
   ]);
 
-  recordComprehensionOutcome(f4State === "ESCALATION");
+  recordComprehensionOutcome(resolvedState === "ESCALATION");
 
-  if (f4State === "ESCALATION") {
-    const reason = `comprehension_score=${f4Score.toFixed(2)} state=${f4State}`;
+  if (resolvedState === "ESCALATION") {
+    const reason = `comprehension_score=${comprehensionScore.toFixed(2)} state=${comprehensionState}`;
     await setChatSessionEscalationReason(phone, reason);
-    logEscalation(String(conversationId), reason, f4Score);
-    await notifyAdmin(`⚠️ *ESCALACIÓN — Bajo nivel de comprensión*\n\nTeléfono: ******${phone.slice(-4)}\nScore: ${f4Score.toFixed(2)}`);
+    logEscalation(String(conversationId), reason, comprehensionScore);
+    await notifyAdmin(`⚠️ *ESCALACIÓN — Bajo nivel de comprensión*\n\nTeléfono: ******${phone.slice(-4)}\nScore: ${comprehensionScore.toFixed(2)}`);
     const escMsg = buildEscalationMessage();
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_ESCALATION", text: escMsg });
     await sendWhatsAppMessage(phone, escMsg);
@@ -67,14 +78,15 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
     return true;
   }
 
-  if (f4State === "RECOVERY") {
+  if (resolvedState === "RECOVERY") {
     log.info("[TRACE RECOVERY]", {
-      state: f4State,
-      score: f4Score,
+      state: comprehensionState,
+      resolvedState,
+      score: comprehensionScore,
       phone: phone.slice(-4),
       textLen: text.length,
     });
-    const recoveryMsg = getRecoveryMessage(f4State, session);
+    const recoveryMsg = getRecoveryMessage(comprehensionState, session);
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_RECOVERY", text: recoveryMsg });
     await sendWhatsAppMessage(phone, recoveryMsg);
     await insertMessage(conversationId, "assistant", recoveryMsg);

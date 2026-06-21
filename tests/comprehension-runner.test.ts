@@ -167,4 +167,66 @@ describe("runComprehensionCheck", () => {
     expect(insertF4Log).toHaveBeenCalledWith("2", 0.9, "FULL_CONTROL", null);
     expect(recordComprehensionOutcome).toHaveBeenCalledWith(false);
   });
+
+  // ── FASE A2: first-turn gate override ──
+  it("firstTurn RECOVERY → resolved CLARIFICATION, continues pipeline", async () => {
+    vi.mocked(getComprehensionState).mockReturnValue("RECOVERY");
+
+    const { updateChatSessionComprehension } = await import("@/lib/db/database");
+
+    const result = await runComprehensionCheck({
+      phone: "+54911111111",
+      text: "quiero consultar",
+      conversationId: 3,
+      leadCore: makeCoreDecision({ intent: "CONSULTA", confidence: 0.5 }),
+      predictedContext: makePredictedContext(),
+      session: null,
+      isFirstTurn: true,
+    });
+
+    expect(result).toBe(false);
+    expect(updateChatSessionComprehension).toHaveBeenCalledWith("+54911111111", "CLARIFICATION", 0.9);
+  });
+
+  it("firstTurn ESCALATION → resolved RECOVERY, sends recovery, no admin", async () => {
+    vi.mocked(getComprehensionState).mockReturnValue("ESCALATION");
+
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+    const { insertMessage } = await import("@/lib/db/database");
+    const { notifyAdmin } = await import("@/lib/services/admin/admin.service");
+
+    const result = await runComprehensionCheck({
+      phone: "+54911111111",
+      text: "asdfgh",
+      conversationId: 3,
+      leadCore: makeCoreDecision({ intent: "CONSULTA", confidence: 0.1 }),
+      predictedContext: makePredictedContext(),
+      session: null,
+      isFirstTurn: true,
+    });
+
+    expect(result).toBe(true);
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", "¿A dónde necesitás ir?");
+    expect(insertMessage).toHaveBeenCalledWith(3, "assistant", "¿A dónde necesitás ir?");
+    expect(notifyAdmin).not.toHaveBeenCalled();
+  });
+
+  it("secondTurn RECOVERY → maintains current RECOVERY behavior", async () => {
+    vi.mocked(getComprehensionState).mockReturnValue("RECOVERY");
+
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+
+    const result = await runComprehensionCheck({
+      phone: "+54911111111",
+      text: "todavía no entiendo",
+      conversationId: 4,
+      leadCore: makeCoreDecision({ intent: "AMBIGUOUS", confidence: 0.3 }),
+      predictedContext: makePredictedContext(),
+      session: { phone: "+54911111111", slots: null, confidence: null, comprehension: null },
+      isFirstTurn: false,
+    });
+
+    expect(result).toBe(true);
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", "¿A dónde necesitás ir?");
+  });
 });

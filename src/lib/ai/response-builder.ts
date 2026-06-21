@@ -145,6 +145,25 @@ export function formatOpportunityResponse(
   return lines.join("\n");
 }
 
+// ─── 2b. DOMAIN RESPONSES (informational/commercial, no booking cycle) ────────
+
+export function buildInformationalResponse(intent: string, lang: Lang): string {
+  if (intent === "GREETING") {
+    if (lang === "en") return "Hi! How can I help you with your transfer?";
+    if (lang === "pt") return "Olá! Como posso ajudar com seu traslado?";
+    return "¡Hola! ¿En qué puedo ayudarte con tu traslado?";
+  }
+  if (lang === "en") return "I'm here to help with information about transfers and tours in Iguazú. What would you like to know?";
+  if (lang === "pt") return "Estou aqui para ajudar com informações sobre traslados e passeios em Iguaçu. O que gostaria de saber?";
+  return "Estoy acá para ayudarte con información sobre traslados y paseos en Iguazú. ¿Qué querés saber?";
+}
+
+export function buildCommercialResponse(_intent: string, lang: Lang): string {
+  if (lang === "en") return "For pricing and availability, please let me know your route and how many passengers.";
+  if (lang === "pt") return "Para valores e disponibilidade, informe seu trajeto e quantos passageiros.";
+  return "Para tarifas y disponibilidad, indicame tu recorrido y cuántos pasajeros son.";
+}
+
 // ─── 3. FLEET ─────────────────────────────────────────────────────────────────
 
 export function buildFleetCapacityMessage(maxCapacity: number | null): string {
@@ -166,10 +185,22 @@ export function buildGenericSafeFallback(lang: Lang): string {
   return "No pude procesar eso. Un operador te va a asistir en breve.";
 }
 
+export function buildCancellationMessage(lang: Lang): string {
+  if (lang === "en") return "No problem. Your booking has been cancelled. Let me know if you need anything else.";
+  if (lang === "pt") return "Sem problemas. Sua solicitação foi cancelada. Me avise se precisar de mais alguma coisa.";
+  return "No hay problema. Se canceló la confirmación. Avísame si necesitás algo más.";
+}
+
 export function buildGlobalErrorMessage(): string {
   return "Disculpe, ocurrió un error. Un operador lo asistirá.";
 }
 
 export function buildEscalationMessage(): string {
   return "No entendí bien tu consulta. Un operador humano te va a contactar para ayudarte.";
+}
+
+export function buildNowDispatchResponse(lang: Lang): string {
+  if (lang === "en") return "Looking for an available driver for your trip. We'll notify you when someone picks it up.";
+  if (lang === "pt") return "Procurando um motorista disponível para sua corrida. Avisamos quando alguém aceitar.";
+  return "Buscando chofer disponible para tu viaje. Te avisamos cuando alguien tome el servicio.";
 }

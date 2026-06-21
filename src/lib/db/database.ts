@@ -370,12 +370,13 @@ export async function setClientPreferredDriver(clientPhone: string, driverPhone:
 //
 // La tabla `workflows` quedó sin callers activos (verificado Phase G).
 // La fuente única de verdad del workflow conversacional es ahora
-// `chat_sessions.workflow_state` (ver @/lib/utils/conversation-workflow).
+// `chat_sessions.conversational_state` + `dispatch_state`.
 //
-// Las funciones de la API legacy (`getWorkflow`, `advanceWorkflowState`,
+// Las funciones de la API legacy (`getDispatchWorkflow`, `advanceWorkflowState`,
 // `closeWorkflow`, `assignWorkflowAtomic`, `deleteWorkflow`,
 // `getExpiredWorkflowsByState`) ya no existen. Toda lectura/escritura
-// de estado de workflow pasa por `conversation-workflow.ts`.
+// de estado de workflow pasa por `@/lib/services/workflow/slot-workflow` y
+// `@/lib/services/dispatch/dispatch-workflow`.
 //
 // La tabla se conserva (con su migración `workflows_recreate`) sólo para
 // preservar datos históricos. Candidata a DROP.
@@ -454,7 +455,8 @@ export async function getStaleWorkflows(cutoff: number): Promise<{ conversation_
     sql: `SELECT c.id as conversation_id
           FROM chat_sessions cs
           JOIN conversations c ON c.phone = cs.phone
-          WHERE cs.workflow_state != 'closed' AND cs.updated_at < ?`,
+          WHERE cs.updated_at < ?
+            AND cs.dispatch_state IN ('nivel_1', 'nivel_2', 'nivel_3', 'waiting_driver')`,
     args: [cutoff],
   });
   return rs.rows as unknown as { conversation_id: number }[];
@@ -579,7 +581,7 @@ export async function upsertChatSession(
   phone: string,
   slots: Record<string, any>,
   confidence?: Record<string, number>,
-  workflowState?: string,
+  conversationalState?: string,
   clarifyField?: string,
 ): Promise<void> {
   await ensureSchema();
@@ -595,35 +597,29 @@ export async function upsertChatSession(
       ? { ...baseConfidence, ...confidence }
       : existing.confidence;
     await getDb().execute({
-      sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, workflow_state = ?, clarify_field = ?, updated_at = ? WHERE phone = ?`,
-      args: [JSON.stringify(merged), JSON.stringify(mergedConfidence), now, workflowState || existing.workflow_state || "idle", clarifyField || existing.clarify_field || null, now, phone],
+      sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, conversational_state = ?, clarify_field = ?, updated_at = ? WHERE phone = ?`,
+      args: [JSON.stringify(merged), JSON.stringify(mergedConfidence), now, conversationalState || existing.conversational_state || "idle", clarifyField || existing.clarify_field || null, now, phone],
     });
   } else {
     await getDb().execute({
-      sql: `INSERT INTO chat_sessions (phone, slots, confidence, extraction_count, last_extracted_at, workflow_state, clarify_field, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
-      args: [phone, JSON.stringify(slots), JSON.stringify(confidence || {}), now, workflowState || "idle", clarifyField || null, now],
+      sql: `INSERT INTO chat_sessions (phone, slots, confidence, extraction_count, last_extracted_at, conversational_state, clarify_field, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
+      args: [phone, JSON.stringify(slots), JSON.stringify(confidence || {}), now, conversationalState || "idle", clarifyField || null, now],
     });
   }
 }
 
-export async function updateChatSessionWorkflow(phone: string, workflowState: string, clarifyField?: string): Promise<void> {
+export async function updateChatSessionConversation(phone: string, conversationalState: string, clarifyField?: string): Promise<void> {
   await ensureSchema();
   await getDb().execute({
-    sql: "UPDATE chat_sessions SET workflow_state = ?, clarify_field = ?, updated_at = unixepoch() WHERE phone = ?",
-    args: [workflowState, clarifyField || null, phone],
+    sql: "UPDATE chat_sessions SET conversational_state = ?, clarify_field = ?, updated_at = unixepoch() WHERE phone = ?",
+    args: [conversationalState, clarifyField || null, phone],
   });
 }
 
-// Setter dedicado para transiciones de despacho.
-// NO toca clarify_field/slots/confidence — sólo workflow_state y updated_at.
-export async function setChatSessionWorkflowState(phone: string, state: string, executor?: DbExecutor): Promise<void> {
-  const db = executor ?? getDb();
-  await db.execute({
-    sql: "UPDATE chat_sessions SET workflow_state = ?, updated_at = unixepoch() WHERE phone = ?",
-    args: [state, phone],
-  });
-}
-
+/** Reset destructivo de sesión completa (DELETE).
+ *  Reservado para: expiración, limpieza, abandono definitivo.
+ *  NO usar como transición normal de workflow.
+ *  Preferir setConversationalState(phone, "idle") para reiniciar slot collection. */
 export async function resetChatSession(phone: string): Promise<void> {
   await getDb().execute({ sql: "DELETE FROM chat_sessions WHERE phone = ?", args: [phone] });
 }
@@ -722,6 +718,7 @@ export async function createTransaction() {
   return getDb().transaction();
 }
 
+export { getDb } from "./core/connection";
 export { queryOne } from "./core/helpers";
 export type { DbExecutor } from "./core/connection";
 

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mock all external dependencies ──
 vi.mock("@/lib/db/database", () => ({
   getOrCreateConversation: vi.fn().mockResolvedValue({ id: 1 }),
-  getConversationById: vi.fn(),
+  getConversationById: vi.fn().mockResolvedValue({ id: 1, taken_by_human: null, phone: "+54911111111", created_at: 0, last_message_at: 0 }),
   insertMessage: vi.fn().mockResolvedValue(undefined),
   getRecentHistory: vi.fn().mockResolvedValue([]),
   getActiveTripByPhone: vi.fn().mockResolvedValue(null),
@@ -16,7 +16,7 @@ vi.mock("@/lib/db/database", () => ({
   getCustomerName: vi.fn().mockResolvedValue(null),
   upsertChatSession: vi.fn().mockResolvedValue(undefined),
   resetChatSession: vi.fn().mockResolvedValue(undefined),
-  getChatSession: vi.fn().mockResolvedValue(null),
+  getChatSession: vi.fn().mockResolvedValue({ phone: "+54911111111", slots: null, trip_state: null, pending_opportunity: null, dispatch_state: null, conversational_state: null, updated_at: 1000 }),
   clearPendingOpportunity: vi.fn().mockResolvedValue(undefined),
   updateOpportunityLogResponse: vi.fn().mockResolvedValue(undefined),
   getDbInstance: vi.fn().mockReturnValue({ execute: vi.fn().mockResolvedValue({ rows: [] }) }),
@@ -77,14 +77,14 @@ vi.mock("@/lib/services/memory/predictive-routing", () => ({
     intentPrediction: { confidence: 0 },
     entityPrediction: { candidates: [] },
   }),
-  enrichF4Signals: vi.fn().mockReturnValue({}),
+  enrichComprehensionSignals: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock("@/lib/services/extraction/comprehension", () => ({
-  buildF4Signals: vi.fn().mockReturnValue({}),
+  buildComprehensionSignals: vi.fn().mockReturnValue({}),
   computeComprehensionScore: vi.fn().mockReturnValue(1.0),
-  getF4State: vi.fn().mockReturnValue("NORMAL"),
-  getF4RecoveryMessage: vi.fn().mockReturnValue(""),
+  getComprehensionState: vi.fn().mockReturnValue("NORMAL"),
+  getRecoveryMessage: vi.fn().mockReturnValue(""),
 }));
 
 vi.mock("@/lib/services/learning/event-tracking", () => ({
@@ -95,8 +95,8 @@ vi.mock("@/lib/services/learning/event-tracking", () => ({
 }));
 
 vi.mock("@/lib/services/learning/learning-utils", () => ({
-  recordF4Outcome: vi.fn(),
-  getF4ThresholdAdjustment: vi.fn().mockResolvedValue(0),
+  recordComprehensionOutcome: vi.fn(),
+  getComprehensionThresholdAdjustment: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("@/lib/services/learning/admin", () => ({
@@ -122,9 +122,9 @@ vi.mock("@/lib/services/trip-execution/trip-execution.service", () => ({
   executeTrip: vi.fn().mockResolvedValue({ tripId: "trip_123", executed: true }),
 }));
 
-vi.mock("@/lib/utils/conversation-workflow", () => ({
+vi.mock("@/lib/services/dispatch/dispatch-workflow", () => ({
   resetToIdle: vi.fn().mockResolvedValue(undefined),
-  getWorkflow: vi.fn().mockResolvedValue(null),
+  getDispatchWorkflow: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/services/memory/context-memory", () => ({
@@ -144,7 +144,7 @@ vi.mock("@/lib/ai/response-builder", () => ({
   buildOpportunityDeclinedMessage: vi.fn().mockReturnValue("Entendido"),
   buildOpportunityNoPricingMessage: vi.fn(),
   buildGlobalErrorMessage: vi.fn().mockReturnValue("Error interno"),
-  buildF4EscalationMessage: vi.fn().mockReturnValue("Te transferiré con un operador"),
+  buildEscalationMessage: vi.fn().mockReturnValue("Te transferiré con un operador"),
 }));
 
 vi.mock("@/lib/ai/patterns", () => ({
@@ -164,6 +164,10 @@ vi.mock("@/lib/config/constants", () => ({
   SESSION_INACTIVITY_48H_S: 172800,
 }));
 
+import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { processLead } from "@/lib/core/pipeline";
+import { clearPendingOpportunity, updateOpportunityLogResponse } from "@/lib/db/database";
+import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
 import { handleLeadMessage } from "../src/lib/services/lead.service";
 
 describe("handleLeadMessage characterization", () => {
@@ -171,67 +175,105 @@ describe("handleLeadMessage characterization", () => {
     vi.clearAllMocks();
   });
 
-  it("A) handles a normal message without crashing", async () => {
+  it("A) normal message → no crash, insertMessage y send llamados", async () => {
     await handleLeadMessage("+54911111111", "Hola, quiero ir al centro");
+    const { insertMessage } = await import("@/lib/db/database");
+    expect(insertMessage).toHaveBeenCalledWith(1, "user", "Hola, quiero ir al centro");
   });
 
-  it("B) handles .id command", async () => {
+  it("B) .id command → no llega a pipeline (comando admin)", async () => {
     await handleLeadMessage("+54911111111", ".id");
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("C) handles .limpiar command", async () => {
+  it("C) .limpiar → no llega a pipeline (reset directo)", async () => {
     await handleLeadMessage("+54911111111", ".limpiar");
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("D) handles 'sigo yo' command", async () => {
+  it("D) 'sigo yo' →  no llega a pipeline (comando)", async () => {
     await handleLeadMessage("+54911111111", "sigo yo");
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("E) handles 'seguí vos' command", async () => {
+  it("E) 'seguí vos' →  no llega a pipeline (comando)", async () => {
     await handleLeadMessage("+54911111111", "seguí vos");
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("F) handles HABLAR_HUMANO path", async () => {
+  it("F) HABLAR_HUMANO →  no llega a pipeline (comando)", async () => {
     await handleLeadMessage("+54911111111", "quiero hablar con un humano");
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("G) handles opportunity expired flow", async () => {
+  it("G) opportunity expired → limpia pending y resetea", async () => {
     const { getChatSession } = await import("@/lib/db/database");
-    vi.mocked(getChatSession).mockResolvedValueOnce({
+    vi.mocked(getChatSession).mockResolvedValue({
+      trip_state: "opportunity",
+      conversational_state: null,
+      dispatch_state: null,
       pending_opportunity: JSON.stringify({ logId: 1, expires_at: 0, label: "test" }),
     } as any);
+    const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(false);
+    const { isNegativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isNegativeMessage).mockReturnValue(false);
     await handleLeadMessage("+54911111111", "Hola");
+    expect(clearPendingOpportunity).toHaveBeenCalledWith("+54911111111");
+    expect(updateOpportunityLogResponse).toHaveBeenCalled();
+    expect(resetToIdle).toHaveBeenCalledWith(1);
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("H) handles opportunity accepted flow", async () => {
+  it("H) opportunity accepted → + isAffirmativeMessage true", async () => {
     const { getChatSession } = await import("@/lib/db/database");
     const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
-    vi.mocked(getChatSession).mockResolvedValueOnce({
+    vi.mocked(getChatSession).mockResolvedValue({
+      trip_state: "opportunity",
+      conversational_state: null,
+      dispatch_state: null,
       pending_opportunity: JSON.stringify({ logId: 1, expires_at: 9999999999, label: "test" }),
     } as any);
     vi.mocked(isAffirmativeMessage).mockReturnValueOnce(true);
+    const { isNegativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isNegativeMessage).mockReturnValue(false);
     await handleLeadMessage("+54911111111", "sí");
+    expect(clearPendingOpportunity).toHaveBeenCalledWith("+54911111111");
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", "¡Genial!");
+    expect(resetToIdle).toHaveBeenCalledWith(1);
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("I) handles opportunity declined flow", async () => {
+  it("I) opportunity declined → + isNegativeMessage true", async () => {
     const { getChatSession } = await import("@/lib/db/database");
+    const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValueOnce(false);
     const { isNegativeMessage } = await import("@/lib/ai/patterns");
-    vi.mocked(getChatSession).mockResolvedValueOnce({
+    vi.mocked(getChatSession).mockResolvedValue({
+      trip_state: "opportunity",
+      conversational_state: null,
+      dispatch_state: null,
       pending_opportunity: JSON.stringify({ logId: 1, expires_at: 9999999999, label: "test" }),
     } as any);
     vi.mocked(isNegativeMessage).mockReturnValueOnce(true);
     await handleLeadMessage("+54911111111", "no");
+    expect(clearPendingOpportunity).toHaveBeenCalledWith("+54911111111");
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", "Entendido");
+    expect(resetToIdle).toHaveBeenCalledWith(1);
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("J) handles driver activation (.activar)", async () => {
+  it("J) driver activation (.activar) → comando, no pipeline", async () => {
     await handleLeadMessage("+54911111111", ".activar");
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("K) handles driver registration (.registrar)", async () => {
+  it("K) driver registration (.registrar) → comando, no pipeline", async () => {
     await handleLeadMessage("+54911111111", ".registrar");
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("L) handles error recovery (exception does not propagate)", async () => {
+  it("L) error recovery → exception no propaga", async () => {
     const { getOrCreateConversation } = await import("@/lib/db/database");
     vi.mocked(getOrCreateConversation).mockRejectedValueOnce(new Error("DB error"));
     await expect(handleLeadMessage("+54911111111", "Hola")).resolves.not.toThrow();

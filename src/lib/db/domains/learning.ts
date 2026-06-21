@@ -238,11 +238,11 @@ export async function insertHousekeepingLog(
 // ========== chat_session helpers ==========
 
 export async function updateChatSessionComprehension(
-  phone: string, f4State: string, comprehensionScore: number,
+  phone: string, comprehensionState: string, comprehensionScore: number,
 ): Promise<void> {
   await getDb().execute({
-    sql: "UPDATE chat_sessions SET f4_state = ?, comprehension_score = ?, updated_at = unixepoch() WHERE phone = ?",
-    args: [f4State, comprehensionScore, phone],
+    sql: "UPDATE chat_sessions SET comprehension_state = ?, comprehension_score = ?, updated_at = unixepoch() WHERE phone = ?",
+    args: [comprehensionState, comprehensionScore, phone],
   });
 }
 

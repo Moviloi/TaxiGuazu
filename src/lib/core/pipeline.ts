@@ -1,7 +1,5 @@
 // Core pipeline — deterministic entry point for the semantic execution loop.
-//
-// v5.7: Handler-only. resolveDecision y toda la ruta legacy fueron eliminados.
-//   processLead usa handler (→ core → router → policy → execution effects).
+// processLead usa handler (→ core → router → policy → execution effects).
 //
 // Pipeline:
 //   handler.handleMessage → core → router → policy → send / persist / geo / context
@@ -13,7 +11,8 @@
 //   geo:     { resolveGeoRoute }
 //   memory:  { saveContext }
 
-import type { ExtractionContext } from "@/lib/ai/types";
+import type { ExtractionContext, ConversationDomain } from "@/lib/ai/types";
+import type { Mode } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 
 export interface ExecutionContext {
@@ -28,6 +27,8 @@ export interface ExecutionContext {
   };
   lang: string;
   intent: string;
+  domain: ConversationDomain;
+  mode: Mode;
 }
 
 export interface ExecutionDeps {
@@ -52,21 +53,22 @@ export type ProcessLeadResult = "completed" | "incomplete" | "error";
  * handler recibe el texto + contexto de extracción, ejecuta core → router → policy,
  * y policy produce finalResponse + metadata de ejecución (needsGeo, needsSaveContext).
  *
- * Mode is hardcoded to "RESERVA" (AHORA flows bypass this pipeline entirely via policy-ahora.ts).
- * TODO: Merge AHORA into pipeline with explicit mode field in ExecutionContext.
+ * Mode is determined by ExecutionContext.mode, which is set upstream
+ * based on extractionCtx.slots.scheduled_at.value (if present → RESERVA, else → AHORA).
  */
 export async function processLead(
   execCtx: ExecutionContext,
   deps: ExecutionDeps,
 ): Promise<ProcessLeadResult> {
   try {
-    const handlerResult = deps.handler(execCtx.text, "RESERVA", {
+    const handlerResult = deps.handler(execCtx.text, execCtx.mode, {
       history: execCtx.history,
       customerName: execCtx.customerName,
       extraction: execCtx.extractionCtx,
       lang: execCtx.lang,
       phone: execCtx.phone,
       userText: execCtx.text,
+      domain: execCtx.domain,
     });
     const { finalResponse, needsGeo, needsSaveContext, needsAdminNotify, adminNotifyBody } = handlerResult.policy;
 

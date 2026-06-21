@@ -137,7 +137,7 @@ function buildReservaFinalResponse(
 
   // Confirmación de booking: usuario afirma mientras el workflow esperaba confirmación.
   // La policy reconoce que el usuario ya dijo sí y produce el mensaje de booking aceptado.
-  if (decision.core.facts.some((f) => f.startsWith("affirmation:")) && extraction?.workflowState === "awaiting_confirmation") {
+  if (decision.core.facts.some((f) => f.startsWith("affirmation:")) && extraction?.conversationalState === "awaiting_confirmation") {
     const origin = extraction.slots.origin?.value ?? "";
     const destination = extraction.slots.destination?.value ?? "";
     const price = extraction.tariff?.price;
@@ -170,13 +170,13 @@ function buildReservaFinalResponse(
         nextExpectedFields: ["affirmation"],
       };
     }
-    if (extraction.workflowState === "collecting_slots" && extraction.clarifyField) {
+    if (extraction.conversationalState === "collecting_slots" && extraction.clarifyField) {
       return {
         finalResponse: buildClarifyMessage(extraction, lang),
         nextExpectedFields: [extraction.clarifyField],
       };
     }
-    if (extraction.workflowState === "awaiting_confirmation") {
+    if (extraction.conversationalState === "awaiting_confirmation") {
       return {
         finalResponse: buildNoTariffConfirmation(extraction, lang),
         nextExpectedFields: ["affirmation"],
@@ -222,7 +222,7 @@ function buildReservaFinalResponse(
   };
 }
 
-function buildConfirmationMessage(extraction: ExtractionContext, lang: Lang): string {
+export function buildConfirmationMessage(extraction: ExtractionContext, lang: Lang): string {
   const tariff = extraction.tariff!;
   const slots = extraction.slots;
   const pax = Number(slots.passengers?.value ?? 1);
@@ -269,7 +269,7 @@ function buildConfirmationMessage(extraction: ExtractionContext, lang: Lang): st
   return parts.join("\n");
 }
 
-function buildNoTariffConfirmation(extraction: ExtractionContext, lang: Lang): string {
+export function buildNoTariffConfirmation(extraction: ExtractionContext, lang: Lang): string {
   const slots = extraction.slots;
   const origin = slots.origin?.value ?? "";
   const destination = slots.destination?.value ?? "";
@@ -370,7 +370,7 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): stri
   if (extraction.slots.scheduled_at?.value) return null;
 
   // Si el workflow ya está pidiendo confirmación → no superponer acknowledge.
-  if (extraction.workflowState === "awaiting_confirmation") return null;
+  if (extraction.conversationalState === "awaiting_confirmation") return null;
 
   const originStr = withDefiniteArticle(String(origin), lang);
   const destStr = withDefiniteArticle(String(destination), lang);
@@ -439,13 +439,13 @@ function formatSchedule(value: string, lang: Lang): string {
 
 // ── lateral intent response builders ───────────────────────────
 
-function buildLateralEmergencyResponse(lang: Lang): string {
+export function buildLateralEmergencyResponse(lang: Lang): string {
   if (lang === "en") return "🚨 We're notifying our team. An operator will contact you urgently.";
   if (lang === "pt") return "🚨 Estamos notificando nossa equipe. Um operador entrará em contato urgente.";
   return "🚨 Estamos notificando a nuestro equipo. Un operador te va a contactar urgente.";
 }
 
-function buildLateralRescheduleResponse(lang: Lang): string {
+export function buildLateralRescheduleResponse(lang: Lang): string {
   if (lang === "en") return "Understood. An operator will review your reservation and contact you to reschedule.";
   if (lang === "pt") return "Entendido. Um operador vai revisar sua reserva e entrar em contato para reprogramar.";
   return "Entendido. Un operador va a revisar tu reserva y te contacta para reprogramar.";
@@ -457,7 +457,7 @@ function buildLateralPostServiceResponse(lang: Lang): string {
   return "Gracias por tu mensaje. Si necesitás ayuda con facturación o tenés algún reclamo, un operador te va a contactar.";
 }
 
-function buildAdminNotifyBody(intent: string, phone: string | undefined, userText: string | undefined): string {
+export function buildAdminNotifyBody(intent: string, phone: string | undefined, userText: string | undefined): string {
   const msg = userText ?? "";
   const truncated = msg.substring(0, 200);
   if (intent === "EMERGENCY") {

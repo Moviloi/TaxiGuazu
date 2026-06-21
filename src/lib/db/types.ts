@@ -260,17 +260,17 @@ export interface ChatSessionRow {
   phone: string;
   slots: string | null;
   confidence: string | null;
-  confirmed_fields: string | null;
-  source_message_ids: string | null;
   extraction_count: number;
   last_extracted_at: number | null;
-  workflow_state: string | null;
   clarify_field: string | null;
   pending_opportunity: string | null;
-  f4_state: string | null;
+  comprehension_state: string | null;
   comprehension_score: number | null;
   escalation_reason: string | null;
   updated_at: number;
+  conversational_state: string | null;
+  dispatch_state: string | null;
+  trip_state: string | null;
 }
 
 export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";
@@ -295,6 +295,17 @@ export interface AliasRow {
   place_id: string;
   alias: string;
   language: string | null;
+}
+
+export interface ZoneRow {
+  zone_id: string;
+  zone_name: string;
+  country: string;
+  area_group: string | null;
+  dispatch_priority: number | null;
+  base_eta_min: number | null;
+  crosses_border: number | null;
+  active: number | null;
 }
 
 export interface TariffV2Match {

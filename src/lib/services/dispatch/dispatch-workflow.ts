@@ -1,40 +1,18 @@
 // ARCHITECTURE NOTE (Phase C4): Dispatch workflow FSM (nivel_1/2/3, waiting_driver).
-// Writes chat_sessions.workflow_state — SAME column as slot-workflow.ts (conversational
-// states: idle, collecting_slots, awaiting_confirmation). Both modules share this column
-// with no mutex or coordination.
-//
-// Future: split into dispatch_state + conversational_state columns.
-// Until then, do NOT add new states without checking the other module's transition map.
-// This module is semi-frozen — dispatch changes only, no conversational logic.
+// Writes dispatch_state. This module is dispatch-only, no conversational logic.
 
+import { getConversationById } from "@/lib/db/database";
+import { getDispatchState, setDispatchState } from "@/lib/db/state-accessors";
+import type { DispatchState } from "@/lib/ai/types";
 import {
-  getChatSession,
-  getConversationById,
-  setChatSessionWorkflowState,
   getExpiredByState as getExpiredByStateFromDb,
   getStaleWorkflowsFromDb,
   assignWorkflowAtomic as assignWorkflowAtomicFromDb,
 } from "@/lib/db/database";
 import { log } from "@/lib/utils/logger";
 
-export type WorkflowState =
-  | "idle"
-  | "collecting_slots"
-  | "awaiting_confirmation"
-  | "post_trip_opportunity"
-  | "nivel_1"
-  | "nivel_2"
-  | "nivel_3"
-  | "waiting_driver"
-  | "closed";
-
-// Source of truth: chat_sessions.workflow_state
-// La tabla `workflows` quedó sin callers activos y es candidata a DROP.
-const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
-  idle: ["collecting_slots", "awaiting_confirmation", "nivel_1", "waiting_driver"],
-  collecting_slots: ["awaiting_confirmation", "nivel_1", "waiting_driver"],
-  awaiting_confirmation: ["nivel_1", "waiting_driver", "closed", "post_trip_opportunity"],
-  post_trip_opportunity: ["idle", "closed"],
+const VALID_TRANSITIONS: Record<DispatchState, DispatchState[]> = {
+  idle: ["nivel_1", "waiting_driver", "closed"],
   nivel_1: ["nivel_2", "closed"],
   nivel_2: ["nivel_3", "closed"],
   nivel_3: ["closed"],
@@ -42,36 +20,34 @@ const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   closed: [],
 };
 
-export interface WorkflowContext {
+export interface DispatchWorkflowContext {
   conversationId: number;
   phone: string;
-  state: WorkflowState;
+  state: DispatchState;
 }
 
-function rowToContext(phone: string, convId: number, state: string | null): WorkflowContext {
+function rowToContext(phone: string, convId: number, state: string | null): DispatchWorkflowContext {
   return {
     conversationId: convId,
     phone,
-    state: (state || "idle") as WorkflowState,
+    state: (state || "idle") as DispatchState,
   };
 }
 
-async function transitionTo(phone: string, newState: WorkflowState): Promise<void> {
-  const session = await getChatSession(phone);
-  const current = (session?.workflow_state || "idle") as WorkflowState;
+async function transitionTo(phone: string, newState: DispatchState): Promise<void> {
+  const current = await getDispatchState(phone);
   const allowed = VALID_TRANSITIONS[current];
   if (allowed && !allowed.includes(newState)) {
     log.warn(`[STATEMACHINE] Transición inválida: ${current} → ${newState}`);
   }
-  await setChatSessionWorkflowState(phone, newState);
+  await setDispatchState(phone, newState);
 }
 
-export async function getWorkflow(convId: number): Promise<WorkflowContext | null> {
+export async function getDispatchWorkflow(convId: number): Promise<DispatchWorkflowContext | null> {
   const conv = await getConversationById(convId);
   if (!conv) return null;
-  const session = await getChatSession(conv.phone);
-  if (!session) return null;
-  return rowToContext(conv.phone, convId, session.workflow_state);
+  const state = await getDispatchState(conv.phone);
+  return rowToContext(conv.phone, convId, state);
 }
 
 export async function advanceToNivel1(_convId: number, phone: string): Promise<void> {
@@ -102,21 +78,21 @@ export async function resetToIdle(convId: number): Promise<void> {
   await transitionTo(conv.phone, "idle");
 }
 
-export async function getExpiredByState(state: WorkflowState, timeoutMs: number): Promise<WorkflowContext[]> {
+export async function getExpiredByState(state: DispatchState, timeoutMs: number): Promise<DispatchWorkflowContext[]> {
   const rows = await getExpiredByStateFromDb(state, timeoutMs);
   return rows.map((row) => ({
     conversationId: row.conversationId,
     phone: row.phone,
-    state: row.workflowState as WorkflowState,
+    state: row.dispatchWorkflowState as DispatchState,
   }));
 }
 
-export async function getStaleWorkflows(timeoutMs: number): Promise<WorkflowContext[]> {
+export async function getStaleWorkflows(timeoutMs: number): Promise<DispatchWorkflowContext[]> {
   const rows = await getStaleWorkflowsFromDb(timeoutMs);
   return rows.map((row) => ({
     conversationId: row.conversationId,
     phone: row.phone,
-    state: row.workflowState as WorkflowState,
+    state: row.dispatchWorkflowState as DispatchState,
   }));
 }
 

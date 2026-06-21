@@ -1,32 +1,28 @@
-// ARCHITECTURE NOTE (Phase C4): This module manages conversational slot-collection states
-// via chat_sessions.workflow_state. The SAME column is also written by
-// conversation-workflow.ts (dispatch states: nivel_1/2/3, waiting_driver).
-// Both modules can overwrite each other's state — no mutex or coordination exists.
-// Future: split workflow_state into conversational_state and dispatch_state columns.
-// Until then, slot-workflow must NOT write dispatch states, and conversation-workflow
-// must NOT write slot states. Review on any state transition change.
+// ARCHITECTURE NOTE: This module manages conversational slot-collection states
+// via conversational_state (chat_sessions column).
 
-import { getChatSession, resetChatSession, updateChatSessionWorkflow } from "@/lib/db/database";
+import { getChatSession, resetChatSession } from "@/lib/db/database";
+import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { getActiveTripByPhone } from "@/lib/db/database";
 import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { log } from "@/lib/utils/logger";
 
-export type SlotWorkflowState = "idle" | "collecting_slots" | "awaiting_confirmation" | "closed";
+// idle: estado operativo normal — permite iniciar o reanudar slots.
+export type SlotConversationalState = "idle" | "collecting_slots" | "awaiting_confirmation";
 
-export interface SlotWorkflowContext {
-  state: SlotWorkflowState;
+export interface SlotConversationalContext {
+  state: SlotConversationalState;
   clarifyField: string | null;
   overallConfidence: number;
   action: ExtractionResult["action"];
   askForConfirmation: boolean;
 }
 
-const VALID_SLOT_TRANSITIONS: Record<SlotWorkflowState, SlotWorkflowState[]> = {
-  idle: ["collecting_slots", "closed"],
-  collecting_slots: ["collecting_slots", "awaiting_confirmation", "closed"],
-  awaiting_confirmation: ["collecting_slots", "closed"],
-  closed: [],
+const VALID_SLOT_TRANSITIONS: Record<SlotConversationalState, SlotConversationalState[]> = {
+  idle: ["collecting_slots", "awaiting_confirmation"],
+  collecting_slots: ["collecting_slots", "awaiting_confirmation"],
+  awaiting_confirmation: ["collecting_slots"],
 };
 
 async function checkSessionExpiry(phone: string): Promise<boolean> {
@@ -57,7 +53,7 @@ async function checkSessionExpiry(phone: string): Promise<boolean> {
 export async function evaluateWorkflowTransition(
   phone: string,
   extractionResult: ExtractionResult,
-): Promise<SlotWorkflowContext> {
+): Promise<SlotConversationalContext> {
   // Step 1: Check session expiry (resets if stale)
   const expired = await checkSessionExpiry(phone);
   if (expired) {
@@ -70,12 +66,11 @@ export async function evaluateWorkflowTransition(
     };
   }
 
-  // Step 2: Get current session (or start fresh)
-  const session = await getChatSession(phone);
-  const currentState: SlotWorkflowState = (session?.workflow_state as SlotWorkflowState) || "idle";
+  // Step 2: Get current conversational state
+  const currentState = await getConversationalState(phone);
 
   // Step 3: Determine new state based on confidence
-  let newState: SlotWorkflowState;
+  let newState: SlotConversationalState;
   let clarifyField: string | null = null;
   let askForConfirmation = false;
 
@@ -105,7 +100,7 @@ export async function evaluateWorkflowTransition(
   }
 
   // Step 4: Persist
-  await updateChatSessionWorkflow(phone, newState, clarifyField ?? undefined);
+  await setConversationalState(phone, newState, clarifyField ?? undefined);
 
   return {
     state: newState,

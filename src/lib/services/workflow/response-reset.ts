@@ -1,6 +1,6 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getOrCreateConversation, getConversationByPhone, insertMessage, clearConversationHistory, resetChatSession } from "@/lib/db/database";
-import { resetToIdle } from "@/lib/services/workflow/conversation-workflow";
+import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
 
 export async function handleResponseReset(
   phone: string,

@@ -4,10 +4,9 @@ import {
   getActiveTripByPhone,
   updateTripTariff,
   insertMessage,
-  setChatSessionWorkflowState,
-  resetChatSession,
   setPendingOpportunity,
 } from "@/lib/db/database";
+import { setTripState, setConversationalState } from "@/lib/db/state-accessors";
 import { createTransaction } from "@/lib/db/database";
 import type { ChatSessionRow } from "@/lib/db/types";
 import type { OpportunityContext } from "@/lib/services/learning/opportunity-types";
@@ -25,7 +24,7 @@ import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-s
 import type { Lang } from "@/lib/ai/types";
 import { processLead } from "@/lib/core/pipeline";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
-import type { ConfirmedSlot } from "@/lib/ai/types";
+import type { ConfirmedSlot, ConversationalState } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 
 export interface TripExecutionInput {
@@ -60,7 +59,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     source: "lead.confirmation.new_flow",
   });
   if (!fleetCheck.ok) {
-    await resetChatSession(phone);
+    await setConversationalState(phone, "idle");
     return { tripId: null, executed: false };
   }
 
@@ -72,7 +71,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
   const extractionCtx = {
     slots: confirmedSlots,
     overallConfidence: 1.0,
-    workflowState: "awaiting_confirmation",
+    conversationalState: "awaiting_confirmation" as ConversationalState,
     clarifyField: null,
     askForConfirmation: true,
     tariff: pricingResult.final_price > 0
@@ -95,12 +94,14 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     pricing: { final_price: pricingResult.final_price > 0 ? pricingResult.final_price : (rawSlots.price || 0) },
     lang,
     intent: "MOVE",
+    domain: "reservation",
+    mode: "RESERVA",
   };
 
   const pipelineResult = await processLead(execCtx, deps);
 
   if (pipelineResult !== "completed") {
-    await resetChatSession(phone);
+    await setConversationalState(phone, "idle");
     return { tripId: null, executed: false };
   }
 
@@ -119,7 +120,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
   ]);
   const trip = await getActiveTripByPhone(phone);
   if (!trip) {
-    await resetChatSession(phone);
+    await setConversationalState(phone, "idle");
     return { tripId: null, executed: false };
   }
 
@@ -152,7 +153,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     intent: "MOVE",
   });
   if (learningResult.blocked) {
-    await resetChatSession(phone);
+    await setConversationalState(phone, "idle");
     return { tripId, executed: false, dispatchResult };
   }
   const finalOpps = learningResult.rankedOpportunities;
@@ -166,7 +167,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
         logId: opp.logId, label: opp.label, f7EconomicScore: opp.economicScore, f7Utility: opp.utilityScore,
       });
       await insertMessage(conversationId, "assistant", oppMsg, tx);
-      await setChatSessionWorkflowState(phone, "post_trip_opportunity", tx);
+      await setTripState(phone, "opportunity", tx);
       await setPendingOpportunity(phone, pendingData, tx);
       await logOpportunityShown(String(conversationId), opp.label, opp.utilityScore, tx);
     }
@@ -179,7 +180,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
   for (const opp of finalOpps) {
     await sendWhatsAppMessage(phone, buildOpportunityOfferMessage(opp.description));
   }
-  if (finalOpps.length === 0) await resetChatSession(phone);
+  if (finalOpps.length === 0) await setConversationalState(phone, "idle");
 
   return { tripId, executed: true, dispatchResult };
 }

@@ -12,7 +12,7 @@ export interface SessionMemory {
   lastOrigin: string | null;
   lastDestination: string | null;
   lastOpportunity: string | null;
-  f4StateHistory: string[];
+  comprehensionStateHistory: string[];
 }
 
 export interface ShortTermBuffer {
@@ -56,6 +56,7 @@ export function buildSessionMemory(session: ChatSessionRow | null, history: Mess
   if (session?.slots) {
     try {
       const slots = JSON.parse(session.slots);
+      lastIntent = slots.intent ?? null;
       lastOrigin = slots.origin ?? null;
       lastDestination = slots.destination ?? null;
     } catch {}
@@ -65,9 +66,9 @@ export function buildSessionMemory(session: ChatSessionRow | null, history: Mess
     ? (() => { try { const p = JSON.parse(session.pending_opportunity); return p.label ?? null; } catch { return null; } })()
     : null;
 
-  const f4StateHistory: string[] = session?.f4_state ? [session.f4_state] : [];
+  const comprehensionStateHistory: string[] = session?.comprehension_state ? [session.comprehension_state] : [];
 
-  return { lastIntent, lastEntities, lastOrigin, lastDestination, lastOpportunity, f4StateHistory };
+  return { lastIntent, lastEntities, lastOrigin, lastDestination, lastOpportunity, comprehensionStateHistory };
 }
 
 export function buildMemory(session: ChatSessionRow | null, history: MessageRow[]): Memory {

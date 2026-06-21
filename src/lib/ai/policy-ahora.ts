@@ -2,7 +2,12 @@
 // policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic, inferencia geográfica, generación libre.
 
-import { inferMissingFieldFromCore, buildGreeting } from "./response-builder";
+import { inferMissingFieldFromCore, buildGreeting, buildNowDispatchResponse, buildPriceInfo } from "./response-builder";
+import {
+  buildLateralEmergencyResponse,
+  buildLateralRescheduleResponse,
+  buildAdminNotifyBody,
+} from "./policy-reserva";
 import type { FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
 
 export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): PolicyOutput {
@@ -32,7 +37,7 @@ export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): Poli
       policyHint = "AHORA: respuesta segura genérica sin inferencias.";
   }
 
-  return {
+  const output: PolicyOutput = {
     decision: decision.decision,
     mode: "AHORA",
     policyHint,
@@ -44,6 +49,13 @@ export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): Poli
     needsGeo: false,
     needsSaveContext: false,
   };
+
+  if (decision.core.intent === "EMERGENCY" || decision.core.intent === "RESCHEDULE") {
+    output.needsAdminNotify = true;
+    output.adminNotifyBody = buildAdminNotifyBody(decision.core.intent, ctx?.phone, ctx?.userText);
+  }
+
+  return output;
 }
 
 function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | undefined, lang: Lang): string {
@@ -51,11 +63,20 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
 
   switch (decision.decision) {
     case "EXECUTE": {
-      if (lang === "en") return `${greet}, we're processing your request. A driver will contact you shortly.`;
-      if (lang === "pt") return `${greet}, estamos processando seu pedido. Um motorista entrará em contato em breve.`;
-      return `${greet}, estamos procesando tu pedido. En breve un chofer te contacta.`;
+      if (decision.core.intent === "EMERGENCY") return buildLateralEmergencyResponse(lang);
+      if (decision.core.intent === "RESCHEDULE") return buildLateralRescheduleResponse(lang);
+      return buildNowDispatchResponse(lang);
     }
     case "ANSWER": {
+      const tariff = ctx?.extraction?.tariff;
+      if (tariff?.matched && tariff.price != null) {
+        return buildPriceInfo(
+          tariff.canonicalOrigin ?? "origen",
+          tariff.canonicalDestination ?? "destino",
+          tariff.price,
+          lang,
+        );
+      }
       if (lang === "en") return `${greet}, for pricing and availability, an operator will assist you shortly.`;
       if (lang === "pt") return `${greet}, para valores e disponibilidade, um operador vai te atender em breve.`;
       return `${greet}, para tarifas y disponibilidad, un operador te va a asistir en breve.`;

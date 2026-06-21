@@ -25,6 +25,12 @@ export const CRON_24H_S = 86400;
 // Session cleanup
 export const STALE_WORKFLOW_THRESHOLD_S = 86400;
 
+// Confirmation expiration (awaiting_confirmation stale after 30 min)
+export const CONFIRMATION_TIMEOUT_S = 1800;
+
+// Context slot staleness (slots older than this are not inherited across turns)
+export const CONTEXT_SLOT_TIMEOUT_S = 3600;
+
 // Groq
 export const GROQ_MAX_TOKENS = 512;
 export const GROQ_TIMEOUT_MS = 8000;

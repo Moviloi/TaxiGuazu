@@ -187,6 +187,16 @@ async function initSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_alias_lookup_canonical ON alias_lookup(canonical_name)`,
     `CREATE INDEX IF NOT EXISTS idx_alias_lookup_normalized ON alias_lookup(normalized_alias)`,
     `CREATE VIEW IF NOT EXISTS location_aliases AS SELECT alias, canonical_name, location_code, created_at FROM alias_lookup WHERE active = 1`,
+    `CREATE TABLE IF NOT EXISTS zones (
+      zone_id TEXT PRIMARY KEY,
+      zone_name TEXT NOT NULL,
+      country TEXT NOT NULL,
+      area_group TEXT,
+      dispatch_priority INTEGER DEFAULT 5,
+      base_eta_min INTEGER DEFAULT 10,
+      crosses_border INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1
+    )`,
     `CREATE TABLE IF NOT EXISTS places (
       place_id TEXT PRIMARY KEY,
       canonical_name TEXT NOT NULL,
@@ -436,6 +446,48 @@ async function initSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(recorded_at)`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
+
+  // FASE 5.2.5: Add new workflow state columns for domain separation
+  const migrations = [
+    "ALTER TABLE chat_sessions ADD COLUMN conversational_state TEXT DEFAULT 'idle'",
+    "ALTER TABLE chat_sessions ADD COLUMN dispatch_state TEXT DEFAULT 'idle'",
+    "ALTER TABLE chat_sessions ADD COLUMN trip_state TEXT DEFAULT NULL",
+  ];
+  for (const sql of migrations) {
+    try { await db.execute({ sql }); } catch { /* column may already exist */ }
+  }
+
+  // Data migration: populate new columns from legacy workflow_state
+  try {
+    await db.execute({
+      sql: `UPDATE chat_sessions SET conversational_state = workflow_state
+            WHERE workflow_state IN ('idle','collecting_slots','awaiting_confirmation')
+              AND conversational_state IS NULL`,
+    });
+    await db.execute({
+      sql: `UPDATE chat_sessions SET dispatch_state = workflow_state
+            WHERE workflow_state IN ('nivel_1','nivel_2','nivel_3','waiting_driver','closed')
+              AND dispatch_state IS NULL`,
+    });
+    await db.execute({
+      sql: `UPDATE chat_sessions SET trip_state = 'opportunity'
+            WHERE workflow_state = 'post_trip_opportunity'
+              AND trip_state IS NULL`,
+    });
+  } catch { /* data migration best-effort */ }
+
+  // FASE 5.2.7: Drop legacy workflow_state, rename f4_state, drop dead columns
+  const cleanupDDL: string[] = [
+    // RENAME must happen before DROP (no deadlock)
+    "ALTER TABLE chat_sessions RENAME COLUMN f4_state TO comprehension_state",
+    "ALTER TABLE chat_sessions DROP COLUMN workflow_state",
+    "ALTER TABLE chat_sessions DROP COLUMN confirmed_fields",
+    "ALTER TABLE chat_sessions DROP COLUMN source_message_ids",
+    "ALTER TABLE conversations DROP COLUMN trip_status",
+  ];
+  for (const ddl of cleanupDDL) {
+    try { await db.execute({ sql: ddl }); } catch { /* column may not exist or already renamed/dropped */ }
+  }
 }
 
 

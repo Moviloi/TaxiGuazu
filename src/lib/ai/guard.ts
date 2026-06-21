@@ -3,12 +3,14 @@
 //
 // Reglas:
 // - handleMessage() setea el state (CORE, FinalDecision, PolicyOutput).
-// - Cualquier LLM call (CORE/extraction) debe pasar assertCoreRouterPolicy().
+// - extraction-runner llama assertCoreRouterPolicy() para verificar que no haya
+//   estado parcial corrupto (algunos módulos inicializados y otros no).
 // - Cualquier output final al usuario debe pasar assertOutputSource("POLICY").
 // - El pipeline completo debe estar armado antes de emitir (assertPipelineComplete).
 //
-// El state es module-level. Cada request debe llamar resetRequestState() al inicio
-// y handleMessage() antes de cualquier LLM call o send al usuario.
+// El state es module-level. lead.service.ts llama resetRequestState() al inicio.
+// La extracción corre entre core() y handleMessage(), por lo que el estado inicial
+// (todo null) es válido — assertCoreRouterPolicy solo bloquea estado mixto.
 
 import type { CoreDecision, FinalDecision, OutputSource, PolicyOutput } from "./types";
 import { log } from "@/lib/utils/logger";
@@ -30,11 +32,19 @@ export function setRequestState(core: CoreDecision, final: FinalDecision, policy
 }
 
 export function assertCoreRouterPolicy(): true | BlockResult {
-  if (!coreState || !finalState || !policyState) {
+  const hasCore = coreState !== null;
+  const hasFinal = finalState !== null;
+  const hasPolicy = policyState !== null;
+  const hasAny = hasCore || hasFinal || hasPolicy;
+  const hasAll = hasCore && hasFinal && hasPolicy;
+
+  // Only block on mixed state (partial initialization = corruption).
+  // All-null (initial state before pipeline) and all-set (pipeline complete) are valid.
+  if (hasAny && !hasAll) {
     const block: BlockResult = {
       status: "BLOCKED_LEGACY_FLOW",
       reason: "CORE_ROUTER_REQUIRED",
-      context: `core=${!!coreState} router=${!!finalState} policy=${!!policyState}`,
+      context: `core=${hasCore} router=${hasFinal} policy=${hasPolicy}`,
     };
     log.info("[BLOCKED]", block);
     return block;

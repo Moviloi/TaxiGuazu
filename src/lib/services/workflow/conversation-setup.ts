@@ -1,5 +1,6 @@
 import { getOrCreateConversation, getConversationById, insertMessage, getRecentHistory, getActiveTripByPhone, updateTripState, clearConversationHistory, setCustomerName, getCustomerName, resetChatSession } from "@/lib/db/database";
-import { getWorkflow, resetToIdle } from "@/lib/services/workflow/conversation-workflow";
+import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
+import { getConversationalState, getDispatchState } from "@/lib/db/state-accessors";
 import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import { log } from "@/lib/utils/logger";
 
@@ -8,7 +9,7 @@ export interface ConversationSetupResult {
   history: any[];
   customerName: string | null;
   sessionReset: boolean;
-  workflow: { state: string; [key: string]: any } | null;
+  workflow: null;
 }
 
 export async function handleConversationSetup(
@@ -19,8 +20,12 @@ export async function handleConversationSetup(
   const freshConv = await getConversationById(conversation.id);
   if (!freshConv || freshConv.taken_by_human) return null;
 
-  const workflow = await getWorkflow(conversation.id);
-  if (workflow && workflow.state !== "idle" && workflow.state !== "closed" && workflow.state !== "post_trip_opportunity") return null;
+  const [, dispatchState] = await Promise.all([
+    getConversationalState(phone),
+    getDispatchState(phone),
+  ]);
+
+  if (dispatchState !== "idle" && dispatchState !== "closed") return null;
 
   const now = Math.floor(Date.now() / 1000);
   let sessionReset = false;
@@ -63,5 +68,5 @@ export async function handleConversationSetup(
 
   const history = sessionReset ? [] : await getRecentHistory(conversation.id, 20);
 
-  return { conversation, history, customerName, sessionReset, workflow };
+  return { conversation, history, customerName, sessionReset, workflow: null };
 }

@@ -1,5 +1,5 @@
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
+import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 
 const DESCRIPTIVE_PREFIX: Record<string, string> = {
@@ -39,7 +39,7 @@ function formatFieldLabel(
 export function formatConfidenceNote(
   e: TripExtraction,
   confidenceResult: ExtractionResult,
-  workflowResult: SlotWorkflowContext,
+  workflowResult: SlotConversationalContext,
   pricing?: PricingResult,
 ): string {
   const parts: string[] = [];

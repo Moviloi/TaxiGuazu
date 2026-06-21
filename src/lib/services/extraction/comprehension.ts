@@ -1,9 +1,26 @@
 import type { ChatSessionRow } from "@/lib/db/types";
-import type { RoleLock, SlotStabilityMap } from "@/lib/ai/types";
+import type { ConfidenceMap, ConversationDomain, RoleLock, SlotStabilityMap } from "@/lib/ai/types";
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 
 export type ComprehensionState = "FULL_CONTROL" | "CLARIFICATION" | "RECOVERY" | "ESCALATION";
+
+export interface ComprehensionProfile {
+  requiredSlots: string[];
+  slotWeight: number;
+  extractionWeight: number;
+}
+
+const DOMAIN_PROFILES: Record<string, ComprehensionProfile> = {
+  information: { requiredSlots: [], slotWeight: 0.05, extractionWeight: 0.05 },
+  commercial: { requiredSlots: ["origin", "destination"], slotWeight: 0.15, extractionWeight: 0.15 },
+  reservation: { requiredSlots: ["origin", "destination", "passengers"], slotWeight: 0.20, extractionWeight: 0.15 },
+  dispatch: { requiredSlots: ["origin", "destination", "time"], slotWeight: 0.10, extractionWeight: 0.25 },
+};
+
+export function getProfile(domain?: ConversationDomain): ComprehensionProfile {
+  return DOMAIN_PROFILES[domain ?? "reservation"] ?? DOMAIN_PROFILES.reservation;
+}
 
 export interface ComprehensionSignals {
   intentConfidence: number;
@@ -45,6 +62,7 @@ const INTENT_CONFIDENCE_MAP: Record<string, number> = {
   COMMERCIAL: 0.7,
   GREETING: 0.6,
   INFORMATIONAL: 0.5,
+  CONSULTA: 0.5,
   AMBIGUOUS: 0.3,
 };
 
@@ -52,7 +70,8 @@ function scanEntities(text: string): number {
   return ENTITY_SCAN_RE.test(text) ? 0.9 : 0.3;
 }
 
-function computeSlotCompleteness(effective: EffectiveSlots): number {
+function computeSlotCompleteness(effective: EffectiveSlots, profile: ComprehensionProfile): number {
+  if (profile.requiredSlots.length === 0) return 1.0;
   const hasOrigin = !!effective.origin;
   const hasDest = !!effective.destination;
   if (hasOrigin && hasDest) return 1.0;
@@ -75,6 +94,21 @@ function computeExtractionConfidence(session: ChatSessionRow | null, effective: 
   return 0.5;
 }
 
+function computeMandatoryExtractionConfidence(session: ChatSessionRow | null, effective: EffectiveSlots, profile: ComprehensionProfile): number {
+  if (profile.requiredSlots.length === 0) return 1.0;
+  if (session?.confidence) {
+    try {
+      const conf = JSON.parse(session.confidence);
+      const vals = profile.requiredSlots
+        .map((k) => conf[k])
+        .filter((v): v is number => typeof v === "number");
+      if (vals.length > 0) return vals.reduce((a, b) => a + b, 0) / vals.length;
+    } catch {}
+    return 0.5;
+  }
+  return computeExtractionConfidence(session, effective);
+}
+
 function computeConversationStability(stabilityMap: SlotStabilityMap): number {
   const vals = [stabilityMap.origin, stabilityMap.destination].filter(Boolean);
   if (vals.length === 0) return 0.7;
@@ -93,24 +127,37 @@ export function buildComprehensionSignals(params: {
   slotStability: SlotStabilityMap;
   roleLock?: RoleLock;
   session: ChatSessionRow | null;
+  confidenceMap?: ConfidenceMap;
+  coreConfidence?: number;
+  domain?: ConversationDomain;
 }): ComprehensionSignals {
-  const intentConfidence = clamp01(INTENT_CONFIDENCE_MAP[params.coreIntent] ?? 0.3);
+  const profile = getProfile(params.domain);
+  const intentConfidence = clamp01(
+    params.confidenceMap?.intent
+    ?? params.coreConfidence
+    ?? INTENT_CONFIDENCE_MAP[params.coreIntent]
+    ?? 0.3,
+  );
   const entityConfidence = clamp01(scanEntities(params.text));
   const effective = buildEffectiveSlots(params.session, params.roleLock ?? { origin: null, destination: null });
-  const slotCompleteness = clamp01(computeSlotCompleteness(effective));
-  const extractionConfidence = clamp01(computeExtractionConfidence(params.session, effective));
+  const slotCompleteness = clamp01(computeSlotCompleteness(effective, profile));
+  const extractionConfidence = clamp01(computeMandatoryExtractionConfidence(params.session, effective, profile));
   const conversationStability = clamp01(computeConversationStability(params.slotStability));
 
   return { intentConfidence, entityConfidence, slotCompleteness, extractionConfidence, conversationStability };
 }
 
-export function computeComprehensionScore(signals: ComprehensionSignals): number {
+export function computeComprehensionScore(signals: ComprehensionSignals, domain?: ConversationDomain): number {
+  const w = getProfile(domain);
+  const remaining = 1.0 - w.slotWeight - w.extractionWeight;
+  const baseScale = 0.65;
+  const scale = baseScale > 0 ? remaining / baseScale : 1;
   return (
-    signals.intentConfidence * 0.30 +
-    signals.entityConfidence * 0.25 +
-    signals.slotCompleteness * 0.20 +
-    signals.extractionConfidence * 0.15 +
-    signals.conversationStability * 0.10
+    signals.intentConfidence * 0.30 * scale +
+    signals.entityConfidence * 0.25 * scale +
+    signals.slotCompleteness * w.slotWeight +
+    signals.extractionConfidence * w.extractionWeight +
+    signals.conversationStability * 0.10 * scale
   );
 }
 

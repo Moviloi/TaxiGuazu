@@ -4,11 +4,22 @@
 // PolicyOutput es la ÚNICA fuente del finalResponse.
 // outputSource es un discriminante que el guardrail enforce.
 
-export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "AMBIGUOUS";
+export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "CONSULTA" | "AMBIGUOUS";
 
 export type Mode = "AHORA" | "RESERVA";
 
 export type OutputType = "EXECUTE" | "ANSWER" | "CLARIFY" | "SAFE_FALLBACK";
+
+export type ConversationDomain = "information" | "commercial" | "reservation" | "dispatch";
+
+export type ConversationalState = "idle" | "collecting_slots" | "awaiting_confirmation";
+
+export type DispatchState = "idle" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver" | "closed";
+
+// TripState: solo "opportunity" es operativo.
+// El cierre real del viaje usa trips.status / trips.trip_phase.
+// null = sin opportunity activa.
+export type TripState = "opportunity" | null;
 
 export type OutputSource = "POLICY";
 
@@ -59,10 +70,24 @@ export interface ConfirmedSlot {
   reason: string;
 }
 
+// Mapa de certeza por dimensión (FASE A4)
+// Cada dimensión representa qué tan seguro está el sistema del valor detectado.
+// 0.0 = completamente incierto, 1.0 = completamente cierto.
+export interface ConfidenceMap {
+  intent: number;
+  origin: number;
+  destination: number;
+  date: number;
+  time: number;
+  passengers: number;
+  mode: number;
+  luggage?: number;
+}
+
 export interface ExtractionContext {
   slots: Record<string, ConfirmedSlot | undefined>;
   overallConfidence: number;
-  workflowState: string;
+  conversationalState: ConversationalState;
   clarifyField: string | null;
   askForConfirmation: boolean;
   tariff?: {
@@ -86,6 +111,7 @@ export interface HandlerContext {
   lang?: Lang;
   phone?: string;
   userText?: string;
+  domain?: ConversationDomain;
 }
 
 export interface PolicyOutput {

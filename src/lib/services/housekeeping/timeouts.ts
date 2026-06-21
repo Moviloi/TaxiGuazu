@@ -1,7 +1,7 @@
 import {
   getExpiredByState,
   closeWorkflow,
-} from "@/lib/services/workflow/conversation-workflow";
+} from "@/lib/services/dispatch/dispatch-workflow";
 import {
   getActiveTripByPhone,
   getDriverByPhone,

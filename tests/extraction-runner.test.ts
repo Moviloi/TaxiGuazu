@@ -8,6 +8,7 @@ vi.mock("@/lib/db/database", () => ({
   insertMessage: vi.fn().mockResolvedValue(undefined),
   getChatSession: vi.fn().mockResolvedValue(null),
   upsertChatSession: vi.fn().mockResolvedValue(undefined),
+  resetChatSession: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/services/extraction/extract-slots", () => ({
@@ -20,10 +21,21 @@ vi.mock("@/lib/services/extraction/regex-extractor", () => ({
 
 vi.mock("@/lib/ai/response-builder", () => ({
   buildSlotClarify: vi.fn(),
+  buildCancellationMessage: vi.fn(),
 }));
 
 vi.mock("@/lib/ai/guard", () => ({
   assertCoreRouterPolicy: vi.fn(),
+}));
+
+vi.mock("@/lib/ai/patterns", () => ({
+  isAffirmativeMessage: vi.fn().mockReturnValue(false),
+  isNegativeMessage: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock("@/lib/db/state-accessors", () => ({
+  getConversationalState: vi.fn().mockResolvedValue("idle"),
+  setConversationalState: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/services/extraction/confidence", () => ({
@@ -258,5 +270,196 @@ describe("runExtractionPipeline", () => {
 
     expect(result).not.toBeNull();
     expect(result!.confidenceResult?.action).toBe("clarify");
+  });
+
+  // ── FASE 8.2: awaiting_confirmation + affirmation ──
+
+  it("Caso 1: awaiting_confirmation + 'sí' — salta completeness, no bloquea", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { getConversationalState } = await import("@/lib/db/state-accessors");
+    vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
+
+    const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(true);
+
+    const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
+    vi.mocked(extractSlots).mockResolvedValue(null as any);
+
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+
+    const result = await runExtractionPipeline(
+      "+54911111111", "sí", 1, makeCoreDecision(), [], null,
+    );
+
+    // No bloquea a pesar de raw=null porque el guard salta completeness
+    expect(result).not.toBeNull();
+    // evaluateCompleteness NO fue llamada
+    expect(evaluateCompleteness).not.toHaveBeenCalled();
+  });
+
+  it("Caso 2: awaiting_confirmation + 'no' (raw vacío) — cancela confirmación", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { getConversationalState } = await import("@/lib/db/state-accessors");
+    vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
+
+    const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(false);
+    vi.mocked(isNegativeMessage).mockReturnValue(true);
+
+    const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
+    vi.mocked(extractSlots).mockResolvedValue(null as any);
+
+    const { buildCancellationMessage } = await import("@/lib/ai/response-builder");
+    vi.mocked(buildCancellationMessage).mockReturnValue("No hay problema. Se canceló.");
+
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+    const { resetChatSession, insertMessage } = await import("@/lib/db/database");
+    const { setConversationalState } = await import("@/lib/db/state-accessors");
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+
+    const result = await runExtractionPipeline(
+      "+54911111111", "no", 1, makeCoreDecision(), [], null,
+    );
+
+    expect(evaluateCompleteness).not.toHaveBeenCalled();
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", "No hay problema. Se canceló.");
+    expect(insertMessage).toHaveBeenCalledWith(1, "assistant", "No hay problema. Se canceló.");
+    expect(setConversationalState).toHaveBeenCalledWith("+54911111111", "idle");
+    expect(resetChatSession).toHaveBeenCalledWith("+54911111111");
+    expect(result).toBeNull();
+  });
+
+  it("S5a: awaiting_confirmation + 'no, a las 10' — NO cancela (corrección de scheduled_at)", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { getConversationalState } = await import("@/lib/db/state-accessors");
+    vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
+
+    const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(false);
+    vi.mocked(isNegativeMessage).mockReturnValue(true);
+
+    const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
+    vi.mocked(extractSlots).mockResolvedValue({ scheduled_at: "10:00" } as any);
+
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+    const { resetChatSession } = await import("@/lib/db/database");
+    const { setConversationalState } = await import("@/lib/db/state-accessors");
+
+    const result = await runExtractionPipeline(
+      "+54911111111", "no, a las 10", 1, makeCoreDecision(), [], null,
+    );
+
+    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(sendWhatsAppMessage).not.toHaveBeenCalledWith("+54911111111", expect.stringContaining("canceló"));
+    expect(setConversationalState).not.toHaveBeenCalledWith("+54911111111", "idle");
+    expect(resetChatSession).not.toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  it("S5a: awaiting_confirmation + 'no, desde el hotel' — NO cancela (corrección de origin)", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { getConversationalState } = await import("@/lib/db/state-accessors");
+    vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
+
+    const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(false);
+    vi.mocked(isNegativeMessage).mockReturnValue(true);
+
+    const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
+    vi.mocked(extractSlots).mockResolvedValue({ origin: "hotel" } as any);
+
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+    const { resetChatSession } = await import("@/lib/db/database");
+    const { setConversationalState } = await import("@/lib/db/state-accessors");
+
+    const result = await runExtractionPipeline(
+      "+54911111111", "no, desde el hotel", 1, makeCoreDecision(), [], null,
+    );
+
+    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(sendWhatsAppMessage).not.toHaveBeenCalledWith("+54911111111", expect.stringContaining("canceló"));
+    expect(setConversationalState).not.toHaveBeenCalledWith("+54911111111", "idle");
+    expect(resetChatSession).not.toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  it("F3: collecting_slots + 'no' — NO cancela (solo awaiting_confirmation)", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { getConversationalState } = await import("@/lib/db/state-accessors");
+    vi.mocked(getConversationalState).mockResolvedValue("collecting_slots");
+
+    const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(false);
+    vi.mocked(isNegativeMessage).mockReturnValue(true);
+
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+
+    const result = await runExtractionPipeline(
+      "+54911111111", "no", 1, makeCoreDecision(), [], null,
+    );
+
+    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  it("Caso 3: collecting_slots + 'sí' — completeness evalúa (no salta)", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { getConversationalState } = await import("@/lib/db/state-accessors");
+    vi.mocked(getConversationalState).mockResolvedValue("collecting_slots");
+
+    const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(true);
+
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+
+    const result = await runExtractionPipeline(
+      "+54911111111", "sí", 1, makeCoreDecision(), [], null,
+    );
+
+    // No es awaiting_confirmation → completeness evalúa
+    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  it("Caso 4: idle + 'sí' — completeness evalúa (no salta)", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { getConversationalState } = await import("@/lib/db/state-accessors");
+    vi.mocked(getConversationalState).mockResolvedValue("idle");
+
+    const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(true);
+
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+
+    const result = await runExtractionPipeline(
+      "+54911111111", "sí", 1, makeCoreDecision(), [], null,
+    );
+
+    // No es awaiting_confirmation → completeness evalúa
+    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(result).not.toBeNull();
   });
 });

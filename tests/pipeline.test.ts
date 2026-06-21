@@ -11,6 +11,8 @@ function makeExecCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContex
     extractionCtx: undefined,
     lang: "es",
     intent: "MOVE",
+    domain: "reservation",
+    mode: "RESERVA",
     ...overrides,
   };
 }
@@ -35,7 +37,7 @@ describe("processLead (handler-based v5.7)", () => {
     const deps = makeDeps();
     deps.handler = vi.fn().mockReturnValue({ policy: { finalResponse: "Resumen del viaje", outputSource: "POLICY", needsGeo: true, needsSaveContext: true } });
     const ctx = makeExecCtx({
-      extractionCtx: { slots: { origin: { value: "IGR", score: 1, reason: "test" }, destination: { value: "Centro", score: 1, reason: "test" } }, overallConfidence: 0.9, workflowState: "collecting_slots", clarifyField: null, askForConfirmation: true },
+      extractionCtx: { slots: { origin: { value: "IGR", score: 1, reason: "test" }, destination: { value: "Centro", score: 1, reason: "test" } }, overallConfidence: 0.9, conversationalState: "collecting_slots", clarifyField: null, askForConfirmation: true },
     });
     const result = await processLead(ctx, deps);
     expect(result).toBe("completed");
@@ -60,7 +62,7 @@ describe("processLead (handler-based v5.7)", () => {
     const deps = makeDeps();
     deps.handler = vi.fn().mockReturnValue({ policy: { finalResponse: "Resumen", outputSource: "POLICY", needsGeo: true, needsSaveContext: true } });
     const ctx = makeExecCtx({
-      extractionCtx: { slots: { origin: { value: "IGR", score: 1, reason: "test" } }, overallConfidence: 0.9, workflowState: "collecting_slots", clarifyField: null, askForConfirmation: false },
+      extractionCtx: { slots: { origin: { value: "IGR", score: 1, reason: "test" } }, overallConfidence: 0.9, conversationalState: "collecting_slots", clarifyField: null, askForConfirmation: false },
       pricing: { final_price: 15000 },
     });
     await processLead(ctx, deps);
@@ -90,5 +92,46 @@ describe("processLead (handler-based v5.7)", () => {
     deps.handler = vi.fn().mockImplementation(() => { throw new Error("handler crash"); });
     const result = await processLead(makeExecCtx({ text: "sí", intent: "CONFIRM" }), deps);
     expect(result).toBe("error");
+  });
+
+  describe("mode propagation", () => {
+    it("mode=RESERVA → handler receives RESERVA", async () => {
+      const deps = makeDeps();
+      await processLead(makeExecCtx({ mode: "RESERVA", text: "viaje programado" }), deps);
+      expect(deps.handler).toHaveBeenCalledWith("viaje programado", "RESERVA", expect.any(Object));
+    });
+
+    it("mode=AHORA → handler receives AHORA", async () => {
+      const deps = makeDeps();
+      await processLead(makeExecCtx({ mode: "AHORA", text: "ya" }), deps);
+      expect(deps.handler).toHaveBeenCalledWith("ya", "AHORA", expect.any(Object));
+    });
+
+    it("scheduled_at presente en slots → mode RESERVA", async () => {
+      const deps = makeDeps();
+      const ctx = makeExecCtx({
+        text: "esta noche",
+        extractionCtx: {
+          slots: { scheduled_at: { value: "2026-06-19T22:00:00", score: 1, reason: "test" } },
+          overallConfidence: 0.9, conversationalState: "collecting_slots", clarifyField: null, askForConfirmation: false,
+        },
+      });
+      await processLead(ctx, deps);
+      expect(deps.handler).toHaveBeenCalledWith("esta noche", "RESERVA", expect.any(Object));
+    });
+
+    it("sin scheduled_at en slots → mode AHORA", async () => {
+      const deps = makeDeps();
+      const ctx = makeExecCtx({
+        text: "ya mismo",
+        mode: "AHORA",
+        extractionCtx: {
+          slots: { origin: { value: "IGR", score: 1, reason: "test" } },
+          overallConfidence: 0.7, conversationalState: "collecting_slots", clarifyField: null, askForConfirmation: false,
+        },
+      });
+      await processLead(ctx, deps);
+      expect(deps.handler).toHaveBeenCalledWith("ya mismo", "AHORA", expect.any(Object));
+    });
   });
 });

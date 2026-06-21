@@ -17,16 +17,59 @@ import { router } from "./router";
 import { policyAhora } from "./policy-ahora";
 import { policyReserva } from "./policy-reserva";
 import { assertOutputSource, assertPipelineComplete, setRequestState } from "./guard";
-import type { HandleMessageResult, HandlerContext, Mode } from "./types";
+import { buildInformationalResponse, buildCommercialResponse } from "./response-builder";
+import type { HandleMessageResult, HandlerContext, Mode, PolicyOutput, ConversationDomain } from "./types";
 import { log } from "@/lib/utils/logger";
+
+function buildSafeFallback(decision: ReturnType<typeof router>, _lang: string): PolicyOutput {
+  return {
+    decision: "SAFE_FALLBACK",
+    mode: decision.mode,
+    policyHint: "SAFE_FALLBACK: respuesta genérica segura",
+    requiresConfirmation: false,
+    finalResponse: "No pude procesar eso. Un operador te va a asistir en breve.",
+    requiresUserInput: false,
+    nextExpectedFields: [],
+    outputSource: "POLICY",
+    needsGeo: false,
+    needsSaveContext: false,
+  };
+}
+
+function buildDomainPolicy(decision: ReturnType<typeof router>, domain: ConversationDomain, ctx?: HandlerContext): PolicyOutput {
+  const lang = ctx?.lang ?? "es";
+  if (decision.core.confidence < 0.4 && !ctx?.extraction?.slots) {
+    return buildSafeFallback(decision, lang);
+  }
+  if (domain === "information" || domain === "commercial") {
+    const domainHint = domain === "information" ? "INFORMATION" : "COMMERCIAL";
+    const msg = domain === "information"
+      ? buildInformationalResponse(decision.core.intent, lang)
+      : buildCommercialResponse(decision.core.intent, lang);
+    return {
+      decision: decision.decision,
+      mode: decision.mode,
+      policyHint: `${domainHint}: respuesta para ${decision.core.intent}`,
+      requiresConfirmation: false,
+      finalResponse: msg,
+      requiresUserInput: false,
+      nextExpectedFields: [],
+      outputSource: "POLICY",
+      needsGeo: false,
+      needsSaveContext: false,
+    };
+  }
+  return decision.mode === "AHORA"
+    ? policyAhora(decision, ctx)
+    : policyReserva(decision, ctx);
+}
 
 export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): HandleMessageResult {
   const coreDecision = core(input);
   const decision = router(coreDecision, mode);
-  const policy =
-    mode === "AHORA"
-      ? policyAhora(decision, ctx)
-      : policyReserva(decision, ctx);
+  const hasExtraction = !!ctx?.extraction?.slots && Object.keys(ctx.extraction.slots).length > 0;
+  const domain = (ctx?.domain && !hasExtraction) ? ctx.domain : (mode === "AHORA" ? "dispatch" : "reservation");
+  const policy = buildDomainPolicy(decision, domain, ctx);
 
   // Hard enforcement: policy debe ser la fuente del output.
   assertOutputSource(policy.outputSource);
@@ -38,7 +81,7 @@ export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): 
   log.info(
     `[CORE] intent=${decision.core.intent} confidence=${decision.core.confidence.toFixed(2)} facts=[${decision.core.facts.join(",")}]`,
   );
-  log.info(`[ROUTER] mode=${mode} outputType=${decision.decision} reason="${decision.reason}"`);
+  log.info(`[ROUTER] mode=${mode} domain=${domain} outputType=${decision.decision} reason="${decision.reason}"`);
   log.info(
     `[POLICY] mode=${policy.mode} hint="${policy.policyHint}" requiresConfirmation=${policy.requiresConfirmation}`,
   );

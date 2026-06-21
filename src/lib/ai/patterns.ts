@@ -26,16 +26,16 @@ export const AMBIGUOUS_LOCATION_TERMS = [
  * Usado por lead.service para detectar aceptación/rechazo de oportunidades y confirmaciones.
  * core.ts tiene su propio AFFIRMATION_RE para clasificación de intención (con patrones similares pero no idénticos).
  */
-const AFFIRMATIVE_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)\b/i;
+const AFFIRMATIVE_RE = /^(s[ií]|sim|yes|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)(?=\s|$|[.,!?;])/i;
 
 export function isAffirmativeMessage(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (AFFIRMATIVE_RE.test(t)) return true;
   const clean = t.replace(/[^a-záéíóúñ\s]/g, "").trim();
-  return /\b(ok\b|dale\b|confirmo\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b)/.test(clean);
+  return /\b(ok\b|dale\b|confirmo\b|sim\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b)/.test(clean);
 }
 
-const NEGATIVE_RE = /^(no\b|no gracias|no, gracias|no me interesa|no quiero|nop|nah)/i;
+const NEGATIVE_RE = /^(no\b|n[ãa]o\b|no gracias|no, gracias|no me interesa|no quiero|nop|nah)/i;
 export function isNegativeMessage(text: string): boolean {
   return NEGATIVE_RE.test(text.trim().toLowerCase());
 }

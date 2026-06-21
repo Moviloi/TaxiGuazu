@@ -1,6 +1,6 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getOrCreateConversation, getConversationByPhone, insertMessage } from "@/lib/db/database";
-import { resetToIdle } from "@/lib/services/workflow/conversation-workflow";
+import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
 import { HABLAR_HUMANO } from "@/lib/config/lead-constants";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 

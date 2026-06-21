@@ -5,7 +5,7 @@
 // Future: merge v2/v3 tariff resolution into a unified pricing service.
 
 import type { TariffRow, TariffV2Match } from "@/lib/db/types";
-import { findTariffRow, getOperationalZone } from "@/lib/db/database";
+import { findTariff, findTariffRow, getOperationalZone } from "@/lib/db/database";
 import { resolveLocation } from "../geo/location-resolver";
 
 function buildMatch(row: TariffRow, level: TariffV2Match["level"], pax: number): TariffV2Match {
@@ -53,11 +53,6 @@ export async function resolveTariff(
   const paxNum = Math.max(1, Math.min(pax || 1, 6));
   const originLoc = await resolveLocation(origin);
   const destLoc = await resolveLocation(destination);
-
-  if (!originLoc.place_id || !destLoc.place_id) {
-    return notFound(originLoc.place_id, destLoc.place_id, originLoc.operational_zone, destLoc.operational_zone);
-  }
-
   const originPlaceId = originLoc.place_id;
   const destPlaceId = destLoc.place_id;
   const originZoneId = originLoc.operational_zone;
@@ -79,6 +74,22 @@ export async function resolveTariff(
   if (originZoneId && destZoneId) {
     const l4 = await findTariffRow({ originPlaceId: null, destPlaceId: null, originZoneId, destZoneId });
     if (l4) return buildMatch(l4, "zone_zone", paxNum);
+  }
+
+  const textMatch = await findTariff(origin, destination, paxNum);
+  if (textMatch) {
+    return {
+      matched: true,
+      price: textMatch.price,
+      piso: textMatch.base_price_4p ?? textMatch.price,
+      garantizado: textMatch.base_price_4p ?? textMatch.price,
+      tariffId: textMatch.id,
+      level: "place_place",
+      originPlaceId,
+      destinationPlaceId: destPlaceId,
+      originZoneId,
+      destinationZoneId: destZoneId,
+    };
   }
 
   return notFound(originPlaceId, destPlaceId, originZoneId, destZoneId);

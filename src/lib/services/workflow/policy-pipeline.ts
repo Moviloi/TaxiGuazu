@@ -1,22 +1,26 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { insertMessage, getChatSession, resetChatSession } from "@/lib/db/database";
+import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
 import { processLead } from "@/lib/core/pipeline";
 import { resolveGeoRoute } from "@/lib/services/geo/geo-engine";
 import { evaluateOpportunities, isOpportunityQuery } from "@/lib/services/learning/opportunity-engine";
-import { buildOpportunityNoPricingMessage, formatOpportunityResponse } from "@/lib/ai/response-builder";
+import { buildOpportunityNoPricingMessage, formatOpportunityResponse, buildCancellationMessage, buildNowDispatchResponse } from "@/lib/ai/response-builder";
 import { handleMessage } from "@/lib/ai/handler";
 import { saveContext } from "@/lib/services/memory/context-memory";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
-import { isAffirmativeMessage } from "@/lib/ai/patterns";
+import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
+import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
-import type { ExtractionContext } from "@/lib/ai/types";
+import type { ExtractionContext, ConversationDomain, Mode } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
+import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
+import { buildConfirmationMessage, buildNoTariffConfirmation } from "@/lib/ai/policy-reserva";
 import { core } from "@/lib/ai/core";
+import { CONFIRMATION_TIMEOUT_S } from "@/config/constants";
 import { log } from "@/lib/utils/logger";
 type CoreResult = ReturnType<typeof core>;
 
@@ -29,10 +33,12 @@ export interface PolicyPipelineInput {
   leadCore: CoreResult;
   extractionCtx: ExtractionContext | undefined;
   pricing: PricingResult | undefined;
-  workflowResult: SlotWorkflowContext | undefined;
+  workflowResult: SlotConversationalContext | undefined;
   confidenceResult: ExtractionResult | undefined;
   prevSlotsEarly: Record<string, string>;
   parsedData: TripExtraction | undefined;
+  domain: ConversationDomain;
+  sessionUpdatedAt?: number;
 }
 
 export async function handlePolicyPipeline(
@@ -40,7 +46,8 @@ export async function handlePolicyPipeline(
 ): Promise<void> {
   const {
     phone, text, conversation, history, customerName, leadCore,
-    pricing, confidenceResult, workflowResult, prevSlotsEarly, parsedData,
+    pricing, confidenceResult, workflowResult, prevSlotsEarly, parsedData, domain,
+    sessionUpdatedAt,
   } = input;
 
   const extractionCtx = input.extractionCtx ?? buildExtractionContext(
@@ -55,6 +62,11 @@ export async function handlePolicyPipeline(
 
   const lang = detectLeadLang(text);
 
+  const hasScheduledAt = extractionCtx?.slots?.scheduled_at?.value != null;
+  const reservationIntents: ReadonlyArray<string> = ["BOOKING", "PRE_BOOKING", "RESCHEDULE"];
+  const isReservationFlow = hasScheduledAt || reservationIntents.includes(leadCore.intent);
+  const mode: Mode = isReservationFlow ? "RESERVA" : "AHORA";
+
   const execCtx: ExecutionContext = {
     phone,
     conversationId: conversation.id,
@@ -65,6 +77,8 @@ export async function handlePolicyPipeline(
     pricing,
     lang,
     intent: leadCore.intent,
+    domain,
+    mode,
   };
   const execDeps: ExecutionDeps = {
     send: sendWhatsAppMessage,
@@ -99,9 +113,54 @@ export async function handlePolicyPipeline(
     return;
   }
 
-  {
-    const session = await getChatSession(phone);
-    if (session?.workflow_state === "awaiting_confirmation" && isAffirmativeMessage(text)) {
+  if (domain === "reservation") {
+    const convState = await getConversationalState(phone);
+
+    if (convState === "awaiting_confirmation" && isNegativeMessage(text)) {
+      const hasNewData = parsedData != null && (
+        parsedData.origin || parsedData.destination ||
+        parsedData.scheduled_at || parsedData.passengers ||
+        parsedData.flight
+      );
+      if (!hasNewData) {
+        log.info("[CONFIRMATION] negative response, cancelling confirmation");
+        const cancelMsg = buildCancellationMessage(lang);
+        await sendWhatsAppMessage(phone, cancelMsg);
+        await insertMessage(conversation.id, "assistant", cancelMsg);
+        await setConversationalState(phone, "idle");
+        await resetChatSession(phone);
+        return;
+      }
+      log.info("[CONFIRMATION] negative with new slot data — treating as correction, not cancellation");
+    }
+
+    if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
+      const session = await getChatSession(phone);
+      if (!session) return;
+      const now = Math.floor(Date.now() / 1000);
+      const sessionAge = sessionUpdatedAt ? now - sessionUpdatedAt : 0;
+      if (sessionAge > CONFIRMATION_TIMEOUT_S) {
+        log.info(`[CONFIRMATION] stale affirmation (${sessionAge}s > ${CONFIRMATION_TIMEOUT_S}s), cancelling`);
+        await setConversationalState(phone, "idle");
+        await resetChatSession(phone);
+        return;
+      }
+      const hasNewSlotData = parsedData != null && (
+        (parsedData.origin && parsedData.origin !== (prevSlotsEarly.origin ?? "")) ||
+        (parsedData.destination && parsedData.destination !== (prevSlotsEarly.destination ?? "")) ||
+        (parsedData.scheduled_at != null && parsedData.scheduled_at !== (prevSlotsEarly.scheduled_at ?? "")) ||
+        (parsedData.passengers != null && prevSlotsEarly.passengers != null && String(parsedData.passengers) !== prevSlotsEarly.passengers) ||
+        (parsedData.flight && parsedData.flight !== (prevSlotsEarly.flight ?? ""))
+      );
+      if (hasNewSlotData) {
+        log.info("[CONFIRMATION] affirmation with new slot data — re-confirming");
+        const confirmMsg = extractionCtx?.tariff?.matched && extractionCtx.tariff.price != null
+          ? buildConfirmationMessage(extractionCtx, lang)
+          : buildNoTariffConfirmation(extractionCtx!, lang);
+        await sendWhatsAppMessage(phone, confirmMsg);
+        await insertMessage(conversation.id, "assistant", confirmMsg);
+        return;
+      }
       let rawSlots: any;
       try { rawSlots = JSON.parse(session.slots || "{}"); } catch { return; }
       const origin = rawSlots.origin || "";
@@ -124,11 +183,38 @@ export async function handlePolicyPipeline(
           history,
           customerName: customerName ?? null,
         }, execDeps);
+        await setConversationalState(phone, "idle");
       } else {
         await resetChatSession(phone);
       }
       return;
     }
+  }
+
+  const isLateral = leadCore.intent === "EMERGENCY" || leadCore.intent === "RESCHEDULE";
+  const originValue = extractionCtx?.slots?.origin?.value;
+  const destValue = extractionCtx?.slots?.destination?.value;
+  const hasOrigin = originValue != null && String(originValue).trim() !== "";
+  const hasDestination = destValue != null && String(destValue).trim() !== "";
+  const hasCompleteRoute = hasOrigin && hasDestination;
+
+  if (mode === "AHORA" && !isLateral && hasCompleteRoute) {
+    const msg = buildNowDispatchResponse(lang);
+    await sendWhatsAppMessage(phone, msg);
+    await insertMessage(conversation.id, "assistant", msg);
+    log.info("[AHORA] dispatch", { phone, origin: originValue, destination: destValue });
+    await executeNowTrip({
+      phone,
+      conversationId: conversation.id,
+      origin: String(originValue),
+      destination: String(destValue),
+      passengers: Number(extractionCtx?.slots?.passengers?.value ?? 1),
+      pricing: pricing && pricing.final_price > 0 ? pricing : undefined,
+      customerName,
+      lang,
+      text,
+    });
+    return;
   }
 
   await processLead(execCtx, execDeps);

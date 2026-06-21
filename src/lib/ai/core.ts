@@ -23,12 +23,12 @@ import { applyLaterals } from "./laterals";
 
 const URGENCY_RE = /\b(ahora|ya|inmediato|urgente|hoy|enseguida)\b/i;
 const QUERY_RE = /\b(cu[aá]nto|cu[aá]l|c[oó]mo|d[oó]nde|qu[eé]|precio|tarifa|cuesta|sale|cu[aá]ndo|a qu[eé] hora)\b/i;
-const ACTION_RE = /\b(agend[ao]|confirm[oa]|reserv[ao]|quiero|necesito|deseo|contrat[ao])\b/i;
+const ACTION_RE = /\b(agend[ao]|confirm[oa]|reserv[ao]|reservar|reservame|quiero|necesito|deseo|contrat[ao])\b/i;
 const PAX_RE = /\b(\d+)\s*(personas?|pax|pasajeros?)\b/i;
 const FLIGHT_RE = /\b(?:vuelo\s*)?([A-Z]{2,3}\s?\d{2,4})\b/i;
 const DATE_RE = /\b(hoy|ma[ñn]ana|pasado\s*ma[ñn]ana|esta\s*semana|pr[oó]xim[oa]s?\s*d[ií]as|el\s+(lunes|martes|mi[ée]rcoles|jueves|viernes|s[aá]bado|domingo)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/i;
 const TIME_RE = /\b(?:a\s*las?\s*)?(\d{1,2}:\d{2}|\d{1,2}\s*(?:hs|horas|h))\b/i;
-const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo)\b/i;
+const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo)(?![a-záéíóúñ])/i;
 
 // 9 nuevos intents — patrones específicos
 const GREETING_RE = /\b(hola|buenas|buen[oa]s?\s*(d[ií]as|tardes|noches)|qu[eé] tal|c[oó]mo est[áa]s|saludos|hey)\b/i;
@@ -40,6 +40,7 @@ const NOW_RE = /\b(ahora|inmediato|urgente|enseguida|lo\s+antes\s+posible|necesi
 const RESCHEDULE_RE = /\b(reprogramar|cambiar\s+(\w+\s+)?(fecha|hora|reserva|viaje|turno)|modificar\s+(\w+\s+)?(reserva|viaje|fecha|hora|turno))\b/i;
 const POST_SERVICE_RE = /\b(gracias\s+por\s+(el\s+)?viaje|excelente\s+servicio|muy\s+bue[nt][ao]|queja|reclamo|devoluci[óo]n|factura|comprobante)\b/i;
 const EMERGENCY_RE = /\b(emergencia|ayuda\b|me\s+pas[óo]\s+algo|no\s+(llega|aparece|viene|encuentro)|chofer\s+no\s+(llega|aparece|viene)|perd[ií]\s+el\s+viaje|estoy\s+varad[ao])\b/i;
+const CONSULTA_RE = /\b(consultar|consulta|informaci[oó]n|info)\b/i;
 
 // Términos de ubicación que el CORE NO extrae como hechos (son ambiguos para el CORE).
 // Definidos en patterns.ts — fuente única.
@@ -113,7 +114,7 @@ function isValueAmbiguous(value: string): boolean {
   return AMBIGUOUS_LOCATION_RE.test(value);
 }
 
-export function core(input: string): CoreDecision {
+export function core(input: string, prevIntent?: Intent): CoreDecision {
   const trimmed = (input ?? "").trim();
   if (!trimmed) {
     return {
@@ -185,6 +186,9 @@ export function core(input: string): CoreDecision {
   const em = trimmed.match(EMERGENCY_RE);
   if (em) facts.push(`emergency:${em[1].toLowerCase()}`);
 
+  const cs = trimmed.match(CONSULTA_RE);
+  if (cs) facts.push(`consulta:${cs[1].toLowerCase()}`);
+
   // detectar estructura sintáctica para role lock.
   const { roleLock, slotStability } = detectStructure(trimmed);
   if (roleLock.origin) facts.push(`origin:${roleLock.origin}`);
@@ -203,17 +207,27 @@ export function core(input: string): CoreDecision {
   }
 
   const intent: Intent = classifyIntent(facts, slotStability);
-  confidence = computeConfidence(facts, intent);
 
-  const lateral = applyLaterals({ intent, facts, confidence, slotStability, roleLock });
-  return { intent, facts, confidence, slotStability, roleLock, lateral };
+  // FASE A3 Capa 2: contexto de intención previa
+  const finalIntent: Intent = (prevIntent && prevIntent !== "AMBIGUOUS" && prevIntent !== "GREETING")
+    ? (intent === "PRE_BOOKING"
+        ? prevIntent
+        : intent === prevIntent && (facts.some(f => f.startsWith("commercial:")) || facts.some(f => f.startsWith("consulta:")))
+          ? "CONSULTA"
+          : intent)
+    : intent;
+
+  confidence = computeConfidence(facts, finalIntent);
+
+  const lateral = applyLaterals({ intent: finalIntent, facts, confidence, slotStability, roleLock });
+  return { intent: finalIntent, facts, confidence, slotStability, roleLock, lateral };
 }
 
 function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Intent {
   const has = (prefix: string) => facts.some((f) => f.startsWith(prefix));
   const hasLocationAmbiguous = has("location_ambiguous:");
 
-  // prioridad estricta de 1 (más alta) a 10 (más baja).
+  // prioridad estricta de 1 (más alta) a 11 (más baja).
 
   // 1. Lateral intents (emergencia, reprogramación, post-servicio)
   if (has("emergency:")) return "EMERGENCY";
@@ -231,7 +245,13 @@ function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Inte
     f.startsWith("location_ambiguous:")
   )) return "GREETING";
 
-  // 3. Continuation signals (affirmation, date, time — was STATEFUL)
+  // 3. Consulta explícita (solo si no hay señales operativas fuertes)
+  if (has("consulta:") && !has("emergency:") && !has("reschedule:") && !has("post_service:") &&
+      !has("booking:") && !has("pre_booking:") && !has("now:") && !has("urgency:")) {
+    return "CONSULTA";
+  }
+
+  // 4. Continuation signals
   // "action:" genérico (como "confirmo") no es señal fuerte de booking nuevo
   if (has("affirmation:") || has("date:") || has("time:")) {
     if (has("booking:") || has("now:") || has("urgency:")) {
@@ -241,7 +261,7 @@ function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Inte
     return "PRE_BOOKING";
   }
 
-  // 4. Ambos roles fijados por sintaxis → booking o now
+  // 5. Ambos roles fijados por sintaxis → booking o now
   if (
     slotStability?.origin &&
     slotStability.origin !== "open" &&
@@ -252,30 +272,30 @@ function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Inte
     return "BOOKING";
   }
 
-  // 5. Señales de acción
+  // 6. Señales de acción
   if (has("now:") || has("urgency:")) return "NOW";
   if (has("booking:")) return "BOOKING";
   if (has("pre_booking:")) return "PRE_BOOKING";
   if (has("action:")) return "BOOKING";
 
-  // 6. Señales de consulta
+  // 7. Señales de consulta
   if (has("commercial:")) return "COMMERCIAL";
   if (has("informational:")) return "INFORMATIONAL";
   if (has("query:")) return "COMMERCIAL";
 
-  // 7. Señales implícitas de booking (pasajeros, vuelo)
+  // 8. Señales implícitas de booking (pasajeros, vuelo)
   if (has("passengers:") || has("flight:")) return "BOOKING";
 
-  // 8. Location ambiguous sin slots concretos → ambiguous (baja prioridad)
+  // 9. Location ambiguous sin slots concretos → consulta
   if (hasLocationAmbiguous && !has("origin:") && !has("destination:")) {
-    return "AMBIGUOUS";
+    return "CONSULTA";
   }
 
-  // 9. Greeting que coexiste con otras señales (fallback)
+  // 10. Greeting que coexiste con otras señales (fallback)
   if (has("greeting:")) return "GREETING";
 
-  // 10. Default
-  return "AMBIGUOUS";
+  // 11. Default — mensaje válido pero sin intención operativa clara
+  return "CONSULTA";
 }
 
 function computeConfidence(facts: string[], intent: Intent): number {
@@ -283,6 +303,7 @@ function computeConfidence(facts: string[], intent: Intent): number {
 
   let base = 0.4;
   if (intent === "GREETING") base = 0.3;
+  if (intent === "CONSULTA") base = 0.4;
   if (intent === "INFORMATIONAL") base = 0.55;
   if (intent === "COMMERCIAL") base = 0.6;
   if (intent === "PRE_BOOKING") base = 0.7;

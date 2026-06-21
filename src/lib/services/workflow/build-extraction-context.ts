@@ -1,12 +1,12 @@
-import type { ExtractionContext, RoleLock, SlotStabilityMap } from "@/lib/ai/types";
+import type { ExtractionContext, RoleLock, SlotStabilityMap, ConversationalState } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
+import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 
 export function buildExtractionContext(
   _parsedData: TripExtraction | undefined,
   confidenceResult: ExtractionResult | undefined,
-  workflowResult: SlotWorkflowContext | undefined,
+  workflowResult: SlotConversationalContext | undefined,
   pricing: PricingResult | undefined,
   roleLock?: RoleLock,
   slotStability?: SlotStabilityMap,
@@ -48,7 +48,7 @@ export function buildExtractionContext(
   return {
     slots,
     overallConfidence: confidenceResult?.overall_confidence ?? 0,
-    workflowState: workflowResult.state,
+    conversationalState: workflowResult.state as ConversationalState,
     clarifyField: workflowResult.clarifyField ?? null,
     askForConfirmation: workflowResult.askForConfirmation ?? false,
     tariff: pricing

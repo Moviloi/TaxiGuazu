@@ -29,7 +29,7 @@ import type { DriverRow, PackagePriceRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
-import { advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver, closeWorkflow } from "@/lib/services/workflow/conversation-workflow";
+import { advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver, closeWorkflow } from "@/lib/services/dispatch/dispatch-workflow";
 import { log } from "@/lib/utils/logger";
 
 export type DispatchLevel = "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver";
@@ -56,9 +56,9 @@ export interface EscalationInput {
 // ── Main entry point (replaces lead.service.ts escalateTrip) ──
 
 export async function executeDispatch(input: DispatchInput): Promise<DispatchResult> {
-  const u = (input.urgency || "").toLowerCase();
+  const isScheduled = input.trip.scheduled_at != null;
 
-  if (u.includes("reserva")) {
+  if (isScheduled) {
     // Nivel 1: Principal
     const principal = await getPrincipalDriver();
     if (principal && principal.status === "active") {
@@ -93,13 +93,8 @@ export async function executeDispatch(input: DispatchInput): Promise<DispatchRes
     return { status: "BROADCASTED", offersSent: 0 };
   }
 
-  if (u.includes("ahora")) {
-    await advanceToWaitingDriver(input.conversationId, input.phone);
-    await broadcastTripToDrivers(input.trip, input.conversationId, input.phone, input.urgency, input.passengers);
-    return { status: "BROADCASTED", offersSent: 0 };
-  }
-
-  // Fallback: broadcast for unknown urgency
+  // Non-scheduled trip → waiting_driver + broadcast
+  await advanceToWaitingDriver(input.conversationId, input.phone);
   await broadcastTripToDrivers(input.trip, input.conversationId, input.phone, input.urgency, input.passengers);
   return { status: "BROADCASTED", offersSent: 0 };
 }
@@ -227,7 +222,7 @@ Precio: $${trip.price_base}${note ? `\n\n${note}` : ""}`;
 
 export async function broadcastTripToDrivers(
   trip: TripRow, convId: number, clientPhone: string,
-  urgency?: string, passengers?: number | null,
+  _urgency?: string, passengers?: number | null,
 ): Promise<void> {
   const country = detectCountry(trip.origin || "");
   const filters: { country?: string; minCapacity?: number; strictMinCapacity?: boolean } = {};
@@ -329,7 +324,7 @@ Ningún chofer tiene un piso menor o igual a $${effectivePayout}. Reasigná manu
     return;
   }
 
-  const shiftClass = tripShiftClass(urgency || "");
+  const shiftClass = tripShiftClass(trip.scheduled_at);
   const pref = shiftClass ? await getClientPreferredDriver(clientPhone) : null;
 
   if (shiftClass) {
@@ -376,9 +371,9 @@ Ningún chofer activo en este turno. Reenviá manualmente.`);
     return (b.acceptance_score || 0) - (a.acceptance_score || 0);
   });
 
-  const uLower = (urgency || "").toLowerCase();
-  const icon = uLower.includes("reserva") || uLower.includes("semana") || uLower.includes("proximo") || uLower.includes("lunes") || uLower.includes("martes") ? "📅" : "🚕";
-  const label = uLower.includes("reserva") ? "RESERVA" : uLower.includes("consulta") ? "CONSULTA" : "VIAJE DISPONIBLE";
+  const isScheduled = trip.scheduled_at != null;
+  const icon = isScheduled ? "📅" : "🚕";
+  const label = isScheduled ? "RESERVA" : "VIAJE DISPONIBLE";
   const shiftInfo = shiftClass ? `\n${shiftLabel(shiftClass)}` : "";
   const pkgInfo = packageLabel ? `\n${packageLabel}` : "";
   const schInfo = scheduledLabel(trip);
@@ -421,9 +416,8 @@ function detectCountry(origin: string): string {
   return "AR";
 }
 
-function tripShiftClass(urgency: string): "day" | "night" | null {
-  const u = urgency.toLowerCase();
-  if (u.includes("consulta") || u.includes("reserva")) return null;
+function tripShiftClass(scheduledAt?: number | null): "day" | "night" | null {
+  if (scheduledAt != null) return null;
   const hour = new Date().getHours();
   return hour >= 6 && hour < 18 ? "day" : "night";
 }

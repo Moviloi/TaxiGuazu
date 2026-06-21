@@ -33,7 +33,7 @@ vi.mock("@/lib/services/admin/admin.service", () => ({
   notifyAdmin: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/services/workflow/conversation-workflow", () => ({
+vi.mock("@/lib/services/dispatch/dispatch-workflow", () => ({
   advanceToNivel1: vi.fn().mockResolvedValue(undefined),
   advanceToNivel2: vi.fn().mockResolvedValue(undefined),
   advanceToNivel3: vi.fn().mockResolvedValue(undefined),
@@ -55,7 +55,7 @@ import type { TripRow, DriverRow } from "@/lib/db/types";
 import { getAvailableDrivers, getPrincipalDriver, getDriverExpiry, getPrincipal2Driver, getActiveTripByPhone, getConnectionValueFlag, findTariff, setConnectionValue, setConnectionFlag, deleteConnectionKey, updateTripState, getConnectionCache, incrementOfferReceived, getActiveTripsByClient, getTariffById } from "@/lib/db/database";
 import { sendInteractiveButtons, sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
-import { advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver, closeWorkflow } from "@/lib/services/workflow/conversation-workflow";
+import { advanceToNivel1, advanceToNivel2, advanceToNivel3, advanceToWaitingDriver, closeWorkflow } from "@/lib/services/dispatch/dispatch-workflow";
 
 function makeTrip(overrides: Partial<TripRow> = {}): TripRow {
   return {
@@ -97,13 +97,13 @@ describe("executeDispatch", () => {
     vi.clearAllMocks();
   });
 
-  it("reserva: principal active → OFFERED nivel 1", async () => {
+  it("scheduled trip → principal active → OFFERED nivel 1", async () => {
     const principal = makeDriver({ phone: "principal1", is_principal: 1 });
     vi.mocked(getPrincipalDriver).mockResolvedValue(principal);
     vi.mocked(getDriverExpiry).mockResolvedValue({ active: true, expiresAt: null });
 
     const result = await executeDispatch({
-      conversationId: 1, phone: "+54911", trip: makeTrip(), urgency: "reserva", passengers: 2,
+      conversationId: 1, phone: "+54911", trip: makeTrip({ scheduled_at: Math.floor(Date.now() / 1000) + 86400 }), urgency: "ahora", passengers: 2,
     });
 
     expect(result).toEqual({ status: "OFFERED", offersSent: 1 });
@@ -112,14 +112,14 @@ describe("executeDispatch", () => {
     expect(incrementOfferReceived).toHaveBeenCalledWith("principal1");
   });
 
-  it("reserva: principal expired → principal2 active → OFFERED nivel 2", async () => {
+  it("scheduled trip: principal expired → principal2 active → OFFERED nivel 2", async () => {
     vi.mocked(getPrincipalDriver).mockResolvedValue(makeDriver({ phone: "p1", status: "active" }));
     vi.mocked(getDriverExpiry).mockResolvedValueOnce({ active: false, expiresAt: null });
     vi.mocked(getPrincipal2Driver).mockResolvedValue(makeDriver({ phone: "p2" }));
     vi.mocked(getDriverExpiry).mockResolvedValueOnce({ active: true, expiresAt: null });
 
     const result = await executeDispatch({
-      conversationId: 1, phone: "+54911", trip: makeTrip(), urgency: "reserva", passengers: 2,
+      conversationId: 1, phone: "+54911", trip: makeTrip({ scheduled_at: Math.floor(Date.now() / 1000) + 86400 }), urgency: "ahora", passengers: 2,
     });
 
     expect(result).toEqual({ status: "OFFERED", offersSent: 1 });
@@ -127,18 +127,18 @@ describe("executeDispatch", () => {
     expect(incrementOfferReceived).toHaveBeenCalledWith("p2");
   });
 
-  it("reserva: both principals unavailable → BROADCASTED nivel 3", async () => {
+  it("scheduled trip: both principals unavailable → BROADCASTED nivel 3", async () => {
     vi.mocked(getPrincipalDriver).mockResolvedValue(makeDriver({ phone: "p1", status: "inactive" }));
     vi.mocked(getPrincipal2Driver).mockResolvedValue(null);
 
     const result = await executeDispatch({
-      conversationId: 1, phone: "+54911", trip: makeTrip(), urgency: "reserva", passengers: 2,
+      conversationId: 1, phone: "+54911", trip: makeTrip({ scheduled_at: Math.floor(Date.now() / 1000) + 86400 }), urgency: "ahora", passengers: 2,
     });
     expect(result).toEqual({ status: "BROADCASTED", offersSent: 0 });
     expect(advanceToNivel3).toHaveBeenCalledWith(1, "+54911");
   });
 
-  it("ahora → BROADCASTED waiting_driver", async () => {
+  it("non-scheduled trip → BROADCASTED waiting_driver", async () => {
     const result = await executeDispatch({
       conversationId: 1, phone: "+54911", trip: makeTrip(), urgency: "ahora", passengers: 2,
     });
@@ -146,11 +146,12 @@ describe("executeDispatch", () => {
     expect(advanceToWaitingDriver).toHaveBeenCalledWith(1, "+54911");
   });
 
-  it("unknown urgency → broadcasts as fallback", async () => {
+  it("non-scheduled trip without urgency → BROADCASTED waiting_driver", async () => {
     const result = await executeDispatch({
       conversationId: 1, phone: "+54911", trip: makeTrip(), urgency: "consulta", passengers: 2,
     });
     expect(result).toEqual({ status: "BROADCASTED", offersSent: 0 });
+    expect(advanceToWaitingDriver).toHaveBeenCalledWith(1, "+54911");
   });
 });
 

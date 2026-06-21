@@ -27,7 +27,7 @@ vi.mock("@/lib/db/database", () => ({
   cleanupOldLearningRecords: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("@/lib/services/workflow/conversation-workflow", () => ({
+vi.mock("@/lib/services/dispatch/dispatch-workflow", () => ({
   getExpiredByState: vi.fn().mockResolvedValue([]),
   closeWorkflow: vi.fn().mockResolvedValue(undefined),
 }));
@@ -52,7 +52,7 @@ vi.mock("@/lib/services/trip-execution/survey.service", () => ({
 import { checkTimeouts } from "@/lib/services/housekeeping/timeouts";
 import { sendPendingSurveys } from "@/lib/services/trip-execution/survey.service";
 import { executeEscalation } from "@/lib/services/dispatch/dispatch.service";
-import { getExpiredByState } from "@/lib/services/workflow/conversation-workflow";
+import { getExpiredByState } from "@/lib/services/dispatch/dispatch-workflow";
 import {
   getTripsByScheduledAtWindow, getDriverByPhone, setConnectionFlag,
   getConnectionValueFlag, getTripsPendingCloseOut, getTripsWithMissingCommission,

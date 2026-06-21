@@ -1,16 +1,20 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { insertMessage, getChatSession, upsertChatSession } from "@/lib/db/database";
+import { insertMessage, getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
 import { parseRouteFromText } from "@/lib/services/extraction/regex-extractor";
-import { buildSlotClarify } from "@/lib/ai/response-builder";
+import { buildSlotClarify, buildCancellationMessage } from "@/lib/ai/response-builder";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
 import type { TripExtraction, ExtractionResult as ExtractionSchemaResult } from "@/lib/ai/extraction-schema";
-import type { SlotWorkflowContext } from "@/lib/services/workflow/slot-workflow";
+import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import { evaluateWorkflowTransition } from "@/lib/services/workflow/slot-workflow";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import { assertCoreRouterPolicy } from "@/lib/ai/guard";
-import type { CoreDecision } from "@/lib/ai/types";
+import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
+import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
+import type { CoreDecision, ConfidenceMap } from "@/lib/ai/types";
+import { mapIntentToDomain } from "@/lib/ai/domain";
 import { calculateSlotConfidence } from "@/lib/services/extraction/confidence";
+import { buildConfidenceMap } from "@/lib/services/extraction/confidence-map";
 import { loadContext, mergeContext } from "@/lib/services/memory/context-memory";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
@@ -21,7 +25,7 @@ import { log } from "@/lib/utils/logger";
 interface FallbackExtractionResult {
   pricing: PricingResult;
   confidenceResult: ExtractionSchemaResult;
-  workflowResult: SlotWorkflowContext;
+  workflowResult: SlotConversationalContext;
   extractionNote: string;
 }
 
@@ -92,7 +96,7 @@ async function tryFallbackExtraction(
 
 export interface ExtractionResult {
   extractionNote?: string;
-  workflowResult?: SlotWorkflowContext;
+  workflowResult?: SlotConversationalContext;
   parsed?: { success: true; data: TripExtraction } | { success: false; error: any };
   confidenceResult?: ExtractionSchemaResult;
   pricing?: PricingResult;
@@ -108,7 +112,7 @@ export async function runExtractionPipeline(
   customerName: string | null,
 ): Promise<ExtractionResult | null> {
   let extractionNote: string | undefined;
-  let workflowResult: SlotWorkflowContext | undefined;
+  let workflowResult: SlotConversationalContext | undefined;
   let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
   let confidenceResult: ExtractionSchemaResult | undefined;
   let pricing: PricingResult | undefined;
@@ -142,13 +146,41 @@ export async function runExtractionPipeline(
       raw: raw ? JSON.stringify(raw).substring(0, 200) : null,
     });
 
-    const completeness = evaluateCompleteness(raw);
-    if (completeness.status === "ASK") {
-      const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
-      log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
-      await sendWhatsAppMessage(phone, msg);
-      await insertMessage(conversationId, "assistant", msg);
-      return null;
+    const domain = mapIntentToDomain(leadCore.intent);
+    const convState = await getConversationalState(phone);
+    if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
+      log.info("[COMPLETENESS] awaiting_confirmation + affirmation: skipping completeness");
+    } else if (convState === "awaiting_confirmation" && isNegativeMessage(text)) {
+      const hasNewData = raw != null && Object.keys(raw).some(k => raw[k] != null && String(raw[k]).trim() !== "");
+      if (hasNewData) {
+        log.info("[CONFIRMATION] negative with new slot data — treating as correction, not cancellation");
+        const completeness = evaluateCompleteness(raw, domain);
+        if (completeness.status === "ASK") {
+          const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
+          log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
+          await sendWhatsAppMessage(phone, msg);
+          await insertMessage(conversationId, "assistant", msg);
+          return null;
+        }
+      } else {
+        log.info("[CONFIRMATION] negative response, cancelling confirmation");
+        const lang = detectLeadLang(text);
+        const cancelMsg = buildCancellationMessage(lang);
+        await sendWhatsAppMessage(phone, cancelMsg);
+        await insertMessage(conversationId, "assistant", cancelMsg);
+        await setConversationalState(phone, "idle");
+        await resetChatSession(phone);
+        return null;
+      }
+    } else {
+      const completeness = evaluateCompleteness(raw, domain);
+      if (completeness.status === "ASK") {
+        const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
+        log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
+        await sendWhatsAppMessage(phone, msg);
+        await insertMessage(conversationId, "assistant", msg);
+        return null;
+      }
     }
 
     if (raw) {
@@ -226,10 +258,13 @@ export async function runExtractionPipeline(
           confByField[k] = v.score;
         }
 
+        const confidenceMap: ConfidenceMap = buildConfidenceMap(leadCore, confidenceResult, parsed.data);
+        const mergedConfidence = { ...confByField, ...confidenceMap };
+
         const mergedWithMemory = mergeContext(mergedSlotsForDb, ctxMemory, confidenceResult.overall_confidence);
         log.info("[CONTEXT] merge completado:", Object.keys(mergedWithMemory).join(", "));
 
-        await upsertChatSession(phone, mergedWithMemory, confByField, workflowResult.state, workflowResult.clarifyField ?? undefined);
+        await upsertChatSession(phone, mergedWithMemory, mergedConfidence, workflowResult.state, workflowResult.clarifyField ?? undefined);
 
         extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing);
         log.info("[EXTRACTION] extractionNote generado, len:", extractionNote.length);

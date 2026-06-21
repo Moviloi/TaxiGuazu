@@ -1,14 +1,14 @@
 // ARCHITECTURE NOTE (Phase D): Dispatch domain — semi-frozen.
-// Deeply coupled to admin.service.ts (frozen) and conversation-workflow.ts (semi-frozen).
+// Deeply coupled to admin.service.ts (frozen) and @/lib/services/dispatch/dispatch-workflow (semi-frozen).
 // Imports dispatch internals (driver tiers, workflow transitions) from frozen modules.
 // Future: consolidate dispatch orchestration into a single dispatch.service.ts.
 
 import {
-  getWorkflow,
+  getDispatchWorkflow,
   advanceToNivel1,
   advanceToWaitingDriver,
   assignWorkflowAtomic,
-} from "@/lib/services/workflow/conversation-workflow";
+} from "@/lib/services/dispatch/dispatch-workflow";
 import {
   getActiveTripByPhone,
   getDriverByPhone,
@@ -60,7 +60,7 @@ export async function handleDriverResponse(
 ): Promise<void> {
   if (!isAccepting(groupMsg)) return;
 
-  const workflow = await getWorkflow(convId);
+  const workflow = await getDispatchWorkflow(convId);
   if (!workflow) return;
   const validStates = ["nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
   if (!validStates.includes(workflow.state)) return;
@@ -86,7 +86,7 @@ Tu chofer está llegando al destino. Que tengas un buen viaje!`);
 }
 
 export async function handleDriverEnViaje(convId: number, driverPhone: string): Promise<void> {
-  const workflow = await getWorkflow(convId);
+  const workflow = await getDispatchWorkflow(convId);
   if (!workflow) return;
 
   const trip = await getActiveTripByPhone(workflow.phone);
@@ -102,7 +102,7 @@ ${driverName} está en camino. Que tengas un buen viaje!`);
 }
 
 export async function handleDriverCompleted(convId: number, driverPhone: string): Promise<void> {
-  const workflow = await getWorkflow(convId);
+  const workflow = await getDispatchWorkflow(convId);
   if (!workflow) return;
 
   const trip = await getActiveTripByPhone(workflow.phone);
@@ -160,7 +160,7 @@ ${roleLine ? roleLine.trimStart() : ""}
 }
 
 export async function handleDriverButtonAccept(convId: number, driverPhone: string): Promise<void> {
-  const workflow = await getWorkflow(convId);
+  const workflow = await getDispatchWorkflow(convId);
   if (!workflow) return;
   const validStates = ["nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
   if (!validStates.includes(workflow.state)) return;

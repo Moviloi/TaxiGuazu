@@ -1,9 +1,18 @@
+import type { ConversationDomain } from "@/lib/ai/types";
+
 export interface CompletenessResult {
   status: "ASK" | "COMPLETE";
   field?: "origin" | "destination";
 }
 
-export function evaluateCompleteness(slots: Record<string, any> | null | undefined): CompletenessResult {
+export function evaluateCompleteness(
+  slots: Record<string, any> | null | undefined,
+  domain?: ConversationDomain,
+): CompletenessResult {
+  if (domain === "information") {
+    return { status: "COMPLETE" };
+  }
+
   const origin = slots?.origin;
   const destination = slots?.destination;
 
