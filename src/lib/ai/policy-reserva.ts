@@ -8,7 +8,7 @@
 // ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
 // estructura de ruta turística.
 
-import { buildGenericClarify, buildGenericSafeFallback, inferMissingFieldFromCore, buildPriceInfo } from "./response-builder";
+import { buildGenericClarify, buildGenericSafeFallback, inferMissingFieldFromCore, buildPriceInfo, buildAmbiguousLocationConfirm } from "./response-builder";
 import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
 
@@ -199,6 +199,20 @@ function buildReservaFinalResponse(
 
   if (decision.decision === "CLARIFY") {
     const field = inferMissingFieldFromCore(decision);
+    if (field === "location_ambiguous") {
+      const hasOrigin = decision.core.facts.some(f => f.startsWith("origin:"));
+      const hasDest = decision.core.facts.some(f => f.startsWith("destination:"));
+      if (hasOrigin && hasDest) {
+        const originRaw = decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":") ?? "";
+        const destRaw = decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":") ?? "";
+        const resolvedOrigin = extraction?.slots?.origin?.value ?? originRaw;
+        const resolvedDest = extraction?.slots?.destination?.value ?? destRaw;
+        return {
+          finalResponse: buildAmbiguousLocationConfirm(String(resolvedOrigin), String(resolvedDest), lang),
+          nextExpectedFields: ["location_ambiguous"],
+        };
+      }
+    }
     return {
       finalResponse: buildGenericClarify(field, lang),
       nextExpectedFields: field ? [field] : [],
@@ -375,9 +389,16 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): stri
   const originStr = withDefiniteArticle(String(origin), lang);
   const destStr = withDefiniteArticle(String(destination), lang);
   const destStrRaw = String(destination).trim();
+  const originReason = extraction.slots.origin?.reason;
   const destReason = extraction.slots.destination?.reason;
+  const originIsAmbiguous =
+    originReason === "ambiguous_term" || AMBIGUOUS_LOCATION_RE.test(String(origin));
   const destIsAmbiguous =
     destReason === "ambiguous_term" || AMBIGUOUS_LOCATION_RE.test(destStrRaw);
+
+  if (originIsAmbiguous || destIsAmbiguous) {
+    return buildAmbiguousLocationConfirm(String(origin), String(destination), lang);
+  }
 
   if (lang === "en") {
     const askAddress = destIsAmbiguous ? `, and what's the exact address in ${destStrRaw}` : "";

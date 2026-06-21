@@ -21,9 +21,9 @@ export function buildGreeting(lang: Lang, customerName?: string): string {
 
 export function inferMissingFieldFromCore(decision: FinalDecision): string | null {
   const facts = decision.core.facts;
-  if (facts.includes("location_ambiguous:true")) return "location_ambiguous";
   if (!facts.some((f) => f.startsWith("origin:"))) return "origin";
   if (!facts.some((f) => f.startsWith("destination:"))) return "destination";
+  if (facts.includes("location_ambiguous:true")) return "location_ambiguous";
   if (!facts.some((f) => f.startsWith("time:")) && !facts.some((f) => f.startsWith("date:"))) return "time";
   if (!facts.some((f) => f.startsWith("passengers:"))) return "passengers";
   return null;
@@ -203,4 +203,10 @@ export function buildNowDispatchResponse(lang: Lang): string {
   if (lang === "en") return "Looking for an available driver for your trip. We'll notify you when someone picks it up.";
   if (lang === "pt") return "Procurando um motorista disponível para sua corrida. Avisamos quando alguém aceitar.";
   return "Buscando chofer disponible para tu viaje. Te avisamos cuando alguien tome el servicio.";
+}
+
+export function buildAmbiguousLocationConfirm(origin: string, dest: string, lang: Lang): string {
+  if (lang === "en") return `Just to confirm: from ${origin} to ${dest}. Could you give me the exact addresses?`;
+  if (lang === "pt") return `Só para confirmar: de ${origin} para ${dest}. Pode me passar os endereços exatos?`;
+  return `Solo para confirmar: de ${origin} a ${dest}. ¿Podés darme las direcciones exactas?`;
 }

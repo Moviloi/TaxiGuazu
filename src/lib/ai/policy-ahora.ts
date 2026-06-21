@@ -2,7 +2,7 @@
 // policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic, inferencia geográfica, generación libre.
 
-import { inferMissingFieldFromCore, buildGreeting, buildNowDispatchResponse, buildPriceInfo } from "./response-builder";
+import { inferMissingFieldFromCore, buildGreeting, buildNowDispatchResponse, buildPriceInfo, buildAmbiguousLocationConfirm } from "./response-builder";
 import {
   buildLateralEmergencyResponse,
   buildLateralRescheduleResponse,
@@ -84,6 +84,15 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
     case "CLARIFY": {
       const field = inferMissingFieldFromCore(decision);
       if (field === "location_ambiguous") {
+        const hasOrigin = decision.core.facts.some(f => f.startsWith("origin:"));
+        const hasDest = decision.core.facts.some(f => f.startsWith("destination:"));
+        if (hasOrigin && hasDest) {
+          const originRaw = decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":") ?? "";
+          const destRaw = decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":") ?? "";
+          const resolvedOrigin = ctx?.extraction?.slots?.origin?.value ?? originRaw;
+          const resolvedDest = ctx?.extraction?.slots?.destination?.value ?? destRaw;
+          return buildAmbiguousLocationConfirm(String(resolvedOrigin), String(resolvedDest), lang);
+        }
         if (lang === "en") return `${greet}, which specific place and time do you need the ride?`;
         if (lang === "pt") return `${greet}, qual local específico e que horas você precisa da corrida?`;
         return `${greet}, ¿qué lugar específico y a qué hora necesitás el viaje?`;
