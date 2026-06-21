@@ -2,6 +2,7 @@ import type { ExtractionContext, RoleLock, SlotStabilityMap, ConversationalState
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
+import { log } from "@/lib/utils/logger";
 
 export function buildExtractionContext(
   _parsedData: TripExtraction | undefined,
@@ -12,7 +13,20 @@ export function buildExtractionContext(
   slotStability?: SlotStabilityMap,
   prevSlots?: Record<string, string>,
 ): ExtractionContext | undefined {
-  if (!workflowResult) return undefined;
+  // CAMBIO 3: No perder contexto por workflowResult undefined.
+  // Crear contexto mínimo en vez de retornar undefined, para que la policy
+  // pueda continuar con clarificación en vez de caer al EXECUTE genérico.
+  let effectiveWorkflow = workflowResult;
+  if (!effectiveWorkflow) {
+    log.warn("[EXTRACTION] workflowResult undefined, creating default collecting_slots context");
+    effectiveWorkflow = {
+      state: "collecting_slots",
+      clarifyField: null,
+      overallConfidence: confidenceResult?.overall_confidence ?? 0,
+      action: (confidenceResult?.action ?? "clarify") as ExtractionResult["action"],
+      askForConfirmation: false,
+    } as SlotConversationalContext;
+  }
 
   const slots: Record<string, { value: string | number | null; score: number; reason: string }> = {};
   if (prevSlots) {
@@ -30,14 +44,15 @@ export function buildExtractionContext(
     }
   }
 
-  if (roleLock?.origin) {
+  // CAMBIO 4: RoleLock solo actúa como fallback, no sobrescribe alias resueltos
+  if (roleLock?.origin && (!slots.origin || slots.origin.score === 0)) {
     slots.origin = {
       value: roleLock.origin,
       score: 1.0,
       reason: "core_role_lock",
     };
   }
-  if (roleLock?.destination) {
+  if (roleLock?.destination && (!slots.destination || slots.destination.score === 0)) {
     slots.destination = {
       value: roleLock.destination,
       score: 1.0,
@@ -48,9 +63,9 @@ export function buildExtractionContext(
   return {
     slots,
     overallConfidence: confidenceResult?.overall_confidence ?? 0,
-    conversationalState: workflowResult.state as ConversationalState,
-    clarifyField: workflowResult.clarifyField ?? null,
-    askForConfirmation: workflowResult.askForConfirmation ?? false,
+    conversationalState: effectiveWorkflow.state as ConversationalState,
+    clarifyField: effectiveWorkflow.clarifyField ?? null,
+    askForConfirmation: effectiveWorkflow.askForConfirmation ?? false,
     tariff: pricing
       ? {
           matched: pricing.final_price > 0,

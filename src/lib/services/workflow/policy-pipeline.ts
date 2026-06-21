@@ -9,7 +9,7 @@ import { buildOpportunityNoPricingMessage, formatOpportunityResponse, buildCance
 import { handleMessage } from "@/lib/ai/handler";
 import { saveContext } from "@/lib/services/memory/context-memory";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
-import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
+import { isAffirmativeMessage, isNegativeMessage, AMBIGUOUS_LOCATION_RE } from "@/lib/ai/patterns";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
@@ -63,8 +63,11 @@ export async function handlePolicyPipeline(
   const lang = detectLeadLang(text);
 
   const hasScheduledAt = extractionCtx?.slots?.scheduled_at?.value != null;
-  const reservationIntents: ReadonlyArray<string> = ["BOOKING", "PRE_BOOKING", "RESCHEDULE"];
-  const isReservationFlow = hasScheduledAt || reservationIntents.includes(leadCore.intent);
+  const hasFutureSignal = hasScheduledAt ||
+    leadCore.facts.some(f => f.startsWith("date:") || f.startsWith("time:"));
+  const explicitReservation: ReadonlyArray<string> = ["PRE_BOOKING", "RESCHEDULE"];
+  // BOOKING sin señal temporal futura → candidato AHORA, no RESERVA
+  const isReservationFlow = hasFutureSignal || explicitReservation.includes(leadCore.intent);
   const mode: Mode = isReservationFlow ? "RESERVA" : "AHORA";
 
   const execCtx: ExecutionContext = {
@@ -198,7 +201,14 @@ export async function handlePolicyPipeline(
   const hasDestination = destValue != null && String(destValue).trim() !== "";
   const hasCompleteRoute = hasOrigin && hasDestination;
 
-  if (mode === "AHORA" && !isLateral && hasCompleteRoute) {
+  // AHORA short-circuit: solo despachar si NO hay ambigüedad en ubicaciones
+  const hasAmbiguity = leadCore.facts.includes("location_ambiguous:true") ||
+    extractionCtx?.slots?.origin?.reason === "ambiguous_term" ||
+    extractionCtx?.slots?.destination?.reason === "ambiguous_term" ||
+    (originValue != null && (extractionCtx?.slots?.origin?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(originValue))) ||
+    (destValue != null && (extractionCtx?.slots?.destination?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(destValue)));
+
+  if (mode === "AHORA" && !isLateral && hasCompleteRoute && !hasAmbiguity) {
     const msg = buildNowDispatchResponse(lang);
     await sendWhatsAppMessage(phone, msg);
     await insertMessage(conversation.id, "assistant", msg);

@@ -12,7 +12,7 @@
 // Total: 18 tests
 //
 // route() recibe PolicyDecision, retorna RouteResult | null.
-// router() legacy mantiene backward compat.
+// router() recibe CoreDecision + Mode, retorna FinalDecision.
 
 import { core } from "@/lib/ai/core";
 import { applyPolicy } from "@/lib/ai/policy";
@@ -156,31 +156,34 @@ console.log("\n=== IGNORE ===");
   ok("T060 IGNORE no handler", r === null);
 }
 
-// ── REGRESSION: router legacy backward compat ──
+// ── REGRESSION: router contract (FASE A1) ──
 console.log("\n=== REGRESSION ===");
 {
-  const r = router("hola", "RESERVA");
-  check("T070 router() still works (greeting)", r.mode, "RESERVA");
+  const c = core("hola");
+  const r = router(c, "RESERVA");
+  check("T070 router greeting mode", r.mode, "RESERVA");
   ok("T070 has core", !!r.core);
   ok("T070 has decision", !!r.decision);
   ok("T070 has reason", !!r.reason);
-  check("T070 reason does NOT contain intent", r.reason.includes("intent="), false);
-  check("T070 reason uses action", r.reason.startsWith("action="), true);
+  check("T070 greeting → CLARIFY", r.decision, "CLARIFY");
 }
 {
-  const r = router("emergencia", "RESERVA");
+  const c = core("emergencia");
+  const r = router(c, "RESERVA");
   check("T071 router emergency", r.decision, "EXECUTE");
-  check("T071 reason", r.reason.includes("ESCALATE_EMERGENCY"), true);
+  check("T071 reason", r.reason.includes("EMERGENCY"), true);
 }
 {
-  const r = router("quiero reservar un viaje para mañana", "RESERVA");
+  const c = core("quiero reservar un viaje para mañana");
+  const r = router(c, "RESERVA");
   check("T072 router booking", r.decision, "EXECUTE");
-  check("T072 reason", r.reason.includes("PROCEED_BOOKING"), true);
+  check("T072 reason", r.reason.includes("BOOKING"), true);
 }
 {
-  const r = router("gracias por el viaje", "RESERVA");
+  const c = core("gracias por el viaje");
+  const r = router(c, "RESERVA");
   check("T073 router post service", r.decision, "ANSWER");
-  check("T073 reason", r.reason.includes("POST_SERVICE_HANDLE"), true);
+  check("T073 reason", r.reason.includes("POST_SERVICE"), true);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

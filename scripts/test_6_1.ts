@@ -210,65 +210,113 @@ console.log("\n=== REGRESSION ===");
   check("T083 intent a las 15hs", c.intent, "PRE_BOOKING");
   checkConfidence("T083 confidence", c.confidence, 0.6);
 }
+// ── UNIT TESTS: CONSULTA ──
+console.log("\n=== CONSULTA ===");
+{
+  const c = core("quiero consultar");
+  check("T090 intent consultar", c.intent, "CONSULTA");
+  checkConfidence("T090 confidence", c.confidence, 0.4);
+}
 {
   const c = core("aeropuerto");
-  check("T084 intent aeropuerto alone", c.intent, "AMBIGUOUS");
+  check("T091 intent aeropuerto alone", c.intent, "CONSULTA");
 }
 
-// ── INTEGRATION TESTS: router via PolicyDecision (FASE 6.4) ──
+// ── INTEGRATION TESTS: router (FASE A1) ──
 console.log("\n=== ROUTER ===");
 {
-  // FASE 6.4: router ya no usa intent. Usa PolicyDecision.action.
-  const r = router("hola", "RESERVA");
-  check("T100 GREETING → SMALLTALK → CLARIFY", r.decision, "CLARIFY");
+  const c = core("hola");
+  const r = router(c, "RESERVA");
+  check("T100 GREETING → CLARIFY", r.decision, "CLARIFY");
 }
 {
-  const r = router("qué horarios tienen", "RESERVA");
-  check("T101 INFORMATIONAL → fallback → CLARIFY", r.decision, "CLARIFY");
+  const c = core("qué horarios tienen");
+  const r = router(c, "RESERVA");
+  check("T101 INFORMATIONAL → ANSWER", r.decision, "ANSWER");
 }
 {
-  const r = router("cuánto sale un viaje", "RESERVA");
-  check("T102 COMMERCIAL → fallback → CLARIFY", r.decision, "CLARIFY");
+  const c = core("cuánto sale un viaje");
+  const r = router(c, "RESERVA");
+  check("T102 COMMERCIAL → ANSWER", r.decision, "ANSWER");
 }
 {
-  const r = router("estoy viendo un viaje", "RESERVA");
-  check("T103 PRE_BOOKING → fallback → CLARIFY", r.decision, "CLARIFY");
+  const c = core("estoy viendo un viaje");
+  const r = router(c, "RESERVA");
+  check("T103 PRE_BOOKING → EXECUTE", r.decision, "EXECUTE");
 }
 {
-  const r = router("estoy viendo un viaje", "AHORA");
-  check("T104 PRE_BOOKING AHORA → fallback → CLARIFY", r.decision, "CLARIFY");
+  const c = core("estoy viendo un viaje");
+  const r = router(c, "AHORA");
+  check("T104 PRE_BOOKING AHORA → EXECUTE", r.decision, "EXECUTE");
+  check("T104 mode AHORA", r.mode, "AHORA");
 }
 {
-  const r = router("quiero reservar un viaje", "RESERVA");
-  check("T105 BOOKING → PROCEED_BOOKING → EXECUTE", r.decision, "EXECUTE");
+  const c = core("quiero reservar un viaje");
+  const r = router(c, "RESERVA");
+  check("T105 BOOKING → EXECUTE", r.decision, "EXECUTE");
 }
 {
-  const r = router("necesito un viaje ahora urgente", "RESERVA");
-  check("T106 NOW sin ruta → CLARIFY", r.decision, "CLARIFY");
+  const c = core("necesito un viaje ahora urgente");
+  const r = router(c, "RESERVA");
+  check("T106 NOW → EXECUTE", r.decision, "EXECUTE");
 }
 {
-  const r = router("quiero cambiar mi reserva", "RESERVA");
-  check("T107 RESCHEDULE → fallback → CLARIFY", r.decision, "CLARIFY");
+  const c = core("quiero cambiar mi reserva");
+  const r = router(c, "RESERVA");
+  check("T107 RESCHEDULE → EXECUTE", r.decision, "EXECUTE");
 }
 {
-  const r = router("gracias por el viaje", "RESERVA");
-  check("T108 POST_SERVICE → POST_SERVICE_HANDLE → ANSWER", r.decision, "ANSWER");
+  const c = core("gracias por el viaje");
+  const r = router(c, "RESERVA");
+  check("T108 POST_SERVICE → ANSWER", r.decision, "ANSWER");
 }
 {
-  const r = router("ayuda no encuentro al chofer", "RESERVA");
-  check("T109 EMERGENCY → ESCALATE_EMERGENCY → EXECUTE", r.decision, "EXECUTE");
+  const c = core("ayuda no encuentro al chofer");
+  const r = router(c, "RESERVA");
+  check("T109 EMERGENCY → EXECUTE", r.decision, "EXECUTE");
 }
 {
-  const r = router("xyz123", "RESERVA");
-  check("T110 FLIGHT → BOOKING → PROCEED_BOOKING → EXECUTE", r.decision, "EXECUTE");
+  const c = core("xyz123");
+  const r = router(c, "RESERVA");
+  check("T110 FLIGHT → BOOKING → EXECUTE", r.decision, "EXECUTE");
 }
 {
-  const r = router("estoy en el aeropuerto quiero ir al centro", "RESERVA");
-  check("T111 BOOKING con ruta → PROCEED_BOOKING → EXECUTE", r.decision, "EXECUTE");
+  const c = core("estoy en el aeropuerto quiero ir al centro");
+  const r = router(c, "RESERVA");
+  check("T111 BOOKING con ruta → EXECUTE", r.decision, "EXECUTE");
 }
 {
-  const r = router("sí confirmo", "RESERVA");
-  check("T112 PRE_BOOKING → fallback → CLARIFY", r.decision, "CLARIFY");
+  const c = core("sí confirmo");
+  const r = router(c, "RESERVA");
+  check("T112 PRE_BOOKING → EXECUTE", r.decision, "EXECUTE");
+}
+{
+  const c = core("consultar");
+  const r = router(c, "RESERVA");
+  check("T113 CONSULTA → CLARIFY", r.decision, "CLARIFY");
+}
+
+// ── FASE A3 Capa 2: contexto de intención previa ──
+console.log("\n=== CONTEXT INHERITANCE ===");
+{
+  const c = core("sí", "BOOKING");
+  check("T120 BOOKING + sí → BOOKING", c.intent, "BOOKING");
+}
+{
+  const c = core("mañana", "CONSULTA");
+  check("T121 CONSULTA + mañana → CONSULTA", c.intent, "CONSULTA");
+}
+{
+  const c = core("solo quiero saber precio", "BOOKING");
+  check("T122 BOOKING + solo precio → CONSULTA", c.intent, "CONSULTA");
+}
+{
+  const c = core("sí");
+  check("T123 sí sin contexto → PRE_BOOKING", c.intent, "PRE_BOOKING");
+}
+{
+  const c = core("sí", "AMBIGUOUS");
+  check("T124 sí + AMBIGUOUS prev → PRE_BOOKING (no hereda)", c.intent, "PRE_BOOKING");
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

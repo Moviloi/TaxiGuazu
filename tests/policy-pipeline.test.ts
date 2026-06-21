@@ -22,7 +22,7 @@ vi.mock("@/lib/services/i18n/detect-lang", () => ({ detectLeadLang: vi.fn().mock
 vi.mock("@/lib/ai/core", () => ({ core: vi.fn() }));
 vi.mock("@/lib/services/memory/context-memory", () => ({ saveContext: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/services/geo/geo-engine", () => ({ resolveGeoRoute: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/lib/ai/patterns", () => ({ isAffirmativeMessage: vi.fn(), isNegativeMessage: vi.fn() }));
+vi.mock("@/lib/ai/patterns", () => ({ isAffirmativeMessage: vi.fn(), isNegativeMessage: vi.fn(), AMBIGUOUS_LOCATION_RE: /aeropuerto|aero|terminal/i }));
 vi.mock("@/lib/services/learning/opportunity-engine", () => ({
   evaluateOpportunities: vi.fn().mockResolvedValue([]),
   isOpportunityQuery: vi.fn().mockReturnValue(false),
