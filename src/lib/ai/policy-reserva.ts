@@ -222,6 +222,20 @@ function buildReservaFinalResponse(
   // EXECUTE sin extractionCtx: pedir los slots faltantes antes de ejecutar.
   if (decision.decision === "EXECUTE") {
     const field = inferMissingFieldFromCore(decision);
+    if (field === "location_ambiguous") {
+      const hasOrigin = decision.core.facts.some(f => f.startsWith("origin:"));
+      const hasDest = decision.core.facts.some(f => f.startsWith("destination:"));
+      if (hasOrigin && hasDest) {
+        const originRaw = decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":") ?? "";
+        const destRaw = decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":") ?? "";
+        const resolvedOrigin = extraction?.slots?.origin?.value ?? originRaw;
+        const resolvedDest = extraction?.slots?.destination?.value ?? destRaw;
+        return {
+          finalResponse: buildAmbiguousLocationConfirm(String(resolvedOrigin), String(resolvedDest), lang),
+          nextExpectedFields: ["location_ambiguous"],
+        };
+      }
+    }
     if (field) {
       return {
         finalResponse: buildGenericClarify(field, lang),

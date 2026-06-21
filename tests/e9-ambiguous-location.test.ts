@@ -210,6 +210,87 @@ describe("T5: AHORA with ambiguous locations → maintain AHORA mode", () => {
   });
 });
 
+// E9-EXECUTE-1: EXECUTE + ambiguous locations + no extraction → contextual confirmation
+describe("E9-EXECUTE-1: EXECUTE with ambiguous locations, no extraction", () => {
+  it("RESERVA EXECUTE: origin+dest+location_ambiguous → buildAmbiguousLocationConfirm", () => {
+    const res = policyReserva(makeReservaDecision({
+      decision: "EXECUTE",
+      facts: ["action:quiero", "origin:aeropuerto", "destination:centro", "location_ambiguous:true"],
+    }), {});  // no extraction
+
+    expect(res.finalResponse).toContain("confirmar");
+    expect(res.finalResponse).toContain("aeropuerto");
+    expect(res.finalResponse).toContain("centro");
+    expect(res.finalResponse).not.toContain("¿Qué lugar específico");
+  });
+});
+
+// E9-EXECUTE-2: EXECUTE + ambiguous locations + extraction present → contextual confirmation
+describe("E9-EXECUTE-2: EXECUTE with ambiguous locations, extraction present", () => {
+  it("RESERVA EXECUTE: origin+dest+location_ambiguous + extraction → buildAmbiguousLocationConfirm", () => {
+    const res = policyReserva(makeReservaDecision({
+      decision: "EXECUTE",
+      facts: ["booking:reservar", "origin:aeropuerto", "destination:centro", "location_ambiguous:true"],
+    }), {
+      extraction: {
+        slots: {
+          origin: { value: "Aeropuerto de Iguazú", score: 0.6, reason: "ambiguous_term" },
+          destination: { value: "Centro de Puerto Iguazú", score: 0.6, reason: "ambiguous_term" },
+        },
+        overallConfidence: 0.4,
+        conversationalState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+    });
+
+    expect(res.finalResponse).toContain("confirmar");
+    expect(res.finalResponse).toContain("Aeropuerto de Iguazú");
+    expect(res.finalResponse).toContain("Centro de Puerto Iguazú");
+    expect(res.finalResponse).not.toContain("¿Qué lugar específico");
+  });
+});
+
+// E9-EXECUTE-3: EXECUTE + only origin + ambiguous → ask for missing destination
+describe("E9-EXECUTE-3: EXECUTE with only origin, ambiguous → ask for destination", () => {
+  it("RESERVA EXECUTE: origin+location_ambiguous (no dest) → ask for destination", () => {
+    const res = policyReserva(makeReservaDecision({
+      decision: "EXECUTE",
+      facts: ["booking:reservar", "origin:aeropuerto", "location_ambiguous:true"],
+    }), {});
+
+    expect(res.finalResponse.toLowerCase()).toContain("a dónde necesitás ir");
+    expect(res.finalResponse).not.toContain("confirmar");
+  });
+});
+
+// E9-FLOW-1: Full integration — real facts from "estoy en el aeropuerto quiero ir al centro"
+describe("E9-FLOW-1: Full flow — real facts through RESERVA EXECUTE", () => {
+  it("facts: action:quiero + origin:aeropuerto + destination:centro + location_ambiguous → confirmación contextual", () => {
+    const res = policyReserva(makeReservaDecision({
+      decision: "EXECUTE",
+      facts: ["action:quiero", "origin:aeropuerto", "destination:centro", "location_ambiguous:true"],
+    }), {
+      extraction: {
+        slots: {
+          origin: { value: "Aeropuerto de Iguazú", score: 0.6, reason: "ambiguous_term" },
+          destination: { value: "Centro de Puerto Iguazú", score: 0.6, reason: "ambiguous_term" },
+        },
+        overallConfidence: 0.4,
+        conversationalState: "collecting_slots",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+    });
+
+    expect(res.mode).toBe("RESERVA");
+    expect(res.finalResponse).toContain("confirmar");
+    expect(res.finalResponse).toContain("Aeropuerto de Iguazú");
+    expect(res.finalResponse).toContain("Centro de Puerto Iguazú");
+    expect(res.finalResponse).not.toContain("¿Qué lugar específico");
+  });
+});
+
 // inferMissingFieldFromCore priority tests
 describe("inferMissingFieldFromCore priority", () => {
   it("origin missing → return 'origin' (even if location_ambiguous)", () => {
