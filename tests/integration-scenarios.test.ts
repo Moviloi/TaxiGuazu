@@ -11,6 +11,14 @@ vi.mock("@/lib/ai/response-builder", () => ({
   buildOpportunityAcceptedMessage: vi.fn().mockReturnValue("Perfecto. Te comparto información."),
   buildOpportunityDeclinedMessage: vi.fn().mockReturnValue("Entendido. Quedamos a disposición."),
   buildGenericSafeFallback: vi.fn().mockReturnValue("No pude procesar eso."),
+  buildGenericClarify: vi.fn().mockImplementation((field, lang) => {
+    if (field === "origin") return "¿desde dónde salís?";
+    if (field === "destination") return "¿a dónde necesitás ir?";
+    if (field === "passengers") return "¿Cuántos pasajeros?";
+    if (field === "time") return "¿A qué hora?";
+    return "¿Podés contarme más?";
+  }),
+  buildAmbiguousLocationConfirm: vi.fn().mockImplementation((o, d) => `Solo para confirmar: de ${o} a ${d}. ¿Direcciones exactas?`),
 }));
 vi.mock("@/lib/ai/patterns", () => ({
   isAffirmativeMessage: vi.fn(),

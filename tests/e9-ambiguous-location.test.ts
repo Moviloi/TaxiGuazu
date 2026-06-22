@@ -139,7 +139,7 @@ describe("T3: No locations → ask for origin/destination", () => {
     });
 
     expect(res.decision).toBe("CLARIFY");
-    expect(res.finalResponse).toContain("desde dónde");
+    expect(res.finalResponse.toLowerCase()).toContain("desde dónde");
   });
 
   it("RESERVA: no origin, no dest → ask for origin", () => {

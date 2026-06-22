@@ -66,7 +66,7 @@ describe("handler → policy (replaces old resolveDecision)", () => {
     expect(result.policy.outputSource).toBe("POLICY");
   });
 
-  it("stable origin+dest, missing datetime → acknowledge + request time", () => {
+  it("stable origin+dest, missing datetime → acknowledge + request passengers first", () => {
     const result = handleMessage("IGR a Amerian", "RESERVA", makeCtx({
       extraction: {
         slots: {
@@ -81,7 +81,8 @@ describe("handler → policy (replaces old resolveDecision)", () => {
     }));
     expect(result.policy.finalResponse).toContain("IGR");
     expect(result.policy.finalResponse).toContain("Amerian");
-    expect(result.policy.nextExpectedFields).toContain("scheduled_at");
+    // FASE 18.1: passengers tiene prioridad sobre scheduled_at
+    expect(result.policy.nextExpectedFields).toContain("passengers");
     expect(result.policy.outputSource).toBe("POLICY");
   });
 

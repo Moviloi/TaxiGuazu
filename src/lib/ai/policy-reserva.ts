@@ -8,7 +8,8 @@
 // ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
 // estructura de ruta turística.
 
-import { buildGenericClarify, buildGenericSafeFallback, inferMissingFieldFromCore, buildPriceInfo, buildAmbiguousLocationConfirm } from "./response-builder";
+import { buildGenericClarify, buildGenericSafeFallback, buildPriceInfo, buildAmbiguousLocationConfirm } from "./response-builder";
+import { resolveNextRequiredField } from "./field-resolver";
 import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
 import { log } from "@/lib/utils/logger";
@@ -61,11 +62,10 @@ function formatHotelLandmarkLabel(value: string): string {
 }
 
 export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): PolicyOutput {
-  const lang = ctx?.lang ?? "es";
   const extraction = ctx?.extraction;
   const requiresConfirmation = decision.decision === "EXECUTE";
 
-  const built = buildReservaFinalResponse(decision, extraction, lang);
+  const built = buildReservaFinalResponse(decision, ctx);
   const requiresUserInput =
     decision.decision === "CLARIFY" ||
     (decision.decision === "EXECUTE" && extraction?.askForConfirmation === true);
@@ -134,9 +134,10 @@ interface BuiltResponse {
 
 function buildReservaFinalResponse(
   decision: FinalDecision,
-  extraction: ExtractionContext | undefined,
-  lang: Lang,
+  ctx: HandlerContext | undefined,
 ): BuiltResponse {
+  const extraction = ctx?.extraction;
+  const lang = ctx?.lang ?? "es";
   // Lateral intents: EMERGENCY, RESCHEDULE, POST_SERVICE get specialized responses.
   if (decision.core.intent === "EMERGENCY") {
     return { finalResponse: buildLateralEmergencyResponse(lang), nextExpectedFields: [] };
@@ -174,7 +175,7 @@ function buildReservaFinalResponse(
     // de nuevo. Esta ruta tiene PRIORIDAD sobre la clarificación estándar.
     const stableAck = buildStableAcknowledge(extraction, lang);
     if (stableAck) {
-      return { finalResponse: stableAck, nextExpectedFields: ["scheduled_at"] };
+      return { finalResponse: stableAck.response, nextExpectedFields: [stableAck.nextField] };
     }
 
     if (extraction.askForConfirmation && extraction.tariff?.matched && extraction.tariff.price != null) {
@@ -210,49 +211,45 @@ function buildReservaFinalResponse(
     };
   }
 
+  // Helper para extraer valor de ubicación: extraction > core facts
+  function locationValue(prefix: string): string {
+    const fromExtraction = prefix === "origin"
+      ? extraction?.slots?.origin?.value
+      : extraction?.slots?.destination?.value;
+    if (fromExtraction != null && String(fromExtraction).trim() !== "") return String(fromExtraction);
+    const fromCore = decision.core.facts.find(f => f.startsWith(prefix + ":"))?.split(":").slice(1).join(":");
+    return fromCore ?? "";
+  }
+
   if (decision.decision === "CLARIFY") {
-    const field = inferMissingFieldFromCore(decision);
-    if (field === "location_ambiguous") {
-      const hasOrigin = decision.core.facts.some(f => f.startsWith("origin:"));
-      const hasDest = decision.core.facts.some(f => f.startsWith("destination:"));
-      if (hasOrigin && hasDest) {
-        const originRaw = decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":") ?? "";
-        const destRaw = decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":") ?? "";
-        const resolvedOrigin = extraction?.slots?.origin?.value ?? originRaw;
-        const resolvedDest = extraction?.slots?.destination?.value ?? destRaw;
-        return {
-          finalResponse: buildAmbiguousLocationConfirm(String(resolvedOrigin), String(resolvedDest), lang),
-          nextExpectedFields: ["location_ambiguous"],
-        };
-      }
+    const next = resolveNextRequiredField(ctx, decision.core.facts);
+    if (next.reason === "ambiguous") {
+      return {
+        finalResponse: buildAmbiguousLocationConfirm(locationValue("origin"), locationValue("destination"), lang),
+        nextExpectedFields: [next.field ?? "location_ambiguous"],
+      };
     }
+    const mapped = next.field === "scheduled_at" ? "time" : next.field;
     return {
-      finalResponse: buildGenericClarify(field, lang),
-      nextExpectedFields: field ? [field] : [],
+      finalResponse: buildGenericClarify(mapped, lang),
+      nextExpectedFields: next.field ? [next.field] : [],
     };
   }
 
   // EXECUTE sin extractionCtx: pedir los slots faltantes antes de ejecutar.
   if (decision.decision === "EXECUTE") {
-    const field = inferMissingFieldFromCore(decision);
-    if (field === "location_ambiguous") {
-      const hasOrigin = decision.core.facts.some(f => f.startsWith("origin:"));
-      const hasDest = decision.core.facts.some(f => f.startsWith("destination:"));
-      if (hasOrigin && hasDest) {
-        const originRaw = decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":") ?? "";
-        const destRaw = decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":") ?? "";
-        const resolvedOrigin = extraction?.slots?.origin?.value ?? originRaw;
-        const resolvedDest = extraction?.slots?.destination?.value ?? destRaw;
-        return {
-          finalResponse: buildAmbiguousLocationConfirm(String(resolvedOrigin), String(resolvedDest), lang),
-          nextExpectedFields: ["location_ambiguous"],
-        };
-      }
-    }
-    if (field) {
+    const next = resolveNextRequiredField(ctx, decision.core.facts);
+    if (next.reason === "ambiguous") {
       return {
-        finalResponse: buildGenericClarify(field, lang),
-        nextExpectedFields: [field],
+        finalResponse: buildAmbiguousLocationConfirm(locationValue("origin"), locationValue("destination"), lang),
+        nextExpectedFields: [next.field ?? "location_ambiguous"],
+      };
+    }
+    if (next.field) {
+      const mapped = next.field === "scheduled_at" ? "time" : next.field;
+      return {
+        finalResponse: buildGenericClarify(mapped, lang),
+        nextExpectedFields: [next.field],
       };
     }
   }
@@ -401,7 +398,7 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
 //      acknowledgement más rico con precio).
 // Si destination es ambiguo, también pregunta por la dirección exacta en
 // el destination (no resetea, no pide todo de nuevo).
-function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): string | null {
+function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { response: string; nextField: string } | null {
   const origin = extraction.slots.origin?.value;
   const destination = extraction.slots.destination?.value;
   if (origin == null || destination == null) return null;
@@ -424,19 +421,27 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): stri
     destReason === "ambiguous_term" || AMBIGUOUS_LOCATION_RE.test(destStrRaw);
 
   if (originIsAmbiguous || destIsAmbiguous) {
-    return buildAmbiguousLocationConfirm(String(origin), String(destination), lang);
+    return {
+      response: buildAmbiguousLocationConfirm(String(origin), String(destination), lang),
+      nextField: "location_ambiguous",
+    };
+  }
+
+  // FASE 18.1: preguntar pasajeros antes que horario
+  const paxScore = extraction.slots.passengers?.score ?? 0;
+  if (paxScore < 0.7) {
+    if (lang === "en") return { response: `Got it. Origin: ${originStr}. Destination: ${destStr}. How many passengers?`, nextField: "passengers" };
+    if (lang === "pt") return { response: `Certo. Origem: ${originStr}. Destino: ${destStr}. Quantos passageiros?`, nextField: "passengers" };
+    return { response: `Perfecto. Tengo origen en ${originStr} y destino hacia ${destStr}. ¿Cuántos pasajeros son?`, nextField: "passengers" };
   }
 
   if (lang === "en") {
-    const askAddress = destIsAmbiguous ? `, and what's the exact address in ${destStrRaw}` : "";
-    return `Got it. Origin: ${originStr}. Destination: ${destStr}. What time do you need the ride${askAddress}?`;
+    return { response: `Got it. Origin: ${originStr}. Destination: ${destStr}. What time do you need the ride?`, nextField: "scheduled_at" };
   }
   if (lang === "pt") {
-    const askAddress = destIsAmbiguous ? ` e qual o endereço exato em ${destStrRaw}` : "";
-    return `Certo. Origem: ${originStr}. Destino: ${destStr}. A que horas você precisa da corrida${askAddress}?`;
+    return { response: `Certo. Origem: ${originStr}. Destino: ${destStr}. A que horas você precisa da corrida?`, nextField: "scheduled_at" };
   }
-  const askAddress = destIsAmbiguous ? ` y a qué dirección del ${destStrRaw} vas` : "";
-  return `Perfecto. Tengo origen en ${originStr} y destino hacia ${destStr}. ¿A qué hora necesitás el traslado${askAddress}?`;
+  return { response: `Perfecto. Tengo origen en ${originStr} y destino hacia ${destStr}. ¿A qué hora necesitás el traslado?`, nextField: "scheduled_at" };
 }
 
 // prepend artículo definido cuando el value es un sustantivo

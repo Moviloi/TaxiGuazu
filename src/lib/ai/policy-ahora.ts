@@ -2,13 +2,14 @@
 // policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic, inferencia geográfica, generación libre.
 
-import { inferMissingFieldFromCore, buildGreeting, buildNowDispatchResponse, buildPriceInfo, buildAmbiguousLocationConfirm } from "./response-builder";
+import { buildGreeting, buildNowDispatchResponse, buildPriceInfo, buildAmbiguousLocationConfirm, buildGenericClarify } from "./response-builder";
 import {
   buildLateralEmergencyResponse,
   buildLateralRescheduleResponse,
   buildAdminNotifyBody,
 } from "./policy-reserva";
 import type { FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
+import { resolveNextRequiredField } from "./field-resolver";
 import { log } from "@/lib/utils/logger";
 
 export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): PolicyOutput {
@@ -29,8 +30,8 @@ export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): Poli
       break;
     case "CLARIFY": {
       policyHint = "AHORA: pedir solo el dato mínimo necesario.";
-      const factField = inferMissingFieldFromCore(decision);
-      nextExpectedFields = factField ? [factField] : [];
+      const next = resolveNextRequiredField(ctx, decision.core.facts);
+      nextExpectedFields = next.field ? [next.field] : [];
       break;
     }
     case "SAFE_FALLBACK":
@@ -76,20 +77,30 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
     case "EXECUTE": {
       if (decision.core.intent === "EMERGENCY") return buildLateralEmergencyResponse(lang);
       if (decision.core.intent === "RESCHEDULE") return buildLateralRescheduleResponse(lang);
-      // FASE 16: BOOKING sin now/urgency → preguntar horario, no dispatch
-      if (decision.core.intent === "BOOKING" &&
-          !decision.core.facts.some(f => f.startsWith("now:") || f.startsWith("urgency:"))) {
-        const origin = ctx?.extraction?.slots?.origin?.value;
-        const dest = ctx?.extraction?.slots?.destination?.value;
-        const greet = buildGreeting(lang, ctx?.customerName);
-        if (origin && dest) {
-          if (lang === "en") return `${greet}, from ${origin} to ${dest}. What time do you need the ride?`;
-          if (lang === "pt") return `${greet}, de ${origin} para ${dest}. A que horas você precisa?`;
-          return `${greet}, de ${origin} a ${dest}. ¿A qué hora necesitás el viaje?`;
+      // FASE 18.1: Usar resolveNextRequiredField en vez de hardcodear hora.
+      // Solo BOOKING necesita clarificación en EXECUTE (falta pasajeros/horario).
+      // NOW/EMERGENCY dispatchean directo si ruta es completa y no ambigua.
+      if (decision.core.intent === "BOOKING") {
+        const next = resolveNextRequiredField(ctx, decision.core.facts);
+        log.info("[POLICY_DECISION]", {
+          branch: "EXECUTE",
+          intent: "BOOKING",
+          nextField: next.field,
+          nextReason: next.reason,
+        });
+        if (next.field) {
+          if (next.reason === "ambiguous") {
+            const originVal = ctx?.extraction?.slots?.origin?.value
+              ?? decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":")
+              ?? "";
+            const destVal = ctx?.extraction?.slots?.destination?.value
+              ?? decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":")
+              ?? "";
+            return buildAmbiguousLocationConfirm(String(originVal), String(destVal), lang);
+          }
+          const mapped = next.field === "scheduled_at" ? "time" : next.field;
+          return buildGenericClarify(mapped, lang);
         }
-        if (lang === "en") return `${greet}, what time do you need the ride?`;
-        if (lang === "pt") return `${greet}, a que horas você precisa da corrida?`;
-        return `${greet}, ¿a qué hora necesitás el viaje?`;
       }
       return buildNowDispatchResponse(lang);
     }
@@ -108,39 +119,18 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
       return `${greet}, para tarifas y disponibilidad, un operador te va a asistir en breve.`;
     }
     case "CLARIFY": {
-      const field = inferMissingFieldFromCore(decision);
-      if (field === "location_ambiguous") {
-        const hasOrigin = decision.core.facts.some(f => f.startsWith("origin:"));
-        const hasDest = decision.core.facts.some(f => f.startsWith("destination:"));
-        if (hasOrigin && hasDest) {
-          const originRaw = decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":") ?? "";
-          const destRaw = decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":") ?? "";
-          const resolvedOrigin = ctx?.extraction?.slots?.origin?.value ?? originRaw;
-          const resolvedDest = ctx?.extraction?.slots?.destination?.value ?? destRaw;
-          return buildAmbiguousLocationConfirm(String(resolvedOrigin), String(resolvedDest), lang);
-        }
-        if (lang === "en") return `${greet}, which specific place and time do you need the ride?`;
-        if (lang === "pt") return `${greet}, qual local específico e que horas você precisa da corrida?`;
-        return `${greet}, ¿qué lugar específico y a qué hora necesitás el viaje?`;
+      const next = resolveNextRequiredField(ctx, decision.core.facts);
+      if (next.reason === "ambiguous") {
+        const originVal = ctx?.extraction?.slots?.origin?.value
+          ?? decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":")
+          ?? "";
+        const destVal = ctx?.extraction?.slots?.destination?.value
+          ?? decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":")
+          ?? "";
+        return buildAmbiguousLocationConfirm(String(originVal), String(destVal), lang);
       }
-      if (field === "origin") {
-        if (lang === "en") return `${greet}, where are you right now?`;
-        if (lang === "pt") return `${greet}, onde você está agora?`;
-        return `${greet}, ¿desde dónde salís?`;
-      }
-      if (field === "destination") {
-        if (lang === "en") return `${greet}, where do you need to go?`;
-        if (lang === "pt") return `${greet}, para onde você precisa ir?`;
-        return `${greet}, ¿a dónde necesitás ir?`;
-      }
-      if (field === "time") {
-        if (lang === "en") return `${greet}, what time do you need the ride?`;
-        if (lang === "pt") return `${greet}, a que horas você precisa da corrida?`;
-        return `${greet}, ¿a qué hora necesitás el viaje?`;
-      }
-      if (lang === "en") return `${greet}, could you tell me more about what you need?`;
-      if (lang === "pt") return `${greet}, pode me contar melhor o que você precisa?`;
-      return `${greet}, ¿podés contarme un poco más sobre lo que necesitás?`;
+      const mapped = next.field === "scheduled_at" ? "time" : next.field;
+      return buildGenericClarify(mapped, lang);
     }
     case "SAFE_FALLBACK":
     default: {

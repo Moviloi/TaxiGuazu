@@ -1,0 +1,87 @@
+// FIELD RESOLVER — single source of truth for "¿qué campo pedir después?"
+// Elimina reglas hardcodeadas en policy-ahora y policy-reserva.
+//
+// Prioridad unificada (extraction primero, core facts como fallback):
+//   1. Ubicación ambigua (origin/destination con reason=ambiguous_term)
+//   2. clarifyField origin/destination (viene del workflow → determinó qué falta)
+//   3. Core facts: origin/destination faltantes
+//   4. Core facts: location_ambiguous (antes que passengers!)
+//   5. Passengers faltantes
+//   6. Scheduled_at faltante
+//   7. Core facts: time/passengers faltantes
+//   8. null = todos los campos requeridos completos
+
+import type { HandlerContext } from "./types";
+
+export interface RequiredField {
+  field: "origin" | "destination" | "passengers" | "scheduled_at" | null;
+  reason: "missing" | "ambiguous" | "low_confidence";
+}
+
+export function resolveNextRequiredField(
+  ctx?: HandlerContext,
+  coreFacts?: string[],
+): RequiredField {
+  const extraction = ctx?.extraction;
+  const slots = extraction?.slots ?? {};
+
+  // Si no hay ningún dato, no podemos inferir qué falta
+  if (!extraction && !coreFacts) return { field: null, reason: "missing" };
+
+  // Priority 1: Ambiguous location (extraction tiene reason=ambiguous_term)
+  if (slots.origin?.reason === "ambiguous_term") return { field: "origin", reason: "ambiguous" };
+  if (slots.destination?.reason === "ambiguous_term") return { field: "destination", reason: "ambiguous" };
+
+  // Priority 2: clarifyField del workflow
+  const cf = extraction?.clarifyField;
+  if (cf === "origin") return { field: "origin", reason: "missing" };
+  if (cf === "destination") return { field: "destination", reason: "missing" };
+  if (cf === "passengers") return { field: "passengers", reason: "missing" };
+  if (cf === "scheduled_at" || cf === "scheduled_at_date" || cf === "scheduled_at_time") {
+    return { field: "scheduled_at", reason: "missing" };
+  }
+
+  // Si no hay extracción con datos, delegar todo a core facts
+  const hasExtractionData = Object.keys(slots).length > 0 &&
+    Object.values(slots).some(s => s && s.score > 0);
+
+  if (!hasExtractionData && coreFacts) {
+    if (!coreFacts.some(f => f.startsWith("origin:"))) return { field: "origin", reason: "missing" };
+    if (!coreFacts.some(f => f.startsWith("destination:"))) return { field: "destination", reason: "missing" };
+    if (coreFacts.includes("location_ambiguous:true")) return { field: "origin", reason: "ambiguous" };
+    if (!coreFacts.some(f => f.startsWith("passengers:"))) return { field: "passengers", reason: "missing" };
+    if (!coreFacts.some(f => f.startsWith("time:")) && !coreFacts.some(f => f.startsWith("date:"))) {
+      return { field: "scheduled_at", reason: "missing" };
+    }
+    return { field: null, reason: "missing" };
+  }
+
+  // ── Hay datos de extracción: usar priority con fallback parcial ──
+
+  // Priority 3: Core facts origin/destination faltantes
+  if (coreFacts) {
+    if (!coreFacts.some(f => f.startsWith("origin:"))) return { field: "origin", reason: "missing" };
+    if (!coreFacts.some(f => f.startsWith("destination:"))) return { field: "destination", reason: "missing" };
+  }
+
+  // Priority 4: Passengers missing (de extracción)
+  const paxScore = slots.passengers?.score ?? 0;
+  if (paxScore < 0.7) return { field: "passengers", reason: paxScore === 0 ? "missing" : "low_confidence" };
+
+  // Priority 5: Scheduled time missing (de extracción)
+  const schedScore = slots.scheduled_at?.score ?? 0;
+  if (schedScore < 0.7) return { field: "scheduled_at", reason: schedScore === 0 ? "missing" : "low_confidence" };
+
+  // Priority 6: Core facts location_ambiguous (rodeó extraction pero facts dice ambiguo)
+  if (coreFacts?.includes("location_ambiguous:true")) return { field: "origin", reason: "ambiguous" };
+
+  // Priority 7: Core facts time/passengers
+  if (coreFacts) {
+    if (!coreFacts.some(f => f.startsWith("passengers:"))) return { field: "passengers", reason: "missing" };
+    if (!coreFacts.some(f => f.startsWith("time:")) && !coreFacts.some(f => f.startsWith("date:"))) {
+      return { field: "scheduled_at", reason: "missing" };
+    }
+  }
+
+  return { field: null, reason: "missing" };
+}
