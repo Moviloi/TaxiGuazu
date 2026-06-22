@@ -19,6 +19,7 @@ import { buildPredictedContext } from "@/lib/services/memory/predictive-routing"
 import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/event-tracking";
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
+import { getConversationalState } from "@/lib/db/state-accessors";
 
 import { log } from "@/lib/utils/logger";
 
@@ -36,6 +37,16 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     // ── ZONE: COMMAND SHORTCUTS ──
     if (lower === ".limpiar") {
       await handleResponseReset(phone, trimmed);
+      const [postSession, postState] = await Promise.all([
+        getChatSession(phone).catch(() => null),
+        getConversationalState(phone).catch(() => null),
+      ]);
+      log.info("[AUDIT_LIMPIAR]", {
+        phone: phone.slice(-4),
+        command: ".limpiar",
+        postClearSlots: postSession?.slots ? JSON.parse(postSession.slots) : null,
+        postClearState: postState,
+      });
       return;
     }
     if (await handleCommandShortcuts(phone, trimmed, lower)) return;
@@ -55,6 +66,29 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const session = await getChatSession(phone);
     const memory = buildMemory(session, history);
     const leadCore = core(text, (memory.sessionMemory.lastIntent ?? undefined) as Intent | undefined);
+    log.info("[CORE_RESULT]", {
+      input: text,
+      facts: leadCore.facts,
+      intent: leadCore.intent,
+      confidence: leadCore.confidence,
+      slotStability: leadCore.slotStability,
+      roleLock: leadCore.roleLock,
+      lateral: leadCore.lateral ?? null,
+    });
+    const nowFacts = leadCore.facts.filter(f => f.startsWith("now:") || f.startsWith("urgency:"));
+    const futureFacts = leadCore.facts.filter(f => f.startsWith("date:") || f.startsWith("time:"));
+    const temporalSignal = nowFacts.length > 0 ? "NOW"
+      : futureFacts.length > 0 ? "FUTURO"
+      : "UNKNOWN";
+    log.info("[TEMPORAL_SIGNAL]", {
+      nowDetected: nowFacts.length > 0,
+      urgencyDetected: leadCore.facts.some(f => f.startsWith("urgency:")),
+      futureDetected: futureFacts.length > 0,
+      nowFacts,
+      futureFacts,
+      temporalSignal,
+      palabrasClave: text.match(/\b(ahora|ya|inmediato|urgente|hoy|mañana|pasado\s*mañana|las\s*\d|a\s*las\s*\d|enseguida|al\s*toque)\b/i)?.[0] ?? null,
+    });
     const predictedContext = buildPredictedContext(text, leadCore.intent, memory);
     logIntentDetected(String(conversation.id), leadCore.intent, predictedContext.intentPrediction.confidence);
     const detectedEntities = predictedContext.entityPrediction.candidates;
@@ -87,12 +121,21 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     const domain = mapIntentToDomain(leadCore.intent);
 
+    log.info("[TRACE_PRE_POLICY]", {
+      domain,
+      extractionCtxExists: !!extractionCtx,
+      pricingExists: !!pricing && pricing.final_price > 0,
+      slotsCount: extractionCtx ? Object.keys(extractionCtx.slots).length : 0,
+      origin: extractionCtx?.slots?.origin?.value ?? null,
+      destination: extractionCtx?.slots?.destination?.value ?? null,
+    });
     await handlePolicyPipeline({
       phone, text, conversation, history, customerName,
       leadCore, extractionCtx, pricing, workflowResult,
       confidenceResult, prevSlotsEarly, parsedData, domain,
       sessionUpdatedAt: session?.updated_at,
     });
+    log.info("[TRACE_PIPELINE_END]", { phone: phone.slice(-4), intent: leadCore.intent });
 
   } catch (e) {
     log.error("[LEAD_ERROR]", e);

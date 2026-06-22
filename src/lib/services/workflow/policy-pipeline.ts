@@ -13,7 +13,8 @@ import { isAffirmativeMessage, isNegativeMessage, AMBIGUOUS_LOCATION_RE } from "
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
-import type { ExtractionContext, ConversationDomain, Mode } from "@/lib/ai/types";
+import type { ExtractionContext, ConversationDomain, Mode, TemporalMode, OperationalMode } from "@/lib/ai/types";
+import { temporalFromFacts, operationalModeFromIntent, operationalModeToMode } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
@@ -62,13 +63,20 @@ export async function handlePolicyPipeline(
 
   const lang = detectLeadLang(text);
 
-  const hasScheduledAt = extractionCtx?.slots?.scheduled_at?.value != null;
-  const hasFutureSignal = hasScheduledAt ||
-    leadCore.facts.some(f => f.startsWith("date:") || f.startsWith("time:"));
-  const explicitReservation: ReadonlyArray<string> = ["PRE_BOOKING", "RESCHEDULE"];
-  // BOOKING sin señal temporal futura → candidato AHORA, no RESERVA
-  const isReservationFlow = hasFutureSignal || explicitReservation.includes(leadCore.intent);
-  const mode: Mode = isReservationFlow ? "RESERVA" : "AHORA";
+  // FASE 16 — Temporalidad desde facts
+  const scheduledAt = extractionCtx?.slots?.scheduled_at?.value != null;
+  const temporal: TemporalMode = temporalFromFacts(leadCore.facts);
+  const operationalMode: OperationalMode = operationalModeFromIntent(leadCore.intent, temporal);
+  // Backward compat: derivar Mode desde OperationalMode
+  const mode: Mode = operationalModeToMode(operationalMode);
+
+  log.info("[TEMPORALITY_DECISION]", {
+    intent: leadCore.intent,
+    temporal,
+    operationalMode,
+    mode,
+    facts: leadCore.facts,
+  });
 
   const execCtx: ExecutionContext = {
     phone,
@@ -82,6 +90,8 @@ export async function handlePolicyPipeline(
     intent: leadCore.intent,
     domain,
     mode,
+    temporal,
+    operationalMode,
   };
   const execDeps: ExecutionDeps = {
     send: sendWhatsAppMessage,
@@ -172,6 +182,15 @@ export async function handlePolicyPipeline(
         const shortcutPricing = pricing && pricing.final_price > 0
           ? pricing
           : (await resolvePricingForSlots({ origin, destination, passengers: rawSlots.passengers || 1 })).pricingResult;
+        log.info("[EXECUTION]", {
+          executeNowTrip: false,
+          executeTrip: true,
+          origin,
+          destination,
+          price: shortcutPricing?.final_price ?? null,
+          scheduled_at: rawSlots.scheduled_at ?? null,
+          passengers: rawSlots.passengers || 1,
+        });
         await executeTrip({
           conversationId: conversation.id,
           phone,
@@ -201,18 +220,44 @@ export async function handlePolicyPipeline(
   const hasDestination = destValue != null && String(destValue).trim() !== "";
   const hasCompleteRoute = hasOrigin && hasDestination;
 
-  // AHORA short-circuit: solo despachar si NO hay ambigüedad en ubicaciones
+  // FASE 16 — Short-circuit: solo DISPATCH sin ambigüedad
   const hasAmbiguity = leadCore.facts.includes("location_ambiguous:true") ||
     extractionCtx?.slots?.origin?.reason === "ambiguous_term" ||
     extractionCtx?.slots?.destination?.reason === "ambiguous_term" ||
     (originValue != null && (extractionCtx?.slots?.origin?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(originValue))) ||
     (destValue != null && (extractionCtx?.slots?.destination?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(destValue)));
 
-  if (mode === "AHORA" && !isLateral && hasCompleteRoute && !hasAmbiguity) {
+  const canDispatch = operationalMode === "DISPATCH" && hasCompleteRoute && !hasAmbiguity;
+  log.info("[DISPATCH_DECISION]", {
+    decision: canDispatch ? "DISPATCH" : "NO_DISPATCH",
+    motivo: canDispatch ? "ready_for_dispatch"
+      : operationalMode !== "DISPATCH" ? `mode=${operationalMode}`
+      : !hasCompleteRoute ? "incomplete_route"
+      : hasAmbiguity ? "location_ambiguous"
+      : "unknown",
+    operationalMode,
+    temporal,
+    nowExplicito: leadCore.intent === "NOW",
+    routeComplete: hasCompleteRoute,
+    locationCertainty: hasAmbiguity ? "ambiguous" : "certain",
+    pricingMatched: pricing?.final_price > 0 ?? false,
+    passengersStatus: extractionCtx?.slots?.passengers?.value != null ? "present" : "unknown",
+  });
+
+  if (canDispatch) {
     const msg = buildNowDispatchResponse(lang);
     await sendWhatsAppMessage(phone, msg);
     await insertMessage(conversation.id, "assistant", msg);
     log.info("[AHORA] dispatch", { phone, origin: originValue, destination: destValue });
+    log.info("[EXECUTION]", {
+      executeNowTrip: true,
+      executeTrip: false,
+      origin: originValue ?? null,
+      destination: destValue ?? null,
+      price: pricing?.final_price ?? null,
+      scheduled_at: null,
+      passengers: extractionCtx?.slots?.passengers?.value ?? 1,
+    });
     await executeNowTrip({
       phone,
       conversationId: conversation.id,

@@ -245,7 +245,34 @@ export async function runExtractionPipeline(
           };
         }
 
+        log.info("[EXTRACTION_RESULT]", {
+          rawSlots: Object.fromEntries(
+            Object.entries(confidenceResult.slots).map(([k, v]) => [k, { value: v.value, score: v.score }])
+          ),
+          reasons: Object.fromEntries(
+            Object.entries(confidenceResult.slots).map(([k, v]) => [k, v.reason])
+          ),
+          ambiguity: Object.fromEntries(
+            Object.entries(confidenceResult.slots).map(([k, v]) => [k, v.reason === "ambiguous_term" || v.reason === "core_ambiguous"])
+          ),
+          overallConfidence: confidenceResult.overall_confidence,
+          extractionCtxExists: confidenceResult != null,
+          extractionCtxUndefined: confidenceResult == null,
+          fallbackUsed: false,
+        });
+
         workflowResult = await evaluateWorkflowTransition(phone, confidenceResult);
+
+        log.info("[CONFIDENCE_RESULT]", {
+          originConfidence: confidenceResult.slots.origin?.score ?? null,
+          destConfidence: confidenceResult.slots.destination?.score ?? null,
+          overall: confidenceResult.overall_confidence,
+          action: workflowResult.action,
+          clarifyField: workflowResult.clarifyField ?? null,
+          workflowState: workflowResult.state,
+          askForConfirmation: workflowResult.askForConfirmation ?? false,
+          isComplete: workflowResult.action !== "clarify" && workflowResult.action !== "ask",
+        });
 
         const mergedSlotsForDb: Record<string, any> = {};
         for (const [k, v] of Object.entries(confidenceResult.slots)) {
@@ -285,6 +312,14 @@ export async function runExtractionPipeline(
       confidenceResult = fb.confidenceResult;
       workflowResult = fb.workflowResult;
       extractionNote = fb.extractionNote;
+      log.info("[EXTRACTION_FALLBACK_APPLIED]", {
+        origin: pricing?.origin?.canonical_name ?? null,
+        destination: pricing?.destination?.canonical_name ?? null,
+        price: pricing?.final_price,
+        used: true,
+      });
+    } else {
+      log.info("[EXTRACTION_FALLBACK_APPLIED]", { used: false, reason: extractionNote ? "already_had_extraction" : "fallback_returned_null" });
     }
   }
 

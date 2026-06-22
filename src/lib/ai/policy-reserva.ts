@@ -11,6 +11,7 @@
 import { buildGenericClarify, buildGenericSafeFallback, inferMissingFieldFromCore, buildPriceInfo, buildAmbiguousLocationConfirm } from "./response-builder";
 import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
+import { log } from "@/lib/utils/logger";
 
 function isAmbiguous(value: string | number | null | undefined): boolean {
   if (value == null) return true;
@@ -110,6 +111,18 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
     output.needsAdminNotify = true;
     output.adminNotifyBody = buildAdminNotifyBody(decision.core.intent, ctx?.phone, ctx?.userText);
   }
+
+  log.info("[POLICY_reserva]", {
+    decision: output.decision,
+    policyHint: output.policyHint,
+    finalResponse: output.finalResponse?.substring(0, 120),
+    requiresConfirmation: output.requiresConfirmation,
+    requiresUserInput: output.requiresUserInput,
+    nextExpectedFields: output.nextExpectedFields,
+    needsGeo: output.needsGeo,
+    needsSaveContext: output.needsSaveContext,
+    needsAdminNotify: output.needsAdminNotify ?? false,
+  });
 
   return output;
 }

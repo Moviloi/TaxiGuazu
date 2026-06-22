@@ -60,7 +60,7 @@ export function buildExtractionContext(
     };
   }
 
-  return {
+  const ctx = {
     slots,
     overallConfidence: confidenceResult?.overall_confidence ?? 0,
     conversationalState: effectiveWorkflow.state as ConversationalState,
@@ -78,4 +78,17 @@ export function buildExtractionContext(
     roleLock: roleLock ?? { origin: null, destination: null },
     slotStability: slotStability ?? { origin: "open", destination: "open" },
   };
+  log.info("[EXTRACTION_CTX]", {
+    slotsCount: Object.keys(slots).length,
+    origin: slots.origin?.value ?? null,
+    destination: slots.destination?.value ?? null,
+    originScore: slots.origin?.score ?? null,
+    destScore: slots.destination?.score ?? null,
+    workflowState: effectiveWorkflow.state,
+    askForConfirmation: effectiveWorkflow.askForConfirmation ?? false,
+    tariffMatched: pricing?.final_price > 0 ?? false,
+    roleLockApplied: !!(roleLock?.origin || roleLock?.destination),
+    fallbackWorkflow: !workflowResult,
+  });
+  return ctx;
 }

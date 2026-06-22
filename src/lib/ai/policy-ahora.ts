@@ -9,6 +9,7 @@ import {
   buildAdminNotifyBody,
 } from "./policy-reserva";
 import type { FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
+import { log } from "@/lib/utils/logger";
 
 export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): PolicyOutput {
   const lang = ctx?.lang ?? "es";
@@ -55,6 +56,16 @@ export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): Poli
     output.adminNotifyBody = buildAdminNotifyBody(decision.core.intent, ctx?.phone, ctx?.userText);
   }
 
+  log.info("[POLICY_ahora]", {
+    decision: output.decision,
+    policyHint: output.policyHint,
+    finalResponse: output.finalResponse?.substring(0, 120),
+    requiresConfirmation: output.requiresConfirmation,
+    requiresUserInput: output.requiresUserInput,
+    nextExpectedFields: output.nextExpectedFields,
+    needsAdminNotify: output.needsAdminNotify ?? false,
+  });
+
   return output;
 }
 
@@ -65,6 +76,21 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
     case "EXECUTE": {
       if (decision.core.intent === "EMERGENCY") return buildLateralEmergencyResponse(lang);
       if (decision.core.intent === "RESCHEDULE") return buildLateralRescheduleResponse(lang);
+      // FASE 16: BOOKING sin now/urgency → preguntar horario, no dispatch
+      if (decision.core.intent === "BOOKING" &&
+          !decision.core.facts.some(f => f.startsWith("now:") || f.startsWith("urgency:"))) {
+        const origin = ctx?.extraction?.slots?.origin?.value;
+        const dest = ctx?.extraction?.slots?.destination?.value;
+        const greet = buildGreeting(lang, ctx?.customerName);
+        if (origin && dest) {
+          if (lang === "en") return `${greet}, from ${origin} to ${destination}. What time do you need the ride?`;
+          if (lang === "pt") return `${greet}, de ${origin} para ${destination}. A que horas você precisa?`;
+          return `${greet}, de ${origin} a ${destination}. ¿A qué hora necesitás el viaje?`;
+        }
+        if (lang === "en") return `${greet}, what time do you need the ride?`;
+        if (lang === "pt") return `${greet}, a que horas você precisa da corrida?`;
+        return `${greet}, ¿a qué hora necesitás el viaje?`;
+      }
       return buildNowDispatchResponse(lang);
     }
     case "ANSWER": {

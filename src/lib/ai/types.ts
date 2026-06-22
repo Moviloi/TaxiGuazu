@@ -7,6 +7,8 @@
 export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "CONSULTA" | "AMBIGUOUS";
 
 export type Mode = "AHORA" | "RESERVA";
+export type TemporalMode = "NOW" | "FUTURE" | "UNKNOWN";
+export type OperationalMode = "DISPATCH" | "RESERVATION" | "CLARIFY" | "INFO";
 
 export type OutputType = "EXECUTE" | "ANSWER" | "CLARIFY" | "SAFE_FALLBACK";
 
@@ -112,6 +114,43 @@ export interface HandlerContext {
   phone?: string;
   userText?: string;
   domain?: ConversationDomain;
+  temporalMode?: TemporalMode;
+  operationalMode?: OperationalMode;
+}
+
+export function operationalModeToMode(om: OperationalMode): Mode {
+  return om === "RESERVATION" ? "RESERVA" : "AHORA";
+}
+
+export function temporalFromFacts(facts: string[]): TemporalMode {
+  const hasNow = facts.some(f => f.startsWith("now:") || f.startsWith("urgency:"));
+  const hasFuture = facts.some(f => f.startsWith("date:") || f.startsWith("time:"));
+  if (hasNow) return "NOW";
+  if (hasFuture) return "FUTURE";
+  return "UNKNOWN";
+}
+
+export function operationalModeFromIntent(intent: Intent, temporal: TemporalMode): OperationalMode {
+  if (intent === "CONSULTA" || intent === "GREETING" || intent === "COMMERCIAL" || intent === "INFORMATIONAL" || intent === "AMBIGUOUS") {
+    return "INFO";
+  }
+  if (intent === "EMERGENCY") return "DISPATCH";
+  if (intent === "NOW") return "DISPATCH";
+  if (intent === "BOOKING") {
+    if (temporal === "NOW") return "DISPATCH";
+    if (temporal === "FUTURE") return "RESERVATION";
+    return "CLARIFY";
+  }
+  if (intent === "PRE_BOOKING" || intent === "RESCHEDULE") return "RESERVATION";
+  return "INFO";
+}
+
+export function hasNowSignal(facts: string[]): boolean {
+  return facts.some(f => f.startsWith("now:") || f.startsWith("urgency:"));
+}
+
+export function hasFutureSignal(facts: string[], scheduledAt: boolean): boolean {
+  return scheduledAt || facts.some(f => f.startsWith("date:") || f.startsWith("time:"));
 }
 
 export interface PolicyOutput {
