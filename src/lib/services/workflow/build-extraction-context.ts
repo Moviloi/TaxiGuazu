@@ -86,7 +86,7 @@ export function buildExtractionContext(
     destScore: slots.destination?.score ?? null,
     workflowState: effectiveWorkflow.state,
     askForConfirmation: effectiveWorkflow.askForConfirmation ?? false,
-    tariffMatched: pricing?.final_price > 0 ?? false,
+    tariffMatched: pricing?.final_price != null && pricing.final_price > 0,
     roleLockApplied: !!(roleLock?.origin || roleLock?.destination),
     fallbackWorkflow: !workflowResult,
   });

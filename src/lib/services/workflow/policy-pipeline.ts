@@ -64,7 +64,6 @@ export async function handlePolicyPipeline(
   const lang = detectLeadLang(text);
 
   // FASE 16 — Temporalidad desde facts
-  const scheduledAt = extractionCtx?.slots?.scheduled_at?.value != null;
   const temporal: TemporalMode = temporalFromFacts(leadCore.facts);
   const operationalMode: OperationalMode = operationalModeFromIntent(leadCore.intent, temporal);
   // Backward compat: derivar Mode desde OperationalMode
@@ -213,7 +212,6 @@ export async function handlePolicyPipeline(
     }
   }
 
-  const isLateral = leadCore.intent === "EMERGENCY" || leadCore.intent === "RESCHEDULE";
   const originValue = extractionCtx?.slots?.origin?.value;
   const destValue = extractionCtx?.slots?.destination?.value;
   const hasOrigin = originValue != null && String(originValue).trim() !== "";
@@ -240,7 +238,7 @@ export async function handlePolicyPipeline(
     nowExplicito: leadCore.intent === "NOW",
     routeComplete: hasCompleteRoute,
     locationCertainty: hasAmbiguity ? "ambiguous" : "certain",
-    pricingMatched: pricing?.final_price > 0 ?? false,
+    pricingMatched: pricing?.final_price != null && pricing.final_price > 0,
     passengersStatus: extractionCtx?.slots?.passengers?.value != null ? "present" : "unknown",
   });
 

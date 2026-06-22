@@ -271,7 +271,7 @@ export async function runExtractionPipeline(
           clarifyField: workflowResult.clarifyField ?? null,
           workflowState: workflowResult.state,
           askForConfirmation: workflowResult.askForConfirmation ?? false,
-          isComplete: workflowResult.action !== "clarify" && workflowResult.action !== "ask",
+          isComplete: workflowResult.action !== "clarify",
         });
 
         const mergedSlotsForDb: Record<string, any> = {};

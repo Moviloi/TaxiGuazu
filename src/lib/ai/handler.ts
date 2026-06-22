@@ -19,7 +19,6 @@ import { policyReserva } from "./policy-reserva";
 import { assertOutputSource, assertPipelineComplete, setRequestState } from "./guard";
 import { buildInformationalResponse, buildCommercialResponse } from "./response-builder";
 import type { HandleMessageResult, HandlerContext, Mode, PolicyOutput, ConversationDomain, OperationalMode } from "./types";
-import { operationalModeToMode } from "./types";
 import { log } from "@/lib/utils/logger";
 
 function buildSafeFallback(decision: ReturnType<typeof router>, _lang: string): PolicyOutput {

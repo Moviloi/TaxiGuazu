@@ -83,9 +83,9 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
         const dest = ctx?.extraction?.slots?.destination?.value;
         const greet = buildGreeting(lang, ctx?.customerName);
         if (origin && dest) {
-          if (lang === "en") return `${greet}, from ${origin} to ${destination}. What time do you need the ride?`;
-          if (lang === "pt") return `${greet}, de ${origin} para ${destination}. A que horas você precisa?`;
-          return `${greet}, de ${origin} a ${destination}. ¿A qué hora necesitás el viaje?`;
+          if (lang === "en") return `${greet}, from ${origin} to ${dest}. What time do you need the ride?`;
+          if (lang === "pt") return `${greet}, de ${origin} para ${dest}. A que horas você precisa?`;
+          return `${greet}, de ${origin} a ${dest}. ¿A qué hora necesitás el viaje?`;
         }
         if (lang === "en") return `${greet}, what time do you need the ride?`;
         if (lang === "pt") return `${greet}, a que horas você precisa da corrida?`;
