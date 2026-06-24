@@ -123,7 +123,7 @@ export async function handlePolicyPipeline(
   };
 
   if (isOpportunityQuery(text)) {
-    if (pricing && pricing.final_price > 0) {
+    if (pricing && pricing.final_price > 0 && isQuoteReady(extractionCtx).allowed) {
       const oppResult = await evaluateOpportunities({
         pricingResult: pricing,
         tripContext: {
@@ -323,5 +323,9 @@ export async function handlePolicyPipeline(
     return;
   }
 
-  await processLead(execCtx, execDeps);
+  const safeExtractionCtx = !quoteReady.allowed && extractionCtx?.tariff
+    ? { ...extractionCtx, tariff: { ...extractionCtx.tariff, matched: false, price: undefined } }
+    : extractionCtx;
+
+  await processLead({ ...execCtx, extractionCtx: safeExtractionCtx }, execDeps);
 }
