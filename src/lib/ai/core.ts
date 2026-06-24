@@ -28,7 +28,7 @@ const PAX_RE = /\b(\d+)\s*(personas?|pax|pasajeros?)\b/i;
 const FLIGHT_RE = /\b(?:vuelo\s*)?([A-Z]{2,3}\s?\d{2,4})\b/i;
 const DATE_RE = /\b(hoy|ma[ñn]ana|pasado\s*ma[ñn]ana|esta\s*semana|pr[oó]xim[oa]s?\s*d[ií]as|el\s+(lunes|martes|mi[ée]rcoles|jueves|viernes|s[aá]bado|domingo)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/i;
 const TIME_RE = /\b(?:a\s*las?\s*)?(\d{1,2}:\d{2}|\d{1,2}\s*(?:hs|horas|h))\b/i;
-const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo|esas son las direcciones exactas|esas son|correcto|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|todo bien)(?![a-záéíóúñ])/i;
+const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo|correcto|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|todo bien)(?![a-záéíóúñ])/i;
 
 // 9 nuevos intents — patrones específicos
 const GREETING_RE = /\b(hola|buenas|buen[oa]s?\s*(d[ií]as|tardes|noches)|qu[eé] tal|c[oó]mo est[áa]s|saludos|hey)\b/i;

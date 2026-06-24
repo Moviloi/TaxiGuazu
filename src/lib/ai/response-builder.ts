@@ -8,7 +8,8 @@
 //   3. Fleet — capacidad, tarifa faltante
 //   4. Error — fallback, escalación, error global
 
-import type { FinalDecision, Lang, OpportunityResult } from "./types";
+import type { FinalDecision, Lang, OpportunityResult, ExtractionContext } from "./types";
+import { buildSlotConfirmationMessage } from "./slot-confirmation";
 
 // ─── 1. CONVERSACIONAL ───────────────────────────────────────────────────────
 
@@ -209,6 +210,7 @@ export function buildNowDispatchResponse(lang: Lang): string {
   return "Buscando chofer disponible para tu viaje. Te avisamos cuando alguien tome el servicio.";
 }
 
+/** @deprecated Usar buildSlotConfirmationMessage (slot-confirmation.ts) o buildLocationConfirmationResponse */
 export function buildAmbiguousLocationConfirm(
   origin: string,
   dest: string,
@@ -221,4 +223,11 @@ export function buildAmbiguousLocationConfirm(
   if (lang === "en") return `Just to confirm: from ${o} to ${d}. Could you give me the exact addresses?`;
   if (lang === "pt") return `Só para confirmar: de ${o} para ${d}. Pode me passar os endereços exatos?`;
   return `Solo para confirmar: de ${o} a ${d}. ¿Podés darme las direcciones exactas?`;
+}
+
+export function buildLocationConfirmationResponse(
+  extractionCtx: ExtractionContext,
+  lang: Lang,
+): string {
+  return buildSlotConfirmationMessage(extractionCtx, lang).message ?? "";
 }

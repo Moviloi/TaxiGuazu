@@ -8,7 +8,7 @@
 // ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
 // estructura de ruta turística.
 
-import { buildGenericClarify, buildGenericSafeFallback, buildPriceInfo, buildAmbiguousLocationConfirm } from "./response-builder";
+import { buildGenericClarify, buildGenericSafeFallback, buildPriceInfo, buildLocationConfirmationResponse } from "./response-builder";
 import { resolveNextRequiredField } from "./field-resolver";
 import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
@@ -213,26 +213,16 @@ function buildReservaFinalResponse(
     };
   }
 
-  // Helper para extraer valor de ubicación: extraction > core facts
-  function locationValue(prefix: string): string {
-    const fromExtraction = prefix === "origin"
-      ? extraction?.slots?.origin?.value
-      : extraction?.slots?.destination?.value;
-    if (fromExtraction != null && String(fromExtraction).trim() !== "") return String(fromExtraction);
-    const fromCore = decision.core.facts.find(f => f.startsWith(prefix + ":"))?.split(":").slice(1).join(":");
-    return fromCore ?? "";
-  }
-
   if (decision.decision === "CLARIFY") {
     const next = resolveNextRequiredField(ctx, decision.core.facts);
     if (next.reason === "ambiguous") {
-      return {
-        finalResponse: buildAmbiguousLocationConfirm(
-          locationValue("origin"), locationValue("destination"), lang,
-          extraction?.tariff?.displayOrigin, extraction?.tariff?.displayDestination,
-        ),
-        nextExpectedFields: [next.field ?? "location_ambiguous"],
-      };
+      if (extraction) {
+        return {
+          finalResponse: buildLocationConfirmationResponse(extraction, lang),
+          nextExpectedFields: [next.field ?? "location_ambiguous"],
+        };
+      }
+      return { finalResponse: buildGenericClarify("origin", lang), nextExpectedFields: ["origin"] };
     }
     const mapped = next.field === "scheduled_at" ? "time" : next.field;
     return {
@@ -245,13 +235,13 @@ function buildReservaFinalResponse(
   if (decision.decision === "EXECUTE") {
     const next = resolveNextRequiredField(ctx, decision.core.facts);
     if (next.reason === "ambiguous") {
-      return {
-        finalResponse: buildAmbiguousLocationConfirm(
-          locationValue("origin"), locationValue("destination"), lang,
-          extraction?.tariff?.displayOrigin, extraction?.tariff?.displayDestination,
-        ),
-        nextExpectedFields: [next.field ?? "location_ambiguous"],
-      };
+      if (extraction) {
+        return {
+          finalResponse: buildLocationConfirmationResponse(extraction, lang),
+          nextExpectedFields: [next.field ?? "location_ambiguous"],
+        };
+      }
+      return { finalResponse: buildGenericClarify("origin", lang), nextExpectedFields: ["origin"] };
     }
     if (next.field) {
       const mapped = next.field === "scheduled_at" ? "time" : next.field;
@@ -430,10 +420,7 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { re
 
   if (originIsAmbiguous || destIsAmbiguous) {
     return {
-      response: buildAmbiguousLocationConfirm(
-        String(origin), String(destination), lang,
-        extraction?.tariff?.displayOrigin, extraction?.tariff?.displayDestination,
-      ),
+      response: buildLocationConfirmationResponse(extraction, lang),
       nextField: "location_ambiguous",
     };
   }

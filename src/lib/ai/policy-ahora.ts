@@ -2,7 +2,7 @@
 // policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic, inferencia geográfica, generación libre.
 
-import { buildGreeting, buildNowDispatchResponse, buildPriceInfo, buildAmbiguousLocationConfirm, buildGenericClarify } from "./response-builder";
+import { buildGreeting, buildNowDispatchResponse, buildPriceInfo, buildLocationConfirmationResponse, buildGenericClarify } from "./response-builder";
 import {
   buildLateralEmergencyResponse,
   buildLateralRescheduleResponse,
@@ -90,17 +90,10 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
         });
         if (next.field) {
           if (next.reason === "ambiguous") {
-            const originVal = ctx?.extraction?.slots?.origin?.value
-              ?? decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":")
-              ?? "";
-            const destVal = ctx?.extraction?.slots?.destination?.value
-              ?? decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":")
-              ?? "";
-            return buildAmbiguousLocationConfirm(
-              String(originVal), String(destVal), lang,
-              ctx?.extraction?.tariff?.displayOrigin,
-              ctx?.extraction?.tariff?.displayDestination,
-            );
+            if (ctx?.extraction) {
+              return buildLocationConfirmationResponse(ctx.extraction, lang);
+            }
+            return buildGenericClarify("origin", lang);
           }
           const mapped = next.field === "scheduled_at" ? "time" : next.field;
           return buildGenericClarify(mapped, lang);
@@ -127,17 +120,10 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
     case "CLARIFY": {
       const next = resolveNextRequiredField(ctx, decision.core.facts);
       if (next.reason === "ambiguous") {
-        const originVal = ctx?.extraction?.slots?.origin?.value
-          ?? decision.core.facts.find(f => f.startsWith("origin:"))?.split(":").slice(1).join(":")
-          ?? "";
-        const destVal = ctx?.extraction?.slots?.destination?.value
-          ?? decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":")
-          ?? "";
-        return buildAmbiguousLocationConfirm(
-          String(originVal), String(destVal), lang,
-          ctx?.extraction?.tariff?.displayOrigin,
-          ctx?.extraction?.tariff?.displayDestination,
-        );
+        if (ctx?.extraction) {
+          return buildLocationConfirmationResponse(ctx.extraction, lang);
+        }
+        return buildGenericClarify("origin", lang);
       }
       const mapped = next.field === "scheduled_at" ? "time" : next.field;
       return buildGenericClarify(mapped, lang);

@@ -212,16 +212,15 @@ describe("T5: AHORA with ambiguous locations → maintain AHORA mode", () => {
 
 // E9-EXECUTE-1: EXECUTE + ambiguous locations + no extraction → contextual confirmation
 describe("E9-EXECUTE-1: EXECUTE with ambiguous locations, no extraction", () => {
-  it("RESERVA EXECUTE: origin+dest+location_ambiguous → buildAmbiguousLocationConfirm", () => {
+  it("RESERVA EXECUTE: origin+dest+location_ambiguous + no extraction → generic clarify", () => {
     const res = policyReserva(makeReservaDecision({
       decision: "EXECUTE",
       facts: ["action:quiero", "origin:aeropuerto", "destination:centro", "location_ambiguous:true"],
-    }), {});  // no extraction
+    }), {});  // no extraction — sin slots para confirmar
 
-    expect(res.finalResponse).toContain("confirmar");
-    expect(res.finalResponse).toContain("aeropuerto");
-    expect(res.finalResponse).toContain("centro");
-    expect(res.finalResponse).not.toContain("¿Qué lugar específico");
+    // Sin extraction, el nuevo flujo pide el campo ambiguo genéricamente
+    expect(res.finalResponse).toBe("¿Desde dónde salís?");
+    expect(res.finalResponse).not.toContain("direcciones exactas");
   });
 });
 
