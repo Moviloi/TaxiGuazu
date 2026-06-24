@@ -48,6 +48,27 @@ export function isGroupMessage(from: string): boolean {
 
 const ACEPTAR_KEYWORDS = ["acepto", "yo estoy", "yo voy", "lo tomo"];
 
+interface ContingencyData {
+  origin?: string;
+  destination?: string;
+  passengers?: number;
+}
+
+function validateContingencyTripData(
+  data: ContingencyData | undefined | null,
+  passengers?: number,
+): { valid: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!data) {
+    missing.push("no_data");
+    return { valid: false, missing };
+  }
+  if (!data.origin?.trim()) missing.push("origin");
+  if (!data.destination?.trim()) missing.push("destination");
+  if (passengers == null || passengers <= 0) missing.push("passengers");
+  return { valid: missing.length === 0, missing };
+}
+
 function isAccepting(text: string): boolean {
   const t = text.toLowerCase().trim();
   return ACEPTAR_KEYWORDS.some((k) => t.includes(k));
@@ -295,6 +316,13 @@ Tu chofer es ${driverName}. Te contactará en breve.`;
       }
     }
 
+    // FASE 27 — Verificar integridad de datos antes de crear Trip B
+    const h2Validation = validateContingencyTripData(bData, bData.passengers);
+    if (!h2Validation.valid) {
+      log.warn("[CONTINGENCY_DISPATCH_BLOCKED]", { trip: "B", missing: h2Validation.missing, convId });
+      return;
+    }
+
     const tripIdB = `trip_contingency_${convId}_b_${Date.now()}`;
     await createTrip(tripIdB, workflow.phone, bData.origin, bData.destination, bData.price, bData.passengers, undefined, bData.flight_number || undefined);
     await setConversationTrip(convId, tripIdB);
@@ -495,6 +523,15 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
     source: "driver.contingency_trip_a",
   });
   if (!aFleetCheck.ok) {
+    return;
+  }
+
+  // FASE 27 — Verificar integridad de datos de contingencia antes de crear trip
+  const h3Validation = validateContingencyTripData(origData, paxA);
+  if (!h3Validation.valid) {
+    log.warn("[CONTINGENCY_DISPATCH_BLOCKED]", { trip: "A", missing: h3Validation.missing, convId });
+    await sendWhatsAppMessage(clientPhone, "Lo sentimos, no pudimos procesar tu solicitud. Un operador te va a contactar.");
+    await notifyAdmin(`❌ Contingencia Trip A bloqueada para conv ${convId}. Datos faltantes: ${h3Validation.missing.join(", ")}`);
     return;
   }
 
