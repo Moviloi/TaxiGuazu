@@ -28,11 +28,11 @@ export function buildExtractionContext(
     } as SlotConversationalContext;
   }
 
-  const slots: Record<string, { value: string | number | null; score: number; reason: string }> = {};
+  const slots: Record<string, { value: string | number | null; score: number; reason: string; status: string; source: string }> = {};
   if (prevSlots) {
     for (const [k, v] of Object.entries(prevSlots)) {
       if (v != null && String(v).trim() !== "") {
-        slots[k] = { value: String(v), score: 0.8, reason: "previous_turn" };
+        slots[k] = { value: String(v), score: 0.8, reason: "previous_turn", status: "INFERRED", source: "SYSTEM_INFERRED" };
       }
     }
   }
@@ -40,7 +40,7 @@ export function buildExtractionContext(
   const baseSlots = confidenceResult?.slots ?? {};
   for (const [k, v] of Object.entries(baseSlots)) {
     if (v && v.value != null && String(v.value).trim() !== "") {
-      slots[k] = v;
+      slots[k] = v as any;
     }
   }
 
@@ -51,6 +51,8 @@ export function buildExtractionContext(
       value: roleLock.origin,
       score: 0.6,
       reason: "core_role_lock",
+      status: "INFERRED",
+      source: "SYSTEM_INFERRED",
     };
   }
   if (roleLock?.destination && (!slots.destination || slots.destination.score === 0)) {
@@ -58,6 +60,8 @@ export function buildExtractionContext(
       value: roleLock.destination,
       score: 0.6,
       reason: "core_role_lock",
+      status: "INFERRED",
+      source: "SYSTEM_INFERRED",
     };
   }
 

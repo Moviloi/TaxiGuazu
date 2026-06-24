@@ -19,7 +19,7 @@ import { loadContext, mergeContext } from "@/lib/services/memory/context-memory"
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
 import { loadPreviousSlots, loadPreviousSlotStates } from "@/lib/services/workflow/load-previous-slots";
-import { buildSlotStates } from "@/lib/ai/slot-state";
+import { buildSlotStates, type SlotStateEntry } from "@/lib/ai/slot-state";
 import { evaluateCompleteness } from "@/lib/services/workflow/evaluate-completeness";
 import { log } from "@/lib/utils/logger";
 
@@ -34,6 +34,10 @@ async function tryFallbackExtraction(
   text: string,
   phone: string,
   prevConfidence: ExtractionSchemaResult | undefined,
+  prevSlotStates: Record<string, SlotStateEntry> | null,
+  hasCorrection: boolean,
+  hasAffirmation: boolean,
+  prevSlotValues: Record<string, string>,
 ): Promise<FallbackExtractionResult | null> {
   try {
     log.info("[EXTRACTION] Intentando fallback regex...");
@@ -82,6 +86,20 @@ async function tryFallbackExtraction(
           `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
         ].join('\n');
         log.info("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.final_price);
+        const fbSlotStates = buildSlotStates(
+          fbConfidence.slots,
+          prevSlotStates,
+          hasCorrection,
+          hasAffirmation,
+          prevSlotValues,
+        );
+        for (const [k, entry] of Object.entries(fbSlotStates)) {
+          const existing = fbConfidence.slots[k] as any;
+          if (existing) {
+            existing.source = entry.source;
+            existing.status = entry.status;
+          }
+        }
         return { pricing: ft, confidenceResult: fbConfidence, workflowResult: fbWorkflow, extractionNote: fbExtractionNote };
       }
       log.info("[EXTRACTION] Fallback: tariff no encontrado");
@@ -119,6 +137,9 @@ export async function runExtractionPipeline(
   let pricing: PricingResult | undefined;
   const coreDecisionEarly = leadCore;
   let prevSlotsEarly: Record<string, string> = {};
+  let prevSlotStates: Record<string, SlotStateEntry> | null = null;
+  let hasAffirmation = false;
+  let hasCorrection = false;
   try {
     log.info("[EXTRACTION] Iniciando extraction, textLen:", text.length);
     const extractionGuard = assertCoreRouterPolicy();
@@ -132,7 +153,7 @@ export async function runExtractionPipeline(
       loadContext(phone),
     ]);
     prevSlotsEarly = prevSlotsEarlyResult;
-    const prevSlotStates = prevSlotStatesResult;
+    prevSlotStates = prevSlotStatesResult;
     log.info("[CONTEXT] cargado:", { origin: ctxMemory.origin, destination: ctxMemory.destination, intent: ctxMemory.intent });
     log.info("[TRACE EXTRACTION START]", {
       roleLock: coreDecisionEarly?.roleLock,
@@ -153,11 +174,11 @@ export async function runExtractionPipeline(
     const convState = await getConversationalState(phone);
 
     // FASE 18.2: Location confirmation — when core detects affirmation + existing ambiguous slots
-    const hasAffirmation = leadCore.facts?.some(f => f.startsWith("affirmation:"))
+    hasAffirmation = leadCore.facts?.some(f => f.startsWith("affirmation:"))
       || isAffirmativeMessage(text);
     const hasPrevSlotsLocation = prevSlotsEarly?.origin && prevSlotsEarly?.destination;
     // FASE 20.4: Correction detection — user correcting a previously extracted slot
-    const hasCorrection = isCorrectionMessage(text);
+    hasCorrection = isCorrectionMessage(text);
 
     if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
       log.info("[COMPLETENESS] awaiting_confirmation + affirmation: skipping completeness");
@@ -425,7 +446,7 @@ export async function runExtractionPipeline(
   }
 
   if (!extractionNote) {
-    const fb = await tryFallbackExtraction(text, phone, confidenceResult);
+    const fb = await tryFallbackExtraction(text, phone, confidenceResult, prevSlotStates, hasCorrection, hasAffirmation, prevSlotsEarly);
     if (fb) {
       pricing = fb.pricing;
       confidenceResult = fb.confidenceResult;

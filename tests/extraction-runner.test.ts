@@ -464,4 +464,61 @@ describe("runExtractionPipeline", () => {
     expect(evaluateCompleteness).toHaveBeenCalled();
     expect(result).not.toBeNull();
   });
+
+  // ── FASE 26 — SlotState Consistency: fallback extraction ──
+
+  it("F26-C: fallback extraction → slots tienen status/source", async () => {
+    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
+    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
+    const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
+    vi.mocked(extractSlots).mockResolvedValue(null);
+
+    const { parseRouteFromText } = await import("@/lib/services/extraction/regex-extractor");
+    vi.mocked(parseRouteFromText).mockReturnValue({ origin: "test origin", destination: "test dest" });
+
+    const { resolvePricingForSlots } = await import("@/lib/services/pricing/resolve-pricing-for-slots");
+    vi.mocked(resolvePricingForSlots).mockResolvedValue({
+      pricingResult: {
+        final_price: 15000,
+        tariff_id: 1,
+        base_price: 12000,
+        markup: 3000,
+        adjustments: [],
+        level: "standard",
+        source: "standard",
+        explanation: [],
+        origin: { place_id: "p1", canonical_name: "TestOrigin", operational_zone: "zone" },
+        destination: { place_id: "p2", canonical_name: "TestDest", operational_zone: "zone" },
+      },
+      divergence: null,
+    } as any);
+
+    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+
+    const { isAffirmativeMessage, isCorrectionMessage } = await import("@/lib/ai/patterns");
+    vi.mocked(isAffirmativeMessage).mockReturnValue(false);
+    vi.mocked(isCorrectionMessage).mockReturnValue(false);
+
+    const result = await runExtractionPipeline(
+      "+549111111", "llevame de test origin a test dest", 1,
+      { intent: "PRE_BOOKING", facts: [], confidence: 0.7, slotStability: { origin: "open", destination: "open" }, roleLock: { origin: null, destination: null } } as CoreDecision,
+      [], null,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.confidenceResult).toBeDefined();
+    expect(result!.pricing).toBeDefined();
+    const slots = result!.confidenceResult!.slots;
+    expect(slots.origin).toBeDefined();
+    expect(slots.origin.value).toBe("TestOrigin");
+    expect((slots.origin as any).status).toBe("CONFIRMED");
+    expect((slots.origin as any).source).toBe("SYSTEM_INFERRED");
+    expect(slots.destination).toBeDefined();
+    expect((slots.destination as any).status).toBe("CONFIRMED");
+    expect((slots.destination as any).source).toBe("SYSTEM_INFERRED");
+    expect(slots.price).toBeDefined();
+    expect((slots.price as any).status).toBe("CONFIRMED");
+  });
 });

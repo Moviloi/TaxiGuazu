@@ -3,6 +3,8 @@ import { resolveAlias } from "@/lib/db/database";
 import { CONFIDENCE_PROCEED, CONFIDENCE_CLARIFY } from "@/config/constants";
 import { AMBIGUOUS_LOCATION_TERMS } from "@/lib/ai/patterns";
 
+const CONFIDENCE_AMBIGUOUS = 0.6;
+
 type SlotKey = "origin" | "destination" | "passengers" | "price" | "scheduled_at" | "flight" | "urgency" | "customer_name";
 
 const RELATIVE_DAY_RE = /\b(hoy|mañana|pasado\s*mañana|esta\s*semana|próximos?\s*días)\b/i;
@@ -33,13 +35,13 @@ export async function calculateSlotConfidence(
       const text = extractedData.origin.toLowerCase();
       const isAmbiguous = AMBIGUOUS_LOCATION_TERMS.some(t => text === t || text.includes(t));
       if (isAmbiguous) {
-        slots.origin = { value: aliases[0], score: 0.6, reason: "ambiguous_term" };
+        slots.origin = { value: aliases[0], score: CONFIDENCE_AMBIGUOUS, reason: "ambiguous_term" };
       } else {
         const exactMatch = aliases.some(a => a.toLowerCase() === text);
         if (exactMatch) {
           slots.origin = { value: extractedData.origin, score: 1.0, reason: "exact_alias_match" };
         } else {
-          slots.origin = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
+          slots.origin = { value: aliases[0], score: CONFIDENCE_AMBIGUOUS, reason: "fuzzy_alias_match" };
         }
       }
     }
@@ -57,13 +59,13 @@ export async function calculateSlotConfidence(
       const text = extractedData.destination.toLowerCase();
       const isAmbiguous = AMBIGUOUS_LOCATION_TERMS.some(t => text === t || text.includes(t));
       if (isAmbiguous) {
-        slots.destination = { value: aliases[0], score: 0.6, reason: "ambiguous_term" };
+        slots.destination = { value: aliases[0], score: CONFIDENCE_AMBIGUOUS, reason: "ambiguous_term" };
       } else {
         const exactMatch = aliases.some(a => a.toLowerCase() === text);
         if (exactMatch) {
           slots.destination = { value: extractedData.destination, score: 1.0, reason: "exact_alias_match" };
         } else {
-          slots.destination = { value: aliases[0], score: 0.6, reason: "fuzzy_alias_match" };
+          slots.destination = { value: aliases[0], score: CONFIDENCE_AMBIGUOUS, reason: "fuzzy_alias_match" };
         }
       }
     }
@@ -84,7 +86,7 @@ export async function calculateSlotConfidence(
     if (!isNaN(parsed)) {
       slots.scheduled_at = { value: extractedData.scheduled_at, score: 1.0, reason: "valid_iso_date" };
     } else {
-      slots.scheduled_at = { value: extractedData.scheduled_at, score: 0.6, reason: "unparseable_date_format" };
+      slots.scheduled_at = { value: extractedData.scheduled_at, score: CONFIDENCE_AMBIGUOUS, reason: "unparseable_date_format" };
     }
   } else if (RELATIVE_DAY_RE.test(originalMessage)) {
     const computed = computeRelativeDate(originalMessage);

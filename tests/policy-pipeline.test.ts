@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Mocks: inline vi.fn() in each vi.mock() per vitest v4 hoisting rules ──
 
-vi.mock("@/lib/whatsapp/sender", () => ({ sendWhatsAppMessage: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/whatsapp/sender", () => ({ sendWhatsAppMessage: vi.fn().mockResolvedValue(undefined), sendInteractiveButtons: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/db/database", () => ({
   getChatSession: vi.fn(),
   insertMessage: vi.fn().mockResolvedValue(1),
@@ -47,6 +47,7 @@ import { executeTrip } from "@/lib/services/trip-execution/trip-execution.servic
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { processLead } from "@/lib/core/pipeline";
 import type { PolicyPipelineInput } from "@/lib/services/workflow/policy-pipeline";
+import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 import type { CoreDecision } from "@/lib/ai/types";
 
 function makeBaseInput(overrides: Partial<PolicyPipelineInput> = {}): PolicyPipelineInput {
@@ -60,7 +61,7 @@ function makeBaseInput(overrides: Partial<PolicyPipelineInput> = {}): PolicyPipe
     extractionCtx: undefined,
     pricing: undefined as any,
     workflowResult: { state: "awaiting_confirmation", clarifyField: null, overallConfidence: 0.9, action: "proceed", askForConfirmation: true },
-    confidenceResult: { slots: { origin: { value: "iguazú", score: 0.9, reason: "test" }, destination: { value: "aeropuerto", score: 0.9, reason: "test" } }, overall_confidence: 0.9, action: "proceed" },
+    confidenceResult: { slots: { origin: { value: "iguazú", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, destination: { value: "aeropuerto", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, passengers: { value: 1, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" } }, overall_confidence: 0.9, action: "proceed" },
     prevSlotsEarly: { origin: "iguazú", destination: "aeropuerto" },
     parsedData: { origin: "iguazú", destination: "aeropuerto", passengers: 1 },
     domain: "reservation",
@@ -93,7 +94,11 @@ describe("policy-pipeline — executeTrip guard", () => {
     } as any);
     vi.mocked(isAffirmativeMessage).mockReturnValue(true);
 
-    await handlePolicyPipeline(makeBaseInput({ domain: "reservation" }));
+    await handlePolicyPipeline(makeBaseInput({
+      domain: "reservation",
+      leadCore: { intent: "PRE_BOOKING", facts: ["affirmation:true", "date:hoy"], confidence: 0.7, slotStability: { origin: "open", destination: "open" }, roleLock: { origin: null, destination: null } } as CoreDecision,
+      confidenceResult: { slots: { origin: { value: "iguazú", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, destination: { value: "aeropuerto", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, passengers: { value: 1, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, scheduled_at: { value: "hoy", score: 1.0, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" } }, overall_confidence: 0.9, action: "proceed" },
+    }));
 
     expect(executeTrip).toHaveBeenCalled();
     expect(setConversationalState).toHaveBeenCalledWith("+549111111", "idle");
@@ -196,7 +201,12 @@ describe("policy-pipeline — executeTrip guard", () => {
     } as any);
     vi.mocked(isAffirmativeMessage).mockReturnValue(true);
 
-    await handlePolicyPipeline(makeBaseInput({ domain: "reservation", sessionUpdatedAt: Math.floor(Date.now() / 1000) }));
+    await handlePolicyPipeline(makeBaseInput({
+      domain: "reservation",
+      sessionUpdatedAt: Math.floor(Date.now() / 1000),
+      leadCore: { intent: "PRE_BOOKING", facts: ["affirmation:true", "date:hoy"], confidence: 0.7, slotStability: { origin: "open", destination: "open" }, roleLock: { origin: null, destination: null } } as CoreDecision,
+      confidenceResult: { slots: { origin: { value: "iguazú", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, destination: { value: "aeropuerto", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, passengers: { value: 1, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, scheduled_at: { value: "hoy", score: 1.0, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" } }, overall_confidence: 0.9, action: "proceed" },
+    }));
 
     expect(executeTrip).toHaveBeenCalled();
     expect(setConversationalState).toHaveBeenCalledWith("+549111111", "idle");
@@ -242,6 +252,8 @@ describe("policy-pipeline — executeTrip guard", () => {
       domain: "reservation",
       prevSlotsEarly: { origin: "iguazú", destination: "aeropuerto" },
       parsedData: { origin: "iguazú", destination: "aeropuerto" },
+      leadCore: { intent: "PRE_BOOKING", facts: ["affirmation:true", "date:hoy"], confidence: 0.7, slotStability: { origin: "open", destination: "open" }, roleLock: { origin: null, destination: null } } as CoreDecision,
+      confidenceResult: { slots: { origin: { value: "iguazú", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, destination: { value: "aeropuerto", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, passengers: { value: 1, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, scheduled_at: { value: "hoy", score: 1.0, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" } }, overall_confidence: 0.9, action: "proceed" },
     }));
 
     expect(executeTrip).toHaveBeenCalled();
@@ -301,7 +313,7 @@ describe("policy-pipeline — executeTrip guard", () => {
     await handlePolicyPipeline(makeBaseInput({
       leadCore: { intent: "NOW", facts: ["now:ahora", "origin:aeropuerto", "destination:centro"], confidence: 0.85, slotStability: { origin: "locked", destination: "locked" }, roleLock: { origin: "Aeropuerto IGR", destination: "Centro" } } as CoreDecision,
       extractionCtx: {
-        slots: { origin: { value: "Aeropuerto IGR", score: 0.9, reason: "core_role_lock" }, destination: { value: "Centro", score: 0.9, reason: "core_role_lock" }, passengers: { value: 1, score: 0.6, reason: "previous_turn" } },
+        slots: { origin: { value: "Aeropuerto IGR", score: 0.9, reason: "core_role_lock", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, destination: { value: "Centro", score: 0.9, reason: "core_role_lock", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, passengers: { value: 1, score: 0.6, reason: "previous_turn", status: "CONFIRMED", source: "SYSTEM_INFERRED" } },
         overallConfidence: 0.85,
         conversationalState: "idle",
         clarifyField: null,
@@ -322,5 +334,144 @@ describe("policy-pipeline — executeTrip guard", () => {
     expect(insertMessage).toHaveBeenCalledWith(1, "assistant", "Buscando chofer disponible para tu viaje.");
     expect(executeTrip).not.toHaveBeenCalled();
     expect(processLead).not.toHaveBeenCalled();
+  });
+
+  // ── FASE 26 — Dispatch Gate Hardening ──
+
+  it("F26-A: origin CONFIRMATION_PENDING → NO dispatch (dispatchReady bloquea)", async () => {
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+    const { processLead } = await import("@/lib/core/pipeline");
+
+    await handlePolicyPipeline(makeBaseInput({
+      leadCore: { intent: "NOW", facts: ["now:ahora", "origin:aeropuerto", "destination:centro"], confidence: 0.85, slotStability: { origin: "locked", destination: "locked" }, roleLock: { origin: "Aeropuerto IGR", destination: "Centro" } } as CoreDecision,
+      extractionCtx: {
+        slots: {
+          origin: { value: "Aeropuerto IGR", score: 0.6, reason: "ambiguous_term", status: "CONFIRMATION_PENDING", source: "SYSTEM_INFERRED" },
+          destination: { value: "Centro", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+          passengers: { value: 1, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+        },
+        overallConfidence: 0.85,
+        conversationalState: "idle",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+      domain: "dispatch",
+      workflowResult: undefined as any,
+      pricing: { final_price: 15000, tariff_id: 1, base_price: 12000, markup: 3000, adjustments: [], level: "standard", source: "standard", explanation: [], origin: { place_id: "p1", canonical_name: "IGR", operational_zone: "iguazu" }, destination: { place_id: "p2", canonical_name: "Centro", operational_zone: "centro" } } as any,
+    }));
+
+    const { sendInteractiveButtons } = await import("@/lib/whatsapp/sender");
+
+    expect(executeNowTrip).not.toHaveBeenCalled();
+    expect(sendWhatsAppMessage).not.toHaveBeenCalledWith("+549111111", "Buscando chofer disponible para tu viaje.");
+    expect(sendInteractiveButtons).toHaveBeenCalled();
+    expect(processLead).not.toHaveBeenCalled();
+  });
+
+  it("F26-B: todos CONFIRMED → dispatch permitido (NOW)", async () => {
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+    const { insertMessage } = await import("@/lib/db/database");
+
+    await handlePolicyPipeline(makeBaseInput({
+      leadCore: { intent: "NOW", facts: ["now:ahora", "origin:aeropuerto", "destination:centro"], confidence: 0.85, slotStability: { origin: "locked", destination: "locked" }, roleLock: { origin: "Aeropuerto IGR", destination: "Centro" } } as CoreDecision,
+      extractionCtx: {
+        slots: {
+          origin: { value: "Aeropuerto IGR", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+          destination: { value: "Centro", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+          passengers: { value: 2, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+        },
+        overallConfidence: 1.0,
+        conversationalState: "idle",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+      domain: "dispatch",
+      workflowResult: undefined as any,
+      pricing: { final_price: 15000, tariff_id: 1, base_price: 12000, markup: 3000, adjustments: [], level: "standard", source: "standard", explanation: [], origin: { place_id: "p1", canonical_name: "IGR", operational_zone: "iguazu" }, destination: { place_id: "p2", canonical_name: "Centro", operational_zone: "centro" } } as any,
+    }));
+
+    expect(executeNowTrip).toHaveBeenCalledTimes(1);
+    expect(executeNowTrip).toHaveBeenCalledWith(expect.objectContaining({
+      phone: "+549111111",
+      origin: "Aeropuerto IGR",
+      destination: "Centro",
+      passengers: 2,
+    }));
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+549111111", "Buscando chofer disponible para tu viaje.");
+    expect(insertMessage).toHaveBeenCalledWith(1, "assistant", "Buscando chofer disponible para tu viaje.");
+    expect(executeTrip).not.toHaveBeenCalled();
+    expect(processLead).not.toHaveBeenCalled();
+  });
+
+  it("F26-D: NOW sin hora + slots CONFIRMED → dispatch permitido", async () => {
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+
+    // NOW mode no requiere scheduled_at; solo origin/dest/passengers CONFIRMED
+    await handlePolicyPipeline(makeBaseInput({
+      leadCore: { intent: "NOW", facts: ["now:ahora", "origin:aeropuerto", "destination:centro"], confidence: 0.9, slotStability: { origin: "locked", destination: "locked" }, roleLock: { origin: "Aeropuerto IGR", destination: "Centro" } } as CoreDecision,
+      extractionCtx: {
+        slots: {
+          origin: { value: "Aeropuerto IGR", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+          destination: { value: "Centro", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+          passengers: { value: 1, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" },
+          // NOTA: scheduled_at no está presente — es NOW, no se requiere
+        },
+        overallConfidence: 1.0,
+        conversationalState: "idle",
+        clarifyField: null,
+        askForConfirmation: false,
+      },
+      domain: "dispatch",
+      workflowResult: undefined as any,
+      pricing: { final_price: 15000, tariff_id: 1, base_price: 12000, markup: 3000, adjustments: [], level: "standard", source: "standard", explanation: [], origin: { place_id: "p1", canonical_name: "IGR", operational_zone: "iguazu" }, destination: { place_id: "p2", canonical_name: "Centro", operational_zone: "centro" } } as any,
+    }));
+
+    expect(executeNowTrip).toHaveBeenCalledTimes(1);
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+549111111", "Buscando chofer disponible para tu viaje.");
+    expect(executeTrip).not.toHaveBeenCalled();
+    expect(processLead).not.toHaveBeenCalled();
+  });
+
+  // ── FASE 26.1 — Readiness hardening ──
+
+  it("F26.1-T2: build-extraction-context previous_turn → slot tiene status/source", () => {
+    const ctx = buildExtractionContext(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { origin: null, destination: null },
+      { origin: "open", destination: "open" },
+      { origin: "mi casa", destination: "el centro" },
+    );
+    expect(ctx).toBeDefined();
+    expect(ctx!.slots.origin).toBeDefined();
+    expect(ctx!.slots.origin!.value).toBe("mi casa");
+    expect(ctx!.slots.origin!.score).toBe(0.8);
+    expect(ctx!.slots.origin!.reason).toBe("previous_turn");
+    expect((ctx!.slots.origin as any).status).toBe("INFERRED");
+    expect((ctx!.slots.origin as any).source).toBe("SYSTEM_INFERRED");
+    expect((ctx!.slots.destination as any).status).toBe("INFERRED");
+    expect((ctx!.slots.destination as any).source).toBe("SYSTEM_INFERRED");
+  });
+
+  it("F26.1-T1: FUTURE sin scheduled_at + slots CONFIRMED → NO dispatch (missing_time)", async () => {
+    vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
+    vi.mocked(getChatSession).mockResolvedValue({
+      slots: JSON.stringify({ origin: "iguazú", destination: "aeropuerto" }),
+    } as any);
+    vi.mocked(isAffirmativeMessage).mockReturnValue(true);
+
+    await handlePolicyPipeline(makeBaseInput({
+      domain: "reservation",
+      leadCore: { intent: "PRE_BOOKING", facts: ["affirmation:true", "date:hoy"], confidence: 0.7, slotStability: { origin: "open", destination: "open" }, roleLock: { origin: null, destination: null } } as CoreDecision,
+      // scheduled_at está AUSENTE en confidenceResult — isDispatchReady debe bloquear
+      confidenceResult: { slots: { origin: { value: "iguazú", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, destination: { value: "aeropuerto", score: 0.9, reason: "test", status: "CONFIRMED", source: "SYSTEM_INFERRED" }, passengers: { value: 1, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "SYSTEM_INFERRED" } }, overall_confidence: 0.9, action: "proceed" },
+    }));
+
+    const { resetChatSession } = await import("@/lib/db/database");
+
+    expect(executeTrip).not.toHaveBeenCalled();
+    expect(resetChatSession).toHaveBeenCalled();
   });
 });

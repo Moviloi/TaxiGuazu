@@ -65,7 +65,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
 
   const confirmedSlots: Record<string, ConfirmedSlot> = {};
   for (const [k, v] of Object.entries(rawSlots)) {
-    confirmedSlots[k] = { value: String(v ?? ""), score: 1, reason: "session" };
+    confirmedSlots[k] = { value: String(v ?? ""), score: 1, reason: "session", status: "CONFIRMED", source: "SYSTEM_INFERRED" };
   }
 
   const extractionCtx = {

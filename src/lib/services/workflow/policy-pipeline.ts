@@ -10,7 +10,7 @@ import { buildOpportunityNoPricingMessage, formatOpportunityResponse, buildCance
 import { handleMessage } from "@/lib/ai/handler";
 import { saveContext } from "@/lib/services/memory/context-memory";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
-import { isAffirmativeMessage, isNegativeMessage, AMBIGUOUS_LOCATION_RE } from "@/lib/ai/patterns";
+import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
 import { getPlaceDisplayName } from "@/lib/ai/display-name";
 import { canDispatch as isDispatchReady, canQuote as isQuoteReady, canPrepareQuote as isPrepareQuoteReady } from "@/lib/ai/operational-readiness";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
@@ -198,7 +198,8 @@ export async function handlePolicyPipeline(
       try { rawSlots = JSON.parse(session.slots || "{}"); } catch { return; }
       const origin = rawSlots.origin || "";
       const destination = rawSlots.destination || "";
-      if (origin && destination) {
+      const shortcutDispatchReady = isDispatchReady(extractionCtx, temporal);
+      if (origin && destination && shortcutDispatchReady.allowed) {
         const shortcutPricing = pricing && pricing.final_price > 0
           ? pricing
           : (await resolvePricingForSlots({ origin, destination, passengers: rawSlots.passengers || 1 })).pricingResult;
@@ -249,37 +250,24 @@ export async function handlePolicyPipeline(
 
   const originValue = extractionCtx?.slots?.origin?.value;
   const destValue = extractionCtx?.slots?.destination?.value;
-  const hasOrigin = originValue != null && String(originValue).trim() !== "";
-  const hasDestination = destValue != null && String(destValue).trim() !== "";
-  const hasCompleteRoute = hasOrigin && hasDestination;
-
-  // FASE 16 — Short-circuit: solo DISPATCH sin ambigüedad
-  const hasAmbiguity = leadCore.facts.includes("location_ambiguous:true") ||
-    extractionCtx?.slots?.origin?.reason === "ambiguous_term" ||
-    extractionCtx?.slots?.destination?.reason === "ambiguous_term" ||
-    (originValue != null && (extractionCtx?.slots?.origin?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(originValue))) ||
-    (destValue != null && (extractionCtx?.slots?.destination?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(destValue)));
 
   // FASE 21/24 — Operational readiness log
   const prepareQuoteReady = isPrepareQuoteReady(extractionCtx);
   const quoteReady = isQuoteReady(extractionCtx);
   const dispatchReady = isDispatchReady(extractionCtx, temporal);
 
-  const canDispatch = operationalMode === "DISPATCH" && hasCompleteRoute && !hasAmbiguity;
+  const canDispatch = operationalMode === "DISPATCH" && dispatchReady.allowed;
   log.info("[DISPATCH_DECISION]", {
     decision: canDispatch ? "DISPATCH" : "NO_DISPATCH",
     motivo: canDispatch ? "ready_for_dispatch"
       : operationalMode !== "DISPATCH" ? `mode=${operationalMode}`
-      : !hasCompleteRoute ? "incomplete_route"
-      : hasAmbiguity ? "location_ambiguous"
+      : dispatchReady.blockedBy.length > 0 ? dispatchReady.blockedBy.join(",")
       : "unknown",
     operationalMode,
     temporal,
     nowExplicito: leadCore.intent === "NOW",
-    routeComplete: hasCompleteRoute,
-    locationCertainty: hasAmbiguity ? "ambiguous" : "certain",
+    dispatchReadyBlockedBy: dispatchReady.blockedBy,
     pricingMatched: pricing?.final_price != null && pricing.final_price > 0,
-    passengersStatus: extractionCtx?.slots?.passengers?.value != null ? "present" : "unknown",
   });
 
   // FASE 22.2 — Conversation phase log
