@@ -81,11 +81,15 @@ export function buildPriceInfo(
   destinationName: string,
   price: number,
   lang: Lang,
+  originDisplay?: string,
+  destDisplay?: string,
 ): string {
+  const o = originDisplay ?? originName;
+  const d = destDisplay ?? destinationName;
   if (lang.startsWith("pt")) {
-    return `O traslado de ${originName} para ${destinationName} custa R$ ${price}.`;
+    return `O traslado de ${o} para ${d} custa R$ ${price}.`;
   }
-  return `El traslado de ${originName} a ${destinationName} cuesta $${price} ARS.`;
+  return `El traslado de ${o} a ${d} cuesta $${price} ARS.`;
 }
 
 export function buildOpportunityNoPricingMessage(lang: string): string {
@@ -205,8 +209,16 @@ export function buildNowDispatchResponse(lang: Lang): string {
   return "Buscando chofer disponible para tu viaje. Te avisamos cuando alguien tome el servicio.";
 }
 
-export function buildAmbiguousLocationConfirm(origin: string, dest: string, lang: Lang): string {
-  if (lang === "en") return `Just to confirm: from ${origin} to ${dest}. Could you give me the exact addresses?`;
-  if (lang === "pt") return `Só para confirmar: de ${origin} para ${dest}. Pode me passar os endereços exatos?`;
-  return `Solo para confirmar: de ${origin} a ${dest}. ¿Podés darme las direcciones exactas?`;
+export function buildAmbiguousLocationConfirm(
+  origin: string,
+  dest: string,
+  lang: Lang,
+  originDisplay?: string,
+  destDisplay?: string,
+): string {
+  const o = originDisplay ?? origin;
+  const d = destDisplay ?? dest;
+  if (lang === "en") return `Just to confirm: from ${o} to ${d}. Could you give me the exact addresses?`;
+  if (lang === "pt") return `Só para confirmar: de ${o} para ${d}. Pode me passar os endereços exatos?`;
+  return `Solo para confirmar: de ${o} a ${d}. ¿Podés darme las direcciones exactas?`;
 }

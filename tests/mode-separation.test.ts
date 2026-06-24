@@ -289,9 +289,9 @@ describe("T-CTX: buildExtractionContext", () => {
     expect(ctx).toBeDefined();
     // Should use roleLock raw values as fallback (score = 0)
     expect(ctx!.slots.origin.value).toBe("aeropuerto");
-    expect(ctx!.slots.origin.score).toBe(1.0);
+    expect(ctx!.slots.origin.score).toBe(0.6);
     expect(ctx!.slots.destination.value).toBe("centro");
-    expect(ctx!.slots.destination.score).toBe(1.0);
+    expect(ctx!.slots.destination.score).toBe(0.6);
   });
 
   it("T-CTX-4: no roleLock, no confidence → empty context", () => {

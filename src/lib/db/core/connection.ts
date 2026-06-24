@@ -452,6 +452,7 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE chat_sessions ADD COLUMN conversational_state TEXT DEFAULT 'idle'",
     "ALTER TABLE chat_sessions ADD COLUMN dispatch_state TEXT DEFAULT 'idle'",
     "ALTER TABLE chat_sessions ADD COLUMN trip_state TEXT DEFAULT NULL",
+    "ALTER TABLE chat_sessions ADD COLUMN slot_states TEXT DEFAULT NULL",
   ];
   for (const sql of migrations) {
     try { await db.execute({ sql }); } catch { /* column may already exist */ }

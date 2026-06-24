@@ -96,7 +96,11 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
             const destVal = ctx?.extraction?.slots?.destination?.value
               ?? decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":")
               ?? "";
-            return buildAmbiguousLocationConfirm(String(originVal), String(destVal), lang);
+            return buildAmbiguousLocationConfirm(
+              String(originVal), String(destVal), lang,
+              ctx?.extraction?.tariff?.displayOrigin,
+              ctx?.extraction?.tariff?.displayDestination,
+            );
           }
           const mapped = next.field === "scheduled_at" ? "time" : next.field;
           return buildGenericClarify(mapped, lang);
@@ -112,6 +116,8 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
           tariff.canonicalDestination ?? "destino",
           tariff.price,
           lang,
+          tariff.displayOrigin,
+          tariff.displayDestination,
         );
       }
       if (lang === "en") return `${greet}, for pricing and availability, an operator will assist you shortly.`;
@@ -127,7 +133,11 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
         const destVal = ctx?.extraction?.slots?.destination?.value
           ?? decision.core.facts.find(f => f.startsWith("destination:"))?.split(":").slice(1).join(":")
           ?? "";
-        return buildAmbiguousLocationConfirm(String(originVal), String(destVal), lang);
+        return buildAmbiguousLocationConfirm(
+          String(originVal), String(destVal), lang,
+          ctx?.extraction?.tariff?.displayOrigin,
+          ctx?.extraction?.tariff?.displayDestination,
+        );
       }
       const mapped = next.field === "scheduled_at" ? "time" : next.field;
       return buildGenericClarify(mapped, lang);

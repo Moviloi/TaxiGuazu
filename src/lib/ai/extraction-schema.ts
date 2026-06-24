@@ -14,7 +14,7 @@ export const TripExtractionSchema = z.object({
 export type TripExtraction = z.infer<typeof TripExtractionSchema>;
 
 export interface ExtractionResult {
-  slots: Record<string, { value: string | number | null; score: number; reason: string }>;
+  slots: Record<string, { value: string | number | null; score: number; reason: string; source?: string; status?: string }>;
   overall_confidence: number;
   action: "proceed" | "clarify" | "fallback_regex";
   clarify_field?: string;

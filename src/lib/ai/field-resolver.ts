@@ -1,15 +1,13 @@
 // FIELD RESOLVER — single source of truth for "¿qué campo pedir después?"
-// Elimina reglas hardcodeadas en policy-ahora y policy-reserva.
 //
-// Prioridad unificada (extraction primero, core facts como fallback):
-//   1. Ubicación ambigua (origin/destination con reason=ambiguous_term)
-//   2. clarifyField origin/destination (viene del workflow → determinó qué falta)
-//   3. Core facts: origin/destination faltantes
-//   4. Core facts: location_ambiguous (antes que passengers!)
-//   5. Passengers faltantes
-//   6. Scheduled_at faltante
-//   7. Core facts: time/passengers faltantes
-//   8. null = todos los campos requeridos completos
+// Prioridad FASE 20.4 (basada en status semántico, no en reason string):
+//   1. CONFIRMATION_PENDING origin/destination (necesitan confirmación antes que todo)
+//   2. USER_CORRECTED (corrección pendiente de re-confirmación)
+//   3. RAW missing mandatory fields
+//   4. Low confidence fields (< 0.7)
+//   5. Core facts location_ambiguous (fallback)
+//   6. Core facts time/passengers faltantes
+//   7. null = todos completos
 
 import type { HandlerContext } from "./types";
 
@@ -25,14 +23,26 @@ export function resolveNextRequiredField(
   const extraction = ctx?.extraction;
   const slots = extraction?.slots ?? {};
 
-  // Si no hay ningún dato, no podemos inferir qué falta
   if (!extraction && !coreFacts) return { field: null, reason: "missing" };
 
-  // Priority 1: Ambiguous location (extraction tiene reason=ambiguous_term)
-  if (slots.origin?.reason === "ambiguous_term") return { field: "origin", reason: "ambiguous" };
-  if (slots.destination?.reason === "ambiguous_term") return { field: "destination", reason: "ambiguous" };
+  // ── Priority 1: CONFIRMATION_PENDING slots (status-based) ──
+  const originStatus = (slots.origin as any)?.status;
+  const destStatus = (slots.destination as any)?.status;
+  const originSource = (slots.origin as any)?.source;
+  const destSource = (slots.destination as any)?.source;
 
-  // Priority 2: clarifyField del workflow
+  if (originStatus === "CONFIRMATION_PENDING" && originSource !== "USER_CORRECTED") {
+    return { field: "origin", reason: "ambiguous" };
+  }
+  if (destStatus === "CONFIRMATION_PENDING" && destSource !== "USER_CORRECTED") {
+    return { field: "destination", reason: "ambiguous" };
+  }
+
+  // ── Priority 2: USER_CORRECTED (corrección pendiente de re-confirmación) ──
+  if (originSource === "USER_CORRECTED") return { field: "origin", reason: "ambiguous" };
+  if (destSource === "USER_CORRECTED") return { field: "destination", reason: "ambiguous" };
+
+  // ── Priority 3: clarifyField del workflow ──
   const cf = extraction?.clarifyField;
   if (cf === "origin") return { field: "origin", reason: "missing" };
   if (cf === "destination") return { field: "destination", reason: "missing" };
@@ -41,7 +51,11 @@ export function resolveNextRequiredField(
     return { field: "scheduled_at", reason: "missing" };
   }
 
-  // Si no hay extracción con datos, delegar todo a core facts
+  // Fallback a reason-based matching para slots sin status
+  if (slots.origin?.reason === "ambiguous_term") return { field: "origin", reason: "ambiguous" };
+  if (slots.destination?.reason === "ambiguous_term") return { field: "destination", reason: "ambiguous" };
+
+  // ── Sin datos de extracción: delegar a core facts ──
   const hasExtractionData = Object.keys(slots).length > 0 &&
     Object.values(slots).some(s => s && s.score > 0);
 
@@ -56,26 +70,26 @@ export function resolveNextRequiredField(
     return { field: null, reason: "missing" };
   }
 
-  // ── Hay datos de extracción: usar priority con fallback parcial ──
+  // ── Hay datos de extracción ──
 
-  // Priority 3: Core facts origin/destination faltantes
+  // Priority 4: Core facts origin/destination faltantes
   if (coreFacts) {
     if (!coreFacts.some(f => f.startsWith("origin:"))) return { field: "origin", reason: "missing" };
     if (!coreFacts.some(f => f.startsWith("destination:"))) return { field: "destination", reason: "missing" };
   }
 
-  // Priority 4: Passengers missing (de extracción)
+  // Priority 5: Passengers missing/low
   const paxScore = slots.passengers?.score ?? 0;
   if (paxScore < 0.7) return { field: "passengers", reason: paxScore === 0 ? "missing" : "low_confidence" };
 
-  // Priority 5: Scheduled time missing (de extracción)
+  // Priority 6: Scheduled_at missing/low
   const schedScore = slots.scheduled_at?.score ?? 0;
   if (schedScore < 0.7) return { field: "scheduled_at", reason: schedScore === 0 ? "missing" : "low_confidence" };
 
-  // Priority 6: Core facts location_ambiguous (rodeó extraction pero facts dice ambiguo)
+  // Priority 7: Core facts location_ambiguous (fallback)
   if (coreFacts?.includes("location_ambiguous:true")) return { field: "origin", reason: "ambiguous" };
 
-  // Priority 7: Core facts time/passengers
+  // Priority 8: Core facts time/passengers
   if (coreFacts) {
     if (!coreFacts.some(f => f.startsWith("passengers:"))) return { field: "passengers", reason: "missing" };
     if (!coreFacts.some(f => f.startsWith("time:")) && !coreFacts.some(f => f.startsWith("date:"))) {

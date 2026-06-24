@@ -583,6 +583,7 @@ export async function upsertChatSession(
   confidence?: Record<string, number>,
   conversationalState?: string,
   clarifyField?: string,
+  slotStates?: string | null,
 ): Promise<void> {
   await ensureSchema();
   const existing = await getChatSession(phone);
@@ -596,14 +597,15 @@ export async function upsertChatSession(
     const mergedConfidence = confidence
       ? { ...baseConfidence, ...confidence }
       : existing.confidence;
+    const mergedSlotStates = slotStates ?? existing.slot_states;
     await getDb().execute({
-      sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, conversational_state = ?, clarify_field = ?, updated_at = ? WHERE phone = ?`,
-      args: [JSON.stringify(merged), JSON.stringify(mergedConfidence), now, conversationalState || existing.conversational_state || "idle", clarifyField || existing.clarify_field || null, now, phone],
+      sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, slot_states = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, conversational_state = ?, clarify_field = ?, updated_at = ? WHERE phone = ?`,
+      args: [JSON.stringify(merged), JSON.stringify(mergedConfidence), mergedSlotStates, now, conversationalState || existing.conversational_state || "idle", clarifyField || existing.clarify_field || null, now, phone],
     });
   } else {
     await getDb().execute({
-      sql: `INSERT INTO chat_sessions (phone, slots, confidence, extraction_count, last_extracted_at, conversational_state, clarify_field, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
-      args: [phone, JSON.stringify(slots), JSON.stringify(confidence || {}), now, conversationalState || "idle", clarifyField || null, now],
+      sql: `INSERT INTO chat_sessions (phone, slots, confidence, slot_states, extraction_count, last_extracted_at, conversational_state, clarify_field, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+      args: [phone, JSON.stringify(slots), JSON.stringify(confidence || {}), slotStates ?? null, now, conversationalState || "idle", clarifyField || null, now],
     });
   }
 }

@@ -271,6 +271,7 @@ export interface ChatSessionRow {
   conversational_state: string | null;
   dispatch_state: string | null;
   trip_state: string | null;
+  slot_states: string | null;
 }
 
 export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";

@@ -45,17 +45,18 @@ export function buildExtractionContext(
   }
 
   // CAMBIO 4: RoleLock solo actúa como fallback, no sobrescribe alias resueltos
+  // Score 0.6 (no 1.0) porque es inferencia del sistema, no confirmación del usuario.
   if (roleLock?.origin && (!slots.origin || slots.origin.score === 0)) {
     slots.origin = {
       value: roleLock.origin,
-      score: 1.0,
+      score: 0.6,
       reason: "core_role_lock",
     };
   }
   if (roleLock?.destination && (!slots.destination || slots.destination.score === 0)) {
     slots.destination = {
       value: roleLock.destination,
-      score: 1.0,
+      score: 0.6,
       reason: "core_role_lock",
     };
   }
@@ -72,6 +73,8 @@ export function buildExtractionContext(
           price: pricing.final_price > 0 ? pricing.final_price : undefined,
           canonicalOrigin: pricing.origin.canonical_name ?? undefined,
           canonicalDestination: pricing.destination.canonical_name ?? undefined,
+          displayOrigin: undefined,
+          displayDestination: undefined,
           method: "v3",
         }
       : undefined,

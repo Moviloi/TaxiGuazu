@@ -1,4 +1,5 @@
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
+import { shouldRequestConfirmation, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
 import { insertMessage, getChatSession, resetChatSession } from "@/lib/db/database";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
@@ -10,6 +11,8 @@ import { handleMessage } from "@/lib/ai/handler";
 import { saveContext } from "@/lib/services/memory/context-memory";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { isAffirmativeMessage, isNegativeMessage, AMBIGUOUS_LOCATION_RE } from "@/lib/ai/patterns";
+import { getPlaceDisplayName } from "@/lib/ai/display-name";
+import { canDispatch as isDispatchReady, canQuote as isQuoteReady, canPrepareQuote as isPrepareQuoteReady } from "@/lib/ai/operational-readiness";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
@@ -62,6 +65,24 @@ export async function handlePolicyPipeline(
   );
 
   const lang = detectLeadLang(text);
+
+  // FASE 20.3 — Resolver display names para mensajes UX
+  if (extractionCtx?.tariff) {
+    if (extractionCtx.tariff.canonicalOrigin) {
+      const { displayName } = await getPlaceDisplayName(extractionCtx.tariff.canonicalOrigin);
+      extractionCtx.tariff.displayOrigin = displayName;
+    }
+    if (extractionCtx.tariff.canonicalDestination) {
+      const { displayName } = await getPlaceDisplayName(extractionCtx.tariff.canonicalDestination);
+      extractionCtx.tariff.displayDestination = displayName;
+    }
+    log.info("[DISPLAY_NAME]", {
+      canonicalOrigin: extractionCtx.tariff.canonicalOrigin,
+      displayOrigin: extractionCtx.tariff.displayOrigin,
+      canonicalDest: extractionCtx.tariff.canonicalDestination,
+      displayDest: extractionCtx.tariff.displayDestination,
+    });
+  }
 
   // FASE 16 — Temporalidad desde facts
   const temporal: TemporalMode = temporalFromFacts(leadCore.facts);
@@ -212,6 +233,20 @@ export async function handlePolicyPipeline(
     }
   }
 
+  // FASE 20.4 — Slot Confirmation UX: si hay CONFIRMATION_PENDING, mostrar confirmación antes de seguir
+  if (shouldRequestConfirmation(extractionCtx)) {
+    const confirm = buildSlotConfirmationMessage(extractionCtx!, lang);
+    log.info("[SLOT_CONFIRMATION_UI]", {
+      pendingSlots: confirm.pendingSlots,
+      message: confirm.message?.substring(0, 80),
+      buttons: confirm.buttons?.map(b => b.id),
+    });
+    await sendInteractiveButtons(phone, confirm.message!, confirm.buttons!);
+    await insertMessage(conversation.id, "assistant", confirm.message!);
+    await setConversationalState(phone, "slot_confirmation");
+    return;
+  }
+
   const originValue = extractionCtx?.slots?.origin?.value;
   const destValue = extractionCtx?.slots?.destination?.value;
   const hasOrigin = originValue != null && String(originValue).trim() !== "";
@@ -224,6 +259,11 @@ export async function handlePolicyPipeline(
     extractionCtx?.slots?.destination?.reason === "ambiguous_term" ||
     (originValue != null && (extractionCtx?.slots?.origin?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(originValue))) ||
     (destValue != null && (extractionCtx?.slots?.destination?.score ?? 0) < 0.7 && AMBIGUOUS_LOCATION_RE.test(String(destValue)));
+
+  // FASE 21/24 — Operational readiness log
+  const prepareQuoteReady = isPrepareQuoteReady(extractionCtx);
+  const quoteReady = isQuoteReady(extractionCtx);
+  const dispatchReady = isDispatchReady(extractionCtx, temporal);
 
   const canDispatch = operationalMode === "DISPATCH" && hasCompleteRoute && !hasAmbiguity;
   log.info("[DISPATCH_DECISION]", {
@@ -240,6 +280,31 @@ export async function handlePolicyPipeline(
     locationCertainty: hasAmbiguity ? "ambiguous" : "certain",
     pricingMatched: pricing?.final_price != null && pricing.final_price > 0,
     passengersStatus: extractionCtx?.slots?.passengers?.value != null ? "present" : "unknown",
+  });
+
+  // FASE 22.2 — Conversation phase log
+  const phase =
+    dispatchReady.allowed
+      ? "READY_TO_DISPATCH"
+      : dispatchReady.blockedBy.some(x => x.includes("pending"))
+        ? "SLOT_CONFIRMATION"
+        : quoteReady.allowed
+          ? "QUOTE"
+          : prepareQuoteReady.allowed
+            ? "NEEDS_PASSENGERS"
+            : "DATA_COLLECTION";
+  log.info("[CONVERSATION_PHASE]", {
+    phase,
+    prepareQuoteAllowed: prepareQuoteReady.allowed,
+    quoteAllowed: quoteReady.allowed,
+    dispatchAllowed: dispatchReady.allowed,
+    blockedBy: dispatchReady.blockedBy.length > 0 ? dispatchReady.blockedBy : quoteReady.blockedBy,
+    slots: Object.fromEntries(
+      Object.entries(extractionCtx?.slots ?? {}).map(([k, v]) => [
+        k,
+        { status: v?.status ?? null, source: v?.source ?? null },
+      ])
+    ),
   });
 
   if (canDispatch) {

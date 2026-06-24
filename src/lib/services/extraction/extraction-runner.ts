@@ -9,7 +9,7 @@ import type { SlotConversationalContext } from "@/lib/services/workflow/slot-wor
 import { evaluateWorkflowTransition } from "@/lib/services/workflow/slot-workflow";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import { assertCoreRouterPolicy } from "@/lib/ai/guard";
-import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
+import { isAffirmativeMessage, isNegativeMessage, isCorrectionMessage } from "@/lib/ai/patterns";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import type { CoreDecision, ConfidenceMap } from "@/lib/ai/types";
 import { mapIntentToDomain } from "@/lib/ai/domain";
@@ -18,7 +18,8 @@ import { buildConfidenceMap } from "@/lib/services/extraction/confidence-map";
 import { loadContext, mergeContext } from "@/lib/services/memory/context-memory";
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
-import { loadPreviousSlots } from "@/lib/services/workflow/load-previous-slots";
+import { loadPreviousSlots, loadPreviousSlotStates } from "@/lib/services/workflow/load-previous-slots";
+import { buildSlotStates } from "@/lib/ai/slot-state";
 import { evaluateCompleteness } from "@/lib/services/workflow/evaluate-completeness";
 import { log } from "@/lib/utils/logger";
 
@@ -125,18 +126,20 @@ export async function runExtractionPipeline(
       log.info("[BLOCKED] generateGroqExtraction", extractionGuard);
       return null;
     }
-    const [prevSlotsEarlyResult, ctxMemory] = await Promise.all([
+    const [prevSlotsEarlyResult, prevSlotStatesResult, ctxMemory] = await Promise.all([
       loadPreviousSlots(phone),
+      loadPreviousSlotStates(phone),
       loadContext(phone),
     ]);
     prevSlotsEarly = prevSlotsEarlyResult;
+    const prevSlotStates = prevSlotStatesResult;
     log.info("[CONTEXT] cargado:", { origin: ctxMemory.origin, destination: ctxMemory.destination, intent: ctxMemory.intent });
     log.info("[TRACE EXTRACTION START]", {
       roleLock: coreDecisionEarly?.roleLock,
       slotStability: coreDecisionEarly?.slotStability,
       prevSlots: prevSlotsEarly,
     });
-    const raw = await extractSlots(text, history, customerName || undefined, {
+    let raw = await extractSlots(text, history, customerName || undefined, {
       roleLock: coreDecisionEarly.roleLock,
       slotStability: coreDecisionEarly.slotStability,
       prevSlots: prevSlotsEarly,
@@ -148,13 +151,59 @@ export async function runExtractionPipeline(
 
     const domain = mapIntentToDomain(leadCore.intent);
     const convState = await getConversationalState(phone);
+
+    // FASE 18.2: Location confirmation — when core detects affirmation + existing ambiguous slots
+    const hasAffirmation = leadCore.facts?.some(f => f.startsWith("affirmation:"))
+      || isAffirmativeMessage(text);
+    const hasPrevSlotsLocation = prevSlotsEarly?.origin && prevSlotsEarly?.destination;
+    // FASE 20.4: Correction detection — user correcting a previously extracted slot
+    const hasCorrection = isCorrectionMessage(text);
+
     if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
       log.info("[COMPLETENESS] awaiting_confirmation + affirmation: skipping completeness");
+    } else if (hasAffirmation && hasPrevSlotsLocation && convState !== "awaiting_confirmation" && convState !== "idle") {
+      // User confirmed previously ambiguous location — promote existing slots
+      log.info("[CONFIRMATION_STATE] affirmation + existing slots, promoting previous slots");
+      log.info("[CONFIRMATION_DETECTED]", {
+        text: text.substring(0, 80),
+        prevOrigin: String(prevSlotsEarly.origin).substring(0, 40),
+        prevDest: String(prevSlotsEarly.destination).substring(0, 40),
+        convState,
+      });
+      if (!raw) {
+        const promoted = {
+          origin: String(prevSlotsEarly.origin),
+          destination: String(prevSlotsEarly.destination),
+          ...(prevSlotsEarly.passengers ? { passengers: Number(prevSlotsEarly.passengers) } : {}),
+          ...(prevSlotsEarly.scheduled_at ? { scheduled_at: prevSlotsEarly.scheduled_at } : {}),
+          ...(prevSlotsEarly.flight ? { flight: prevSlotsEarly.flight } : {}),
+        };
+        raw = promoted as any;
+        log.info("[CONFIRMATION_RESULT] promoted prevSlots to current extraction:", {
+          origin: promoted.origin,
+          destination: promoted.destination,
+        });
+      } else {
+        const rawEmpty = Object.keys(raw!).filter(k => raw![k] != null && String(raw![k]).trim() !== "").length === 0;
+        if (rawEmpty) {
+          raw = {
+          origin: String(prevSlotsEarly.origin),
+          destination: String(prevSlotsEarly.destination),
+          ...(prevSlotsEarly.passengers ? { passengers: Number(prevSlotsEarly.passengers) } : {}),
+          ...(prevSlotsEarly.scheduled_at ? { scheduled_at: prevSlotsEarly.scheduled_at } : {}),
+          ...(prevSlotsEarly.flight ? { flight: prevSlotsEarly.flight } : {}),
+        } as any;
+        log.info("[CONFIRMATION_RESULT] promoted prevSlots to current extraction:", {
+          origin: String(prevSlotsEarly.origin),
+          destination: String(prevSlotsEarly.destination),
+        });
+      }
+      }
     } else if (convState === "awaiting_confirmation" && isNegativeMessage(text)) {
-      const hasNewData = raw != null && Object.keys(raw).some(k => raw[k] != null && String(raw[k]).trim() !== "");
+      const hasNewData = raw != null && Object.keys(raw!).some(k => raw![k] != null && String(raw![k]).trim() !== "");
       if (hasNewData) {
         log.info("[CONFIRMATION] negative with new slot data — treating as correction, not cancellation");
-        const completeness = evaluateCompleteness(raw, domain);
+        const completeness = evaluateCompleteness(raw!, domain);
         if (completeness.status === "ASK") {
           const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
           log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
@@ -173,13 +222,25 @@ export async function runExtractionPipeline(
         return null;
       }
     } else {
-      const completeness = evaluateCompleteness(raw, domain);
+      const completeness = evaluateCompleteness(raw!, domain);
       if (completeness.status === "ASK") {
-        const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
-        log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
-        await sendWhatsAppMessage(phone, msg);
-        await insertMessage(conversationId, "assistant", msg);
-        return null;
+        // FASE 22.1: bypass para afirmaciones y correcciones
+        if (
+          (hasAffirmation || hasCorrection) &&
+          hasPrevSlotsLocation &&
+          convState !== "idle"
+        ) {
+          log.info("[COMPLETENESS_BYPASS]", {
+            reason: hasCorrection ? "user_correction" : "user_confirmation",
+            previousState: convState,
+          });
+        } else {
+          const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
+          log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
+          await sendWhatsAppMessage(phone, msg);
+          await insertMessage(conversationId, "assistant", msg);
+          return null;
+        }
       }
     }
 
@@ -230,20 +291,78 @@ export async function runExtractionPipeline(
             }
           }
         }
+        // FASE 20.4: RoleLock asigna rol pero preserva certeza existente
         if (coreDecisionEarly.roleLock?.origin) {
-          confidenceResult.slots.origin = {
-            value: coreDecisionEarly.roleLock.origin,
-            score: 1.0,
-            reason: "core_role_lock",
-          };
+          if (!confidenceResult.slots.origin || confidenceResult.slots.origin.score === 0 || confidenceResult.slots.origin.value == null) {
+            confidenceResult.slots.origin = {
+              value: coreDecisionEarly.roleLock.origin,
+              score: 0.6,
+              reason: "core_role_lock",
+            };
+          }
+          // else: slot ya existe con valor+confianza → roleLock solo confirma el rol
         }
         if (coreDecisionEarly.roleLock?.destination) {
-          confidenceResult.slots.destination = {
-            value: coreDecisionEarly.roleLock.destination,
-            score: 1.0,
-            reason: "core_role_lock",
-          };
+          if (!confidenceResult.slots.destination || confidenceResult.slots.destination.score === 0 || confidenceResult.slots.destination.value == null) {
+            confidenceResult.slots.destination = {
+              value: coreDecisionEarly.roleLock.destination,
+              score: 0.6,
+              reason: "core_role_lock",
+            };
+          }
         }
+
+        // FASE 18.2: Override to 1.0 for slots confirmed via location affirmation
+        if (hasAffirmation) {
+          if (confidenceResult.slots.origin && prevSlotsEarly.origin) {
+            confidenceResult.slots.origin.score = 1.0;
+            confidenceResult.slots.origin.reason = "user_confirmed";
+          }
+          if (confidenceResult.slots.destination && prevSlotsEarly.destination) {
+            confidenceResult.slots.destination.score = 1.0;
+            confidenceResult.slots.destination.reason = "user_confirmed";
+          }
+          log.info("[CONFIRMATION_RESULT] overridden confirmed slots to 1.0");
+        }
+
+        // Apply USER_CORRECTED for corrections
+        if (hasCorrection) {
+          for (const [k, slot] of Object.entries(confidenceResult.slots)) {
+            if (k === "origin" || k === "destination") {
+              const prevVal = prevSlotsEarly[k];
+              if (slot.value != null && prevVal != null && String(slot.value) !== String(prevVal)) {
+                (slot as any).source = "USER_CORRECTED";
+                (slot as any).status = "CONFIRMATION_PENDING";
+              }
+            }
+          }
+        }
+        // FASE 23: Build persisted slot_states from runtime state + previous states
+        const slotStates = buildSlotStates(
+          confidenceResult.slots,
+          prevSlotStates,
+          hasCorrection,
+          hasAffirmation,
+          prevSlotsEarly,
+        );
+        // Write source/status back to confidenceResult.slots for downstream compatibility
+        for (const [k, entry] of Object.entries(slotStates)) {
+          const existing = confidenceResult.slots[k] as any;
+          if (existing) {
+            existing.source = entry.source;
+            existing.status = entry.status;
+          }
+        }
+        log.info("[SLOT_STATE_TRANSITION]", {
+          before: prevSlotsEarly,
+          event: hasAffirmation ? "confirmation" : hasCorrection ? "correction" : "extraction",
+          after: Object.fromEntries(
+            Object.entries(confidenceResult.slots).map(([k, v]) => [
+              k,
+              { value: v.value, score: v.score, source: (v as any).source ?? null, status: (v as any).status ?? null, reason: v.reason }
+            ])
+          ),
+        });
 
         log.info("[EXTRACTION_RESULT]", {
           rawSlots: Object.fromEntries(
@@ -291,7 +410,7 @@ export async function runExtractionPipeline(
         const mergedWithMemory = mergeContext(mergedSlotsForDb, ctxMemory, confidenceResult.overall_confidence);
         log.info("[CONTEXT] merge completado:", Object.keys(mergedWithMemory).join(", "));
 
-        await upsertChatSession(phone, mergedWithMemory, mergedConfidence, workflowResult.state, workflowResult.clarifyField ?? undefined);
+        await upsertChatSession(phone, mergedWithMemory, mergedConfidence, workflowResult.state, workflowResult.clarifyField ?? undefined, JSON.stringify(slotStates));
 
         extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing);
         log.info("[EXTRACTION] extractionNote generado, len:", extractionNote.length);

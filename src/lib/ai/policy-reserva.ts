@@ -206,6 +206,8 @@ function buildReservaFinalResponse(
         extraction.tariff.canonicalDestination ?? "destino",
         extraction.tariff.price,
         lang,
+        extraction.tariff.displayOrigin,
+        extraction.tariff.displayDestination,
       ),
       nextExpectedFields: [],
     };
@@ -225,7 +227,10 @@ function buildReservaFinalResponse(
     const next = resolveNextRequiredField(ctx, decision.core.facts);
     if (next.reason === "ambiguous") {
       return {
-        finalResponse: buildAmbiguousLocationConfirm(locationValue("origin"), locationValue("destination"), lang),
+        finalResponse: buildAmbiguousLocationConfirm(
+          locationValue("origin"), locationValue("destination"), lang,
+          extraction?.tariff?.displayOrigin, extraction?.tariff?.displayDestination,
+        ),
         nextExpectedFields: [next.field ?? "location_ambiguous"],
       };
     }
@@ -241,7 +246,10 @@ function buildReservaFinalResponse(
     const next = resolveNextRequiredField(ctx, decision.core.facts);
     if (next.reason === "ambiguous") {
       return {
-        finalResponse: buildAmbiguousLocationConfirm(locationValue("origin"), locationValue("destination"), lang),
+        finalResponse: buildAmbiguousLocationConfirm(
+          locationValue("origin"), locationValue("destination"), lang,
+          extraction?.tariff?.displayOrigin, extraction?.tariff?.displayDestination,
+        ),
         nextExpectedFields: [next.field ?? "location_ambiguous"],
       };
     }
@@ -265,8 +273,8 @@ export function buildConfirmationMessage(extraction: ExtractionContext, lang: La
   const slots = extraction.slots;
   const pax = Number(slots.passengers?.value ?? 1);
   const date = slots.scheduled_at?.value ? formatSchedule(slots.scheduled_at.value as string, lang) : null;
-  const origin = tariff.canonicalOrigin ?? slots.origin?.value ?? "origen";
-  const destination = tariff.canonicalDestination ?? slots.destination?.value ?? "destino";
+  const origin = tariff.displayOrigin ?? tariff.canonicalOrigin ?? slots.origin?.value ?? "origen";
+  const destination = tariff.displayDestination ?? tariff.canonicalDestination ?? slots.destination?.value ?? "destino";
   const price = tariff.price!;
 
   if (lang === "en") {
@@ -422,7 +430,10 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { re
 
   if (originIsAmbiguous || destIsAmbiguous) {
     return {
-      response: buildAmbiguousLocationConfirm(String(origin), String(destination), lang),
+      response: buildAmbiguousLocationConfirm(
+        String(origin), String(destination), lang,
+        extraction?.tariff?.displayOrigin, extraction?.tariff?.displayDestination,
+      ),
       nextField: "location_ambiguous",
     };
   }

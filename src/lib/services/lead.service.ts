@@ -20,6 +20,9 @@ import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/ev
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
 import { getConversationalState } from "@/lib/db/state-accessors";
+import { buildFieldSelector } from "@/lib/ai/slot-confirmation";
+import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
+import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 
 import { log } from "@/lib/utils/logger";
 
@@ -66,6 +69,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const session = await getChatSession(phone);
     const memory = buildMemory(session, history);
     const leadCore = core(text, (memory.sessionMemory.lastIntent ?? undefined) as Intent | undefined);
+
+    // ── ZONE: SLOT CONFIRMATION BUTTONS ──
+    const SLOT_BUTTON_RE = /^(slot_confirm|slot_change|change_origin|change_destination|change_passengers|change_scheduled_at|change_back)$/;
+    const slotButtonMatch = trimmed.match(SLOT_BUTTON_RE);
+    if (slotButtonMatch) {
+      await handleSlotConfirmationButton(phone, trimmed, conversation, history, customerName, leadCore, session);
+      return;
+    }
     log.info("[CORE_RESULT]", {
       input: text,
       facts: leadCore.facts,
@@ -154,5 +165,139 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     } catch (e3) {
       log.error("[LEAD_ERROR] fallback admin notify también falló:", e3);
     }
+  }
+}
+
+// ── ZONE: SLOT CONFIRMATION BUTTON HANDLER ──
+export async function handleSlotConfirmationButton(
+  phone: string,
+  buttonId: string,
+  conversation: { id: number },
+  history: any[],
+  customerName: string | null,
+  leadCore: ReturnType<typeof core>,
+  session: Awaited<ReturnType<typeof getChatSession>>,
+): Promise<void> {
+  const lang = detectLeadLang(buttonId);
+  const buttonType = buttonId as string;
+
+  log.info("[BUTTON_ROUTING]", {
+    buttonId,
+    currentState: session?.conversational_state ?? "unknown",
+    action: buttonType === "slot_confirm" ? "confirm"
+      : buttonType === "slot_change" ? "show_field_selector"
+      : buttonType.startsWith("change_") ? `change_field:${buttonType.replace("change_", "")}`
+      : "unknown",
+  });
+
+  if (buttonType === "slot_confirm") {
+    let rawSlots: Record<string, any> = {};
+    let rawConfidence: Record<string, number> = {};
+    try {
+      const s = await getChatSession(phone);
+      if (s?.slots) rawSlots = JSON.parse(s.slots);
+      if (s?.confidence) rawConfidence = JSON.parse(s.confidence);
+    } catch { /* ignore */ }
+
+    // Promote all CONFIRMATION_PENDING slots to CONFIRMED
+    if (rawSlots.origin) rawConfidence.origin = 1.0;
+    if (rawSlots.destination) rawConfidence.destination = 1.0;
+
+    // Save to session
+    const { upsertChatSession } = await import("@/lib/db/database");
+    const { evaluateWorkflowTransition } = await import("@/lib/services/workflow/slot-workflow");
+
+    const syntheticSlots: ExtractionResult["slots"] = {};
+    if (rawSlots.origin != null) syntheticSlots.origin = { value: String(rawSlots.origin), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
+    if (rawSlots.destination != null) syntheticSlots.destination = { value: String(rawSlots.destination), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
+    if (rawSlots.passengers != null) syntheticSlots.passengers = { value: String(rawSlots.passengers), score: 1.0, reason: "user_confirmed" };
+    if (rawSlots.scheduled_at != null) syntheticSlots.scheduled_at = { value: String(rawSlots.scheduled_at), score: 1.0, reason: "user_confirmed" };
+
+    const syntheticConfidence: ExtractionResult = {
+      slots: syntheticSlots,
+      overall_confidence: 1.0,
+      action: "proceed",
+    };
+
+    const workflowResult = await evaluateWorkflowTransition(phone, syntheticConfidence);
+    await upsertChatSession(phone, rawSlots, rawConfidence, workflowResult.state, workflowResult.clarifyField ?? undefined);
+
+    log.info("[USER_SLOT_CONFIRM]", {
+      action: "confirm",
+      confirmedSlots: Object.keys(rawSlots).filter(k => k === "origin" || k === "destination" || k === "passengers"),
+      correctedSlots: [],
+    });
+
+    // Re-route through policy pipeline
+    const parsedData = undefined;
+    const extractionCtx = buildExtractionContext(parsedData, syntheticConfidence, workflowResult, undefined, leadCore?.roleLock, leadCore?.slotStability, rawSlots);
+    const domain = mapIntentToDomain(leadCore.intent);
+    await handlePolicyPipeline({
+      phone, text: buttonId, conversation, history, customerName,
+      leadCore, extractionCtx, pricing: undefined, workflowResult,
+      confidenceResult: syntheticConfidence, prevSlotsEarly: rawSlots, parsedData, domain,
+      sessionUpdatedAt: session?.updated_at,
+    });
+    return;
+  }
+
+  if (buttonType === "slot_change") {
+    const selector = buildFieldSelector(lang);
+    await sendWhatsAppMessage(phone, selector.text);
+    await insertMessage(conversation.id, "assistant", selector.text);
+    return;
+  }
+
+  if (buttonType === "change_origin" || buttonType === "change_destination") {
+    const slotKey = buttonType === "change_origin" ? "origin" : "destination";
+    let rawSlots: Record<string, any> = {};
+    try {
+      const s = await getChatSession(phone);
+      if (s?.slots) rawSlots = JSON.parse(s.slots);
+    } catch { /* ignore */ }
+
+    const currentValue = rawSlots[slotKey];
+    if (!currentValue) {
+      await sendWhatsAppMessage(phone, `Escribí el ${slotKey === "origin" ? "origen" : "destino"} exacto.`);
+      await insertMessage(conversation.id, "assistant", `Escribí el ${slotKey === "origin" ? "origen" : "destino"} exacto.`);
+      return;
+    }
+
+    const { resolveAlias } = await import("@/lib/db/database");
+    const aliasResult = await resolveAlias(String(currentValue));
+    const options = aliasResult.resolved ? [...new Set(aliasResult.names.slice(0, 5))] : [];
+
+    let msg: string;
+    if (options.length > 0) {
+      const lines = options.map((name, i) => `${i + 1}. ${name}`);
+      msg = [`Elegí ${slotKey === "origin" ? "el origen" : "el destino"}:`, ...lines, `${options.length + 1}. Otro lugar`].join("\n");
+    } else {
+      msg = `Escribí el ${slotKey === "origin" ? "origen" : "destino"} exacto.`;
+    }
+    await sendWhatsAppMessage(phone, msg);
+    await insertMessage(conversation.id, "assistant", msg);
+    return;
+  }
+
+  if (buttonType === "change_passengers") {
+    const msg = "¿Cuántos pasajeros son?";
+    await sendWhatsAppMessage(phone, msg);
+    await insertMessage(conversation.id, "assistant", msg);
+    return;
+  }
+
+  if (buttonType === "change_scheduled_at") {
+    const msg = "¿Para qué día y horario necesitás el viaje?";
+    await sendWhatsAppMessage(phone, msg);
+    await insertMessage(conversation.id, "assistant", msg);
+    return;
+  }
+
+  if (buttonType === "change_back") {
+    // Re-send confirmation message (triggers policy pipeline re-evaluation)
+    // For now, just send generic message to restart
+    await sendWhatsAppMessage(phone, "Escribí los datos de tu viaje.");
+    await insertMessage(conversation.id, "assistant", "Escribí los datos de tu viaje.");
+    return;
   }
 }

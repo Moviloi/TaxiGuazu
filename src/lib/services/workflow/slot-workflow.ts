@@ -9,7 +9,8 @@ import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { log } from "@/lib/utils/logger";
 
 // idle: estado operativo normal — permite iniciar o reanudar slots.
-export type SlotConversationalState = "idle" | "collecting_slots" | "awaiting_confirmation";
+// slot_confirmation: esperando que el usuario confirme/corrija slots CONFIRMATION_PENDING
+export type SlotConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_confirmation";
 
 export interface SlotConversationalContext {
   state: SlotConversationalState;
@@ -21,7 +22,8 @@ export interface SlotConversationalContext {
 
 const VALID_SLOT_TRANSITIONS: Record<SlotConversationalState, SlotConversationalState[]> = {
   idle: ["collecting_slots", "awaiting_confirmation"],
-  collecting_slots: ["collecting_slots", "awaiting_confirmation"],
+  collecting_slots: ["collecting_slots", "slot_confirmation", "awaiting_confirmation"],
+  slot_confirmation: ["collecting_slots", "awaiting_confirmation"],
   awaiting_confirmation: ["collecting_slots"],
 };
 

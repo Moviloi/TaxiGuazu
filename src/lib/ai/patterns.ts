@@ -40,6 +40,11 @@ export function isNegativeMessage(text: string): boolean {
   return NEGATIVE_RE.test(text.trim().toLowerCase());
 }
 
+const CORRECTION_RE = /^\s*(no\s*,?\s+|me\s+equivoqu[ée]|es\s+otro\s+(lugar|sitio|destino|origen)|cambi[oóié]\s+(el\s+)?(origen|destino|direcci[óo]n)|corrijo|rectifico|en\s+realidad\s+(es|ser[íi]a)|dec[íi]a\s+mal|me\s+confund[ií]|no,\s*estoy\s+en|no,\s*voy\s+(a|para)|no\s+es\s+eso)/i;
+export function isCorrectionMessage(text: string): boolean {
+  return CORRECTION_RE.test(text.trim().toLowerCase());
+}
+
 /**
  * Hoteles y landmarks que requieren clarificación específica.
  * Usado por policy-reserva para preguntar "¿te referís a X en el centro

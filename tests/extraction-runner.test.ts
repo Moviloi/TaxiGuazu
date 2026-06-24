@@ -31,6 +31,7 @@ vi.mock("@/lib/ai/guard", () => ({
 vi.mock("@/lib/ai/patterns", () => ({
   isAffirmativeMessage: vi.fn().mockReturnValue(false),
   isNegativeMessage: vi.fn().mockReturnValue(false),
+  isCorrectionMessage: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("@/lib/db/state-accessors", () => ({
@@ -57,6 +58,7 @@ vi.mock("@/lib/services/memory/context-memory", () => ({
 
 vi.mock("@/lib/services/workflow/load-previous-slots", () => ({
   loadPreviousSlots: vi.fn().mockResolvedValue({}),
+  loadPreviousSlotStates: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/services/workflow/evaluate-completeness", () => ({
