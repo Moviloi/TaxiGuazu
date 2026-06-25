@@ -115,6 +115,7 @@ export async function handlePolicyPipeline(
   };
   const execDeps: ExecutionDeps = {
     send: sendWhatsAppMessage,
+    sendButtons: sendInteractiveButtons,
     persist: insertMessage,
     handler: handleMessage,
     geo: { resolveGeoRoute },

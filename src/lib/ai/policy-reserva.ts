@@ -9,6 +9,7 @@
 // estructura de ruta turística.
 
 import { buildGenericClarify, buildGenericSafeFallback, buildPriceInfo, buildLocationConfirmationResponse } from "./response-builder";
+import type { SlotConfirmationUI } from "./slot-confirmation";
 import { resolveNextRequiredField } from "./field-resolver";
 import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
@@ -71,6 +72,7 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
     (decision.decision === "EXECUTE" && extraction?.askForConfirmation === true);
   const nextExpectedFields = built.nextExpectedFields;
   const finalResponse = built.finalResponse;
+  const confirmationUI = built.confirmationUI;
 
   let policyHint: string;
   switch (decision.decision) {
@@ -104,6 +106,7 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
     outputSource: "POLICY",
     needsGeo,
     needsSaveContext,
+    confirmationUI,
   };
 
   // Lateral intents: EMERGENCY and RESCHEDULE require admin notification as side effect.
@@ -130,6 +133,7 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
 interface BuiltResponse {
   finalResponse: string;
   nextExpectedFields: string[];
+  confirmationUI?: SlotConfirmationUI;
 }
 
 function buildReservaFinalResponse(
@@ -175,7 +179,11 @@ function buildReservaFinalResponse(
     // de nuevo. Esta ruta tiene PRIORIDAD sobre la clarificación estándar.
     const stableAck = buildStableAcknowledge(extraction, lang);
     if (stableAck) {
-      return { finalResponse: stableAck.response, nextExpectedFields: [stableAck.nextField] };
+      return {
+        finalResponse: stableAck.response,
+        confirmationUI: stableAck.confirmationUI,
+        nextExpectedFields: [stableAck.nextField],
+      };
     }
 
     if (extraction.askForConfirmation && extraction.tariff?.matched && extraction.tariff.price != null) {
@@ -217,8 +225,10 @@ function buildReservaFinalResponse(
     const next = resolveNextRequiredField(ctx, decision.core.facts);
     if (next.reason === "ambiguous") {
       if (extraction) {
+        const ui = buildLocationConfirmationResponse(extraction, lang);
         return {
-          finalResponse: buildLocationConfirmationResponse(extraction, lang),
+          finalResponse: ui.message ?? "",
+          confirmationUI: ui,
           nextExpectedFields: [next.field ?? "location_ambiguous"],
         };
       }
@@ -236,8 +246,10 @@ function buildReservaFinalResponse(
     const next = resolveNextRequiredField(ctx, decision.core.facts);
     if (next.reason === "ambiguous") {
       if (extraction) {
+        const ui = buildLocationConfirmationResponse(extraction, lang);
         return {
-          finalResponse: buildLocationConfirmationResponse(extraction, lang),
+          finalResponse: ui.message ?? "",
+          confirmationUI: ui,
           nextExpectedFields: [next.field ?? "location_ambiguous"],
         };
       }
@@ -396,7 +408,7 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
 //      acknowledgement más rico con precio).
 // Si destination es ambiguo, también pregunta por la dirección exacta en
 // el destination (no resetea, no pide todo de nuevo).
-function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { response: string; nextField: string } | null {
+function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { response: string; confirmationUI?: SlotConfirmationUI; nextField: string } | null {
   const origin = extraction.slots.origin?.value;
   const destination = extraction.slots.destination?.value;
   if (origin == null || destination == null) return null;
@@ -419,8 +431,10 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { re
     destReason === "ambiguous_term" || AMBIGUOUS_LOCATION_RE.test(destStrRaw);
 
   if (originIsAmbiguous || destIsAmbiguous) {
+    const ui = buildLocationConfirmationResponse(extraction, lang);
     return {
-      response: buildLocationConfirmationResponse(extraction, lang),
+      response: ui.message ?? "",
+      confirmationUI: ui,
       nextField: "location_ambiguous",
     };
   }

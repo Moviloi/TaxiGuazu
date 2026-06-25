@@ -24,7 +24,8 @@ describe("FASE 25 — No legacy confirmation", () => {
       origin: slot("Aeropuerto IGR", "CONFIRMATION_PENDING"),
       destination: slot("Centro", "CONFIRMATION_PENDING"),
     });
-    const msg = buildLocationConfirmationResponse(extractionCtx, "es");
+    const ui = buildLocationConfirmationResponse(extractionCtx, "es");
+    const msg = ui.message ?? "";
 
     // NO contiene texto legacy
     expect(msg).not.toContain("direcciones exactas");
@@ -54,7 +55,8 @@ describe("FASE 25 — No legacy confirmation", () => {
       origin: slot("Hotel X", "CONFIRMATION_PENDING"),
       destination: slot("Centro", "CONFIRMATION_PENDING"),
     });
-    const msg = buildLocationConfirmationResponse(extractionCtx, "es");
+    const ui = buildLocationConfirmationResponse(extractionCtx, "es");
+    const msg = ui.message ?? "";
 
     expect(msg).not.toContain("direcciones exactas");
     expect(msg).toContain("Solo para confirmar los datos del viaje");

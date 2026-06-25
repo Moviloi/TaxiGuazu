@@ -9,7 +9,7 @@
 //   4. Error — fallback, escalación, error global
 
 import type { FinalDecision, Lang, OpportunityResult, ExtractionContext } from "./types";
-import { buildSlotConfirmationMessage } from "./slot-confirmation";
+import { buildSlotConfirmationMessage, type SlotConfirmationUI } from "./slot-confirmation";
 
 // ─── 1. CONVERSACIONAL ───────────────────────────────────────────────────────
 
@@ -228,6 +228,6 @@ export function buildAmbiguousLocationConfirm(
 export function buildLocationConfirmationResponse(
   extractionCtx: ExtractionContext,
   lang: Lang,
-): string {
-  return buildSlotConfirmationMessage(extractionCtx, lang).message ?? "";
+): SlotConfirmationUI {
+  return buildSlotConfirmationMessage(extractionCtx, lang);
 }

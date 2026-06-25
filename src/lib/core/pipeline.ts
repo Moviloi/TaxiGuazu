@@ -34,6 +34,7 @@ export interface ExecutionContext {
 
 export interface ExecutionDeps {
   send: (phone: string, msg: string) => Promise<void>;
+  sendButtons: (phone: string, message: string, buttons: { id: string; title: string }[]) => Promise<void>;
   persist: (convId: number, role: string, msg: string) => Promise<number>;
   handler: (text: string, mode: any, ctx?: any) => any;
   geo: {
@@ -73,9 +74,13 @@ export async function processLead(
       temporalMode: execCtx.temporal,
       operationalMode: execCtx.operationalMode,
     });
-    const { finalResponse, needsGeo, needsSaveContext, needsAdminNotify, adminNotifyBody } = handlerResult.policy;
+    const { finalResponse, needsGeo, needsSaveContext, needsAdminNotify, adminNotifyBody, confirmationUI } = handlerResult.policy;
 
-    await deps.send(execCtx.phone, finalResponse);
+    if (confirmationUI && confirmationUI.buttons && confirmationUI.buttons.length > 0) {
+      await deps.sendButtons(execCtx.phone, confirmationUI.message ?? finalResponse, confirmationUI.buttons);
+    } else {
+      await deps.send(execCtx.phone, finalResponse);
+    }
     await deps.persist(execCtx.conversationId, "assistant", finalResponse);
 
     if (needsGeo && needsSaveContext) {

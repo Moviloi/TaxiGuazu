@@ -173,6 +173,9 @@ export interface PolicyOutput {
   // ADMIN NOTIFY — side effect flag for lateral intents (EMERGENCY, RESCHEDULE).
   needsAdminNotify?: boolean;
   adminNotifyBody?: string;
+  // CONFIRMATION UI — cuando la respuesta es una confirmación de ubicación,
+  // transporta los botones interactivos para sendInteractiveButtons.
+  confirmationUI?: import("./slot-confirmation").SlotConfirmationUI;
 }
 
 export interface HandleMessageResult {
