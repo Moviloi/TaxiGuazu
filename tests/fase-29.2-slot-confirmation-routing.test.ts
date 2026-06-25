@@ -101,9 +101,9 @@ describe("FASE 29.2 — Slot confirmation UI routing audit", () => {
     });
   });
 
-  // ── T2: INFERRED status bypass → plain text (BUG) ──
-  describe("T2: INFERRED status bypass → debe fallar (BUG)", () => {
-    it("should call sendInteractiveButtons but instead sends plain text", { timeout: 15000 }, async () => {
+  // ── T2: INFERRED status → interactive buttons (FASE 29.3 fix) ──
+  describe("T2: INFERRED status → interactive buttons", () => {
+    it("sendInteractiveButtons con origin INFERRED y destination CONFIRMED", { timeout: 15000 }, async () => {
       const { sendInteractiveButtons } = await import("@/lib/whatsapp/sender");
       vi.mocked(getConversationalState).mockResolvedValue("idle");
 
@@ -125,10 +125,16 @@ describe("FASE 29.2 — Slot confirmation UI routing audit", () => {
       }));
       await flush();
 
-      // BUG: INFERRED bypass — shouldRequestConfirmation solo chequea
-      // CONFIRMATION_PENDING, no INFERRED. Pipeline cae a processLead.
-      // DEBERÍA llamar sendInteractiveButtons pero envía texto plano.
       expect(sendInteractiveButtons).toHaveBeenCalled();
+      const [, body, buttons] = vi.mocked(sendInteractiveButtons).mock.calls[0];
+      expect(body).toContain("Origen");
+      expect(buttons).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "slot_confirm" }),
+          expect.objectContaining({ id: "slot_change" }),
+        ]),
+      );
+      expect(processLead).not.toHaveBeenCalled();
     });
   });
 
@@ -170,6 +176,104 @@ describe("FASE 29.2 — Slot confirmation UI routing audit", () => {
       const execCtx = vi.mocked(processLead).mock.calls[0][0] as any;
       expect(execCtx.extractionCtx.slots.origin.status).toBe("CONFIRMED");
       expect(execCtx.extractionCtx.slots.destination.status).toBe("CONFIRMED");
+    });
+  });
+
+  // ── T4: Ambos INFERRED → interactive buttons ──
+  describe("T4: origin + destination ambos INFERRED", () => {
+    it("sendInteractiveButtons con ambos slots INFERRED", { timeout: 15000 }, async () => {
+      const { sendInteractiveButtons } = await import("@/lib/whatsapp/sender");
+      vi.mocked(getConversationalState).mockResolvedValue("idle");
+
+      await handlePolicyPipeline(makeBaseInput({
+        domain: "reservation",
+        leadCore: { intent: "PRE_BOOKING", facts: ["date:hoy"], confidence: 0.85, slotStability: { origin: "locked", destination: "locked" }, roleLock: { origin: "Retiro", destination: "Congreso" } },
+        extractionCtx: {
+          slots: {
+            origin: { value: "Retiro", score: 0.35, reason: "core_role_lock", status: "INFERRED", source: "SYSTEM_INFERRED" },
+            destination: { value: "Congreso", score: 0.4, reason: "core_role_lock", status: "INFERRED", source: "SYSTEM_INFERRED" },
+          },
+          overallConfidence: 0.4,
+          conversationalState: "idle",
+          clarifyField: null,
+          askForConfirmation: false,
+          tariff: { matched: false, price: undefined, canonicalOrigin: "Retiro", canonicalDestination: "Congreso" },
+        },
+        workflowResult: undefined as any,
+      }));
+      await flush();
+
+      expect(sendInteractiveButtons).toHaveBeenCalled();
+      const [, , buttons] = vi.mocked(sendInteractiveButtons).mock.calls[0];
+      expect(buttons).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "slot_confirm" }),
+          expect.objectContaining({ id: "slot_change" }),
+        ]),
+      );
+      expect(processLead).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── T5: Ambos CONFIRMED → no hay confirmación interactiva ──
+  describe("T5: origin + destination CONFIRMED → sin botones", () => {
+    it("no llama sendInteractiveButtons ni buildSlotConfirmationMessage", { timeout: 15000 }, async () => {
+      const { sendInteractiveButtons } = await import("@/lib/whatsapp/sender");
+      vi.mocked(getConversationalState).mockResolvedValue("idle");
+
+      await handlePolicyPipeline(makeBaseInput({
+        domain: "reservation",
+        leadCore: { intent: "PRE_BOOKING", facts: ["date:hoy"], confidence: 0.95, slotStability: { origin: "locked", destination: "locked" }, roleLock: { origin: "Aeropuerto IGR", destination: "Centro" } },
+        extractionCtx: {
+          slots: {
+            origin: { value: "Aeropuerto IGR", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "USER_CONFIRMED" },
+            destination: { value: "Centro", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "USER_CONFIRMED" },
+            passengers: { value: 2, score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "USER_CONFIRMED" },
+            scheduled_at: { value: "2026-06-25", score: 1.0, reason: "direct_extraction", status: "CONFIRMED", source: "USER_CONFIRMED" },
+          },
+          overallConfidence: 1.0,
+          conversationalState: "collecting_slots",
+          clarifyField: null,
+          askForConfirmation: true,
+          tariff: { matched: true, price: 15000, canonicalOrigin: "IGR", canonicalDestination: "Centro" },
+        },
+        pricing: { final_price: 15000, tariff_id: 1, base_price: 12000, markup: 3000, adjustments: [], level: "standard", source: "standard", explanation: [], origin: { place_id: "p1", canonical_name: "IGR", operational_zone: "iguazu" }, destination: { place_id: "p2", canonical_name: "Centro", operational_zone: "centro" } } as any,
+      }));
+      await flush();
+
+      expect(sendInteractiveButtons).not.toHaveBeenCalled();
+      expect(processLead).toHaveBeenCalled();
+    });
+  });
+
+  // ── T6: passengers INFERRED → no dispara location confirmation ──
+  describe("T6: solo passengers INFERRED → sin confirmación de ubicación", () => {
+    it("deja pasar porque solo origin/destination disparan confirmación", { timeout: 15000 }, async () => {
+      const { sendInteractiveButtons } = await import("@/lib/whatsapp/sender");
+      vi.mocked(getConversationalState).mockResolvedValue("idle");
+
+      await handlePolicyPipeline(makeBaseInput({
+        domain: "reservation",
+        leadCore: { intent: "PRE_BOOKING", facts: ["date:hoy"], confidence: 0.85, slotStability: { origin: "locked", destination: "locked" }, roleLock: { origin: "Aeropuerto IGR", destination: "Centro" } },
+        extractionCtx: {
+          slots: {
+            origin: { value: "Aeropuerto IGR", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "USER_CONFIRMED" },
+            destination: { value: "Centro", score: 1.0, reason: "exact_alias_match", status: "CONFIRMED", source: "USER_CONFIRMED" },
+            passengers: { value: 1, score: 0.5, reason: "user_provided", status: "INFERRED", source: "SYSTEM_INFERRED" },
+          },
+          overallConfidence: 0.85,
+          conversationalState: "idle",
+          clarifyField: null,
+          askForConfirmation: false,
+          tariff: { matched: false, price: undefined, canonicalOrigin: "IGR", canonicalDestination: "Centro" },
+        },
+        workflowResult: undefined as any,
+      }));
+      await flush();
+
+      // passengers INFERRED no dispara confirmación de ubicación
+      expect(sendInteractiveButtons).not.toHaveBeenCalled();
+      expect(processLead).toHaveBeenCalled();
     });
   });
 });

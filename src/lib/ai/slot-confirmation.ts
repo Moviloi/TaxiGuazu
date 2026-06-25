@@ -16,9 +16,13 @@ export function shouldRequestConfirmation(extractionCtx?: ExtractionContext): bo
   if (!extractionCtx?.slots) return false;
   const origin = extractionCtx.slots.origin;
   const dest = extractionCtx.slots.destination;
-  const originPending = origin?.status === "CONFIRMATION_PENDING" && origin?.value != null;
-  const destPending = dest?.status === "CONFIRMATION_PENDING" && dest?.value != null;
-  return originPending || destPending;
+  const originNeedsConfirm = origin?.value != null && (
+    origin.status === "CONFIRMATION_PENDING" || origin.status === "INFERRED"
+  );
+  const destNeedsConfirm = dest?.value != null && (
+    dest.status === "CONFIRMATION_PENDING" || dest.status === "INFERRED"
+  );
+  return originNeedsConfirm || destNeedsConfirm;
 }
 
 export function buildSlotConfirmationMessage(
@@ -37,18 +41,18 @@ export function buildSlotConfirmationMessage(
     "Solo para confirmar los datos del viaje:",
     "",
     "📍 *Origen:*",
-    origin?.status === "CONFIRMATION_PENDING" ? `⚠️ ${originDisplay}` : originDisplay,
+    origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? `⚠️ ${originDisplay}` : originDisplay,
     "",
     "📍 *Destino:*",
-    dest?.status === "CONFIRMATION_PENDING" ? `⚠️ ${destDisplay}` : destDisplay,
+    dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? `⚠️ ${destDisplay}` : destDisplay,
     "",
     "¿Está correcto?",
   ];
 
   log.info("[SLOT_CONFIRMATION_UI]", {
     pendingSlots: [
-      ...(origin?.status === "CONFIRMATION_PENDING" ? ["origin"] : []),
-      ...(dest?.status === "CONFIRMATION_PENDING" ? ["destination"] : []),
+      ...(origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? ["origin"] : []),
+      ...(dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? ["destination"] : []),
     ],
     confidence: extractionCtx.overallConfidence,
     availableActions: ["confirm", "change"],
@@ -60,8 +64,8 @@ export function buildSlotConfirmationMessage(
   return {
     showConfirmation: true,
     pendingSlots: [
-      ...(origin?.status === "CONFIRMATION_PENDING" ? ["origin"] : []),
-      ...(dest?.status === "CONFIRMATION_PENDING" ? ["destination"] : []),
+      ...(origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? ["origin"] : []),
+      ...(dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? ["destination"] : []),
     ],
     message: lines.join("\n"),
     buttons: [
@@ -96,7 +100,7 @@ export function applyConfirmation(
 ): Record<string, { value: unknown; score: number; reason: string; source?: string; status?: string }> {
   const result = { ...slots };
   for (const [k, v] of Object.entries(result)) {
-    if (v?.status === "CONFIRMATION_PENDING") {
+    if (v?.status === "CONFIRMATION_PENDING" || v?.status === "INFERRED") {
       result[k] = {
         ...v,
         score: 1.0,
@@ -109,7 +113,7 @@ export function applyConfirmation(
   log.info("[USER_SLOT_CONFIRM]", {
     action: "confirm",
     confirmedSlots: Object.entries(slots)
-      .filter(([, v]) => (v as any)?.status === "CONFIRMATION_PENDING")
+      .filter(([, v]) => (v as any)?.status === "CONFIRMATION_PENDING" || (v as any)?.status === "INFERRED")
       .map(([k]) => k),
     correctedSlots: [],
   });
