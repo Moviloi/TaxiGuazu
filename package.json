@@ -13,7 +13,8 @@
     "start:all": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "security-check": "node scripts/precommit-security-check.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",

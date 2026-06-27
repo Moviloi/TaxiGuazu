@@ -60,3 +60,12 @@ coverage/
 
 # Build artifacts
 *.tsbuildinfo
+
+# Secrets & Credentials
+*.pem
+*.key
+*.crt
+*.cert
+secrets/
+credentials/
+service-account*.json
