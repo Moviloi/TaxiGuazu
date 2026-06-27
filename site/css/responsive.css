@@ -1,0 +1,43 @@
+/* ================================================================
+   RESPONSIVE — GuazuTransfer · ES / EN / PT
+   ================================================================ */
+
+@media (max-width:1024px) {
+  .reservas-layout { grid-template-columns:1fr; }
+  .reserva-info { order:-1; }
+  .contacto-inner { grid-template-columns:1fr; gap:36px; }
+}
+
+@media (max-width:768px) {
+  #nav { display:none; position:fixed; top:var(--hh); left:0; width:100%; background:white; border-bottom:1px solid var(--bo); padding:12px 0; box-shadow:var(--sh); z-index:101; }
+  #nav.open { display:block; }
+  #nav ul { flex-direction:column; gap:0; }
+  #nav a { display:block; padding:11px 22px; border-radius:0; font-size:0.92rem; color:var(--vp); font-weight:500; }
+  .btn-wa-header { display:none; }
+  .hamburger { display:flex; }
+  .lang-switch { gap:2px; }
+  .lang-switch a { font-size:0.7rem; padding:3px 6px; }
+  .hero-content { padding:40px 0; }
+  .trust-pills span { font-size:0.75rem; }
+  .hero-ctas { flex-direction:column; }
+  .hero-ctas .btn { justify-content:center; }
+  .servicios-grid { grid-template-columns:1fr; }
+  .why-grid { grid-template-columns:1fr 1fr; }
+  .reviews-grid { grid-template-columns:1fr; }
+  .form-row { grid-template-columns:1fr; }
+  .reserva-form { padding:22px 18px; }
+}
+
+@media (max-width:480px) {
+  :root { --hh:64px; }
+  .logo-sub { display:none; }
+  .sec-servicios,.sec-reviews,.sec-reservas,.sec-why,.sec-contacto,.sec-faq { padding:60px 0; }
+  .sec-header { margin-bottom:32px; }
+  .why-grid { grid-template-columns:1fr; gap:20px; }
+  .wa-float { bottom:18px; right:18px; }
+  .wa-float a { width:50px; height:50px; font-size:1.4rem; }
+  .faq-q { font-size:0.88rem; padding:14px 16px; }
+  .faq-a { padding:0 16px 14px; }
+  .trust-pills { gap: 6px; }
+  .trust-pills span { font-size: 0.72rem; padding: 5px 10px; }
+}

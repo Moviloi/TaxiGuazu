@@ -294,8 +294,6 @@ export async function handleSlotConfirmationButton(
   }
 
   if (buttonType === "change_back") {
-    // Re-send confirmation message (triggers policy pipeline re-evaluation)
-    // For now, just send generic message to restart
     await sendWhatsAppMessage(phone, "Escribí los datos de tu viaje.");
     await insertMessage(conversation.id, "assistant", "Escribí los datos de tu viaje.");
     return;

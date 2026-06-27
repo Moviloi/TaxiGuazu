@@ -1,0 +1,57 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "ael",
+  "instructions": ["AGENTS.md"],
+  "agent": {
+    "ael": {
+      "description": "ARNES Director — orquesta pipeline de 7 fases para cambios al sistema",
+      "mode": "primary",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "ask",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "ael-explore": "allow",
+          "ael-audit": "allow"
+        }
+      }
+    },
+    "ael-explore": {
+      "description": "Explorador — descubre estado real del codigo, solo lectura",
+      "mode": "subagent",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "ael-audit": {
+      "description": "Auditor — valida calidad con tests, lint, build, enforce",
+      "mode": "subagent",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "npm test": "allow",
+          "npm run build": "allow",
+          "npm run lint": "allow",
+          "bash ael/contracts/enforce.sh*": "allow"
+        }
+      }
+    }
+  }
+}

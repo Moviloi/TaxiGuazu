@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
   const token = params.get("hub.verify_token");
   const challenge = params.get("hub.challenge");
   let VERIFY_TOKEN: string;
-  try { VERIFY_TOKEN = getEnv().WHATSAPP_VERIFY_TOKEN; } catch { VERIFY_TOKEN = "redcolaborativa-bot-2025"; }
+  try { VERIFY_TOKEN = getEnv().WHATSAPP_VERIFY_TOKEN; } catch { return NextResponse.json({ error: "Config missing" }, { status: 500 }); }
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     log.info("[WEBHOOK] Verificación exitosa");
