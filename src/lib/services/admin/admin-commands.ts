@@ -171,6 +171,10 @@ async function handleRemoveSlot(phone: string, text: string): Promise<void> {
 }
 
 async function handleListSlots(phone: string): Promise<void> {
+  if (phone !== ADMIN_PHONE) {
+    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede listar slots.");
+    return;
+  }
   const slots = await getActiveSlots();
   if (slots.length === 0) {
     await sendWhatsAppMessage(phone, "📅 No hay slots configurados. Usá .add_slot para agregar.");

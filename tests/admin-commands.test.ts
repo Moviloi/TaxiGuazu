@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("@/config/env", () => ({
+  getEnv: vi.fn().mockReturnValue({ ADMIN_PHONE: "+54911" }),
+}));
+
 vi.mock("@/lib/db/database", () => ({
   getOrCreateConversation: vi.fn().mockResolvedValue({ id: 1 }),
   getConversationByPhone: vi.fn().mockResolvedValue(null),

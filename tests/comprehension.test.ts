@@ -154,7 +154,7 @@ describe("Comprehension Engine", () => {
       const s = session({ slots: JSON.stringify({ origin: "A", destination: "B" }) });
       const msg = getRecoveryMessage("RECOVERY", s);
       expect(msg).toBeTruthy();
-      expect(msg.toLowerCase()).toContain("confirmar");
+      expect(msg.toLowerCase()).toContain("viaje");
     });
 
     it("ESCALATION → still returns RECOVERY message (fallback)", () => {

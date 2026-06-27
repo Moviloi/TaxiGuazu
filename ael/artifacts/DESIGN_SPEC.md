@@ -26,13 +26,11 @@ Fase del pipeline: `DESIGNING`
 
 | Archivo | Cambio | Líneas approx |
 |---------|--------|---------------|
-| `src/lib/...` | ... | +/- N líneas |
 
 ## Archivos a crear
 
 | Archivo | Propósito |
 |---------|-----------|
-| `src/lib/...` | ... |
 
 ## Criterios de aceptación para Implementer
 

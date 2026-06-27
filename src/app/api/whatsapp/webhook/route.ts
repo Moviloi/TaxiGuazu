@@ -18,7 +18,6 @@ import {
   handleContingenciaNo,
 } from "@/lib/services/dispatch/driver.service";
 import { getConversationByPhone, getDriverByPhone, tryRegisterMessage } from "@/lib/db/database";
-import { checkTimeouts } from "@/lib/services/housekeeping/timeouts";
 import { handleSurveyResponse, handleNewTripResponse } from "@/lib/services/trip-execution/survey.service";
 import { getEnv } from "@/config/env";
 import { log } from "@/lib/utils/logger";
@@ -129,12 +128,8 @@ export async function POST(request: NextRequest) {
       }));
     }
 
-    // TODO: mover checkTimeouts() a cron exclusivo (R29).
-    // Por ahora se ejecuta una sola vez por mensaje único gracias a la
-    // idempotencia, pero el objetivo es desacoplarlo completamente del
-    // webhook para evitar que retries de Meta lo disparen múltiples veces
-    // y para que la cascada de timeouts corra con cadencia propia.
-    await checkTimeouts();
+    // checkTimeouts() movido a cron exclusivo (R29).
+    // Ver: src/app/api/cron/check-timeouts/route.ts
 
     if (message.type === "interactive") {
       const buttonId = message.interactive?.button_reply?.id || "";

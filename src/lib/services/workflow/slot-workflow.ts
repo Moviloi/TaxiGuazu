@@ -6,11 +6,11 @@ import { getConversationalState, setConversationalState } from "@/lib/db/state-a
 import { getActiveTripByPhone } from "@/lib/db/database";
 import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
+import type { ConversationalState } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 
-// idle: estado operativo normal — permite iniciar o reanudar slots.
-// slot_confirmation: esperando que el usuario confirme/corrija slots CONFIRMATION_PENDING
-export type SlotConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_confirmation";
+// Re-export for backward compatibility
+export type SlotConversationalState = ConversationalState;
 
 export interface SlotConversationalContext {
   state: SlotConversationalState;

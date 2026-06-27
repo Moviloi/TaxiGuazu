@@ -20,7 +20,7 @@ vi.mock("@/lib/services/extraction/regex-extractor", () => ({
 }));
 
 vi.mock("@/lib/ai/response-builder", () => ({
-  buildSlotClarify: vi.fn(),
+  buildGenericClarify: vi.fn(),
   buildCancellationMessage: vi.fn(),
 }));
 
@@ -113,8 +113,8 @@ describe("runExtractionPipeline", () => {
     const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
     vi.mocked(evaluateCompleteness).mockReturnValue({ status: "ASK", field: "destination" });
 
-    const { buildSlotClarify } = await import("@/lib/ai/response-builder");
-    vi.mocked(buildSlotClarify).mockReturnValue("¿A dónde querés ir?");
+    const { buildGenericClarify } = await import("@/lib/ai/response-builder");
+    vi.mocked(buildGenericClarify).mockReturnValue("¿A dónde querés ir?");
 
     const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
     const { insertMessage } = await import("@/lib/db/database");

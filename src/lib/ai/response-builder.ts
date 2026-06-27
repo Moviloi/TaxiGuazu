@@ -61,22 +61,6 @@ export function buildGenericClarify(field: string | null, lang: Lang): string {
   return "¿Podés contarme un poco más sobre el viaje que necesitás?";
 }
 
-export function buildSlotClarify(slot: string, lang: Lang): string {
-  if (slot === "origin") {
-    if (lang === "en") return "Where are you leaving from?";
-    if (lang === "pt") return "De onde você vai sair?";
-    return "¿Desde dónde salís?";
-  }
-  if (slot === "destination") {
-    if (lang === "en") return "Where do you need to go?";
-    if (lang === "pt") return "Para onde você precisa ir?";
-    return "¿A dónde necesitás ir?";
-  }
-  if (lang === "en") return "I'm not sure about the destination. Could you confirm it?";
-  if (lang === "pt") return "Não tenho certeza do destino. Pode confirmar?";
-  return "No estoy seguro del destino. ¿Podés confirmarlo?";
-}
-
 export function buildPriceInfo(
   originName: string,
   destinationName: string,

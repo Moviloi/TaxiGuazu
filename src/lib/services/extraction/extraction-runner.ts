@@ -2,7 +2,7 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { insertMessage, getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
 import { parseRouteFromText } from "@/lib/services/extraction/regex-extractor";
-import { buildSlotClarify, buildCancellationMessage } from "@/lib/ai/response-builder";
+import { buildGenericClarify, buildCancellationMessage } from "@/lib/ai/response-builder";
 import { TripExtractionSchema } from "@/lib/ai/extraction-schema";
 import type { TripExtraction, ExtractionResult as ExtractionSchemaResult } from "@/lib/ai/extraction-schema";
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
@@ -226,7 +226,7 @@ export async function runExtractionPipeline(
         log.info("[CONFIRMATION] negative with new slot data — treating as correction, not cancellation");
         const completeness = evaluateCompleteness(raw!, domain);
         if (completeness.status === "ASK") {
-          const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
+          const msg = buildGenericClarify(completeness.field!, detectLeadLang(text));
           log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
           await sendWhatsAppMessage(phone, msg);
           await insertMessage(conversationId, "assistant", msg);
@@ -256,7 +256,7 @@ export async function runExtractionPipeline(
             previousState: convState,
           });
         } else {
-          const msg = buildSlotClarify(completeness.field!, detectLeadLang(text));
+          const msg = buildGenericClarify(completeness.field!, detectLeadLang(text));
           log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
           await sendWhatsAppMessage(phone, msg);
           await insertMessage(conversationId, "assistant", msg);

@@ -2,6 +2,7 @@ import type { ChatSessionRow } from "@/lib/db/types";
 import type { ConfidenceMap, ConversationDomain, RoleLock, SlotStabilityMap } from "@/lib/ai/types";
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
+import { buildGenericClarify } from "@/lib/ai/response-builder";
 
 export type ComprehensionState = "FULL_CONTROL" | "CLARIFICATION" | "RECOVERY" | "ESCALATION";
 
@@ -170,15 +171,16 @@ export function getComprehensionState(score: number, thresholdAdjustment = 0): C
 }
 
 export function getRecoveryMessage(state: ComprehensionState, session: ChatSessionRow | null): string {
+  const lang = "es";
   if (state === "CLARIFICATION") {
     if (session?.slots) {
       try {
         const slots = JSON.parse(session.slots);
-        if (!slots.origin) return "¿Desde qué lugar salís?";
-        if (!slots.destination) return "¿A dónde necesitás ir?";
+        if (!slots.origin) return buildGenericClarify("origin", lang);
+        if (!slots.destination) return buildGenericClarify("destination", lang);
       } catch {}
     }
-    return "¿Podrías repetir tu consulta?";
+    return buildGenericClarify(null, lang);
   }
-  return "Necesito confirmar origen y destino para continuar.";
+  return buildGenericClarify(null, lang);
 }

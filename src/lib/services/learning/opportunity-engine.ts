@@ -2,8 +2,7 @@
 // Flujo independiente gestionado por lead.service.ts. No pasa por pipeline ni policies.
 import type { ProviderAdjustmentRow, PromotionRow, PackageRow, OpportunityRuleRow } from "@/lib/db/types";
 import type { OpportunityContext, Opportunity, OpportunityOffer, OpportunityResult } from "@/lib/services/learning/opportunity-types";
-
-export type OpportunityType = "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "complement";
+import type { OpportunityType } from "@/lib/db/types";
 import type { PricingResult } from "../pricing/pricing-engine";
 import { queryOne } from "@/lib/db/database";
 import { getActiveComplementRules, insertOpportunityLog } from "@/lib/db/database";
