@@ -1,5 +1,5 @@
-import { getOrCreateConversation, getConversationById, insertMessage, getRecentHistory, getActiveTripByPhone, updateTripState, clearConversationHistory, setCustomerName, getCustomerName, resetChatSession } from "@/lib/db/database";
-import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
+import { getOrCreateConversation, getConversationById, insertMessage, getRecentHistory, getActiveTripByPhone, updateTripState, clearConversationHistory, setCustomerName, getCustomerName } from "@/lib/db/database";
+import { fullReset } from "@/lib/services/shared/reset-helpers";
 import { getConversationalState, getDispatchState } from "@/lib/db/state-accessors";
 import { SESSION_INACTIVITY_48H_S } from "@/config/constants";
 import { log } from "@/lib/utils/logger";
@@ -51,8 +51,7 @@ export async function handleConversationSetup(
   if (sessionReset) {
     await Promise.all([
       clearConversationHistory(conversation.id),
-      resetToIdle(conversation.id),
-      resetChatSession(phone),
+      fullReset(phone, conversation.id),
     ]);
   }
 

@@ -1,6 +1,6 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { getChatSession, insertMessage, updateOpportunityLogResponse, clearPendingOpportunity, resetChatSession } from "@/lib/db/database";
-import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
+import { getChatSession, insertMessage, updateOpportunityLogResponse, clearPendingOpportunity } from "@/lib/db/database";
+import { fullReset } from "@/lib/services/shared/reset-helpers";
 import { setTripState } from "@/lib/db/state-accessors";
 import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
 import { buildOpportunityAcceptedMessage, buildOpportunityDeclinedMessage } from "@/lib/ai/response-builder";
@@ -24,8 +24,7 @@ export async function handleOpportunityResponse(
     log.info(`[OPPORTUNITY] Invalid pending_opportunity JSON for ******${phone.slice(-4)}`);
     await clearPendingOpportunity(phone);
     await setTripState(phone, null);
-    await resetToIdle(conversationId);
-    await resetChatSession(phone);
+    await fullReset(phone, conversationId);
     return false;
   }
   const now = Math.floor(Date.now() / 1000);
@@ -36,8 +35,7 @@ export async function handleOpportunityResponse(
       updateOpportunityLogResponse(pending.logId, "expired", now),
       clearPendingOpportunity(phone),
       setTripState(phone, null),
-      resetToIdle(conversationId),
-      resetChatSession(phone),
+      fullReset(phone, conversationId),
     ]);
     logUserResponse(String(conversationId), "ignored", pending.label);
   } else if (isAffirmativeMessage(text)) {
@@ -49,8 +47,7 @@ export async function handleOpportunityResponse(
       insertMessage(conversationId, "assistant", infoMsg),
       clearPendingOpportunity(phone),
       setTripState(phone, null),
-      resetToIdle(conversationId),
-      resetChatSession(phone),
+      fullReset(phone, conversationId),
     ]);
     logUserResponse(String(conversationId), "accepted", pending.label);
     return true;
@@ -63,8 +60,7 @@ export async function handleOpportunityResponse(
       insertMessage(conversationId, "assistant", declineMsg),
       clearPendingOpportunity(phone),
       setTripState(phone, null),
-      resetToIdle(conversationId),
-      resetChatSession(phone),
+      fullReset(phone, conversationId),
     ]);
     logUserResponse(String(conversationId), "declined", pending.label);
     return true;
@@ -74,8 +70,7 @@ export async function handleOpportunityResponse(
       updateOpportunityLogResponse(pending.logId, "ignored", now),
       clearPendingOpportunity(phone),
       setTripState(phone, null),
-      resetToIdle(conversationId),
-      resetChatSession(phone),
+      fullReset(phone, conversationId),
     ]);
     logUserResponse(String(conversationId), "ignored", pending.label);
   }

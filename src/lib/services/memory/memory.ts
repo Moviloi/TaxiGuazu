@@ -1,5 +1,6 @@
 import type { ChatSessionRow, MessageRow } from "@/lib/db/types";
 import { ENTITY_CATALOG, extractEntitiesFromCatalog } from "@/lib/config/entity-catalog";
+import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 
 export interface ShortTermMessage {
   role: string;
@@ -54,12 +55,10 @@ export function buildSessionMemory(session: ChatSessionRow | null, history: Mess
   let lastOrigin: string | null = null;
   let lastDestination: string | null = null;
   if (session?.slots) {
-    try {
-      const slots = JSON.parse(session.slots);
-      lastIntent = slots.intent ?? null;
-      lastOrigin = slots.origin ?? null;
-      lastDestination = slots.destination ?? null;
-    } catch {}
+    const slots = parseSessionSlots(session.slots);
+    lastIntent = slots.intent as string ?? null;
+    lastOrigin = slots.origin as string ?? null;
+    lastDestination = slots.destination as string ?? null;
   }
 
   const lastOpportunity: string | null = session?.pending_opportunity

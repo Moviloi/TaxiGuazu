@@ -1,6 +1,6 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { getOrCreateConversation, getConversationByPhone, insertMessage, clearConversationHistory, resetChatSession } from "@/lib/db/database";
-import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
+import { getOrCreateConversation, getConversationByPhone, insertMessage, clearConversationHistory } from "@/lib/db/database";
+import { fullReset } from "@/lib/services/shared/reset-helpers";
 
 export async function handleResponseReset(
   phone: string,
@@ -9,9 +9,10 @@ export async function handleResponseReset(
   const conv = await getConversationByPhone(phone);
   if (conv) {
     await clearConversationHistory(conv.id);
-    await resetToIdle(conv.id);
+    await fullReset(phone, conv.id);
+  } else {
+    await fullReset(phone, 0);
   }
-  await resetChatSession(phone);
   const isStructured = trimmed.length > 20 || /(reserva|quiero|necesito|traslado|viaje|aeropuerto|hotel)/i.test(trimmed);
   const welcome = isStructured
     ? "Bienvenido a TaxiGuazú! Soy Cris Virtual (Asistente 24/7). ¿A dónde necesitas ir?"

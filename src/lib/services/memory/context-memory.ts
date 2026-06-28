@@ -4,6 +4,7 @@
 
 import { getChatSession, upsertChatSession } from "@/lib/db/database";
 import { type ZoneResolution, type ZoneExpansionResult, type ProximityScore } from "@/lib/services/geo/geo-engine";
+import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 
 type FareCategory = "LOW" | "MEDIUM" | "MEDIUM+" | "HIGH" | "VARIABLE";
 
@@ -38,9 +39,8 @@ export async function loadContext(phone: string): Promise<ConversationContext> {
   if (!session?.slots) return { lastUpdate: 0 };
 
   let slots: Record<string, any> = {};
-  try {
-    slots = JSON.parse(session.slots);
-  } catch {
+  slots = parseSessionSlots(session.slots);
+  if (Object.keys(slots).length === 0) {
     return { lastUpdate: 0 };
   }
 

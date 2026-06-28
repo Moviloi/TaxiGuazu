@@ -3,7 +3,7 @@ import { getOrCreateConversation, getConversationByPhone, insertMessage, getDriv
 import { buildShiftActivationMsg, buildShiftEndPrompt } from "@/lib/services/dispatch/shift-utils";
 import { handleAdminCommand } from "@/lib/services/admin/admin-commands";
 import { isAdminCommand, parseAdminCommand, executeAdminCommand } from "@/lib/services/learning/admin";
-import { getEnv } from "@/config/env";
+import { assertAdmin } from "@/lib/services/shared/admin-helpers";
 
 export async function handleAdminCommands(
   phone: string,
@@ -65,12 +65,7 @@ export async function handleAdminCommands(
   if (await handleAdminCommand(phone, trimmed)) return true;
 
   if (isAdminCommand(trimmed)) {
-    if (phone !== getEnv().ADMIN_PHONE) {
-      await sendWhatsAppMessage(phone, "No tenés permisos para ejecutar comandos de administrador.");
-      const conv = await getOrCreateConversation(phone);
-      await insertMessage(conv.id, "assistant", "No tenés permisos para ejecutar comandos de administrador.");
-      return true;
-    }
+    if (!(await assertAdmin(phone, "ejecutar comandos de administrador"))) return true;
     const parsed = parseAdminCommand(trimmed);
     if (parsed) {
       const result = await executeAdminCommand(parsed, phone);

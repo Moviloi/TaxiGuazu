@@ -14,7 +14,7 @@ const envSchema = z.object({
   COTIZACION_REAL: z.string().optional(),
   TURSO_DATABASE_URL: z.string().optional(),
   TURSO_DATABASE_TOKEN: z.string().optional(),
-  CRON_SECRET: z.string().optional(),
+  CRON_SECRET: z.string().min(1, "CRON_SECRET es obligatorio. Generá un valor seguro para autenticar endpoints de cron"),
 });
 
 type Env = z.infer<typeof envSchema>;

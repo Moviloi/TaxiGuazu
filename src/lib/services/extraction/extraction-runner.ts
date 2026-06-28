@@ -1,5 +1,4 @@
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { insertMessage, getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
+import { getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
 import { parseRouteFromText } from "@/lib/services/extraction/regex-extractor";
 import { buildGenericClarify, buildCancellationMessage } from "@/lib/ai/response-builder";
@@ -22,6 +21,8 @@ import { loadPreviousSlots, loadPreviousSlotStates } from "@/lib/services/workfl
 import { buildSlotStates, type SlotStateEntry } from "@/lib/ai/slot-state";
 import { evaluateCompleteness } from "@/lib/services/workflow/evaluate-completeness";
 import { log } from "@/lib/utils/logger";
+import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
+import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 
 interface FallbackExtractionResult {
   pricing: PricingResult;
@@ -48,10 +49,8 @@ async function tryFallbackExtraction(
     if (!originMatch) {
       const session = await getChatSession(phone);
       if (session?.slots) {
-        try {
-          const slots = JSON.parse(session.slots);
-          if (slots.origin) originMatch = slots.origin;
-        } catch {}
+        const slots = parseSessionSlots(session.slots);
+        if (slots.origin) originMatch = slots.origin as string;
       }
     }
 
@@ -228,16 +227,14 @@ export async function runExtractionPipeline(
         if (completeness.status === "ASK") {
           const msg = buildGenericClarify(completeness.field!, detectLeadLang(text));
           log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
-          await sendWhatsAppMessage(phone, msg);
-          await insertMessage(conversationId, "assistant", msg);
+          await sendAndPersist(phone, conversationId, msg);
           return null;
         }
       } else {
         log.info("[CONFIRMATION] negative response, cancelling confirmation");
         const lang = detectLeadLang(text);
         const cancelMsg = buildCancellationMessage(lang);
-        await sendWhatsAppMessage(phone, cancelMsg);
-        await insertMessage(conversationId, "assistant", cancelMsg);
+        await sendAndPersist(phone, conversationId, cancelMsg);
         await setConversationalState(phone, "idle");
         await resetChatSession(phone);
         return null;
@@ -258,8 +255,7 @@ export async function runExtractionPipeline(
         } else {
           const msg = buildGenericClarify(completeness.field!, detectLeadLang(text));
           log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
-          await sendWhatsAppMessage(phone, msg);
-          await insertMessage(conversationId, "assistant", msg);
+          await sendAndPersist(phone, conversationId, msg);
           return null;
         }
       }

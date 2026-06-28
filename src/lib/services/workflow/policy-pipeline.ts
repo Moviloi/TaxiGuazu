@@ -23,6 +23,7 @@ import type { SlotConversationalContext } from "@/lib/services/workflow/slot-wor
 import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 import { buildConfirmationMessage, buildNoTariffConfirmation } from "@/lib/ai/policy-reserva";
+import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 import { core } from "@/lib/ai/core";
 import { CONFIRMATION_TIMEOUT_S } from "@/config/constants";
 import { log } from "@/lib/utils/logger";
@@ -196,7 +197,8 @@ export async function handlePolicyPipeline(
         return;
       }
       let rawSlots: any;
-      try { rawSlots = JSON.parse(session.slots || "{}"); } catch { return; }
+      rawSlots = parseSessionSlots(session.slots || null);
+      if (Object.keys(rawSlots).length === 0) return;
       const origin = rawSlots.origin || "";
       const destination = rawSlots.destination || "";
       const shortcutDispatchReady = isDispatchReady(extractionCtx, temporal);

@@ -3,6 +3,7 @@ import type { ConfidenceMap, ConversationDomain, RoleLock, SlotStabilityMap } fr
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 import { buildGenericClarify } from "@/lib/ai/response-builder";
+import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 
 export type ComprehensionState = "FULL_CONTROL" | "CLARIFICATION" | "RECOVERY" | "ESCALATION";
 
@@ -40,11 +41,9 @@ function buildEffectiveSlots(session: ChatSessionRow | null, roleLock: RoleLock)
   let sessionOrigin: string | null = null;
   let sessionDest: string | null = null;
   if (session?.slots) {
-    try {
-      const s = JSON.parse(session.slots);
-      sessionOrigin = s.origin ?? null;
-      sessionDest = s.destination ?? null;
-    } catch {}
+    const s = parseSessionSlots(session.slots);
+    sessionOrigin = (s.origin as string) ?? null;
+    sessionDest = (s.destination as string) ?? null;
   }
   return {
     origin: sessionOrigin ?? roleLock.origin ?? null,
@@ -174,11 +173,9 @@ export function getRecoveryMessage(state: ComprehensionState, session: ChatSessi
   const lang = "es";
   if (state === "CLARIFICATION") {
     if (session?.slots) {
-      try {
-        const slots = JSON.parse(session.slots);
-        if (!slots.origin) return buildGenericClarify("origin", lang);
-        if (!slots.destination) return buildGenericClarify("destination", lang);
-      } catch {}
+      const slots = parseSessionSlots(session.slots);
+      if (!slots.origin) return buildGenericClarify("origin", lang);
+      if (!slots.destination) return buildGenericClarify("destination", lang);
     }
     return buildGenericClarify(null, lang);
   }

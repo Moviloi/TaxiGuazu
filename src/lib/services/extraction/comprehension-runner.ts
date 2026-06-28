@@ -1,5 +1,4 @@
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { insertMessage, updateChatSessionComprehension, insertF4Log, setChatSessionEscalationReason } from "@/lib/db/database";
+import { updateChatSessionComprehension, insertF4Log, setChatSessionEscalationReason } from "@/lib/db/database";
 import { buildEscalationMessage } from "@/lib/ai/response-builder";
 import { enrichComprehensionSignals } from "@/lib/services/memory/predictive-routing";
 import { logEscalation } from "@/lib/services/learning/event-tracking";
@@ -11,6 +10,7 @@ import { log } from "@/lib/utils/logger";
 import type { CoreDecision } from "@/lib/ai/types";
 import type { PredictedContext } from "@/lib/services/memory/predictive-routing";
 import type { ChatSessionRow } from "@/lib/db/types";
+import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 
 export interface ComprehensionRunnerParams {
   phone: string;
@@ -73,8 +73,7 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
     await notifyAdmin(`⚠️ *ESCALACIÓN — Bajo nivel de comprensión*\n\nTeléfono: ******${phone.slice(-4)}\nScore: ${comprehensionScore.toFixed(2)}`);
     const escMsg = buildEscalationMessage();
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_ESCALATION", text: escMsg });
-    await sendWhatsAppMessage(phone, escMsg);
-    await insertMessage(conversationId, "assistant", escMsg);
+    await sendAndPersist(phone, conversationId, escMsg);
     return true;
   }
 
@@ -88,8 +87,7 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
     });
     const recoveryMsg = getRecoveryMessage(comprehensionState, session);
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_RECOVERY", text: recoveryMsg });
-    await sendWhatsAppMessage(phone, recoveryMsg);
-    await insertMessage(conversationId, "assistant", recoveryMsg);
+    await sendAndPersist(phone, conversationId, recoveryMsg);
     return true;
   }
 

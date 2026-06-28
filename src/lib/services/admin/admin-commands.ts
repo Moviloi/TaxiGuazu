@@ -6,7 +6,7 @@
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs } from "@/lib/db/database";
 import { TIERS, type Tier } from "@/config/constants";
-import { ADMIN_PHONE } from "./admin.service";
+import { assertAdmin } from "@/lib/services/shared/admin-helpers";
 
 export async function handleAdminCommand(phone: string, text: string): Promise<boolean> {
   const trimmed = text.trim();
@@ -105,10 +105,7 @@ async function handleAddSlot(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede configurar slots.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "configurar slots"))) return;
 
   const dayOfWeek = parseDay(parts[1]);
   if (dayOfWeek === null) {
@@ -151,10 +148,7 @@ async function handleRemoveSlot(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede eliminar slots.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "eliminar slots"))) return;
 
   const id = parseInt(parts[1]);
   if (isNaN(id)) {
@@ -171,10 +165,7 @@ async function handleRemoveSlot(phone: string, text: string): Promise<void> {
 }
 
 async function handleListSlots(phone: string): Promise<void> {
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede listar slots.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "listar slots"))) return;
   const slots = await getActiveSlots();
   if (slots.length === 0) {
     await sendWhatsAppMessage(phone, "📅 No hay slots configurados. Usá .add_slot para agregar.");
@@ -199,10 +190,7 @@ async function handleAddChofer(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede agregar choferes.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "agregar choferes"))) return;
 
   const code = parts[1].toLowerCase();
   const knownCarTypes = ["sedan", "suv", "van", "pickup"];
@@ -282,10 +270,7 @@ async function handleUpdateChofer(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede actualizar choferes.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "actualizar choferes"))) return;
 
   const code = parts[1].toLowerCase();
   const knownCarTypes = ["sedan", "suv", "van", "pickup"];
@@ -358,10 +343,7 @@ async function handleBajaChofer(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede dar de baja choferes.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "dar de baja choferes"))) return;
 
   const code = parts[1].toLowerCase();
   const ok = await deactivateDriverByCode(code);
@@ -379,10 +361,7 @@ async function handleSetPaquete(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede configurar precios de paquete.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "configurar precios de paquete"))) return;
 
   const code = parts[1].toLowerCase();
   const packageType = parts[2].toLowerCase();
@@ -416,10 +395,7 @@ async function handleSetTier(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede cambiar tiers.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "cambiar tiers"))) return;
 
   const code = parts[1].toLowerCase();
   const tier = parts[2].toLowerCase();
@@ -447,10 +423,7 @@ async function handleSetMinimo(phone: string, text: string): Promise<void> {
     return;
   }
 
-  if (phone !== ADMIN_PHONE) {
-    await sendWhatsAppMessage(phone, "❌ Solo el administrador puede configurar mínimos.");
-    return;
-  }
+  if (!(await assertAdmin(phone, "configurar mínimos"))) return;
 
   const code = parts[1].toLowerCase();
   const monto = parseInt(parts[2].replace(/[^0-9]/g, ""));

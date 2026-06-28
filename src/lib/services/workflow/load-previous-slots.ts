@@ -1,6 +1,7 @@
 import { getChatSession } from "@/lib/db/database";
 import { CONTEXT_SLOT_TIMEOUT_S } from "@/config/constants";
 import type { SlotStateEntry } from "@/lib/ai/slot-state";
+import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 
 export async function loadPreviousSlots(phone: string): Promise<Record<string, string>> {
   try {
@@ -9,7 +10,7 @@ export async function loadPreviousSlots(phone: string): Promise<Record<string, s
     const now = Math.floor(Date.now() / 1000);
     const sessionAge = session.updated_at ? now - session.updated_at : 0;
     if (sessionAge > CONTEXT_SLOT_TIMEOUT_S) return {};
-    const parsed = JSON.parse(session.slots);
+    const parsed = parseSessionSlots(session.slots);
     if (!parsed || typeof parsed !== "object") return {};
     const result: Record<string, string> = {};
     for (const [k, v] of Object.entries(parsed)) {
@@ -42,7 +43,8 @@ export async function loadPreviousSlotStates(phone: string): Promise<Record<stri
     // Backward compat: reconstruct from slots + confidence
     if (!session.slots) return null;
     let slots: Record<string, any>;
-    try { slots = JSON.parse(session.slots); } catch { return null; }
+    slots = parseSessionSlots(session.slots);
+    if (Object.keys(slots).length === 0) return null;
     if (!slots || typeof slots !== "object") return null;
 
     let confidence: Record<string, number> = {};

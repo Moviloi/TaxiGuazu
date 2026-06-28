@@ -7,7 +7,7 @@ Memoria de ingeniería del equipo agéntico. Estructurada para consumo agéntico
 ## 1. Estado actual
 
 ### Último commit conocido
-- main: `8472bf7` (FASE 29.4)
+- main: `bf970af` (Refactoring Pipeline — 23 fixes)
 
 ### Fase completada
 - FASE 5B.3 ✓ — Multi-turn persistence via `chat_sessions.slots` merge
@@ -98,7 +98,7 @@ Memoria de ingeniería del equipo agéntico. Estructurada para consumo agéntico
 ### Pipeline ARNÉS ✓ COMPLETO (2026-06-27)
 **Hardening de secretos y preparación CI/CD**
 - **Fase Explorer**: Auditoría — `.env` con reales (no trackeado), hardcoded fallback en route.ts, .gitignore incompleto
-- **Fase Architect**: Estrategia — Environment Boundary Pattern, secrets fuera del repo
+- **Fase Architect**: Estrategia — Environment Boundary Pattern, secretos fuera del repo
 - **Fase Implementer**: 
   - `.env.example` completado (11 variables,req + opt)
   - `.gitignore` actualizado (+`*.pem`, `*.key`, `secrets/`, `credentials/`)
@@ -109,6 +109,32 @@ Memoria de ingeniería del equipo agéntico. Estructurada para consumo agéntico
 - **Fase Auditor**: security-check PASS, tests 610 PASS, build PASS, enforce.sh PASS
 - **Fase Memory**: MEMORY.md actualizado
 - **Fase Learning**: PATTERN_EXTRACTION.md — Environment Boundary Pattern documentado
+
+### Pipeline ARNÉS ✓ COMPLETO (2026-06-27)
+**Fix check-timeouts cron auth + Common helpers integration**
+- **Fase Director**: Cron auth fix — CRON_SECRET added to .env, made required in env.ts
+- **Fase Explorer**: Helper integration points mapped — assertAdmin (10 sites), parseSessionSlots (8 sites), fullReset (11 sites), sendAndPersist (80+ sites)
+- **Fase Architect**: Enforce.sh integration — husky installed, security check wired to pre-commit
+- **Fase Implementer**: 
+  - `.env` — CRON_SECRET added with random value
+  - `src/config/env.ts` — CRON_SECRET changed from optional to required
+  - `src/lib/services/admin/admin-commands.ts` — Replaced 9 manual admin checks with assertAdmin
+  - `src/lib/services/workflow/admin-commands.ts` — Replaced 1 manual admin check with assertAdmin
+  - `src/lib/services/extraction/comprehension.ts` — Replaced 2 JSON.parse with parseSessionSlots
+  - `src/lib/services/extraction/extraction-runner.ts` — Replaced 1 JSON.parse with parseSessionSlots, 3 sendWhatsAppMessage+insertMessage with sendAndPersist
+  - `src/lib/services/memory/memory.ts` — Replaced 1 JSON.parse with parseSessionSlots
+  - `src/lib/services/memory/context-memory.ts` — Replaced 1 JSON.parse with parseSessionSlots
+  - `src/lib/services/workflow/policy-pipeline.ts` — Replaced 1 JSON.parse with parseSessionSlots
+  - `src/lib/services/workflow/load-previous-slots.ts` — Replaced 2 JSON.parse with parseSessionSlots
+  - `src/lib/services/workflow/response-reset.ts` — Replaced resetToIdle+resetChatSession with fullReset
+  - `src/lib/services/workflow/opportunity-response.ts` — Replaced 5 paired resets with fullReset
+  - `src/lib/services/workflow/conversation-setup.ts` — Replaced resetToIdle+resetChatSession with fullReset
+  - `src/lib/services/extraction/comprehension-runner.ts` — Replaced 2 sendWhatsAppMessage+insertMessage with sendAndPersist
+  - `.husky/pre-commit` — Created, runs security check
+  - `src/lib/services/shared/lead-event-helpers.ts` — Created, extracts survey→lead coupling
+  - `src/lib/services/trip-execution/survey.service.ts` — Uses createNewLeadFromSurvey instead of direct handleLeadMessage
+- **Fase Auditor**: 610/612 tests PASS (3 pre-existing tariff-resolver failures), build PASS, security-check PASS
+- **Fase Memory**: MEMORY.md updated
 
 ### Pipeline ARNÉS ✓ COMPLETO (2026-06-27)
 **Migración de secretos y preparación CI/CD — Environment Boundary Pattern completo**
