@@ -156,8 +156,8 @@ function buildReservaFinalResponse(
   // Confirmación de booking: usuario afirma mientras el workflow esperaba confirmación.
   // La policy reconoce que el usuario ya dijo sí y produce el mensaje de booking aceptado.
   if (decision.core.facts.some((f) => f.startsWith("affirmation:")) && extraction?.conversationalState === "awaiting_confirmation") {
-    const origin = extraction.slots.origin?.value ?? "";
-    const destination = extraction.slots.destination?.value ?? "";
+    const origin = extraction.tariff?.displayOrigin ?? extraction.tariff?.canonicalOrigin ?? String(extraction.slots.origin?.value ?? "");
+    const destination = extraction.tariff?.displayDestination ?? extraction.tariff?.canonicalDestination ?? String(extraction.slots.destination?.value ?? "");
     const price = extraction.tariff?.price;
     if (price != null && extraction.tariff?.matched) {
       return {
@@ -319,8 +319,8 @@ export function buildConfirmationMessage(extraction: ExtractionContext, lang: La
 
 export function buildNoTariffConfirmation(extraction: ExtractionContext, lang: Lang): string {
   const slots = extraction.slots;
-  const origin = slots.origin?.value ?? "";
-  const destination = slots.destination?.value ?? "";
+  const origin = extraction.tariff?.displayOrigin ?? extraction.tariff?.canonicalOrigin ?? String(slots.origin?.value ?? "");
+  const destination = extraction.tariff?.displayDestination ?? extraction.tariff?.canonicalDestination ?? String(slots.destination?.value ?? "");
 
   if (lang === "en") {
     return `I couldn't find a published rate for that route (${origin} → ${destination}). An operator will confirm availability and final price. Do you want to proceed?`;
@@ -339,11 +339,8 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
   const originValue = safe.origin;
 
   if (field === "destination") {
-    // Caso especial: destination es un hotel/landmark ambiguo (amerian, meliá, etc.)
-    // → la policy NO asume estructura de ruta, pregunta si es ese hotel en el centro
-    //   o alguna dirección específica.
     if (destValue && AMBIGUOUS_HOTEL_LANDMARKS_RE.test(destValue)) {
-      const label = formatHotelLandmarkLabel(destValue);
+      const label = extraction.tariff?.displayDestination ?? formatHotelLandmarkLabel(destValue);
       if (lang === "en") {
         return `Do you mean ${label} in the city centre or a specific address?`;
       }
@@ -409,15 +406,15 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { re
   if (origin == null || destination == null) return null;
   if (String(origin).trim() === "" || String(destination).trim() === "") return null;
 
-  // Si ya tiene hora → no es el caso del fallback, el policy elige otra ruta.
   if (extraction.slots.scheduled_at?.value) return null;
 
-  // Si el workflow ya está pidiendo confirmación → no superponer acknowledge.
   if (extraction.conversationalState === "awaiting_confirmation") return null;
 
-  const originStr = withDefiniteArticle(String(origin), lang);
-  const destStr = withDefiniteArticle(String(destination), lang);
-  const destStrRaw = String(destination).trim();
+  const displayOrigin = extraction.tariff?.displayOrigin;
+  const displayDest = extraction.tariff?.displayDestination;
+  const originStr = displayOrigin ?? withDefiniteArticle(String(origin), lang);
+  const destStr = displayDest ?? withDefiniteArticle(String(destination), lang);
+  const destStrRaw = String(displayDest ?? destination).trim();
   const originReason = extraction.slots.origin?.reason;
   const destReason = extraction.slots.destination?.reason;
   const originIsAmbiguous =

@@ -40,13 +40,13 @@ describe("getPlaceDisplayName", () => {
     expect(result.source).toBe("canonical_name");
   });
 
-  it("returns canonical_name when official_name is longer", async () => {
+  it("returns official_name when available and longer than canonical_name", async () => {
     mockQueryOne.mockResolvedValue({
       official_name: "Hotel Gran Meliá Iguazú (5 estrellas, lujo, piscina)",
     });
     const result = await getPlaceDisplayName("Hotel Gran Meliá Iguazú");
-    expect(result.displayName).toBe("Hotel Gran Meliá Iguazú");
-    expect(result.source).toBe("canonical_name");
+    expect(result.displayName).toBe("Hotel Gran Meliá Iguazú (5 estrellas, lujo, piscina)");
+    expect(result.source).toBe("official_name");
   });
 
   it("returns canonical_name when place not found in DB", async () => {

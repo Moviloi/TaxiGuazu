@@ -17,10 +17,10 @@ Fase del pipeline: `RECORDING`
 ### Decisión 1: Mantener función en lead.service.ts con re-export
 
 - **Quién:** Architect + Implementer
-- **Qué:** `handleSlotConfirmationButton` permanece en `lead.service.ts`. Se crea `workflow/slot-confirmation-handler.ts` como re-export.
-- **Por qué:** La función usa dynamic imports (`await import()`) que Vitest no intercepta correctamente cuando están en módulos separados. Los tests de integración que pasan por `handleLeadMessage` dependen de mocks configurados para `lead.service.ts`.
-- **ADR reference:** ADR 004 (Service Boundaries) — función permanece en el dominio correcto (workflow-related logic en lead.service como orquestador top-level)
-- **Impacto:** `lead.service.ts` (303→268 líneas), `workflow/slot-confirmation-handler.ts` (creado, 1 línea re-export)
+- **Qué:** `handleSlotConfirmationButton` permanece en `lead.service.ts`.
+- **Por qué:** La función usa dynamic imports que Vitest no intercepta correctamente en módulos separados.
+- **ADR reference:** ADR 004 (Service Boundaries)
+- **Impacto:** `lead.service.ts` (303→268 líneas)
 
 ### Decisión 2: No resolver circular survey→lead en este pipeline
 
@@ -57,7 +57,6 @@ Fase del pipeline: `RECORDING`
 
 | Deuda | Severidad |
 |-------|-----------|
-| `slot-confirmation-handler.ts` es solo re-export (no separación real) | BAJO |
 | Función de 132 líneas permanece en lead.service.ts | MEDIA |
 
 ## Referencias

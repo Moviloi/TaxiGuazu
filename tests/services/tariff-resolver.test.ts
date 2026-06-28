@@ -86,7 +86,7 @@ describe("tariff-resolver", () => {
   it("resolveTariff — not found when no match at any level", async () => {
     mockResolveLocation({ place_id: "place_a", canonical_name: "Place A", operational_zone: null, confidence: "exact" });
     mockResolveLocation({ place_id: "place_b", canonical_name: "Place B", operational_zone: null, confidence: "exact" });
-    mockDb.execute.mockResolvedValueOnce({ rows: [] });
+    mockDb.execute.mockResolvedValue({ rows: [] });
 
     const result = await resolveTariff("unknown_origin", "unknown_dest", 1);
     expect(result.matched).toBe(false);
@@ -135,6 +135,7 @@ describe("tariff-resolver", () => {
   it("resolveTariff — empty origin or destination returns not_found", async () => {
     mockResolveLocation({ place_id: null, canonical_name: null, operational_zone: null, confidence: "not_found" });
     mockResolveLocation({ place_id: null, canonical_name: null, operational_zone: null, confidence: "not_found" });
+    mockDb.execute.mockResolvedValue({ rows: [] });
 
     const result = await resolveTariff("", "", 1);
     expect(result.matched).toBe(false);

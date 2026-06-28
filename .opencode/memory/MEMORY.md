@@ -39,7 +39,7 @@ Memoria de ingeniería del equipo agéntico. Estructurada para consumo agéntico
 - **5B.3**: `loadPreviousSlots()` async, merge con prioridad role lock > LLM > prev
 - **5B.4**: `getExtractionContextMessage` inyecta constraints de CORE como system message
 - **ARNÉS-OpenCode**: Arquitectura `Usuario → OpenCode → ael → PIPELINE.md → src/`
-- **Re-export pattern**: `handleSlotConfirmationButton` permanece en lead.service.ts, `slot-confirmation-handler.ts` re-exporta. Motivo: Vitest no intercepta dynamic imports en módulos separados.
+- **handleSlotConfirmationButton** permanece en lead.service.ts.
 
 ### Decisiones pendientes
 - Blueprint FASE 6.0 (COMMERCIAL-MODEL-SPEC.md) — sin implementar

@@ -30,7 +30,11 @@ export async function getPlaceDisplayName(canonicalName: string): Promise<Displa
     return { displayName: canonicalName, source: "canonical_name" };
   }
 
-  if (official.length >= canonicalName.length) {
+  if (official.length < 3) {
+    return { displayName: canonicalName, source: "canonical_name" };
+  }
+
+  if (official.trim().toLowerCase() === canonicalName.trim().toLowerCase()) {
     return { displayName: canonicalName, source: "canonical_name" };
   }
 

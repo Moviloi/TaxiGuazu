@@ -6,7 +6,7 @@ export async function findPlaceByAlias(
   return queryOne(
     `SELECT p.place_id, p.canonical_name, p.operational_zone
      FROM aliases a JOIN places p ON p.place_id = a.place_id
-     WHERE LOWER(a.alias) = ? AND p.active = 1
+      WHERE LOWER(a.alias) = ? AND p.active_status = 'active'
      LIMIT 1`,
     [alias],
   );
@@ -17,7 +17,7 @@ export async function findPlaceByName(
 ): Promise<{ place_id: string; canonical_name: string; operational_zone: string | null } | null> {
   return queryOne(
     `SELECT place_id, canonical_name, operational_zone FROM places
-     WHERE LOWER(canonical_name) = ? AND active = 1
+     WHERE LOWER(canonical_name) = ? AND active_status = 'active'
      LIMIT 1`,
     [name],
   );
