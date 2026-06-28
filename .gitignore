@@ -58,6 +58,9 @@ coverage/
 .vercel
 .turbo
 
+# Standalone static marketing site (separate repo)
+site/
+
 # Build artifacts
 *.tsbuildinfo
 
