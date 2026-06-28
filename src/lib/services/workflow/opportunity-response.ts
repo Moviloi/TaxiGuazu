@@ -1,4 +1,4 @@
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import { getChatSession, insertMessage, updateOpportunityLogResponse, clearPendingOpportunity } from "@/lib/db/database";
 import { fullReset } from "@/lib/services/shared/reset-helpers";
 import { setTripState } from "@/lib/db/state-accessors";

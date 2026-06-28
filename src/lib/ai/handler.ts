@@ -17,6 +17,7 @@ import { router } from "./router";
 import { policyAhora } from "./policy-ahora";
 import { policyReserva } from "./policy-reserva";
 import { assertOutputSource, assertPipelineComplete, setRequestState } from "./guard";
+import { generateLLMResponse } from "./llm-response";
 import { buildInformationalResponse, buildCommercialResponse } from "./response-builder";
 import type { HandleMessageResult, HandlerContext, Mode, PolicyOutput, ConversationDomain, OperationalMode } from "./types";
 import { log } from "@/lib/utils/logger";
@@ -67,7 +68,7 @@ function buildDomainPolicy(decision: ReturnType<typeof router>, domain: Conversa
     : policyReserva(decision, ctx);
 }
 
-export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): HandleMessageResult {
+export async function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): Promise<HandleMessageResult> {
   const coreDecision = core(input);
   const decision = router(coreDecision, mode);
   const hasExtraction = !!ctx?.extraction?.slots && Object.keys(ctx.extraction.slots).length > 0;
@@ -104,6 +105,13 @@ export function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): 
     `[POLICY] mode=${policy.mode} hint="${policy.policyHint}" requiresConfirmation=${policy.requiresConfirmation}`,
   );
   log.info(`[OUTPUT_SOURCE]=POLICY`);
+
+  // Intentar mejora LLM con validación → fallback silencioso a template
+  const llmResponse = await generateLLMResponse(policy, ctx);
+  if (llmResponse) {
+    policy.finalResponse = llmResponse;
+    log.info("[LLM_RESPONSE] applied");
+  }
 
   return { decision, policy };
 }

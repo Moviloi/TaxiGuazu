@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMessages, insertMessage, getConversationById } from '@/lib/db/database';
-import { sendWhatsAppMessage } from '@/lib/whatsapp/sender';
+import { sendWhatsAppMessage } from '@/lib/sender';
 import { checkAdminAuth } from '@/lib/auth';
 import { log } from "@/lib/utils/logger";
 

@@ -1,4 +1,4 @@
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import { insertMessage } from "@/lib/db/database";
 
 export async function sendAndPersist(phone: string, conversationId: number, msg: string): Promise<void> {

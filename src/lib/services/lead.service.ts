@@ -4,13 +4,13 @@ import { resetRequestState } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
 import type { Intent } from "@/lib/ai/types";
 import { mapIntentToDomain } from "@/lib/ai/domain";
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 
 import { handleCommandShortcuts } from "@/lib/services/workflow/command-shortcuts";
 import { handleResponseReset } from "@/lib/services/workflow/response-reset";
-import { handleAdminCommands } from "@/lib/services/workflow/admin-commands";
+import { handleAdminCommands } from "@/lib/services/workflow/command-router";
 import { handleConversationSetup } from "@/lib/services/workflow/conversation-setup";
 import { handleOpportunityResponse } from "@/lib/services/workflow/opportunity-response";
 import { handlePolicyPipeline } from "@/lib/services/workflow/policy-pipeline";
@@ -19,10 +19,11 @@ import { buildPredictedContext } from "@/lib/services/memory/predictive-routing"
 import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/event-tracking";
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
-import { getConversationalState } from "@/lib/db/state-accessors";
+import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { buildFieldSelector } from "@/lib/ai/slot-confirmation";
-import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
+import { detectLeadLang } from "@/lib/detect-lang";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
+import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
 
 import { log } from "@/lib/utils/logger";
 
@@ -39,7 +40,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // ── ZONE: COMMAND SHORTCUTS ──
     if (lower === ".limpiar") {
-      await handleResponseReset(phone, trimmed);
+      await handleResponseReset(phone);
       const [postSession, postState] = await Promise.all([
         getChatSession(phone).catch(() => null),
         getConversationalState(phone).catch(() => null),
@@ -228,16 +229,41 @@ export async function handleSlotConfirmationButton(
       correctedSlots: [],
     });
 
-    // Re-route through policy pipeline
-    const parsedData = undefined;
-    const extractionCtx = buildExtractionContext(parsedData, syntheticConfidence, workflowResult, undefined, leadCore?.roleLock, leadCore?.slotStability, rawSlots);
-    const domain = mapIntentToDomain(leadCore.intent);
-    await handlePolicyPipeline({
-      phone, text: buttonId, conversation, history, customerName,
-      leadCore, extractionCtx, pricing: undefined, workflowResult,
-      confidenceResult: syntheticConfidence, prevSlotsEarly: rawSlots, parsedData, domain,
-      sessionUpdatedAt: session?.updated_at,
-    });
+    // Resolve pricing and ask for final confirmation
+    let priceMsg: string | null = null;
+    if (rawSlots.origin && rawSlots.destination) {
+      try {
+        const resolved = await resolvePricingForSlots({
+          origin: String(rawSlots.origin),
+          destination: String(rawSlots.destination),
+          passengers: Number(rawSlots.passengers ?? 1),
+        });
+        if (resolved.pricingResult.final_price > 0) {
+          const p = resolved.pricingResult;
+          const originName = p.origin.canonical_name ?? rawSlots.origin;
+          const destName = p.destination.canonical_name ?? rawSlots.destination;
+          priceMsg = `El traslado de ${originName} a ${destName} cuesta $${p.final_price} ARS.\n\n¿Confirmamos el viaje?`;
+        }
+      } catch (e) {
+        log.error("[SLOT_CONFIRM] pricing error:", e);
+      }
+    }
+
+    if (priceMsg) {
+      await sendWhatsAppMessage(phone, priceMsg);
+      await insertMessage(conversation.id, "assistant", priceMsg);
+      await setConversationalState(phone, "awaiting_confirmation");
+    } else {
+      const parsedData = undefined;
+      const extractionCtx = buildExtractionContext(parsedData, syntheticConfidence, workflowResult, undefined, leadCore?.roleLock, leadCore?.slotStability, rawSlots);
+      const domain = mapIntentToDomain(leadCore.intent);
+      await handlePolicyPipeline({
+        phone, text: buttonId, conversation, history, customerName,
+        leadCore, extractionCtx, pricing: undefined, workflowResult,
+        confidenceResult: syntheticConfidence, prevSlotsEarly: rawSlots, parsedData, domain,
+        sessionUpdatedAt: session?.updated_at,
+      });
+    }
     return;
   }
 

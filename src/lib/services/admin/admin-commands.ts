@@ -3,7 +3,7 @@
 // which manages dispatch/system notifications. Keep this import boundary clean:
 // admin-commands reads configuration; admin.service manages dispatch.
 
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import { createDriverCode, deactivateDriverByCode, getDriverCodeByCode, setPackagePrice, createReservationSlot, getActiveSlots, deleteReservationSlot, updateDriverTier, updateDriverMinPayout, updateDriverLanguages, updateDriverGuide, updateDriverByCode, getDriverByPhone, searchTariffs } from "@/lib/db/database";
 import { TIERS, type Tier } from "@/config/constants";
 import { assertAdmin } from "@/lib/services/shared/admin-helpers";

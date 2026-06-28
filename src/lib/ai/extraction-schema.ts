@@ -9,7 +9,10 @@ export const TripExtractionSchema = z.object({
   flight: z.string().nullable().optional(),
   urgency: z.enum(["ahora", "pronto", "programado"]).nullable().optional(),
   customer_name: z.string().nullable().optional(),
+  language: z.enum(["es", "en", "pt", "fr", "de", "it", "zh"]).nullable().optional(),
 });
+
+export type ExtractionLanguage = z.infer<typeof TripExtractionSchema>["language"];
 
 export type TripExtraction = z.infer<typeof TripExtractionSchema>;
 

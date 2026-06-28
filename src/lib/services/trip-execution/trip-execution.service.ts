@@ -18,11 +18,11 @@ import { logOpportunityShown } from "@/lib/services/learning/event-tracking";
 import { buildOpportunityOfferMessage } from "@/lib/ai/response-builder";
 import { executeDispatch } from "@/lib/services/dispatch/dispatch.service";
 import type { DispatchResult } from "@/lib/services/dispatch/dispatch.service";
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import type { Lang } from "@/lib/ai/types";
-import { processLead } from "@/lib/core/pipeline";
-import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
+import { processLead } from "@/lib/pipeline";
+import type { ExecutionContext, ExecutionDeps } from "@/lib/pipeline";
 import type { ConfirmedSlot, ConversationalState } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 

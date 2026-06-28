@@ -1,5 +1,5 @@
 import { getEnv } from "@/config/env";
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import { insertMessage, getOrCreateConversation } from "@/lib/db/database";
 
 export async function assertAdmin(phone: string, action: string): Promise<boolean> {

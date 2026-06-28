@@ -3,7 +3,7 @@
 // (offerToSpecificDriver, broadcastTripToDrivers), and timeouts.ts (escalation).
 // Frozen: do NOT change escalation rules, timeouts, levels, or broadcast logic.
 
-import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
 import {
   getAvailableDrivers,
   getClientPreferredDriver,

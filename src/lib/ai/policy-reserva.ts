@@ -386,11 +386,6 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
     if (lang === "pt") return `Para que dia e horário você precisa da corrida?`;
     return `¿Para qué día y horario necesitás el viaje?`;
   }
-  if (field === "flight") {
-    if (lang === "en") return `What's your flight number?`;
-    if (lang === "pt") return `Qual é o número do voo?`;
-    return `¿Cuál es el número de vuelo?`;
-  }
   if (lang === "en") return `Could you provide ${field}?`;
   if (lang === "pt") return `Pode informar ${field}?`;
   return `¿Podés indicarme ${field}?`;

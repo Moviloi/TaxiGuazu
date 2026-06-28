@@ -3,7 +3,7 @@
 // Cualquier cambio requiere aprobación de arquitectura.
 
 import { getMaxFleetCapacity, validateFleetCanHandle, findTariff, insertMessage } from "@/lib/db/database";
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { buildFleetCapacityMessage, buildFleetTariffMessage } from "@/lib/ai/response-builder";
 import { log } from "@/lib/utils/logger";

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkTimeouts } from "@/lib/services/housekeeping/timeouts";
+import { checkTimeouts } from "@/lib/timeouts";
 import { getEnv } from "@/config/env";
 import { log } from "@/lib/utils/logger";
 

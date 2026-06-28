@@ -1,4 +1,4 @@
-import { sendInteractiveButtons } from "@/lib/whatsapp/sender";
+import { sendInteractiveButtons } from "@/lib/sender";
 import {
   getTripsPendingSurvey,
   markSurveySent,

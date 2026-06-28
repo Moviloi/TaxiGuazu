@@ -15,7 +15,7 @@ import { mapIntentToDomain } from "@/lib/ai/domain";
 import { calculateSlotConfidence } from "@/lib/services/extraction/confidence";
 import { buildConfidenceMap } from "@/lib/services/extraction/confidence-map";
 import { loadContext, mergeContext } from "@/lib/services/memory/context-memory";
-import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
+import { detectLeadLang } from "@/lib/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
 import { loadPreviousSlots, loadPreviousSlotStates } from "@/lib/services/workflow/load-previous-slots";
 import { buildSlotStates, type SlotStateEntry } from "@/lib/ai/slot-state";

@@ -27,7 +27,8 @@ Devuelve un objeto JSON con estos campos (todos opcionales — incluí solo los 
   "scheduled_at": string | null,
   "flight": string | null,
   "urgency": "ahora" | "pronto" | "programado" | null,
-  "customer_name": string | null
+  "customer_name": string | null,
+  "language": "es" | "en" | "pt" | "fr" | "de" | "it" | "zh" | null
 }
 
 Reglas:
@@ -39,8 +40,9 @@ Reglas:
 - flight: solo número de vuelo explícito ("vuelo AR1234", "AR1782").
 - urgency: "ahora" si hay urgencia explícita, "programado" si hay fecha futura, "pronto" si es "en unas horas", null si no hay indicación.
 - customer_name: si el usuario se presenta ("me llamo Juan", "soy María", "es Juan").
+- language: detectá el idioma del mensaje del usuario. Solo si estás seguro (es, en, pt, fr, de, it, zh). Si no estás seguro, null.
 
-NO inventes datos que no estén explícitamente en el mensaje del usuario ni en el historial reciente.
+NO inventes datos que no estén explícitamente en el message del usuario ni en el historial reciente.
 Respuesta SOLO JSON, sin texto adicional.
 `.trim();
 }

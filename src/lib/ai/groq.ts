@@ -22,8 +22,8 @@ function getGroq(): Groq | null {
 
 function detectLang(text: string): "es" | "en" | "pt" {
   const lower = text.toLowerCase();
-  const ptMarkers = ["você", "obrigado", "bom dia", "boa tarde", "boa noite", "quanto custa", "valor", "por favor"];
-  const enMarkers = ["hello", "hi", "how much", "price", "airport", "booking", "tomorrow", "today", "please"];
+  const ptMarkers = ["você", "obrigado", "bom dia", "boa tarde", "boa noite", "quanto custa", "valor", "por favor", "obrigada", "tudo bem", "por gentileza", "preciso", "gostaria"];
+  const enMarkers = ["hello", "hi", "how much", "price", "airport", "booking", "tomorrow", "today", "please", "thanks", "help", "where", "hotel", "need", "i want", "how far"];
 
   if (ptMarkers.some(marker => lower.includes(marker))) return "pt";
   if (enMarkers.some(marker => lower.includes(marker))) return "en";

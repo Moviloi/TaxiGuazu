@@ -38,7 +38,7 @@ import {
 } from "@/lib/db/database";
 import { notifyAdmin, notifyOtherDriversTaken } from "../admin/admin.service";
 import { offerToSpecificDriver, broadcastTripToDrivers } from "./dispatch.service";
-import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
 import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
 import { log } from "@/lib/utils/logger";
 

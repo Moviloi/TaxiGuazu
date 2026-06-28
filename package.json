@@ -12,10 +12,10 @@
     "start": "next start",
     "start:all": "next start",
     "lint": "next lint",
-    "test": "vitest run",
+    "test": "vitest run --config src/config/vitest.config.ts",
     "ael:enforce": "bash ael/contracts/enforce.sh",
     "ael:validate": "npm test && npm run build && bash ael/contracts/enforce.sh",
-    "test:watch": "vitest",
+    "test:watch": "vitest --config src/config/vitest.config.ts",
     "security-check": "node scripts/precommit-security-check.mjs",
     "prepare": "husky"
   },

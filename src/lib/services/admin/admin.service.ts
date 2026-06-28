@@ -2,7 +2,7 @@
 // No modificar. Gestiona notificaciones a administradores, asignación de viajes
 // y comunicación con choferes. Cualquier cambio requiere aprobación de arquitectura.
 
-import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage } from "@/lib/sender";
 import { getAvailableDrivers } from "@/lib/db/database";
 import { getEnv } from "@/config/env";
 import { log } from "@/lib/utils/logger";

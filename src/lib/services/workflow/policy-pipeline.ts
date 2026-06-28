@@ -1,9 +1,9 @@
-import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
 import { shouldRequestConfirmation, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
 import { insertMessage, getChatSession, resetChatSession } from "@/lib/db/database";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
-import type { ExecutionContext, ExecutionDeps } from "@/lib/core/pipeline";
-import { processLead } from "@/lib/core/pipeline";
+import type { ExecutionContext, ExecutionDeps } from "@/lib/pipeline";
+import { processLead } from "@/lib/pipeline";
 import { resolveGeoRoute } from "@/lib/services/geo/geo-engine";
 import { evaluateOpportunities, isOpportunityQuery } from "@/lib/services/learning/opportunity-engine";
 import { buildOpportunityNoPricingMessage, formatOpportunityResponse, buildCancellationMessage, buildNowDispatchResponse } from "@/lib/ai/response-builder";
@@ -16,11 +16,11 @@ import { canDispatch as isDispatchReady, canQuote as isQuoteReady, canPrepareQuo
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
-import type { ExtractionContext, ConversationDomain, Mode, TemporalMode, OperationalMode } from "@/lib/ai/types";
+import type { ExtractionContext, ConversationDomain, Mode, TemporalMode, OperationalMode, Lang } from "@/lib/ai/types";
 import { temporalFromFacts, operationalModeFromIntent, operationalModeToMode } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
-import { detectLeadLang } from "@/lib/services/i18n/detect-lang";
+import { detectLeadLang, resolveLang } from "@/lib/detect-lang";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 import { buildConfirmationMessage, buildNoTariffConfirmation } from "@/lib/ai/policy-reserva";
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
@@ -65,7 +65,11 @@ export async function handlePolicyPipeline(
     prevSlotsEarly,
   );
 
-  const lang = detectLeadLang(text);
+  const lang: Lang = detectLeadLang(text);
+  const extendedLang = resolveLang(text, parsedData);
+  if (extendedLang !== lang) {
+    log.info("[LANG_EXTENDED]", { fastPath: lang, extended: extendedLang });
+  }
 
   // FASE 20.3 — Resolver display names para mensajes UX
   if (extractionCtx?.tariff) {
