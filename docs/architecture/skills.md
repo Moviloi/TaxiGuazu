@@ -1,6 +1,6 @@
 # Skills Classification — TaxGuazú
 
-Clasificación de skills instalados en `.agents/skills/`.
+Clasificación de los 8 skills instalados en `.agents/skills/`.
 Referencia documental — no es una regla obligatoria.
 
 ## KEEP (relevantes para el proyecto)
@@ -21,7 +21,7 @@ Referencia documental — no es una regla obligatoria.
 
 ## IGNORE (no aplican a este proyecto)
 
-| Categoría | Skills |
-|-----------|--------|
-| HyperFrames/Video | `animejs`, `contribute-catalog`, `css-animations`, `gsap`, `hyperframes`, `hyperframes-cli`, `hyperframes-media`, `hyperframes-registry`, `lottie`, `remotion-to-hyperframes`, `three`, `typegpu`, `waapi`, `website-to-hyperframes` |
-| Frontend/UI | `accessibility`, `composition-patterns`, `frontend-design`, `react-best-practices`, `seo`, `tailwind`, `tailwind-css-patterns` |
+| Skill | Razón |
+|-------|-------|
+| `react-best-practices` | Skill de React — no aplica (proyecto sin componentes React complejos) |
+| `seo` | Skill de SEO — no aplica (proyecto interno sin requisitos de ranking) |

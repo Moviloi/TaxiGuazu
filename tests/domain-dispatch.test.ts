@@ -206,12 +206,12 @@ describe("buildInformationalResponse", () => {
 
 describe("buildCommercialResponse", () => {
   it("returns route+pax request", () => {
-    const msg = buildCommercialResponse("COMMERCIAL", "es");
+    const msg = buildCommercialResponse("es");
     expect(msg).toContain("recorrido");
   });
 
   it("supports lang parameter", () => {
-    const en = buildCommercialResponse("COMMERCIAL", "en");
+    const en = buildCommercialResponse("en");
     expect(en).toContain("route");
   });
 });

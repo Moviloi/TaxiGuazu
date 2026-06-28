@@ -24,7 +24,6 @@ vi.mock("@/lib/db/database", () => ({
   getTripsWithMissingCommission: vi.fn().mockResolvedValue([]),
   getStaleWorkflows: vi.fn().mockResolvedValue([]),
   insertHousekeepingLog: vi.fn().mockResolvedValue(undefined),
-  cleanupOldLearningRecords: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/lib/services/dispatch/dispatch-workflow", () => ({
@@ -57,7 +56,7 @@ import {
   getTripsByScheduledAtWindow, getDriverByPhone, setConnectionFlag,
   getConnectionValueFlag, getTripsPendingCloseOut, getTripsWithMissingCommission,
   getConnectionValue, setConnectionValue, getExpiredTrips, getStaleWorkflows,
-  cleanupOldLearningRecords, insertHousekeepingLog,
+  insertHousekeepingLog,
 } from "@/lib/db/database";
 import { sendInteractiveButtons, sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
@@ -250,15 +249,4 @@ describe("checkTimeouts", () => {
     });
   });
 
-  describe("runHousekeeping", () => {
-    it("cleans up old learning records", async () => {
-      vi.mocked(cleanupOldLearningRecords).mockResolvedValue([
-        { job: "cleanup_events", rowsDeleted: 42, duration: 5 },
-      ]);
-
-      await checkTimeouts();
-
-      expect(insertHousekeepingLog).toHaveBeenCalledWith("cleanup_events", 42, 5);
-    });
-  });
 });

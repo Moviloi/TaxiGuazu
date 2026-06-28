@@ -89,14 +89,14 @@
 | Campo | Especificación |
 |---|---|
 | **Definición técnica** | Estado discreto del proceso de servicio. No es un score. Es un ENUM de 7 valores. |
-| **INPUTS** | `workflowState: string` (desde `chat_sessions.workflow_state` o `conversation-workflow.state`), `turnCount: int` (nuevo campo en chat_sessions), `lastInteractionAt: unix timestamp` (desde `conversations.last_message_at` o `chat_sessions.updated_at`), `scoreTrend: "up"|"flat"|"down"` (cambio en DataReadiness en los últimos 2 turnos), `hasActiveTrip: boolean`. |
+| **INPUTS** | `workflowState: string` (desde `chat_sessions.workflow_state` gestionado por `slot-workflow.ts`), `turnCount: int` (nuevo campo en chat_sessions), `lastInteractionAt: unix timestamp` (desde `conversations.last_message_at` o `chat_sessions.updated_at`), `scoreTrend: "up"|"flat"|"down"` (cambio en DataReadiness en los últimos 2 turnos), `hasActiveTrip: boolean`. |
 | **SOURCE OF TRUTH** | `chat_sessions` (workflow_state, turn_count, last_score_at, updated_at), `conversations` (last_message_at), `trips` (active trip check). |
 | **DEPENDENCIAS** | ChatSessionRow (+ turn_count, last_score_at), ConversationRow, TripRow. |
 | **OUTPUT** | `"NOT_STARTED" | "ENGAGED" | "STALLED" | "AWAITING_DECISION" | "ABANDONED" | "DISPATCHED" | "COMPLETED"` |
 
 **Mapeo desde estado actual**:
 
-- El modelo actual tiene 2 state machines paralelas: `slot-workflow.ts` (4 estados) + `conversation-workflow.ts` (8 estados).
+- El modelo actual tiene 1 state machine: `slot-workflow.ts` (4 estados: `idle`, `collecting_slots`, `slot_confirmation`, `awaiting_confirmation`). El segundo nivel (8 estados con niveles y estados post-confirmación) es parte del diseño de FunnelState no implementado aún.
 - **FunnelState las unifica**: no es una tercera state machine, es un **derivado** que se computa desde ambas + nuevas columnas.
 - No requiere cambios de schema en `chat_sessions.workflow_state` (sigue existiendo), solo agrega `turn_count` y `last_score_at`.
 
@@ -432,8 +432,8 @@ Para soportar FunnelState se requieren:
 | Campo | Especificación |
 |---|---|
 | **Objetivo** | Integrar Tariff match existente con Supply validation existente en un score compuesto. |
-| **Archivos afectados** | Nuevo: `src/lib/services/serviceability.ts`. Modificado: `src/lib/services/fleet-validation.ts` (exponer sub-scores), `src/lib/services/tariff-matcher.ts` (exponer method + alternatives como TariffConfidence). |
-| **Riesgo** | Alto. Toca dispatch (`fleet-validation.ts`), tariff engine (`tariff-matcher.ts`), y el flujo de confirmation en `lead.service.ts`. Serviceability puede bloquear dispatch si score < 0.3. |
+| **Archivos afectados** | Nuevo: `src/lib/services/serviceability.ts`. Modificado: `src/lib/services/fleet-validation.ts` (exponer sub-scores), `src/lib/services/pricing/tariff-resolver.ts` (exponer method + alternatives como TariffConfidence). |
+| **Riesgo** | Alto. Toca dispatch (`fleet-validation.ts`), tariff engine (`tariff-resolver.ts`), y el flujo de confirmation en `lead.service.ts`. Serviceability puede bloquear dispatch si score < 0.3. |
 | **Complejidad** | Alta. ~120 líneas + cambios en 2 servicios existentes. Requiere orquestación. |
 | **Criterio de aceptación** | Tests T56-T75: cada sub-score (physical, economic, operational, temporal) se computa correctamente. Serviceability se combina con pesos dinámicos por intent. **Serviceability < 0.3 bloquea dispatch correctamente.** Tests existentes 5B.2-5B.4 + 5B.6.1-5B.6.3 no rotos. |
 | **Dependencias** | Fase 6.1, Fase 6.4 (DataReadiness provee slots para tariff match). |
@@ -465,7 +465,7 @@ Para soportar FunnelState se requieren:
 | Campo | Especificación |
 |---|---|
 | **Objetivo** | Crear sistema de reglas explícitas para tarifas COMPOSABLE. Operador configura reglas. IA no compone. |
-| **Archivos afectados** | Nuevo: `src/lib/services/tariff-composer.ts`, migración DB para `tariff_composition_rules`. Modificado: `src/lib/services/tariff-matcher.ts` (consulta reglas antes de retornar "not_found"). |
+| **Archivos afectados** | Nuevo: `src/lib/services/tariff-composer.ts`, migración DB para `tariff_composition_rules`. Modificado: `src/lib/services/pricing/tariff-resolver.ts` (consulta reglas antes de retornar "not_found"). |
 | **Riesgo** | Medio. No toca el pipeline principal. Solo el tariff engine. Operador debe configurar reglas. Sin reglas, las tarifas siguen siendo HUMAN. |
 | **Complejidad** | Media. ~80 líneas + migración. |
 | **Criterio de aceptación** | Tests T111-T120: reglas de composición se consultan y aplican correctamente. Si no hay regla → HUMAN. Si hay regla → COMPOSABLE con precio calculado. |
@@ -492,12 +492,11 @@ Para soportar FunnelState se requieren:
 
 | Componente | Impacto | Decisión |
 |---|---|---|
-| **slot-workflow.ts** (4 estados: idle, collecting_slots, awaiting_confirmation, closed) | FunnelState (7 estados) lo reemplazará conceptualmente. slot-workflow sigue siendo el motor de transición de slots (DataReadiness). | **KEEP** — pero renombrado como "slot engine". Deja de ser el "workflow" principal. |
-| **conversation-workflow.ts** (8 estados: idle, collecting_slots, awaiting_confirmation, nivel_1/2/3, waiting_driver, closed) | FunnelState reemplazará la mitad superior (pre-dispatch). La mitad inferior (nivel_1/2/3, waiting_driver) se mueve a FunnelState.DISPATCHED. | **MERGE** (parcial) — la lógica de niveles y waiting_driver sigue siendo necesaria para dispatch, pero el estado se expone como FunnelState.DISPATCHED. |
+| **slot-workflow.ts** (4 estados: idle, collecting_slots, slot_confirmation, awaiting_confirmation) | FunnelState (7 estados) lo reemplazará conceptualmente. El pipeline post-confirmación (niveles, waiting_driver) es planeado. | **KEEP** — renombrado como "slot engine". Deja de ser el "workflow" principal. |
 | **trip_phase** (5 valores: QUOTED, ASSIGNED, CLOSED, etc.) | FunnelState.COMPLETED mapea a trip_phase.CLOSED. FunnelState.DISPATCHED mapea a trip_phase.ASSIGNED. **No hay conflicto.** | **KEEP** — trip_phase sigue siendo el estado del viaje en DB. FunnelState es el estado del cliente en la conversación. Son complementarios. |
 | **trips.status** (legacy: consulta, asignado_chofer, etc.) | FunnelState lo ignora. trip_phase ya lo reemplazó. | **DEPRECATE** — no se toca en esta fase, pero se marca como legacy. |
 | **dispatch** (`escalateTrip`, `broadcastTripToDrivers`, `offerToSpecificDriver`) | Serviceability modula el dispatch (puede escalar antes o cambiar ruta). La lógica de dispatch existente sigue funcionando. | **KEEP** — pero Serviceability lo precede como gate opcional. |
-| **tariff engine** (`matchTariff`, `findTariff`, `searchTariffs`) | Se expone `method` como TariffConfidence. Nivel COMPOSABLE se integra como consulta previa a `not_found`. | **KEEP** — con extensión menor (consulta reglas de composición). |
+| **tariff engine** (`tariff-resolver.ts`, `pricing-engine.ts`, `database.ts`) | Se expone `method` como TariffConfidence. Nivel COMPOSABLE se integra como consulta previa a `not_found`. | **KEEP** — con extensión menor (consulta reglas de composición). |
 | **lead tracking** (`leads` table, `broadcastLeadToDrivers`) | CustomerValue y FunnelState reemplazarán la necesidad de la tabla `leads` (el estado del cliente se infiere de trips + chat_sessions). | **DEPRECATE** (Fase 7+) — la tabla `leads` tiene 2 callsites en `admin.service.ts`. Se depreca cuando FunnelState esté estable. |
 | **confidence.ts** (calculateSlotConfidence) | Su lógica se mueve a `DataReadiness` dentro de `computeLeadMaturity`. La función `calculateSlotConfidence` se refactoriza pero su lógica se conserva. | **KEEP** — refactorizado como sub-componente de LeadMaturity. |
 | **types.ts** (Intent, CoreDecision, ExtractionContext, HandlerContext) | Intent se expande de 4 a 9. ExtractionContext recibe nuevos campos opcionales (`serviceability`, `leadMaturity`, `funnelState`, `customerTier`). | **KEEP** — expandido. |

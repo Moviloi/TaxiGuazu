@@ -147,7 +147,7 @@ export function buildInformationalResponse(intent: string, lang: Lang): string {
   return "Estoy acá para ayudarte con información sobre traslados y paseos en Iguazú. ¿Qué querés saber?";
 }
 
-export function buildCommercialResponse(_intent: string, lang: Lang): string {
+export function buildCommercialResponse(lang: Lang): string {
   if (lang === "en") return "For pricing and availability, please let me know your route and how many passengers.";
   if (lang === "pt") return "Para valores e disponibilidade, informe seu trajeto e quantos passageiros.";
   return "Para tarifas y disponibilidad, indicame tu recorrido y cuántos pasajeros son.";
@@ -192,21 +192,6 @@ export function buildNowDispatchResponse(lang: Lang): string {
   if (lang === "en") return "Looking for an available driver for your trip. We'll notify you when someone picks it up.";
   if (lang === "pt") return "Procurando um motorista disponível para sua corrida. Avisamos quando alguém aceitar.";
   return "Buscando chofer disponible para tu viaje. Te avisamos cuando alguien tome el servicio.";
-}
-
-/** @deprecated Usar buildSlotConfirmationMessage (slot-confirmation.ts) o buildLocationConfirmationResponse */
-export function buildAmbiguousLocationConfirm(
-  origin: string,
-  dest: string,
-  lang: Lang,
-  originDisplay?: string,
-  destDisplay?: string,
-): string {
-  const o = originDisplay ?? origin;
-  const d = destDisplay ?? dest;
-  if (lang === "en") return `Just to confirm: from ${o} to ${d}. Could you give me the exact addresses?`;
-  if (lang === "pt") return `Só para confirmar: de ${o} para ${d}. Pode me passar os endereços exatos?`;
-  return `Solo para confirmar: de ${o} a ${d}. ¿Podés darme las direcciones exactas?`;
 }
 
 export function buildLocationConfirmationResponse(

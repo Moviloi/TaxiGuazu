@@ -21,7 +21,7 @@ import { buildInformationalResponse, buildCommercialResponse } from "./response-
 import type { HandleMessageResult, HandlerContext, Mode, PolicyOutput, ConversationDomain, OperationalMode } from "./types";
 import { log } from "@/lib/utils/logger";
 
-function buildSafeFallback(decision: ReturnType<typeof router>, _lang: string): PolicyOutput {
+function buildSafeFallback(decision: ReturnType<typeof router>): PolicyOutput {
   return {
     decision: "SAFE_FALLBACK",
     mode: decision.mode,
@@ -39,13 +39,13 @@ function buildSafeFallback(decision: ReturnType<typeof router>, _lang: string): 
 function buildDomainPolicy(decision: ReturnType<typeof router>, domain: ConversationDomain, ctx?: HandlerContext): PolicyOutput {
   const lang = ctx?.lang ?? "es";
   if (decision.core.confidence < 0.4 && !ctx?.extraction?.slots) {
-    return buildSafeFallback(decision, lang);
+    return buildSafeFallback(decision);
   }
   if (domain === "information" || domain === "commercial") {
     const domainHint = domain === "information" ? "INFORMATION" : "COMMERCIAL";
     const msg = domain === "information"
       ? buildInformationalResponse(decision.core.intent, lang)
-      : buildCommercialResponse(decision.core.intent, lang);
+      : buildCommercialResponse(lang);
     return {
       decision: decision.decision,
       mode: decision.mode,

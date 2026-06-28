@@ -119,9 +119,6 @@ export interface DriverRow {
   approved_by: string | null;
 }
 
-// Nota: WorkflowRow ya no se usa en código activo. La tabla `workflows`
-// se conserva por ahora (DROP pendiente).
-
 export interface DriverCodeRow {
   code: string;
   name: string;
@@ -182,16 +179,6 @@ export interface ProviderAdjustmentRow {
   adjustment_type: "percent" | "fixed";
   adjustment_value: number;
   valid_from: number | null;
-  valid_until: number | null;
-  active: number | null;
-  created_at: number | null;
-}
-
-export interface DriverDiscountRow {
-  id: number;
-  driver_phone: string;
-  tariff_id: number;
-  discount_pct: number;
   valid_until: number | null;
   active: number | null;
   created_at: number | null;
@@ -289,24 +276,6 @@ export interface OpportunityRuleRow {
   valid_from: number | null;
   valid_until: number | null;
   created_at: number;
-}
-
-export interface AliasRow {
-  id: number;
-  place_id: string;
-  alias: string;
-  language: string | null;
-}
-
-export interface ZoneRow {
-  zone_id: string;
-  zone_name: string;
-  country: string;
-  area_group: string | null;
-  dispatch_priority: number | null;
-  base_eta_min: number | null;
-  crosses_border: number | null;
-  active: number | null;
 }
 
 export interface TariffV2Match {

@@ -24,12 +24,12 @@
     "incremental": true,
     "module": "esnext",
     "esModuleInterop": true,
-    "moduleResolution": "bundler", // <-- Cambiá 'node' por 'bundler'
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
     "plugins": [{ "name": "next" }],
-    "allowImportingTsExtensions": true // <-- Agregá esto para evitar conflictos
+    "allowImportingTsExtensions": true
   },
   "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "scripts"]

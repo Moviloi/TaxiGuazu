@@ -331,85 +331,12 @@ async function initSchema(): Promise<void> {
       value REAL NOT NULL DEFAULT 0,
       updated_at INTEGER DEFAULT (unixepoch())
     )`,
-    `CREATE TABLE IF NOT EXISTS conversion_outcomes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      entity TEXT,
-      intent TEXT,
-      success_score REAL,
-      opportunity_type TEXT,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS system_metrics (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      revenue_total REAL DEFAULT 0,
-      conversion_rate REAL DEFAULT 0,
-      load_factor REAL DEFAULT 0,
-      escalation_rate REAL DEFAULT 0,
-      recorded_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS policies (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      priority INTEGER DEFAULT 0,
-      condition TEXT NOT NULL DEFAULT '[]',
-      action TEXT NOT NULL DEFAULT 'allow',
-      params TEXT DEFAULT '{}',
-      active INTEGER DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS policy_results (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      policy_id TEXT NOT NULL,
-      variant TEXT,
-      revenue REAL DEFAULT 0,
-      conversion INTEGER DEFAULT 0,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS simulations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      opportunity_id TEXT,
-      predicted_conversion REAL DEFAULT 0,
-      predicted_revenue REAL DEFAULT 0,
-      risk TEXT DEFAULT 'low',
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS f9_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT,
-      type TEXT NOT NULL,
-      entity TEXT,
-      intent TEXT,
-      predicted_value REAL,
-      actual_value REAL,
-      revenue REAL,
-      timestamp INTEGER DEFAULT (unixepoch()),
-      source TEXT NOT NULL DEFAULT 'HUMAN'
-    )`,
     `CREATE TABLE IF NOT EXISTS f9_admin_commands (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       command_text TEXT NOT NULL,
       parsed_action TEXT,
       author TEXT,
       timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS f9_drift_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      metric TEXT NOT NULL,
-      entity TEXT NOT NULL,
-      drift_value REAL NOT NULL DEFAULT 0,
-      severity TEXT NOT NULL DEFAULT 'low',
-      session_id TEXT,
-      policy_id TEXT,
-      timestamp INTEGER DEFAULT (unixepoch())
-    )`,
-    `CREATE TABLE IF NOT EXISTS f9_error_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      component TEXT NOT NULL,
-      error TEXT NOT NULL,
-      stack TEXT,
-      created_at INTEGER NOT NULL
     )`,
     `CREATE TABLE IF NOT EXISTS housekeeping_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -418,32 +345,9 @@ async function initSchema(): Promise<void> {
       duration_ms INTEGER DEFAULT 0,
       ran_at INTEGER DEFAULT (unixepoch())
     )`,
-    `CREATE TABLE IF NOT EXISTS decision_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      selected_opportunity TEXT,
-      candidate_opportunities TEXT NOT NULL DEFAULT '[]',
-      utility_score REAL DEFAULT 0,
-      load_adjusted INTEGER DEFAULT 0,
-      policy_override INTEGER DEFAULT 0,
-      guardrails TEXT DEFAULT '[]',
-      policies TEXT DEFAULT '[]',
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(LOWER(origin), LOWER(destination))`,
     `CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(LOWER(alias))`,
     `CREATE INDEX IF NOT EXISTS idx_aliases_place ON aliases(place_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_decision_log_session ON decision_log(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_events_session ON f9_events(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_events_timestamp ON f9_events(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_drift_log_session ON f9_drift_log(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_drift_log_timestamp ON f9_drift_log(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_f9_error_log_created ON f9_error_log(created_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_simulations_session ON simulations(session_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_simulations_timestamp ON simulations(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_policy_results_policy ON policy_results(policy_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_policy_results_timestamp ON policy_results(timestamp)`,
-    `CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(recorded_at)`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 

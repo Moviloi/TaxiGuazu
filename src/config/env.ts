@@ -10,8 +10,6 @@ const envSchema = z.object({
   ADMIN_PHONE: z.string().min(1, "ADMIN_PHONE es obligatorio. Teléfono del administrador del bot"),
   PRINCIPAL_2_PHONE: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
-  COTIZACION_DOLAR: z.string().optional(),
-  COTIZACION_REAL: z.string().optional(),
   TURSO_DATABASE_URL: z.string().optional(),
   TURSO_DATABASE_TOKEN: z.string().optional(),
   CRON_SECRET: z.string().min(1, "CRON_SECRET es obligatorio. Generá un valor seguro para autenticar endpoints de cron"),
@@ -36,6 +34,4 @@ export function getEnv(): Env {
   return _parsed;
 }
 
-export function getEnvError(): string | null {
-  return _error;
-}
+

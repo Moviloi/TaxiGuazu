@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { checkTimeouts } from "@/lib/services/housekeeping/timeouts";
 import { log } from "@/lib/utils/logger";
+import { getEnv } from "@/config/env";
 
-// TODO: proteger este endpoint con un cron secret / shared secret header
-// y remover el checkTimeouts() del webhook principal (R27, R29).
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = req.headers.get("authorization")?.replace("Bearer ", "");
+  const expected = getEnv().CRON_SECRET;
+  if (!auth || auth !== expected) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     await checkTimeouts();
     return NextResponse.json({ ok: true });

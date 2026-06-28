@@ -42,7 +42,7 @@ import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/send
 import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
 import { log } from "@/lib/utils/logger";
 
-export function isGroupMessage(from: string): boolean {
+export function isAdminBotGroup(from: string): boolean {
   return from.endsWith("@g.us");
 }
 

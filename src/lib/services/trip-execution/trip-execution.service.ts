@@ -14,7 +14,6 @@ import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
 import { buildRouteKey, observe as observeLearning } from "@/lib/services/learning/fare-learning-engine";
 import { classifyTripLeg } from "@/lib/services/geo/geo-engine";
 import { opportunityEngine } from "@/lib/services/learning/opportunity-engine";
-import { evaluateLearningPipeline } from "@/lib/services/learning/learning-pipeline.service";
 import { logOpportunityShown } from "@/lib/services/learning/event-tracking";
 import { buildOpportunityOfferMessage } from "@/lib/ai/response-builder";
 import { executeDispatch } from "@/lib/services/dispatch/dispatch.service";
@@ -145,18 +144,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     hasPendingOpportunity: !!session?.pending_opportunity,
     memoryBoost: 0,
   };
-  const rawOpportunities = await opportunityEngine.evaluate(oppContext);
-  const learningResult = await evaluateLearningPipeline({
-    opportunities: rawOpportunities,
-    conversationId: String(conversationId),
-    phone,
-    intent: "MOVE",
-  });
-  if (learningResult.blocked) {
-    await setConversationalState(phone, "idle");
-    return { tripId, executed: false, dispatchResult };
-  }
-  const finalOpps = learningResult.rankedOpportunities;
+  const finalOpps = await opportunityEngine.evaluate(oppContext);
   const tx = await createTransaction();
   try {
     for (const opp of finalOpps) {
@@ -164,12 +152,12 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
       const now = Math.floor(Date.now() / 1000);
       const pendingData = JSON.stringify({
         id: String(opp.ruleId), tipo: opp.type, presented_at: now, expires_at: now + 86400,
-        logId: opp.logId, label: opp.label, f7EconomicScore: opp.economicScore, f7Utility: opp.utilityScore,
+        logId: opp.logId, label: opp.label,
       });
       await insertMessage(conversationId, "assistant", oppMsg, tx);
       await setTripState(phone, "opportunity", tx);
       await setPendingOpportunity(phone, pendingData, tx);
-      await logOpportunityShown(String(conversationId), opp.label, opp.utilityScore, tx);
+      await logOpportunityShown(String(conversationId), opp.label, opp.priority, tx);
     }
     await tx.commit();
   } catch (e) {

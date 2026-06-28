@@ -28,10 +28,6 @@ vi.mock("@/lib/services/learning/opportunity-engine", () => ({
   opportunityEngine: { evaluate: vi.fn().mockResolvedValue([]) },
 }));
 
-vi.mock("@/lib/services/learning/learning-pipeline.service", () => ({
-  evaluateLearningPipeline: vi.fn().mockResolvedValue({ blocked: false, rankedOpportunities: [] }),
-}));
-
 vi.mock("@/lib/services/learning/event-tracking", () => ({
   logOpportunityShown: vi.fn().mockResolvedValue(undefined),
 }));
@@ -62,7 +58,6 @@ import type { ExecutionDeps } from "@/lib/core/pipeline";
 import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
 import { processLead } from "@/lib/core/pipeline";
 import { updateChatSessionConversation, getActiveTripByPhone, createTrip, createTransaction } from "@/lib/db/database";
-import { evaluateLearningPipeline } from "@/lib/services/learning/learning-pipeline.service";
 import { opportunityEngine } from "@/lib/services/learning/opportunity-engine";
 
 function makeInput(overrides: Partial<TripExecutionInput> = {}): TripExecutionInput {
@@ -139,16 +134,6 @@ describe("executeTrip", () => {
     expect(result).toEqual({ tripId: null, executed: false });
   });
 
-  it("learning pipeline blocks → returns executed:false with tripId", async () => {
-    vi.mocked(evaluateLearningPipeline).mockResolvedValueOnce({ blocked: true, rankedOpportunities: [] });
-
-    const result = await executeTrip(makeInput(), makeDeps());
-
-    expect(result.executed).toBe(false);
-    expect(result.tripId).toBeTruthy();
-    expect(updateChatSessionConversation).toHaveBeenCalledWith("+54911", "idle", undefined);
-  });
-
   it("transaction error → rollback and return", async () => {
     const mockRollback = vi.fn();
     const mockCommit = vi.fn().mockRejectedValue(new Error("commit failed"));
@@ -157,14 +142,6 @@ describe("executeTrip", () => {
       ruleId: 1, type: "promotion", label: "P", description: "Promo",
       originalPrice: 50000, offeredPrice: 45000, savings: 5000, priority: 1, logId: 1,
     }]);
-    vi.mocked(evaluateLearningPipeline).mockResolvedValueOnce({
-      blocked: false,
-      rankedOpportunities: [{
-        ruleId: 1, type: "promotion", label: "P", description: "Promo",
-        originalPrice: 50000, offeredPrice: 45000, savings: 5000, priority: 1, logId: 1,
-        economicScore: 0, utilityScore: 0,
-      }],
-    });
 
     const result = await executeTrip(makeInput(), makeDeps());
 

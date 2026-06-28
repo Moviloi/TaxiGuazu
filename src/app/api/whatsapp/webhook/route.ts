@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { handleLeadMessage } from "@/lib/services/lead.service";
 import {
-  isGroupMessage,
+  isAdminBotGroup,
   handleDriverResponse,
   handleDriverAccept,
   handleDriverButtonAccept,
@@ -235,9 +235,9 @@ export async function POST(request: NextRequest) {
 
     const convId = phone.replace(/\d/g, "").length > 0 ? "unknown" : phone.slice(-4);
     log.info(`[MSG] event=message_received conv=******${convId} len=${text.length}`);
-    log.info(`[WEBHOOK_DEBUG] phone=******${phone.slice(-4)} botPhone=${getBotPhone()} isGroup=${isGroupMessage(phone)}`);
+    log.info(`[WEBHOOK_DEBUG] phone=******${phone.slice(-4)} botPhone=${getBotPhone()} isGroup=${isAdminBotGroup(phone)}`);
 
-    if (isGroupMessage(phone)) {
+    if (isAdminBotGroup(phone)) {
       const conv = await getConversationByPhone(phone);
       if (conv) {
         await handleDriverResponse(text, phone, conv.id);

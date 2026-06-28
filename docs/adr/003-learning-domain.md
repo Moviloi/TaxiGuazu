@@ -14,46 +14,37 @@ The learning domain had 25 files with overlapping responsibilities (policies, ex
 
 ```
 services/learning/
-  learning-pipeline.service.ts  — Single entry point (facade) for the domain
-  policy-engine.ts              — Policy conditions, actions, guardrails, experiments
   opportunity-engine.ts         — Opportunity evaluation, ranking, pricing
-  adaptation.ts                 — Drift detection, event logging, adaptation orchestration
   fare-learning-engine.ts       — Fare observation and learning from trip outcomes
   learning-utils.ts             — Weight management, shared helpers
-  routing.ts                    — Opportunity ranking with load adjustment
-  objectives.ts                 — Objective weight loading and scoring
-  system-load.ts                — System load metrics
-  economics.ts                  — Economic profile scoring
   event-tracking.ts             — Event logging to DB
   admin.ts                      — Admin commands for learning system
-  types.ts                      — Shared type definitions
   opportunity-types.ts          — Opportunity type definitions
+  (No implementados) learning-pipeline.service.ts, policy-engine.ts, adaptation.ts, routing.ts, objectives.ts, system-load.ts, economics.ts, types.ts
 ```
 
 ### Responsibilities
 
 | Component | Responsibility |
 |-----------|---------------|
-| `learning-pipeline.service.ts` | Single entry point. Orchestrates: weights → load → ranking → policy engine → adaptation |
-| `policy-engine.ts` | Policy loading/evaluation, simulation, experiment variant assignment, guardrails |
-| `adaptation.ts` | Drift detection (prediction, conversion, entity, policy), event logging, meta-governance |
 | `opportunity-engine.ts` | Opportunity scoring, pricing extraction, completeness checking |
+| _(No implementados)_ | `learning-pipeline.service.ts` (facade), `policy-engine.ts` (policies/experiments), `adaptation.ts` (drift detection) |
 
 ### Boundaries
 
 - Learning MUST NOT import from Housekeeping (resolved in H.4.1 by extracting shared logger)
 - Learning imports DB exclusively through `db/domains/learning` (gap: not yet through `database.ts` facade)
 - Learning is NOT a presentation layer — no WhatsApp message sending
-- `learning-pipeline.service.ts` is the ONLY entry point for consumers outside the domain
+- **No dedicated facade yet** — consumers import directly from individual modules
 
 ## Consequences
 
 ### Positive
-- Single entry point simplifies consumers (they import one file)
-- 25 → 14 files, cleaner separation of concerns
-- Drift detection and adaptation are cleanly separated from policy evaluation
+- Cleaner organization with focused modules
+- 25 → 6 actual files, reduced surface area
 
 ### Negative
-- 103 dead exports remain (side effect of consolidation)
-- Some files still large: `policy-engine.ts` (316L), `opportunity-engine.ts` (257L)
+- No dedicated facade — consumers import directly from individual modules
+- Some files still large: `opportunity-engine.ts` (257L)
 - Learning domain still bypasses `database.ts` facade (imports `db/domains/learning` directly)
+- 8 planned modules not yet implemented: pipeline facade, policy engine, adaptation, routing, objectives, system load, economics, shared types

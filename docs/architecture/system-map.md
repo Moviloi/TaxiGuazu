@@ -77,20 +77,12 @@ Mapa operativo: "Si necesito modificar X, buscar Y".
 
 | Necesito modificar... | Buscar en... | Notas |
 |----------------------|-------------|-------|
-| **Pipeline de aprendizaje** | `src/lib/services/learning/learning-pipeline.service.ts` | Entry point. 80 líneas. |
-| **Policy engine** | `src/lib/services/learning/policy-engine.ts` | Evaluación de políticas. 249 líneas. |
 | **Opportunity engine** | `src/lib/services/learning/opportunity-engine.ts` | Evaluación de oportunidades. 222 líneas. |
-| **Adaptación** | `src/lib/services/learning/adaptation.ts` | Detección de deriva. 114 líneas. |
-| **Event tracking** | `src/lib/services/learning/event-tracking.ts` | Logging de eventos. 55 líneas. |
 | **Fare learning** | `src/lib/services/learning/fare-learning-engine.ts` | Aprendizaje de tarifas. 135 líneas. |
-| **Routing** | `src/lib/services/learning/routing.ts` | Ranking de oportunidades. 65 líneas. |
-| **Objectives** | `src/lib/services/learning/objectives.ts` | Pesos y scoring. 50 líneas. |
-| **Economics** | `src/lib/services/learning/economics.ts` | Scoring económico. 35 líneas. |
-| **System load** | `src/lib/services/learning/system-load.ts` | Métricas de carga. 40 líneas. |
-| **Admin** | `src/lib/services/learning/admin.ts` | Comandos admin de learning. 45 líneas. |
-| **Types** | `src/lib/services/learning/types.ts` | Tipos del dominio. 130 líneas. |
-| **Opportunity types** | `src/lib/services/learning/opportunity-types.ts` | Tipos de oportunidades. 30 líneas. |
 | **Learning utils** | `src/lib/services/learning/learning-utils.ts` | Helpers compartidos. 50 líneas. |
+| **Event tracking** | `src/lib/services/learning/event-tracking.ts` | Logging de eventos. 55 líneas. |
+| **Admin** | `src/lib/services/learning/admin.ts` | Comandos admin de learning. 45 líneas. |
+| **Opportunity types** | `src/lib/services/learning/opportunity-types.ts` | Tipos de oportunidades. 30 líneas. |
 
 ---
 
@@ -114,7 +106,7 @@ Mapa operativo: "Si necesito modificar X, buscar Y".
 | **Admin service** | `src/lib/services/admin/admin.service.ts` | Notificaciones admin. 80 líneas. |
 | **Admin commands** | `src/lib/services/admin/admin-commands.ts` | Comandos admin. 463 líneas. |
 | **Housekeeping** | `src/lib/services/housekeeping/timeouts.ts` | Cron jobs + limpieza. 219 líneas. |
-| **Error logger** | `src/lib/services/shared/error-logger.ts` | Logger compartido. 20 líneas. |
+| **Error logger** | _(no implementado)_ | Logger compartido planeado. |
 
 ---
 

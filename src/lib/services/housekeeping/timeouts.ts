@@ -16,7 +16,6 @@ import {
   getTripsWithMissingCommission,
   getStaleWorkflows,
 } from "@/lib/db/database";
-import { insertHousekeepingLog, cleanupOldLearningRecords } from "@/lib/db/database";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp/sender";
 import { executeEscalation } from "@/lib/services/dispatch/dispatch.service";
@@ -63,7 +62,6 @@ export async function checkTimeouts(): Promise<void> {
   await checkDiscrepanciaComision();
   await checkDolarApiNotification();
   await checkSessionCleanup();
-  await runHousekeeping();
 }
 
 // === RECONFIRMACIÓN 24HS ===
@@ -264,17 +262,3 @@ async function checkSessionCleanup(): Promise<void> {
   log.info(`[CLEANUP] Ejecutado para ${today}: ${expiredTrips.length} trips, ${stale.length} workflows`);
 }
 
-async function logCleanup(job: string, rowsDeleted: number, duration: number): Promise<void> {
-  await insertHousekeepingLog(job, rowsDeleted, duration);
-}
-
-async function runHousekeeping(): Promise<void> {
-  const cutoff = Math.floor(Date.now() / 1000) - 30 * 86400;
-  const results = await cleanupOldLearningRecords(cutoff);
-
-  for (const { job, rowsDeleted, duration } of results) {
-    if (rowsDeleted > 0) {
-      await logCleanup(job, rowsDeleted, duration);
-    }
-  }
-}
