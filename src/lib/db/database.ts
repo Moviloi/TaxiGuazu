@@ -8,7 +8,6 @@ import type {
   ReservationSlotRow,
   TariffRow,
   LeadRow,
-  AliasLookupRow,
   ChatSessionRow,
   OpportunityRuleRow,
   PackagePriceRow,
@@ -507,10 +506,10 @@ export async function deleteReservationSlot(id: number): Promise<boolean> {
 
 // ========== TARIFFS ==========
 
-export async function getTariffById(tariffId: number): Promise<{ base_price_4p: number | null; base_price_6p: number | null } | null> {
-  return queryOne<{ base_price_4p: number | null; base_price_6p: number | null }>(
-    "SELECT base_price_4p, base_price_6p FROM tariffs WHERE id = ?",
-    [tariffId],
+export async function getTariffById(tariffId: number): Promise<{ driver_price_4p: number | null; driver_price_6p: number | null } | null> {
+  return queryOne<{ driver_price_4p: number | null; driver_price_6p: number | null }>(
+    "SELECT driver_price_4p, driver_price_6p FROM tariffs WHERE id = ?",
+    [tariffId]
   );
 }
 
@@ -527,7 +526,9 @@ export async function findTariff(origin: string, destination: string, passengers
   if (!t) return null;
   return {
     ...t,
-    price: passengers > 4 ? t.price_6p : t.price_4p,
+    price: passengers > 4
+      ? (t.public_price_6p ?? 0)
+      : (t.public_price_4p ?? 0),
   };
 }
 
@@ -539,35 +540,51 @@ export async function searchTariffs(text: string): Promise<TariffRow[]> {
 export async function resolveAlias(text: string): Promise<{ resolved: boolean; names: string[] }> {
   if (!text) return { resolved: false, names: [] };
   const lower = text.toLowerCase().trim();
-  const direct = await query<AliasLookupRow>(
-    "SELECT canonical_name FROM alias_lookup WHERE LOWER(alias) = ? LIMIT 5",
+
+  // 1. Exact match: aliases JOIN places (replaces legacy alias_lookup)
+  const direct = await query<{ canonical_name: string; place_id: string }>(
+    `SELECT DISTINCT p.canonical_name, p.place_id
+     FROM aliases a JOIN places p ON p.place_id = a.place_id
+     WHERE LOWER(a.alias) = ? AND p.active_status = 'active'
+     LIMIT 5`,
     [lower]
   );
   if (direct.length > 0) return { resolved: true, names: [...new Set(direct.map(r => r.canonical_name))] };
 
-  // Fuzzy fallback — Levenshtein ≤ 3 against all unique aliases
-  const all = await query<AliasLookupRow>(
-    "SELECT DISTINCT alias, canonical_name FROM alias_lookup"
+  // 2. Fuzzy fallback — Levenshtein ≤ 3 against all unique aliases
+  const all = await query<{ alias: string; canonical_name: string; place_id: string }>(
+    `SELECT DISTINCT a.alias, p.canonical_name, p.place_id
+     FROM aliases a JOIN places p ON p.place_id = a.place_id
+     WHERE p.active_status = 'active'`
   );
   let bestDist = Infinity;
   let bestAlias: string | undefined;
   let bestCanonical: string | undefined;
+  let bestPlaceId: string | undefined;
   for (const row of all) {
     const d = levenshtein(lower, row.alias.toLowerCase());
     if (d < bestDist) {
       bestDist = d;
       bestAlias = row.alias;
       bestCanonical = row.canonical_name;
+      bestPlaceId = row.place_id;
     }
   }
-  if (bestDist <= 3 && bestCanonical && bestAlias) {
+  if (bestDist <= 3 && bestCanonical && bestPlaceId && bestAlias) {
     // Auto-insert the new alias so future requests get exact match
-    await getDb().execute({
-      sql: "INSERT OR IGNORE INTO alias_lookup (alias, canonical_name) VALUES (?, ?)",
-      args: [lower, bestCanonical],
-    });
+    const exists = await query<{ id: number }>(
+      "SELECT id FROM aliases WHERE place_id = ? AND alias = ? AND language = 'es'",
+      [bestPlaceId, lower]
+    );
+    if (exists.length === 0) {
+      await getDb().execute({
+        sql: "INSERT INTO aliases (place_id, alias, language) VALUES (?, ?, 'es')",
+        args: [bestPlaceId, lower],
+      });
+    }
     return { resolved: true, names: [bestCanonical] };
   }
+
   return { resolved: false, names: [text] };
 }
 
@@ -754,6 +771,7 @@ export {
   getStaleWorkflowsFromDb,
   assignWorkflowAtomic,
   findTariffRow,
+  findTariffByPriority,
 } from "./domains/trips";
 export {
   getLearningWeight,
@@ -785,5 +803,6 @@ export {
 export {
   findPlaceByAlias,
   findPlaceByName,
+  getPlaceZone,
   getOperationalZone,
 } from "./domains/geo";

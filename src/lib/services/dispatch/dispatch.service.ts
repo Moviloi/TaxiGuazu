@@ -20,11 +20,12 @@ import {
   setConnectionValue,
   deleteConnectionKey,
   updateTripState,
-  findTariff,
   getTariffById,
   debugGetActiveDriversWithConversationStatus,
+  queryOne,
 } from "@/lib/db/database";
 import { getConnectionCache } from "@/lib/db/database";
+import { resolveTariff } from "@/lib/services/pricing/tariff-resolver";
 import type { DriverRow, PackagePriceRow, TripRow } from "@/lib/db/types";
 import { LOW_PISO_FACTOR, MIN_MARGIN } from "@/config/constants";
 import { getEnv } from "@/config/env";
@@ -158,8 +159,8 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
       await setConnectionValue(`contingency_data_${input.conversationId}`, tripData);
       await setConnectionFlag(`contingency_offered_${input.conversationId}`);
 
-      const tariff4p = await findTariff(trip.origin || "", trip.destination || "ninguno", 4);
-      const price4p = tariff4p?.price || trip.price_base || 0;
+      const match4p = await resolveTariff(trip.origin || "", trip.destination || "", 4);
+      const price4p = match4p.matched ? match4p.price : (trip.price_base || 0);
 
       await closeWorkflow(input.conversationId);
 
@@ -224,7 +225,7 @@ export async function broadcastTripToDrivers(
   trip: TripRow, convId: number, clientPhone: string,
   _urgency?: string, passengers?: number | null,
 ): Promise<void> {
-  const country = detectCountry(trip.origin || "");
+  const country = await detectCountry(trip.origin || "");
   const filters: { country?: string; minCapacity?: number; strictMinCapacity?: boolean } = {};
   if (country) filters.country = country;
   if (passengers && passengers > 0) {
@@ -271,7 +272,7 @@ No hay choferes activos con car_capacity >= ${passengers ?? "?"} en ${country}. 
       const row = await getTariffById(trip.tariff_id);
       if (row) {
         const passengersNum = trip.passengers || 0;
-        const bp = passengersNum > 4 ? (row.base_price_6p ?? null) : (row.base_price_4p ?? null);
+        const bp = passengersNum > 4 ? (row.driver_price_6p ?? null) : (row.driver_price_4p ?? null);
         pisoLow = bp ? Math.round(bp * 0.8) : null;
       }
     } catch (e) { log.error("[broadcastTripToDrivers] load base_price error:", e); }
@@ -409,10 +410,25 @@ async function getPrincipal2(): Promise<DriverRow | null> {
 
 // ── Internal helpers ──
 
-function detectCountry(origin: string): string {
-  const text = origin.toLowerCase();
-  if (text.includes("brasil") || text.includes("foz") || text.includes("catuaí") || text.includes("br-")) return "BR";
-  if (text.includes("paraguay") || text.includes("ciudad del este") || text.includes("py-")) return "PY";
+async function detectCountry(origin: string): Promise<string> {
+  // Try to resolve via DB: resolveLocation → place → zone → country
+  try {
+    const { resolveLocationToPlaceId } = await import("@/lib/services/geo/location-resolver");
+    const placeId = await resolveLocationToPlaceId(origin);
+    if (placeId) {
+      const placeResult = await queryOne<{ country: string }>(
+        "SELECT p.country FROM places p WHERE p.place_id = ? AND p.active_status = 'active'",
+        [placeId]
+      );
+      if (placeResult?.country) return placeResult.country;
+      // Fallback to zone country
+      const zoneResult = await queryOne<{ country: string }>(
+        "SELECT z.country FROM places p JOIN zones z ON z.zone_id = p.zone_id WHERE p.place_id = ?",
+        [placeId]
+      );
+      if (zoneResult?.country) return zoneResult.country;
+    }
+  } catch { /* fallback to default */ }
   return "AR";
 }
 

@@ -28,7 +28,6 @@ import {
   setCommissionDeclared,
   getTripById,
   getPrincipalDriver,
-  findTariff,
   updateTripTariff,
   getConnectionValue,
   getConnectionValueFlag,
@@ -40,6 +39,7 @@ import { notifyAdmin, notifyOtherDriversTaken } from "../admin/admin.service";
 import { offerToSpecificDriver, broadcastTripToDrivers } from "./dispatch.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
 import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
+import { resolveTariff } from "@/lib/services/pricing/tariff-resolver";
 import { log } from "@/lib/utils/logger";
 
 export function isAdminBotGroup(from: string): boolean {
@@ -508,8 +508,8 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
   }
 
   // Find standard 4p tariff for this route
-  const tariff = await findTariff(origData.origin, origData.destination, 4);
-  const price4p = tariff?.price || origData.price_base || 0;
+  const tariffMatch = await resolveTariff(origData.origin, origData.destination, 4);
+  const price4p = tariffMatch.matched ? tariffMatch.price : (origData.price_base || 0);
 
   // Calculate passengers split
   const paxA = Math.min(origData.passengers, 4);
@@ -542,8 +542,8 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
   const tripA = await getActiveTripByPhone(clientPhone);
   if (!tripA) return;
 
-  if (tariff?.id) {
-    await updateTripTariff(tripA.trip_id, tariff.id, tariff.price || 0);
+  if (tariffMatch?.tariffId) {
+    await updateTripTariff(tripA.trip_id, tariffMatch.tariffId, tariffMatch.price || 0);
   }
 
   // Store Trip B data for sequel
@@ -554,8 +554,8 @@ export async function handleContingenciaSi(convId: number, clientPhone: string):
     passengers: paxB,
     paxA: paxA,
     flight_number: origData.flight_number || null,
-    tariff_id: tariff?.id || null,
-    piso: tariff?.price || 0,
+    tariff_id: tariffMatch?.tariffId || null,
+    piso: tariffMatch?.price || 0,
   });
   await setConnectionValue(`contingency_pending_B_${convId}`, bData);
 

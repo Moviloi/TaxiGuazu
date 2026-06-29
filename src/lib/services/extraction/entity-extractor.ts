@@ -1,53 +1,53 @@
-// Entity Extractor — known location lookup without LLM.
-// runs after regexExtractor, before LLM fallback.
-// Detects registered hotels, POIs, and structured points of interest.
-// Only matches when the entity name appears as a primary mention.
+// Entity Extractor — known location candidate detection without LLM.
+// Runs after regexExtractor, before LLM fallback.
+// Only DETECTS candidates (returns raw matched text) — does NOT resolve canonical names.
+// Resolution happens downstream via resolveAlias() → aliases/places DB tables.
+//
+// ARCHITECTURE:
+//   Extractor: detects candidates (this file)
+//   Resolver: confirms entity from DB (confidence.ts → resolveAlias)
 
 import type { TripExtraction } from "@/lib/ai/extraction-schema";
 
-// Known hotels and landmarks. These are safe to assign to destination
-// when mentioned without directional context (users mention hotels
-// as their intended drop-off point).
-const KNOWN_HOTELS: { pattern: RegExp; canonical: string }[] = [
-  { pattern: /\bamerian\b/i, canonical: "Amerian" },
-  { pattern: /\bmeli[áa]\b/i, canonical: "Meliá" },
-  { pattern: /\brafain\b/i, canonical: "Rafain" },
-  { pattern: /\bmabu\b/i, canonical: "Mabu" },
-  { pattern: /\bpanoramic\b/i, canonical: "Panoramic" },
-  { pattern: /falls\s+hotel\b/i, canonical: "Falls Hotel" },
-  { pattern: /iguaz[uú]\s+grand\b/i, canonical: "Iguazú Grand" },
-  { pattern: /lo\s+de\s+ramona/i, canonical: "Lo de Ramona" },
-  { pattern: /gran\s+hotel\b/i, canonical: "Gran Hotel" },
-  { pattern: /hotel\s+igua[zúu]/i, canonical: "Hotel Iguazú" },
+// Known hotel detection patterns. Matched text is returned raw (not canonical).
+const KNOWN_HOTELS: RegExp[] = [
+  /\bamerian\b/i,
+  /\bmeli[áa]\b/i,
+  /\brafain\b/i,
+  /\bmabu\b/i,
+  /\bpanoramic\b/i,
+  /falls\s+hotel\b/i,
+  /iguaz[uú]\s+grand\b/i,
+  /lo\s+de\s+ramona/i,
+  /gran\s+hotel\b/i,
+  /hotel\s+igua[zúu]/i,
 ];
 
-// Known POIs and structured reference points
-const KNOWN_POIS: { pattern: RegExp; canonical: string }[] = [
-  { pattern: /\baduana\b/i, canonical: "Aduana" },
-  { pattern: /centro\s+igua[zúu]/i, canonical: "Centro Iguazú" },
-  { pattern: /puerto\s+igua[zúu]/i, canonical: "Puerto Iguazú" },
-  { pattern: /\bcataratas\b/i, canonical: "Cataratas" },
-  { pattern: /\bterminal\s+de\s+[oó]mnibus\b/i, canonical: "Terminal de Ómnibus" },
-  { pattern: /\bterminal\b/, canonical: "Terminal" },
+// Known POI detection patterns.
+const KNOWN_POIS: RegExp[] = [
+  /\baduana\b/i,
+  /centro\s+igua[zúu]/i,
+  /puerto\s+igua[zúu]/i,
+  /\bcataratas\b/i,
+  /\bterminal\s+de\s+[oó]mnibus\b/i,
+  /\bterminal\b/,
 ];
 
 // Generic ambiguous terms that should NOT trigger entity extraction
 const GENERIC_TERMS_RE = /^(centro|microcentro|hotel|ciudad|aeropuerto|puerto|cerca|zona|alrededores|la\s+ciudad|el\s+centro)$/i;
 
 function findHotelMatch(text: string): string | null {
-  for (const hotel of KNOWN_HOTELS) {
-    if (hotel.pattern.test(text)) {
-      return hotel.canonical;
-    }
+  for (const pattern of KNOWN_HOTELS) {
+    const match = text.match(pattern);
+    if (match) return match[0];
   }
   return null;
 }
 
 function findPOIMatch(text: string): string | null {
-  for (const poi of KNOWN_POIS) {
-    if (poi.pattern.test(text)) {
-      return poi.canonical;
-    }
+  for (const pattern of KNOWN_POIS) {
+    const match = text.match(pattern);
+    if (match) return match[0];
   }
   return null;
 }

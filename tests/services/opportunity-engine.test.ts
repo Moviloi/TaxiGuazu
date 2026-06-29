@@ -33,8 +33,8 @@ const basePricing = {
   level: "standard" as string,
   source: "standard" as "standard" | "promotion" | "provider_adjustment" | "package" | "tg_campaign",
   explanation: [] as never[],
-  origin: { place_id: "place_1" as string | null, canonical_name: "Puerto Iguazú" as string | null, operational_zone: null as string | null },
-  destination: { place_id: "place_2" as string | null, canonical_name: "Cataratas" as string | null, operational_zone: null as string | null },
+  origin: { place_id: "place_1" as string | null, canonical_name: "Puerto Iguazú" as string | null, zone_id: null as string | null },
+  destination: { place_id: "place_2" as string | null, canonical_name: "Cataratas" as string | null, zone_id: null as string | null },
 };
 
 const baseTrip = {

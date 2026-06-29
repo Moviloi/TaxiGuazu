@@ -1,23 +1,39 @@
 // ARCHITECTURE NOTE (Phase D): Pricing domain — semi-frozen.
-// Part of the pricing domain alongside pricing-engine.ts (frozen) and
-// commercial-pricing-engine.ts (semi-frozen). Must remain stable until
-// pricing domain is fully unblocked for refactor.
-// Future: merge v2/v3 tariff resolution into a unified pricing service.
+// v2: resolución unificada en single query con ORDER BY resolution_priority.
+// Reemplaza el enfoque secuencial L1-L4 (4 queries) por una sola consulta SQL
+// que evalúa los 4 niveles y retorna el de mayor prioridad.
 
 import type { TariffRow, TariffV2Match } from "@/lib/db/types";
-import { findTariff, findTariffRow, getOperationalZone } from "@/lib/db/database";
+import { findTariffByPriority, getPlaceZone } from "@/lib/db/database";
 import { resolveLocation } from "../geo/location-resolver";
 
-function buildMatch(row: TariffRow, level: TariffV2Match["level"], pax: number): TariffV2Match {
-  const price = pax > 4 ? row.price_6p : row.price_4p;
-  const piso = pax > 4 ? row.base_price_6p : row.base_price_4p;
+const PRIORITY_TO_LEVEL: Record<number, TariffV2Match["level"]> = {
+  1: "place_place",
+  2: "place_zone",
+  3: "zone_place",
+  4: "zone_zone",
+};
+
+function buildMatch(row: TariffRow, pax: number): TariffV2Match {
+  const price4p = row.public_price_4p ?? 0;
+  const price6p = row.public_price_6p ?? 0;
+  const price = pax > 4 ? price6p : price4p;
+  const piso = pax > 4
+    ? (row.driver_price_6p ?? price6p)
+    : (row.driver_price_4p ?? price4p);
+  const priority = row.resolution_priority ?? 4;
   return {
     matched: true,
+    publicPrice4p: row.public_price_4p,
+    publicPrice6p: row.public_price_6p,
+    driverPrice4p: row.driver_price_4p,
+    driverPrice6p: row.driver_price_6p,
     price,
     piso,
     garantizado: piso,
     tariffId: row.id,
-    level,
+    level: PRIORITY_TO_LEVEL[priority] ?? "zone_zone",
+    resolutionPriority: priority,
     originPlaceId: row.origin_place_id,
     destinationPlaceId: row.destination_place_id,
     originZoneId: row.origin_zone_id,
@@ -33,11 +49,16 @@ function notFound(
 ): TariffV2Match {
   return {
     matched: false,
+    publicPrice4p: null,
+    publicPrice6p: null,
+    driverPrice4p: null,
+    driverPrice6p: null,
     price: 0,
     piso: 0,
     garantizado: 0,
     tariffId: null,
     level: "not_found",
+    resolutionPriority: null,
     originPlaceId,
     destinationPlaceId: destPlaceId,
     originZoneId,
@@ -55,42 +76,12 @@ export async function resolveTariff(
   const destLoc = await resolveLocation(destination);
   const originPlaceId = originLoc.place_id;
   const destPlaceId = destLoc.place_id;
-  const originZoneId = originLoc.operational_zone;
-  const destZoneId = destLoc.operational_zone;
+  const originZoneId = originLoc.zone_id;
+  const destZoneId = destLoc.zone_id;
 
-  const l1 = await findTariffRow({ originPlaceId, destPlaceId, originZoneId: null, destZoneId: null });
-  if (l1) return buildMatch(l1, "place_place", paxNum);
-
-  if (destZoneId) {
-    const l2 = await findTariffRow({ originPlaceId, destPlaceId: null, originZoneId: null, destZoneId });
-    if (l2) return buildMatch(l2, "place_zone", paxNum);
-  }
-
-  if (originZoneId) {
-    const l3 = await findTariffRow({ originPlaceId: null, destPlaceId, originZoneId, destZoneId: null });
-    if (l3) return buildMatch(l3, "zone_place", paxNum);
-  }
-
-  if (originZoneId && destZoneId) {
-    const l4 = await findTariffRow({ originPlaceId: null, destPlaceId: null, originZoneId, destZoneId });
-    if (l4) return buildMatch(l4, "zone_zone", paxNum);
-  }
-
-  const textMatch = await findTariff(origin, destination, paxNum);
-  if (textMatch) {
-    return {
-      matched: true,
-      price: textMatch.price,
-      piso: textMatch.base_price_4p ?? textMatch.price,
-      garantizado: textMatch.base_price_4p ?? textMatch.price,
-      tariffId: textMatch.id,
-      level: "place_place",
-      originPlaceId,
-      destinationPlaceId: destPlaceId,
-      originZoneId,
-      destinationZoneId: destZoneId,
-    };
-  }
+  // Single query: evalúa los 4 niveles y retorna el de mayor prioridad
+  const match = await findTariffByPriority({ originPlaceId, destPlaceId, originZoneId, destZoneId });
+  if (match) return buildMatch(match, paxNum);
 
   return notFound(originPlaceId, destPlaceId, originZoneId, destZoneId);
 }
@@ -103,28 +94,14 @@ export async function resolveTariffByPlaceIds(
   const paxNum = Math.max(1, Math.min(pax || 1, 6));
   const dId = destinationPlaceId;
 
-  const originZone = await getOperationalZone(originPlaceId);
-  const destZone = await getOperationalZone(dId);
-  const originZoneId = originZone?.operational_zone ?? null;
-  const destZoneId = destZone?.operational_zone ?? null;
+  const originZone = await getPlaceZone(originPlaceId);
+  const destZone = await getPlaceZone(dId);
+  const originZoneId = originZone?.zone_id ?? null;
+  const destZoneId = destZone?.zone_id ?? null;
 
-  const l1 = await findTariffRow({ originPlaceId, destPlaceId: dId, originZoneId: null, destZoneId: null });
-  if (l1) return buildMatch(l1, "place_place", paxNum);
-
-  if (destZoneId) {
-    const l2 = await findTariffRow({ originPlaceId, destPlaceId: null, originZoneId: null, destZoneId });
-    if (l2) return buildMatch(l2, "place_zone", paxNum);
-  }
-
-  if (originZoneId) {
-    const l3 = await findTariffRow({ originPlaceId: null, destPlaceId: dId, originZoneId, destZoneId: null });
-    if (l3) return buildMatch(l3, "zone_place", paxNum);
-  }
-
-  if (originZoneId && destZoneId) {
-    const l4 = await findTariffRow({ originPlaceId: null, destPlaceId: null, originZoneId, destZoneId });
-    if (l4) return buildMatch(l4, "zone_zone", paxNum);
-  }
+  // Single query: evalúa los 4 niveles con place_ids + zone_ids resueltos
+  const match = await findTariffByPriority({ originPlaceId, destPlaceId: dId, originZoneId, destZoneId });
+  if (match) return buildMatch(match, paxNum);
 
   return notFound(originPlaceId, dId, originZoneId, destZoneId);
 }

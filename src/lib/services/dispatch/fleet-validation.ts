@@ -2,10 +2,11 @@
 // No modificar. Valida capacidad de flota antes de aceptar un booking.
 // Cualquier cambio requiere aprobación de arquitectura.
 
-import { getMaxFleetCapacity, validateFleetCanHandle, findTariff, insertMessage } from "@/lib/db/database";
+import { getMaxFleetCapacity, validateFleetCanHandle, insertMessage } from "@/lib/db/database";
 import { sendWhatsAppMessage } from "@/lib/sender";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { buildFleetCapacityMessage, buildFleetTariffMessage } from "@/lib/ai/response-builder";
+import { resolveTariff } from "@/lib/services/pricing/tariff-resolver";
 import { log } from "@/lib/utils/logger";
 
 export interface FleetValidationContext {
@@ -99,8 +100,8 @@ La tabla tariffs actual solo admite hasta ${TARIFF_MAX_PAX} pasajeros. Configura
     }
 
     if (context.origin && context.destination) {
-      const tariff = await findTariff(context.origin, context.destination, pax);
-      if (!tariff) {
+      const match = await resolveTariff(context.origin, context.destination, pax);
+      if (!match.matched) {
         const clientMsg = buildFleetTariffMessage();
         await rejectAndNotify(pax, context, "no_tariff", clientMsg, "missing_capacity_tariff");
         await notifyAdmin(`⚠️ *TARIFA FALTANTE*

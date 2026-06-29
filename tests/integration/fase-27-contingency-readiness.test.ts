@@ -26,6 +26,9 @@ vi.mock("@/lib/db/database", () => ({
   setClientPreferredDriver: vi.fn().mockResolvedValue(undefined),
   completeTrip: vi.fn().mockResolvedValue(undefined),
   getCustomerName: vi.fn().mockResolvedValue(null),
+  findPlaceByAlias: vi.fn().mockResolvedValue(null),
+  findPlaceByName: vi.fn().mockResolvedValue(null),
+  findTariffByPriority: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/sender", () => ({

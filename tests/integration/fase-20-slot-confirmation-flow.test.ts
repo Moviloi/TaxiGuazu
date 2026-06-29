@@ -10,6 +10,7 @@ vi.mock("@/lib/db/database", () => ({
   resetChatSession: vi.fn().mockResolvedValue(undefined),
   resolveAlias: vi.fn(),
   getActiveTripByPhone: vi.fn().mockResolvedValue(null),
+  updateChatSessionConversation: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/sender", () => ({
@@ -175,8 +176,11 @@ describe("FASE 20.5 — Slots CONFIRMATION_PENDING flujo completo", () => {
         undefined,
       );
 
-      // Debe re-rutear por handlePolicyPipeline
-      expect(handlePolicyPipeline).toHaveBeenCalled();
+      // Debe enviar mensaje de verificación humana cuando pricing falla
+      expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+        TEST_PHONE,
+        expect.stringContaining("Gracias por confirmar los datos"),
+      );
     });
   });
 
@@ -339,7 +343,10 @@ describe("handleSlotConfirmationButton — routing directo", () => {
     );
 
     expect(upsertChatSession).toHaveBeenCalled();
-    expect(handlePolicyPipeline).toHaveBeenCalled();
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+      TEST_PHONE,
+      expect.stringContaining("Gracias por confirmar los datos"),
+    );
   });
 
   it("slot_change: envía field selector", async () => {

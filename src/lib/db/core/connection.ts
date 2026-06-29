@@ -131,16 +131,18 @@ async function initSchema(): Promise<void> {
       origin TEXT NOT NULL,
       destination TEXT NOT NULL,
       modality TEXT,
-      crosses_border INTEGER DEFAULT 0,
+      crosses_border INTEGER NOT NULL DEFAULT 0 CHECK(crosses_border IN (0,1)),
       wait_included INTEGER DEFAULT 0,
-      price_4p REAL NOT NULL,
-      price_6p REAL NOT NULL,
-      base_price_4p REAL,
-      base_price_6p REAL,
+      public_price_4p REAL,
+      public_price_6p REAL,
+      driver_price_4p REAL,
+      driver_price_6p REAL,
+      -- COLUMNAS GEO (resolución de tarifa)
       origin_place_id TEXT,
       destination_place_id TEXT,
       origin_zone_id TEXT,
       destination_zone_id TEXT,
+      resolution_priority INTEGER DEFAULT 4 CHECK(resolution_priority BETWEEN 1 AND 4),
       active INTEGER DEFAULT 1
     )`,
     `CREATE TABLE IF NOT EXISTS driver_discounts (
@@ -194,21 +196,24 @@ async function initSchema(): Promise<void> {
       area_group TEXT,
       dispatch_priority INTEGER DEFAULT 5,
       base_eta_min INTEGER DEFAULT 10,
-      crosses_border INTEGER DEFAULT 0,
+      surcharge_description TEXT,
+      surcharge_pct REAL DEFAULT 0,
       active INTEGER DEFAULT 1
     )`,
     `CREATE TABLE IF NOT EXISTS places (
       place_id TEXT PRIMARY KEY,
       canonical_name TEXT NOT NULL,
-      official_name TEXT NOT NULL,
-      google_maps_name TEXT NOT NULL,
-      place_type TEXT NOT NULL CHECK(place_type IN ('airport','bus_terminal','border_crossing','attraction','shopping','hotel','resort','hostel','restaurant','casino','event_center','tourist_area','port','other')),
-      city TEXT NOT NULL CHECK(city IN ('Puerto Iguazú','Foz do Iguaçu','Ciudad del Este')),
-      country TEXT NOT NULL CHECK(country IN ('Argentina','Brasil','Paraguay')),
+      official_name TEXT NOT NULL DEFAULT '',
+      display_name TEXT DEFAULT '',
+      google_maps_name TEXT NOT NULL DEFAULT '',
+      place_type TEXT NOT NULL DEFAULT 'other' CHECK(place_type IN ('airport','bus_terminal','border_crossing','border','attraction','shopping','hotel','resort','hostel','restaurant','casino','event_center','tourist_area','port','other','area','landmark','airbnb','bar','lodge','house')),
+      city TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT '',
       latitude REAL,
       longitude REAL,
       tourist_relevance_score INTEGER NOT NULL DEFAULT 5,
       operational_zone TEXT,
+      zone_id TEXT REFERENCES zones(zone_id),
       active_status TEXT NOT NULL DEFAULT 'active' CHECK(active_status IN ('active','inactive'))
     )`,
     `CREATE TABLE IF NOT EXISTS aliases (
@@ -345,7 +350,33 @@ async function initSchema(): Promise<void> {
       duration_ms INTEGER DEFAULT 0,
       ran_at INTEGER DEFAULT (unixepoch())
     )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(LOWER(origin), LOWER(destination))`,
+    `CREATE TABLE IF NOT EXISTS tours (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      trip_type TEXT NOT NULL CHECK(trip_type IN ('round_trip','tour')),
+      origin_place_id TEXT,
+      origin_zone_id TEXT,
+      destination_place_id TEXT,
+      destination_zone_id TEXT,
+      waypoints TEXT,
+      wait_hours INTEGER NOT NULL DEFAULT 0,
+      price_4p REAL,
+      price_6p REAL,
+      driver_price_4p REAL,
+      driver_price_6p REAL,
+      crosses_border INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS waiting_rates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      zone_id TEXT REFERENCES zones(zone_id),
+      country TEXT NOT NULL CHECK(country IN ('AR','BR','PY')),
+      price_per_hour_4p REAL NOT NULL,
+      price_per_hour_6p REAL NOT NULL,
+      active INTEGER DEFAULT 1
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(LOWER(origin), LOWER(destination)) WHERE origin IS NOT NULL AND destination IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(LOWER(alias))`,
     `CREATE INDEX IF NOT EXISTS idx_aliases_place ON aliases(place_id)`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
@@ -357,6 +388,26 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE chat_sessions ADD COLUMN dispatch_state TEXT DEFAULT 'idle'",
     "ALTER TABLE chat_sessions ADD COLUMN trip_state TEXT DEFAULT NULL",
     "ALTER TABLE chat_sessions ADD COLUMN slot_states TEXT DEFAULT NULL",
+    // GRAFO ZONAS: Columnas nuevas + DROP legacy (2026-06-29)
+    "ALTER TABLE tariffs ADD COLUMN public_price_4p REAL",
+    "ALTER TABLE tariffs ADD COLUMN public_price_6p REAL",
+    "ALTER TABLE tariffs ADD COLUMN driver_price_4p REAL",
+    "ALTER TABLE tariffs ADD COLUMN driver_price_6p REAL",
+    "ALTER TABLE tariffs ADD COLUMN active INTEGER DEFAULT 1",
+    "ALTER TABLE tariffs ADD COLUMN origin_place_id TEXT",
+    "ALTER TABLE tariffs ADD COLUMN destination_place_id TEXT",
+    "ALTER TABLE tariffs ADD COLUMN origin_zone_id TEXT",
+    "ALTER TABLE tariffs ADD COLUMN destination_zone_id TEXT",
+    "ALTER TABLE tariffs ADD COLUMN resolution_priority INTEGER DEFAULT 4",
+    // GRAFO ZONAS: DROP columnas legacy (reemplazadas por public_price_4p/6p y driver_price_4p/6p)
+    "ALTER TABLE tariffs DROP COLUMN price_4p",
+    "ALTER TABLE tariffs DROP COLUMN price_6p",
+    "ALTER TABLE tariffs DROP COLUMN base_price_4p",
+    "ALTER TABLE tariffs DROP COLUMN base_price_6p",
+    "ALTER TABLE zones ADD COLUMN surcharge_description TEXT",
+    "ALTER TABLE zones ADD COLUMN surcharge_pct REAL DEFAULT 0",
+    "ALTER TABLE places ADD COLUMN display_name TEXT DEFAULT ''",
+    "ALTER TABLE places ADD COLUMN zone_id TEXT REFERENCES zones(zone_id)",
   ];
   for (const sql of migrations) {
     try { await db.execute({ sql }); } catch { /* column may already exist */ }
@@ -392,6 +443,95 @@ async function initSchema(): Promise<void> {
   ];
   for (const ddl of cleanupDDL) {
     try { await db.execute({ sql: ddl }); } catch { /* column may not exist or already renamed/dropped */ }
+  }
+
+  // GRAFO ZONAS: Index for resolution priority query (needs column to exist first)
+  try {
+    await db.execute({
+      sql: "CREATE INDEX IF NOT EXISTS idx_tariffs_resolution ON tariffs(origin_place_id, destination_place_id, origin_zone_id, destination_zone_id, resolution_priority)",
+    });
+  } catch { /* column may not exist yet in some DB versions */ }
+
+  // HARDENING: CHECK constraints via triggers (SQLite doesn't support ALTER TABLE ADD CHECK)
+  // resolution_priority must be 1-4
+  const hardeningTriggers = [
+    `CREATE TRIGGER IF NOT EXISTS trg_tariffs_resolution_priority_insert
+BEFORE INSERT ON tariffs
+WHEN NEW.resolution_priority IS NOT NULL AND (NEW.resolution_priority < 1 OR NEW.resolution_priority > 4)
+BEGIN
+  SELECT RAISE(ABORT, 'resolution_priority must be between 1 and 4');
+END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_tariffs_resolution_priority_update
+BEFORE UPDATE OF resolution_priority ON tariffs
+WHEN NEW.resolution_priority IS NOT NULL AND (NEW.resolution_priority < 1 OR NEW.resolution_priority > 4)
+BEGIN
+  SELECT RAISE(ABORT, 'resolution_priority must be between 1 and 4');
+END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_tariffs_crosses_border_insert
+BEFORE INSERT ON tariffs
+WHEN NEW.crosses_border IS NOT NULL AND (NEW.crosses_border NOT IN (0,1))
+BEGIN
+  SELECT RAISE(ABORT, 'crosses_border must be 0 or 1');
+END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_tariffs_crosses_border_update
+BEFORE UPDATE OF crosses_border ON tariffs
+WHEN NEW.crosses_border IS NOT NULL AND (NEW.crosses_border NOT IN (0,1))
+BEGIN
+  SELECT RAISE(ABORT, 'crosses_border must be 0 or 1');
+END`,
+  ];
+  for (const sql of hardeningTriggers) {
+    try { await db.execute({ sql }); } catch { /* trigger may already exist */ }
+  }
+
+  // HARDENING: Missing indexes for geo queries and tariff resolution
+  const hardeningIndexes = [
+    "CREATE INDEX IF NOT EXISTS idx_places_zone_id ON places(zone_id)",
+    "CREATE INDEX IF NOT EXISTS idx_places_place_type ON places(place_type)",
+    "CREATE INDEX IF NOT EXISTS idx_tariffs_active_resolution ON tariffs(active, resolution_priority)",
+  ];
+  for (const sql of hardeningIndexes) {
+    try { await db.execute({ sql }); } catch { /* index may already exist */ }
+  }
+
+  // FASE 6: Migrar alias_lookup → aliases, eliminar tabla legacy
+  // Copiar datos de alias_lookup a aliases (solo donde canonical_name → place_id)
+  try {
+    const legacyAliases = await db.execute({
+      sql: `SELECT l.alias, l.canonical_name FROM alias_lookup l
+            WHERE l.active = 1
+              AND EXISTS (SELECT 1 FROM places p WHERE p.canonical_name = l.canonical_name)`,
+    });
+    if (legacyAliases.rows && legacyAliases.rows.length > 0) {
+      for (const row of legacyAliases.rows as unknown as Array<{ alias: string; canonical_name: string }>) {
+        const placeLookup = await db.execute({
+          sql: "SELECT place_id FROM places WHERE canonical_name = ? LIMIT 1",
+          args: [row.canonical_name],
+        });
+        if (placeLookup.rows && placeLookup.rows.length > 0) {
+          const placeId = (placeLookup.rows[0] as unknown as { place_id: string }).place_id;
+          const exists = await db.execute({
+            sql: "SELECT id FROM aliases WHERE place_id = ? AND alias = ? AND language = 'es'",
+            args: [placeId, row.alias],
+          });
+          if (!exists.rows || exists.rows.length === 0) {
+            await db.execute({
+              sql: "INSERT INTO aliases (place_id, alias, language) VALUES (?, ?, 'es')",
+              args: [placeId, row.alias],
+            });
+          }
+        }
+      }
+    }
+  } catch { /* best-effort migration */ }
+
+  // Dropear vista y tabla legacy
+  const aliasCleanup: string[] = [
+    "DROP VIEW IF EXISTS location_aliases",
+    "DROP TABLE IF EXISTS alias_lookup",
+  ];
+  for (const sql of aliasCleanup) {
+    try { await db.execute({ sql }); } catch { /* may not exist */ }
   }
 }
 

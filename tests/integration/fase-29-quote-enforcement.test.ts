@@ -5,6 +5,19 @@ vi.mock("@/lib/db/database", () => ({
   getChatSession: vi.fn(),
   insertMessage: vi.fn().mockResolvedValue(1),
   resetChatSession: vi.fn().mockResolvedValue(undefined),
+  findPlaceByAlias: vi.fn().mockResolvedValue(null),
+  findPlaceByName: vi.fn().mockResolvedValue(null),
+  queryOne: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/db/core/helpers", () => ({
+  queryOne: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/ai/display-name", () => ({
+  getPlaceDisplayName: vi.fn().mockResolvedValue({ displayName: "", source: "canonical_name" }),
+}));
+vi.mock("@/lib/services/geo/location-resolver", () => ({
+  resolveLocation: vi.fn().mockResolvedValue({ place_id: null, canonical_name: null, zone_id: null, confidence: "not_found" }),
+  resolveLocationToPlaceId: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("@/lib/db/state-accessors", () => ({
   getConversationalState: vi.fn(),

@@ -514,7 +514,9 @@ async function handleSearchTariffs(phone: string, text: string): Promise<void> {
   let msg = `📋 *Tarifas encontradas:*\n`;
   for (const t of results.slice(0, 10)) {
     msg += `\n#${t.id} ${t.origin} → ${t.destination}`;
-    msg += `\n   4p: $${t.price_4p.toLocaleString("es-AR")} | 6p: $${t.price_6p.toLocaleString("es-AR")}`;
+    const p4 = t.public_price_4p ?? 0;
+    const p6 = t.public_price_6p ?? 0;
+    msg += `\n   4p: $${p4.toLocaleString("es-AR")} | 6p: $${p6.toLocaleString("es-AR")}`;
   }
   if (results.length > 10) msg += `\n... y ${results.length - 10} más. Usá una búsqueda más específica.`;
   await sendWhatsAppMessage(phone, msg);

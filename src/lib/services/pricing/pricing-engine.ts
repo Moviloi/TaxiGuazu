@@ -21,12 +21,12 @@ export interface PricingResult {
   origin: {
     place_id: string | null;
     canonical_name: string | null;
-    operational_zone: string | null;
+    zone_id: string | null;
   };
   destination: {
     place_id: string | null;
     canonical_name: string | null;
-    operational_zone: string | null;
+    zone_id: string | null;
   };
   level: string;
   source: "standard" | "promotion" | "provider_adjustment" | "package" | "tg_campaign";
@@ -51,8 +51,8 @@ export async function calculatePrice(req: PricingRequest): Promise<PricingResult
       adjustments: [],
       final_price: 0,
       tariff_id: null,
-      origin: { place_id: originLoc.place_id, canonical_name: originLoc.canonical_name, operational_zone: originLoc.operational_zone },
-      destination: { place_id: destLoc.place_id, canonical_name: destLoc.canonical_name, operational_zone: destLoc.operational_zone },
+      origin: { place_id: originLoc.place_id, canonical_name: originLoc.canonical_name, zone_id: originLoc.zone_id },
+      destination: { place_id: destLoc.place_id, canonical_name: destLoc.canonical_name, zone_id: destLoc.zone_id },
       level: "not_found",
       source: "standard",
       explanation: [...explanation, "No se pudo resolver una o ambas ubicaciones"],
@@ -69,8 +69,8 @@ export async function calculatePrice(req: PricingRequest): Promise<PricingResult
       adjustments: [],
       final_price: 0,
       tariff_id: null,
-      origin: { place_id: originLoc.place_id, canonical_name: originLoc.canonical_name, operational_zone: originLoc.operational_zone },
-      destination: { place_id: destLoc.place_id, canonical_name: destLoc.canonical_name, operational_zone: destLoc.operational_zone },
+      origin: { place_id: originLoc.place_id, canonical_name: originLoc.canonical_name, zone_id: originLoc.zone_id },
+      destination: { place_id: destLoc.place_id, canonical_name: destLoc.canonical_name, zone_id: destLoc.zone_id },
       level: match.level,
       source: "standard",
       explanation: [...explanation, `Sin tarifa para esta ruta (${match.level})`],
@@ -93,8 +93,8 @@ export async function calculatePrice(req: PricingRequest): Promise<PricingResult
     tariff_id: match.tariffId,
     origin_place_id: originLoc.place_id,
     destination_place_id: destLoc.place_id,
-    origin_zone_id: originLoc.operational_zone,
-    destination_zone_id: destLoc.operational_zone,
+    origin_zone_id: originLoc.zone_id,
+    destination_zone_id: destLoc.zone_id,
     passenger_count: pax,
     modality: req.modality ?? null,
   });
@@ -108,8 +108,8 @@ export async function calculatePrice(req: PricingRequest): Promise<PricingResult
     adjustments: commercial.adjustments,
     final_price: commercial.final_price,
     tariff_id: match.tariffId,
-    origin: { place_id: originLoc.place_id, canonical_name: originLoc.canonical_name, operational_zone: originLoc.operational_zone },
-    destination: { place_id: destLoc.place_id, canonical_name: destLoc.canonical_name, operational_zone: destLoc.operational_zone },
+    origin: { place_id: originLoc.place_id, canonical_name: originLoc.canonical_name, zone_id: originLoc.zone_id },
+    destination: { place_id: destLoc.place_id, canonical_name: destLoc.canonical_name, zone_id: destLoc.zone_id },
     level: match.level,
     source: commercial.source,
     explanation,

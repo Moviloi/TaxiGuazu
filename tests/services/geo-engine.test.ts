@@ -2,40 +2,43 @@ import { describe, it, expect } from "vitest";
 import { resolveGeoRoute } from "@/lib/services/geo/geo-engine";
 
 describe("geoEngine", () => {
+  // Zone resolution removed from geo-engine (superseded by location-resolver.ts → DB places/aliases).
+  // All routes now return null zones + MEDIUM routeType + default proximity 0.3.
+  // Proximity scoring reactivates once zone IDs from DB are passed in.
+
   it("IGR → Centro → MEDIUM (airport to city)", () => {
     const r = resolveGeoRoute({ origin: "IGR", destination: "Centro" });
-    expect(r.originZone).toBe("Z_AIRPORT");
-    expect(r.destinationZone).toBe("Z_CITY_CORE");
+    expect(r.originZone).toBeNull();
+    expect(r.destinationZone).toBeNull();
     expect(r.routeType).toBe("MEDIUM");
   });
 
   it("Aeropuerto → Selva Iryapú → MEDIUM", () => {
     const r = resolveGeoRoute({ origin: "Aeropuerto IGR", destination: "Selva Iryapú" });
-    expect(r.originZone).toBe("Z_AIRPORT");
-    expect(r.destinationZone).toBe("Z_HOTEL_ZONE");
+    expect(r.originZone).toBeNull();
+    expect(r.destinationZone).toBeNull();
     expect(r.routeType).toBe("MEDIUM");
   });
 
-  it("Aduana → cualquier → LONG", () => {
+  it("Aduana → cualquier → MEDIUM (zones resolved by DB)", () => {
     const r = resolveGeoRoute({ origin: "Aduana", destination: "Centro" });
-    expect(r.originZone).toBe("Z_BORDER");
-    expect(r.destinationZone).toBe("Z_CITY_CORE");
-    expect(r.routeType).toBe("LONG");
+    expect(r.originZone).toBeNull();
+    expect(r.destinationZone).toBeNull();
+    expect(r.routeType).toBe("MEDIUM");
   });
 
-  it("Mabu → Amerian → SHORT (same zone)", () => {
+  it("Mabu → Amerian → MEDIUM (same zone, zones resolved by DB)", () => {
     const r = resolveGeoRoute({ origin: "Mabu", destination: "Amerian" });
-    expect(r.originZone).toBe("Z_HOTEL_ZONE");
-    expect(r.destinationZone).toBe("Z_HOTEL_ZONE");
-    expect(r.routeType).toBe("SHORT");
+    expect(r.originZone).toBeNull();
+    expect(r.destinationZone).toBeNull();
+    expect(r.routeType).toBe("MEDIUM");
   });
 
-  it("Aduana → Cataratas → LONG con penalización", () => {
+  it("Aduana → Cataratas → MEDIUM (zones resolved by DB)", () => {
     const r = resolveGeoRoute({ origin: "Aduana", destination: "Cataratas" });
-    expect(r.originZone).toBe("Z_BORDER");
-    expect(r.destinationZone).toBe("Z_LANDMARK");
-    expect(r.routeType).toBe("LONG");
-    expect(r.proximityScore).toBeLessThan(0.4);
+    expect(r.originZone).toBeNull();
+    expect(r.destinationZone).toBeNull();
+    expect(r.routeType).toBe("MEDIUM");
   });
 
   it("null slots → null zones + MEDIUM", () => {

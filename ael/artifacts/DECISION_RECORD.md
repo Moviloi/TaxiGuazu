@@ -1,66 +1,54 @@
-# DECISION_RECORD — Separación de responsabilidades en lead.service
+# DECISION_RECORD — Congelamiento del Grafo de Zonas
 
 Generado por: **Memory**
 Fase del pipeline: `RECORDING`
+Estado: `COMPLETE`
 
 ---
 
-## Pipeline Execution
+## Decisión: Congelamiento del Grafo de Zonas Operativas
 
-- **Fecha:** 2026-06-27
-- **Request:** Separar responsabilidades en lead.service
-- **Estado final:** COMPLETE
-- **Commit:** pendiente
+### Contexto
 
-## Decisiones tomadas
+El sistema TaxiGuazú necesita un modelo de zonificación para calcular tarifas de transporte en la Triple Frontera (AR, BR, PY). El modelo anterior tenía 7 zonas genéricas con precios placeholder y sin validación operativa. Se realizaron dos análisis complementarios:
 
-### Decisión 1: Mantener función en lead.service.ts con re-export
+1. **ASE 32** — Inferencia desde red vial: identificar bifurcaciones, corredores de acceso, y comportamiento vehicular usando Google Maps / Street View.
+2. **ASE 33** — Inferencia desde tarifario real: agrupar destinos que comparten precios desde múltiples orígenes independientes.
 
-- **Quién:** Architect + Implementer
-- **Qué:** `handleSlotConfirmationButton` permanece en `lead.service.ts`.
-- **Por qué:** La función usa dynamic imports que Vitest no intercepta correctamente en módulos separados.
-- **ADR reference:** ADR 004 (Service Boundaries)
-- **Impacto:** `lead.service.ts` (303→268 líneas)
+Ambos análisis se integraron en un documento único que constituye la especificación congelada.
 
-### Decisión 2: No resolver circular survey→lead en este pipeline
+### Decisión
 
-- **Quién:** Architect
-- **Qué:** La dependencia circular `survey.service.ts → lead.service.ts` se mantiene como deuda técnica conocida.
-- **Por qué:** Requiere ADR nuevo o extracción de `handleLeadMessage` a un módulo compartido. Impacto demasiado alto para un refactor de separación de responsabilidades.
-- **ADR reference:** ADR 004 ya documenta esta violación como conocida
-- **Impacto:** Sin cambio
+Se acepta el **Grafo de Zonas Congelado** con ~18 zonas operativas, matriz de precios reales, y las siguientes reglas de diseño:
 
-## Cambios realizados
+1. **Zonas definidas por comportamiento vehicular, no por geografía.** Dos lugares están en la misma zona si un vehículo se comporta igual para llegar a ambos (mismo corredor, misma maniobra, tiempo homogéneo).
+2. **Pricing simétrico:** Cada tarifa tiene `public_price` (cliente) y `driver_price` (chofer). La diferencia es el margen bruto.
+3. **Resolución por prioridad:** 1=place→place, 2=place→zone, 3=zone→place, 4=zone→zone. Query única con `ORDER BY resolution_priority LIMIT 1`.
+4. **Sin tarifas intra-zona:** Si dos places están en la misma zona, no puede haber tarifa entre ellos. Si se necesita precio diferente, están en zonas incorrectas.
+5. **Excepciones solas si el costo operativo difiere significativamente** del default de zona.
 
-| Archivo | Tipo de cambio | Líneas |
-|---------|---------------|--------|
-| `src/lib/services/lead.service.ts` | MODIFICADO | -35 (303→268) |
-| `src/lib/services/workflow/slot-confirmation-handler.ts` | CREADO | +1 (re-export) |
+### Alternativas consideradas
 
-## Tests ejecutados
+| Alternativa | Rechazada por |
+|-------------|---------------|
+| Zonas administrativas (barrios, distritos) | No reflejan comportamiento vehicular real |
+| Zonas por tipo de lugar (ZONE_HOTELES) | Mezcla hoteles con accesos muy distintos (Recanto vs Mabu) |
+| 4 queries secuenciales L1-L4 | Mantenible pero menos eficiente y prioridad hardcodeada |
+| price_4p + driver_discounts | El descuento no refleja el pago real del chofer; mejor tener ambos precios explícitos |
+| No subdividir 600 Hectáreas | La diferencia de precio (12k vs 15k) y de camino (asfalto vs tierra 2.8km) justifica la subdivisión |
 
-| Test | Resultado |
-|------|-----------|
-| `npm test` | PASS (610 passed, 2 pre-existentes) |
-| `npm run build` | PASS |
-| `enforce.sh` | PASS (sin nuevas violaciones) |
+### Impacto
 
-## Riesgos identificados
+- **Schema DB:** 3 tablas modificadas (tariffs, places, zones), ~6 columnas nuevas
+- **Seed-data:** Expansión de 7 a ~18 zonas, 12 a ~30 places, 20 a ~60+ tarifas
+- **Código:** tariff-resolver.ts reescrito a single query, location-resolver.ts retorna zoneId
+- **Tests:** 591 tests existentes deben seguir pasando
+- **Turso:** Tabla location_aliases (120 filas) debe ser respaldada y eliminada
 
-| Riesgo | Severidad | Mitigación |
-|--------|-----------|-----------|
-| Dynamic imports en módulo separado | ALTA | Función permanece en lead.service.ts |
-| Circular survey→lead | ALTA | ADR 004 documenta, pendiente de resolver |
-| Tests de integración frágiles | MEDIA | Mocks deben actualizarse si cambia la estructura de imports |
+### Prerrequisitos para implementación
 
-## Deuda técnica generada
-
-| Deuda | Severidad |
-|-------|-----------|
-| Función de 132 líneas permanece en lead.service.ts | MEDIA |
-
-## Referencias
-
-- TASK_PLAN: generado en memoria (Fase Director)
-- DESIGN_SPEC: generado en memoria (Fase Architect)
-- VALIDATION_REPORT: enforce.sh + npm test + npm run build
+- [ ] TASK_PLAN aprobado por Director
+- [ ] DESIGN_SPEC validado contra ADRs
+- [ ] Seed-data revisado por stakeholder (precios reales)
+- [ ] Backup de DB Turso actual
+- [ ] Borrador de migraciones M0-M2 listo

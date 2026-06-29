@@ -156,20 +156,78 @@ export interface ReservationSlotRow {
 
 export interface TariffRow {
   id: number;
-  origin: string;
-  destination: string;
+  origin: string | null;
+  destination: string | null;
   modality: string | null;
   crosses_border: number | null;
   wait_included: number | null;
-  price_4p: number;
-  price_6p: number;
-  base_price_4p: number;
-  base_price_6p: number;
+  public_price_4p: number | null;
+  public_price_6p: number | null;
+  driver_price_4p: number | null;
+  driver_price_6p: number | null;
+  // COLUMNAS GEO
   origin_place_id: string | null;
   destination_place_id: string | null;
   origin_zone_id: string | null;
   destination_zone_id: string | null;
+  resolution_priority: number | null;
   active: number | null;
+}
+
+export interface TourRow {
+  id: number;
+  name: string;
+  trip_type: "round_trip" | "tour";
+  origin_place_id: string | null;
+  origin_zone_id: string | null;
+  destination_place_id: string | null;
+  destination_zone_id: string | null;
+  waypoints: string | null;
+  wait_hours: number;
+  price_4p: number | null;
+  price_6p: number | null;
+  driver_price_4p: number | null;
+  driver_price_6p: number | null;
+  crosses_border: number | null;
+  active: number | null;
+  created_at: number | null;
+}
+
+export interface WaitingRateRow {
+  id: number;
+  zone_id: string | null;
+  country: "AR" | "BR" | "PY";
+  price_per_hour_4p: number;
+  price_per_hour_6p: number;
+  active: number | null;
+}
+
+export interface ZoneRow {
+  zone_id: string;
+  zone_name: string;
+  country: string;
+  area_group: string | null;
+  dispatch_priority: number | null;
+  base_eta_min: number | null;
+  surcharge_description: string | null;
+  surcharge_pct: number | null;
+  active: number | null;
+}
+
+export interface PlaceRow {
+  place_id: string;
+  canonical_name: string;
+  official_name: string | null;
+  display_name: string | null;
+  google_maps_name: string | null;
+  place_type: string;
+  city: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  tourist_relevance_score: number | null;
+  zone_id: string | null;
+  active_status: string;
 }
 
 export interface ProviderAdjustmentRow {
@@ -232,17 +290,6 @@ export interface LeadRow {
   created_at: number | null;
 }
 
-export interface AliasLookupRow {
-  alias: string;
-  canonical_name: string;
-  place_id: string | null;
-  normalized_alias: string;
-  location_code: string | null;
-  active: number;
-  source: string;
-  created_at: number;
-}
-
 export interface ChatSessionRow {
   phone: string;
   slots: string | null;
@@ -280,11 +327,16 @@ export interface OpportunityRuleRow {
 
 export interface TariffV2Match {
   matched: boolean;
+  publicPrice4p: number | null;
+  publicPrice6p: number | null;
+  driverPrice4p: number | null;
+  driverPrice6p: number | null;
   price: number;
   piso: number;
   garantizado: number;
   tariffId: number | null;
   level: "place_place" | "place_zone" | "zone_place" | "zone_zone" | "not_found";
+  resolutionPriority: number | null;
   originPlaceId: string | null;
   destinationPlaceId: string | null;
   originZoneId: string | null;

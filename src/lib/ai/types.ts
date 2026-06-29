@@ -14,7 +14,7 @@ export type OutputType = "EXECUTE" | "ANSWER" | "CLARIFY" | "SAFE_FALLBACK";
 
 export type ConversationDomain = "information" | "commercial" | "reservation" | "dispatch";
 
-export type ConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_confirmation";
+export type ConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_confirmation" | "pending_human_review";
 
 export type DispatchState = "idle" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver" | "closed";
 

@@ -24,10 +24,91 @@ Pipeline de 7 fases que gobierna la evolucion del sistema. OpenCode entra por aq
 | Contratos | `docs/architecture/architecture.md` |
 | Estado | `.opencode/memory/MEMORY.md` |
 
+## Subagentes
+
+| Subagente | Rol | Autoridad | Modo | Comando |
+|-----------|-----|-----------|------|---------|
+| `ael` | Director | Orquesta pipeline, define prioridad, resuelve escalaciones | primary | `/ael:plan` |
+| `ael-explore` | Explorer | Descubre estado real del codigo (solo lectura) | subagent | `/ael:explore` |
+| `ael-architect` | Architect | Veto arquitectonico sobre disenos que violen ADRs | subagent | `/ael:design` |
+| `ael-implementer` | Implementer | Aplica cambios aprobados al codigo | subagent | `/ael:implement` |
+| `ael-audit` | Auditor | Bloqueo por calidad (tests/build/enforce) | subagent | `/ael:validate` |
+| `ael-memory` | Memory | Conserva estado del sistema y decisiones | subagent | `/ael:remember` |
+| `ael-learning` | Learning | Detecta patrones de exito y fallo | subagent | `/ael:learn` |
+
+## Organigrama funcional
+
+Jerarquia de autoridad y responsabilidad entre los 7 roles del ARNES:
+
+```
+                    ┌─────────────────────┐
+                    │      DIRECTOR       │  ← Estrategia: prioriza, orquesta,
+                    │   (ael - primary)   │     resuelve conflictos, decide P0
+                    └──────┬──────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+   ┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
+   │  EXPLORER   │ │  ARCHITECT  │ │   MEMORY    │
+   │ (ael-exp.)  │ │ (ael-arch.) │ │ (ael-mem.)  │
+   │             │ │             │ │             │
+   │ Inteligencia│ │ Gobierno    │ │ Conocimiento│
+   │ Realidad    │ │ Arquitect.  │ │ del sistema │
+   │ (readonly)  │ │ (veto ADR)  │ │ (solo edit) │
+   └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
+          └───────────────┼───────────────┘
+                          │
+                   ┌──────▼──────┐
+                   │ IMPLEMENTER │
+                   │ (ael-impl.) │
+                   │             │
+                   │ Ejecucion   │
+                   │ (edit+bash) │
+                   └──────┬──────┘
+                          │
+                   ┌──────▼──────┐
+                   │   AUDITOR   │
+                   │ (ael-audit) │
+                   │             │
+                   │ Control     │
+                   │ (bash restr)│
+                   │ (bloqueo)   │
+                   └──────┬──────┘
+                          │
+                   ┌──────▼──────┐
+                   │   LEARNING  │
+                   │ (ael-learn) │
+                   │             │
+                   │ Mejora      │
+                   │ (solo lect) │
+                   │ Patrones    │
+                   └─────────────┘
+```
+
+**Flujo de autoridad:**
+1. **Director** → define QUÉ y EN QUÉ ORDEN (prioridad)
+2. **Explorer, Architect, Memory** → asesoran al Director (staff)
+3. **Implementer** → ejecuta lo aprobado (línea de producción)
+4. **Auditor** → controla calidad (puerta de salida)
+5. **Learning** → analiza resultados y propone mejoras (retroalimentación)
+
+**Flujo de datos:**
+```
+Director ──TASK_PLAN──→ Explorer ──SYSTEM_STATE──→ Architect ──DESIGN_SPEC──→
+Implementer ──CODE_DIFF──→ Auditor ──VALIDATION_REPORT──→ Memory ──DECISION_RECORD──→
+Learning ──PATTERN_EXTRACTION──→ (feedback al Director)
+```
+
 ## Commands
 
-- `/ael:plan` — Fase Director
-- `/ael:explore` — Fase Explorer
-- `/ael:design` — Fase Architect
-- `/ael:enforce` — Contract enforcement
-- `/ael:validate` — Tests + build + enforce
+| Comando | Fase | Uso |
+|---------|------|-----|
+| `/ael:plan` | Director | Iniciar pipeline: planificar un cambio |
+| `/ael:explore` | Explorer | Explorar estado actual del codigo |
+| `/ael:design` | Architect | Validar diseno contra ADRs |
+| `/ael:implement` | Implementer | Aplicar cambios aprobados |
+| `/ael:enforce` | — | Verificar contratos R1-R3 |
+| `/ael:validate` | — | Tests + build + enforce |
+| `/ael:remember` | Memory | Registrar decisiones y estado |
+| `/ael:learn` | Learning | Extraer patrones del historial |
+| `/ael:diagnose` | — | Auto-diagnostico de integridad del ARNES |

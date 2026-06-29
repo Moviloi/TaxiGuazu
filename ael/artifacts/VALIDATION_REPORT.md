@@ -1,54 +1,42 @@
-# VALIDATION_REPORT — Template
+# VALIDATION_REPORT
 
 Generado por: **Auditor**
 Fase del pipeline: `VALIDATING`
+Estado: `{{STATE}}`
 
 ---
 
-## Summary
+## Resumen
 
-- **Estado:** PASS / FAIL
-- **Tests ejecutados:** N
-- **Tests pasaron:** N
-- **Build:** PASS / FAIL
-- **Lint:** PASS / FAIL / SKIP
+| Check | Resultado |
+|-------|-----------|
+| `npm test` | {{TEST_RESULT}} |
+| `npm run build` | {{BUILD_RESULT}} |
+| `npm run lint` | {{LINT_RESULT}} |
+| `bash ael/contracts/enforce.sh` | {{ENFORCE_RESULT}} |
 
-## Test Results
+## Detalle de tests
 
-```
-[output de npm test]
-```
+{{TEST_DETAIL}}
 
-## Build Results
+## Detalle de build
 
-```
-[output de npm run build]
-```
+{{BUILD_DETAIL}}
 
-## Contract Checks
+## Violaciones de contrato
 
-### R1: Contract Integrity
-- AI → Services: PASS / FAIL
-- Detalle: ...
-
-### R2: Dependency Rules
-- Utils leaf: PASS / FAIL
-- DB Facade: PASS / FAIL (N violaciones)
-- Circular deps: PASS / FAIL (N violaciones)
-- Detalle: ...
-
-### R3: Code Existence
-- Archivos referenciados existen: PASS / FAIL
-- Detalle: ...
+{{CONTRACT_VIOLATIONS}}
 
 ## Regresiones detectadas
 
-| Test | Antes | Después | Impacto |
-|------|-------|---------|---------|
-| ... | PASS | FAIL | ... |
+{{REGRESSIONS}}
 
-## Approval
+## Decisión
 
-- **Aprobado:** SÍ / NO
-- **Condición:** [si es condicional]
-- **Próximo paso:** IMPLEMENTING / ROLLBACK
+- [ ] **PASS** — Todos los checks pasan. Pipeline continúa a Memory.
+- [ ] **FAIL** — Uno o más checks fallan. Pipeline entra en ROLLBACK.
+
+## Artefactos relacionados
+
+- `CODE_DIFF.md` — cambios validados
+- `DESIGN_SPEC.md` — especificación de diseño implementada

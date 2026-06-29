@@ -16,6 +16,7 @@
     "ael:enforce": "bash ael/contracts/enforce.sh",
     "ael:validate": "npm test && npm run build && bash ael/contracts/enforce.sh",
     "test:watch": "vitest --config src/config/vitest.config.ts",
+    "seed": "npx tsx scripts/seed-data.ts",
     "security-check": "node scripts/precommit-security-check.mjs",
     "prepare": "husky"
   },
@@ -36,6 +37,7 @@
     "husky": "^9.1.7",
     "typescript": "^5.4.5",
     "vercel": "^54.1.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "xlsx": "^0.18.5"
   }
 }

@@ -1,26 +1,26 @@
 # Agent Execution Layer (AEL)
 
-Sistema operativo de ingeniería de software basado en agentes para TaxGuazú.
+Sistema operativo de ingenieria de software basado en agentes para TaxGuazu.
 
-## Qué es la AEL
+## Que es la AEL
 
 La AEL es una capa intermedia entre:
 
 ```
-USER REQUEST → AEL (ARNÉS) → CODEBASE MODIFICATION
+USER REQUEST → AEL (ARNES) → CODEBASE MODIFICATION
 ```
 
-Convierte el arnés agéntico conceptual (Director, Architect, Explorer, Implementer, Auditor, Memory, Learning) en un **pipeline de ejecución formal** capaz de producir cambios consistentes en el sistema.
+Convierte el arnes agéntico conceptual (Director, Architect, Explorer, Implementer, Auditor, Memory, Learning) en un **pipeline de ejecucion formal** capaz de producir cambios consistentes en el sistema.
 
 ## Estructura
 
 ```
 ael/
-├── PIPELINE.md              ← Flujo de ejecución formal
+├── AGENTS.md                ← Entry point, organigrama, comandos
+├── PIPELINE.md              ← Flujo de ejecucion formal
 ├── HANDOFF.md               ← Protocolo de transferencia entre roles
 ├── FAILURE.md               ← Modos de fallo y rollback
-├── INTEGRATION.md           ← Conexión con ecosistema existente
-├── roles/                   ← Definición de cada rol
+├── roles/                   ← Definicion de cada rol
 │   ├── 01-director.md
 │   ├── 02-explorer.md
 │   ├── 03-architect.md
@@ -28,19 +28,23 @@ ael/
 │   ├── 05-auditor.md
 │   ├── 06-memory.md
 │   └── 07-learning.md
-├── artifacts/               ← Templates de artefactos por rol
+├── artifacts/               ← Artefactos por fase del pipeline
 │   ├── TASK_PLAN.md
 │   ├── SYSTEM_STATE.md
 │   ├── DESIGN_SPEC.md
+│   ├── CODE_DIFF.md
 │   ├── VALIDATION_REPORT.md
 │   ├── DECISION_RECORD.md
-│   └── PATTERN_EXTRACTION.md
-└── contracts/               ← Enforcement de contratos
-    ├── CONTRACTS.md
-    └── enforce.sh
+│   ├── PATTERN_EXTRACTION.md
+│   └── archive/             ← Artefactos de pipelines anteriores
+├── contracts/               ← Enforcement de contratos
+│   ├── CONTRACTS.md
+│   └── enforce.sh
+└── archive/                 ← Documentacion de diseno anterior
+    └── INTEGRATION.md
 ```
 
-## Pipeline de ejecución
+## Pipeline de ejecucion
 
 ```
 DIRECTOR → EXPLORER → ARCHITECT → IMPLEMENTER → AUDITOR → MEMORY → LEARNING
@@ -50,20 +54,12 @@ TASK_PLAN  SYSTEM_     DESIGN_      CODE_DIFF   VALIDATION  DECISION   PATTERN_
     .md      STATE.md    SPEC.md                  _REPORT.md  _RECORD.md EXTRACTION.md
 ```
 
-## Cómo se ejecuta
+## Como se ejecuta
 
-### Manual (actual)
-
-1. Leer `ael/PIPELINE.md`
-2. Seguir el flujo fase por fase
-3. Generar artefactos en `ael/artifacts/`
-4. Ejecutar `bash ael/contracts/enforce.sh` al final
-
-### Automático (futuro)
-
-```bash
-ael run "descripción del cambio"
-```
+1. El usuario describe el cambio al Director (agente `ael`)
+2. El Director ejecuta el pipeline de 7 fases automaticamente
+3. Cada fase delega al subagente correspondiente
+4. Al finalizar, se ejecuta `bash ael/contracts/enforce.sh`
 
 ## Contract enforcement
 
@@ -71,16 +67,15 @@ ael run "descripción del cambio"
 # Ejecutar todos los checks
 bash ael/contracts/enforce.sh
 
-# Ejecutar un check específico
+# Ejecutar un check especifico
 bash ael/contracts/enforce.sh --rule R1
 bash ael/contracts/enforce.sh --rule R2
 bash ael/contracts/enforce.sh --rule R3
 ```
 
-## Integración con npm
+## Integracion con npm
 
 ```bash
-# Agregar a package.json
 npm run ael:enforce   # bash ael/contracts/enforce.sh
 npm run ael:validate  # npm test && npm run build && bash ael/contracts/enforce.sh
 ```
@@ -90,12 +85,10 @@ npm run ael:validate  # npm test && npm run build && bash ael/contracts/enforce.
 | Componente | Estado |
 |-----------|--------|
 | Pipeline definition | COMPLETO |
-| Role specs | COMPLETO |
-| Artifact templates | COMPLETO |
+| Role specs (7 roles) | COMPLETO |
 | Handoff protocol | COMPLETO |
 | Contract enforcement | COMPLETO |
 | Failure modes | COMPLETO |
-| Integration plan | COMPLETO |
-| OpenCode integration | PENDIENTE (requiere opencode.json) |
+| OpenCode integration (7 subagentes, 8 comandos) | COMPLETO |
+| Self-diagnosis (`/ael:diagnose`) | COMPLETO |
 | CI/CD integration | PENDIENTE (requiere GitHub Actions) |
-| Runtime execution | PENDIENTE (requiere execution engine) |

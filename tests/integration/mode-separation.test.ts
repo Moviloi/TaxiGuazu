@@ -197,10 +197,16 @@ describe("T-SHORT: AHORA short-circuit ambiguity guard", () => {
 
 describe("T-CTX: buildExtractionContext", () => {
   const mockPricing: PricingResult = {
+    base_price: 12000,
+    markup: 3000,
+    adjustments: [],
     final_price: 15000,
     tariff_id: 1,
-    origin: { canonical_name: "Aeropuerto IGR" },
-    destination: { canonical_name: "Centro Puerto Iguazú" },
+    origin: { place_id: null, canonical_name: "Aeropuerto IGR", zone_id: null },
+    destination: { place_id: null, canonical_name: "Centro Puerto Iguazú", zone_id: null },
+    level: "standard",
+    source: "standard",
+    explanation: [],
   };
 
   it("T-CTX-1: workflowResult undefined → context is NOT undefined", () => {

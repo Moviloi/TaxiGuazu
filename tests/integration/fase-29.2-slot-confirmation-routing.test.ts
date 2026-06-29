@@ -9,6 +9,20 @@ vi.mock("@/lib/db/database", () => ({
   insertMessage: vi.fn().mockResolvedValue(1),
   resetChatSession: vi.fn().mockResolvedValue(undefined),
   upsertChatSession: vi.fn().mockResolvedValue(undefined),
+  findPlaceByAlias: vi.fn().mockResolvedValue(null),
+  findPlaceByName: vi.fn().mockResolvedValue(null),
+  findTariffByPriority: vi.fn().mockResolvedValue(null),
+  queryOne: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/db/core/helpers", () => ({
+  queryOne: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/ai/display-name", () => ({
+  getPlaceDisplayName: vi.fn().mockResolvedValue({ displayName: "", source: "canonical_name" }),
+}));
+vi.mock("@/lib/services/geo/location-resolver", () => ({
+  resolveLocation: vi.fn().mockResolvedValue({ place_id: null, canonical_name: null, zone_id: null, confidence: "not_found" }),
+  resolveLocationToPlaceId: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("@/lib/db/state-accessors", () => ({
   getConversationalState: vi.fn(),
@@ -169,13 +183,9 @@ describe("FASE 29.2 — Slot confirmation UI routing audit", () => {
       );
       await flush();
 
-      // After slot_confirm, pipeline re-enters with CONFIRMED slots
-      // shouldRequestConfirmation returns false → skips buttons
+      // After slot_confirm, pricing succeeds → price message sent, no pipeline re-entry
       expect(sendInteractiveButtons).not.toHaveBeenCalled();
-      expect(processLead).toHaveBeenCalled();
-      const execCtx = vi.mocked(processLead).mock.calls[0][0] as any;
-      expect(execCtx.extractionCtx.slots.origin.status).toBe("CONFIRMED");
-      expect(execCtx.extractionCtx.slots.destination.status).toBe("CONFIRMED");
+      expect(processLead).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,7 @@
 ---
-description: Ejecuta fase Architect — valida diseño contra ADRs
+description: Ejecuta fase Architect — valida diseno contra ADRs y contratos
 agent: ael
+subtask: true
 ---
 Eres el Architect del ARNES. Lee `ael/roles/03-architect.md` y valida el diseno propuesto.
 

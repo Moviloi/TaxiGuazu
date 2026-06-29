@@ -8,7 +8,7 @@ import { findPlaceByAlias, findPlaceByName } from "@/lib/db/database";
 export interface ResolveLocationResult {
   place_id: string | null;
   canonical_name: string | null;
-  operational_zone: string | null;
+  zone_id: string | null;
   confidence: "exact" | "alias" | "fuzzy" | "not_found";
 }
 
@@ -25,7 +25,7 @@ function removeAccents(text: string): string {
 
 export async function resolveLocation(text: string): Promise<ResolveLocationResult> {
   if (!text || text.trim() === "") {
-    return { place_id: null, canonical_name: null, operational_zone: null, confidence: "not_found" };
+    return { place_id: null, canonical_name: null, zone_id: null, confidence: "not_found" };
   }
 
   const raw = text.trim();
@@ -55,7 +55,7 @@ export async function resolveLocation(text: string): Promise<ResolveLocationResu
     return { ...fuzzyName, confidence: "fuzzy" };
   }
 
-  return { place_id: null, canonical_name: null, operational_zone: null, confidence: "not_found" };
+  return { place_id: null, canonical_name: null, zone_id: null, confidence: "not_found" };
 }
 
 export async function resolveLocationToPlaceId(text: string): Promise<string | null> {

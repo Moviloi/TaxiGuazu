@@ -2,39 +2,14 @@
 // DEPRECATED: Location resolution lives in location-resolver.ts.
 // Legacy — route/proximity logic only.
 // Only route/proximity logic should survive long-term.
+// SUBZONE_MAP and NODE_ZONE_MAP removed — superseded by places/aliases DB tables.
 
 // ── Types ──
-
-interface Subzone {
-  name: string;
-  weight: number;
-  confidence: number;
-}
 
 export interface ZoneResolution {
   originZone: string | null;
   destinationZone: string | null;
   distanceClass: "SHORT" | "MEDIUM" | "LONG";
-  originSubzone?: Subzone | null;
-  destinationSubzone?: Subzone | null;
-}
-
-interface RadialProbs {
-  core: number;
-  boundary: number;
-  transition: number;
-}
-
-interface ExpandedZone {
-  zone: string;
-  label?: string;
-  probs: RadialProbs;
-  subzone?: Subzone | null;
-}
-
-export interface ZoneExpansionResult {
-  origin: ExpandedZone | null;
-  destination: ExpandedZone | null;
 }
 
 interface ProximityFactors {
@@ -49,6 +24,22 @@ export interface ProximityScore {
   factors: ProximityFactors;
 }
 
+interface ExpansionProbabilities {
+  core: number;
+  boundary: number;
+  transition: number;
+}
+
+interface ExpansionNode {
+  probs: ExpansionProbabilities;
+  subzone?: { name: string };
+}
+
+export interface ZoneExpansionResult {
+  origin?: ExpansionNode;
+  destination?: ExpansionNode;
+}
+
 interface GeoRoute {
   originNode: string;
   destinationNode: string;
@@ -56,59 +47,7 @@ interface GeoRoute {
   destinationZone: string | null;
   routeType: "SHORT" | "MEDIUM" | "LONG";
   proximityScore: number;
-  originSubzone?: Subzone | null;
-  destinationSubzone?: Subzone | null;
 }
-
-// ⚠️ SUBZONE_MAP — legacy subzone definitions, superseded by places/aliases
-const SUBZONE_MAP: Record<string, Subzone> = {
-  amerian: { name: "Amerian", weight: 1.0, confidence: 0.95 },
-  meliá: { name: "Meliá", weight: 0.9, confidence: 0.9 },
-  melia: { name: "Meliá", weight: 0.9, confidence: 0.9 },
-  rafain: { name: "Rafain", weight: 0.85, confidence: 0.9 },
-  mabu: { name: "Mabu", weight: 0.8, confidence: 0.85 },
-  panoramic: { name: "Panoramic", weight: 0.75, confidence: 0.85 },
-  "iguazú grand": { name: "Iguazú Grand", weight: 0.85, confidence: 0.9 },
-  "iguazu grand": { name: "Iguazú Grand", weight: 0.85, confidence: 0.9 },
-  "selva iryapú": { name: "Selva Iryapú", weight: 0.7, confidence: 0.8 },
-  "selva iryapu": { name: "Selva Iryapú", weight: 0.7, confidence: 0.8 },
-};
-
-// ⚠️ NODE_ZONE_MAP — legacy text→zone mapping, superseded by resolveLocation() + places table
-const NODE_ZONE_MAP: Record<string, string> = {
-  igr: "Z_AIRPORT",
-  igu: "Z_AIRPORT",
-  "aeropuerto igr": "Z_AIRPORT",
-  aeropuerto: "Z_AIRPORT",
-  "centro iguazú": "Z_CITY_CORE",
-  "centro iguazu": "Z_CITY_CORE",
-  centro: "Z_CITY_CORE",
-  "puerto iguazú": "Z_CITY_CORE",
-  "puerto iguazu": "Z_CITY_CORE",
-  "terminal de ómnibus": "Z_CITY_CORE",
-  terminal: "Z_CITY_CORE",
-  "ciudad de foz": "Z_CITY_CORE",
-  foz: "Z_CITY_CORE",
-  "foz do iguacu": "Z_CITY_CORE",
-  amerian: "Z_HOTEL_ZONE",
-  meliá: "Z_HOTEL_ZONE",
-  melia: "Z_HOTEL_ZONE",
-  rafain: "Z_HOTEL_ZONE",
-  mabu: "Z_HOTEL_ZONE",
-  panoramic: "Z_HOTEL_ZONE",
-  "iguazú grand": "Z_HOTEL_ZONE",
-  "iguazu grand": "Z_HOTEL_ZONE",
-  "gran hotel": "Z_HOTEL_ZONE",
-  "hotel iguazú": "Z_HOTEL_ZONE",
-  "hotel iguazu": "Z_HOTEL_ZONE",
-  "lo de ramona": "Z_HOTEL_ZONE",
-  "selva iryapú": "Z_HOTEL_ZONE",
-  "selva iryapu": "Z_HOTEL_ZONE",
-  aduana: "Z_BORDER",
-  cataratas: "Z_LANDMARK",
-  "iguazú falls": "Z_LANDMARK",
-  "iguazu falls": "Z_LANDMARK",
-};
 
 // ── Proximity matrix ──
 
@@ -144,47 +83,7 @@ const CORRIDOR_PAIRS = new Set([
 const ADUANA_PENALTY = 0.5;
 const CORRIDOR_BONUS = 0.15;
 
-// ── Helpers ──
-
-function normalize(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/[á]/g, "a").replace(/[é]/g, "e")
-    .replace(/[í]/g, "i").replace(/[ó]/g, "o").replace(/[ú]/g, "u");
-}
-
-function mapNodeToZone(node: string | null | undefined): string | null {
-  if (!node || String(node).trim() === "") return null;
-  const key = normalize(String(node));
-  if (NODE_ZONE_MAP[key]) return NODE_ZONE_MAP[key];
-  for (const [name, zone] of Object.entries(NODE_ZONE_MAP)) {
-    if (key.includes(name)) return zone;
-  }
-  return null;
-}
-
-function mapNodeToSubzone(node: string | null | undefined): Subzone | null {
-  if (!node || String(node).trim() === "") return null;
-  const key = normalize(String(node));
-  if (SUBZONE_MAP[key]) return SUBZONE_MAP[key];
-  for (const [name, sub] of Object.entries(SUBZONE_MAP)) {
-    if (key.includes(name)) return sub;
-  }
-  return null;
-}
-
-function computeRouteType(a: string | null, b: string | null): "SHORT" | "MEDIUM" | "LONG" {
-  if (!a || !b) return "MEDIUM";
-  if (a === b) return "SHORT";
-  if (
-    (a === "Z_CITY_CORE" && b === "Z_HOTEL_ZONE") ||
-    (a === "Z_HOTEL_ZONE" && b === "Z_CITY_CORE")
-  ) return "SHORT";
-  if (a === "Z_BORDER" || b === "Z_BORDER") return "LONG";
-  return "MEDIUM";
-}
+// ── Proximity algorithm ──
 
 function computeProximity(a: string | null, b: string | null): number {
   if (!a || !b) return 0.3;
@@ -200,19 +99,6 @@ function computeProximity(a: string | null, b: string | null): number {
   if (a === "Z_AIRPORT" || b === "Z_AIRPORT") roadAccess = 0.8;
   else if (a === "Z_BORDER" || b === "Z_BORDER") roadAccess = 0.4;
   return Math.round(baseScore * (0.5 + roadAccess * 0.5) * 100) / 100;
-}
-
-// ── Public API (backward compat) ──
-
-function resolveZones(slots: Record<string, any>): ZoneResolution {
-  const originRaw = slots?.origin ?? null;
-  const destinationRaw = slots?.destination ?? null;
-  const originZone = mapNodeToZone(originRaw);
-  const destinationZone = mapNodeToZone(destinationRaw);
-  const distanceClass = computeRouteType(originZone, destinationZone);
-  const originSubzone = originZone === "Z_HOTEL_ZONE" ? mapNodeToSubzone(originRaw) : null;
-  const destinationSubzone = destinationZone === "Z_HOTEL_ZONE" ? mapNodeToSubzone(destinationRaw) : null;
-  return { originZone, destinationZone, distanceClass, originSubzone, destinationSubzone };
 }
 
 // ── Trip leg classification ──
@@ -237,19 +123,22 @@ export function classifyTripLeg(origin: string, destination: string): { type: Tr
 }
 
 // ── Unified entry point ──
+// Zone resolution removed (superseded by location-resolver.ts → places/aliases DB).
+// Keeps proximity scoring as algorithmic config.
 
 export function resolveGeoRoute(slots: Record<string, any>): GeoRoute {
-  const zones = resolveZones(slots);
-  const prox = computeProximity(zones.originZone, zones.destinationZone);
+  // Zone types no longer resolved from hardcoded maps; DB-backed
+  // resolveLocation() in tariff-resolver provides place_id + zone_id.
+  const originNode = String(slots?.origin ?? "");
+  const destinationNode = String(slots?.destination ?? "");
+  const prox = computeProximity(null, null);
 
   return {
-    originNode: String(slots?.origin ?? ""),
-    destinationNode: String(slots?.destination ?? ""),
-    originZone: zones.originZone,
-    destinationZone: zones.destinationZone,
-    routeType: zones.distanceClass,
+    originNode,
+    destinationNode,
+    originZone: null,
+    destinationZone: null,
+    routeType: "MEDIUM",
     proximityScore: prox,
-    originSubzone: zones.originSubzone,
-    destinationSubzone: zones.destinationSubzone,
   };
 }

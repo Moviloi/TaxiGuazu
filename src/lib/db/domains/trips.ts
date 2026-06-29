@@ -252,7 +252,11 @@ export async function updateTripTariff(tripId: string, tariffId: number, pisoBas
   const trip = await getTripById(tripId);
   const pax = passengers ?? trip?.passengers ?? 0;
   const tariff = await queryOne<TariffRow>("SELECT * FROM tariffs WHERE id = ?", [tariffId]);
-  const price = tariff ? (pax > 4 ? tariff.price_6p : tariff.price_4p) : (trip?.price_base ?? 0);
+  const price = tariff
+    ? (pax > 4
+      ? (tariff.public_price_6p ?? 0)
+      : (tariff.public_price_4p ?? 0))
+    : (trip?.price_base ?? 0);
   const garantizado = Math.round(price * 0.85);
   await getDb().execute({
     sql: "UPDATE trips SET tariff_id = ?, piso_base = ?, garantizado_base = ?, updated_at = unixepoch() WHERE trip_id = ?",
@@ -382,5 +386,43 @@ export async function findTariffRow(opts: {
      opts.destPlaceId ?? null, opts.destPlaceId ?? null,
      opts.originZoneId ?? null, opts.originZoneId ?? null,
      opts.destZoneId ?? null, opts.destZoneId ?? null]
+  );
+}
+
+/**
+ * findTariffByPriority — Single query que evalúa los 4 niveles de resolución
+ * (place→place, place→zone, zone→place, zone→zone) en una sola sentencia SQL
+ * y retorna el match con la resolution_priority más baja (mayor prioridad).
+ *
+ * Orden de prioridad (resolution_priority):
+ *   1 = place→place   (más específico)
+ *   2 = place→zone
+ *   3 = zone→place
+ *   4 = zone→zone     (fallback general)
+ *
+ * SQL maneja NULLs naturalmente: columna = NULL nunca es TRUE, por lo que
+ * si algún ID no está disponible, la cláusula correspondiente no matchea.
+ */
+export async function findTariffByPriority(opts: {
+  originPlaceId: string | null;
+  destPlaceId: string | null;
+  originZoneId: string | null;
+  destZoneId: string | null;
+}): Promise<TariffRow | null> {
+  const { originPlaceId, destPlaceId, originZoneId, destZoneId } = opts;
+  return queryOne<TariffRow>(
+    `SELECT * FROM tariffs WHERE active = 1
+     AND (
+       (origin_place_id = ? AND destination_place_id = ?)
+       OR (origin_place_id = ? AND destination_zone_id = ?)
+       OR (origin_zone_id = ? AND destination_place_id = ?)
+       OR (origin_zone_id = ? AND destination_zone_id = ?)
+     )
+     ORDER BY resolution_priority ASC
+     LIMIT 1`,
+    [originPlaceId, destPlaceId,
+     originPlaceId, destZoneId,
+     originZoneId, destPlaceId,
+     originZoneId, destZoneId]
   );
 }

@@ -22,6 +22,10 @@ vi.mock("@/lib/db/database", () => ({
   getTariffById: vi.fn().mockResolvedValue(null),
   debugGetActiveDriversWithConversationStatus: vi.fn().mockResolvedValue(undefined),
   getConnectionCache: vi.fn().mockResolvedValue(null),
+  findPlaceByAlias: vi.fn().mockResolvedValue(null),
+  findPlaceByName: vi.fn().mockResolvedValue(null),
+  queryOne: vi.fn().mockResolvedValue({ country: "BR" }),
+  findTariffByPriority: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/sender", () => ({
@@ -31,6 +35,11 @@ vi.mock("@/lib/sender", () => ({
 
 vi.mock("@/lib/services/admin/admin.service", () => ({
   notifyAdmin: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/services/geo/location-resolver", () => ({
+  resolveLocationToPlaceId: vi.fn().mockResolvedValue("place_foz"),
+  resolveLocation: vi.fn().mockResolvedValue({ place_id: "p_test", canonical_name: "test", zone_id: "z_test", confidence: "not_found" }),
 }));
 
 vi.mock("@/lib/services/dispatch/dispatch-workflow", () => ({
@@ -295,7 +304,7 @@ describe("broadcastTripToDrivers", () => {
     const d1 = makeDriver({ phone: "d1", rating: 4.5, tier: "normal" });
     const d2 = makeDriver({ phone: "d2", rating: 4.0, tier: "normal" });
     vi.mocked(getAvailableDrivers).mockResolvedValue([d1, d2]);
-    vi.mocked(getTariffById).mockResolvedValueOnce({ base_price_4p: 25000, base_price_6p: 35000 } as any);
+    vi.mocked(getTariffById).mockResolvedValueOnce({ driver_price_4p: 25000, driver_price_6p: 35000 } as any);
 
     await broadcastTripToDrivers(makeTrip(), 1, "+54911", "reserva", 2);
 

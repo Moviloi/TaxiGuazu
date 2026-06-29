@@ -243,11 +243,29 @@ export async function handlePolicyPipeline(
 
   // FASE 20.4 — Slot Confirmation UX: si hay CONFIRMATION_PENDING, mostrar confirmación antes de seguir
   if (shouldRequestConfirmation(extractionCtx)) {
-    const confirm = buildSlotConfirmationMessage(extractionCtx!, lang);
+    // Resolve display names from DB para mejor UX
+    let confirmCtx = extractionCtx;
+    const originVal = extractionCtx?.slots?.origin?.value;
+    const destVal = extractionCtx?.slots?.destination?.value;
+    if (originVal && !confirmCtx?.tariff?.displayOrigin) {
+      try {
+        const dn = await getPlaceDisplayName(String(originVal));
+        confirmCtx = { ...confirmCtx!, tariff: { matched: false, ...confirmCtx?.tariff, displayOrigin: dn.displayName } };
+      } catch { /* fallback: canonical name */ }
+    }
+    if (destVal && !confirmCtx?.tariff?.displayDestination) {
+      try {
+        const dn = await getPlaceDisplayName(String(destVal));
+        confirmCtx = { ...confirmCtx!, tariff: { matched: false, ...confirmCtx?.tariff, displayDestination: dn.displayName } };
+      } catch { /* fallback: canonical name */ }
+    }
+    const confirm = buildSlotConfirmationMessage(confirmCtx!, lang);
     log.info("[SLOT_CONFIRMATION_UI]", {
       pendingSlots: confirm.pendingSlots,
       message: confirm.message?.substring(0, 80),
       buttons: confirm.buttons?.map(b => b.id),
+      displayOrigin: confirmCtx?.tariff?.displayOrigin,
+      displayDestination: confirmCtx?.tariff?.displayDestination,
     });
     await sendInteractiveButtons(phone, confirm.message!, confirm.buttons!);
     await insertMessage(conversation.id, "assistant", confirm.message!);

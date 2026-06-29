@@ -174,9 +174,9 @@ export async function handleSlotConfirmationButton(
   phone: string,
   buttonId: string,
   conversation: { id: number },
-  history: any[],
-  customerName: string | null,
-  leadCore: ReturnType<typeof core>,
+  _history: any[],
+  _customerName: string | null,
+  _leadCore: ReturnType<typeof core>,
   session: Awaited<ReturnType<typeof getChatSession>>,
 ): Promise<void> {
   const lang = detectLeadLang(buttonId);
@@ -254,15 +254,12 @@ export async function handleSlotConfirmationButton(
       await insertMessage(conversation.id, "assistant", priceMsg);
       await setConversationalState(phone, "awaiting_confirmation");
     } else {
-      const parsedData = undefined;
-      const extractionCtx = buildExtractionContext(parsedData, syntheticConfidence, workflowResult, undefined, leadCore?.roleLock, leadCore?.slotStability, rawSlots);
-      const domain = mapIntentToDomain(leadCore.intent);
-      await handlePolicyPipeline({
-        phone, text: buttonId, conversation, history, customerName,
-        leadCore, extractionCtx, pricing: undefined, workflowResult,
-        confidenceResult: syntheticConfidence, prevSlotsEarly: rawSlots, parsedData, domain,
-        sessionUpdatedAt: session?.updated_at,
-      });
+      const originDn = String(rawSlots.origin ?? "?");
+      const destDn = String(rawSlots.destination ?? "?");
+      const msg = `Gracias por confirmar los datos de tu viaje 🚖\n\n📍 De: ${originDn}\n📍 A: ${destDn}\n\nEstamos verificando la tarifa y te la confirmamos en breve por este chat.`;
+      await sendWhatsAppMessage(phone, msg);
+      await insertMessage(conversation.id, "assistant", msg);
+      await setConversationalState(phone, "pending_human_review");
     }
     return;
   }

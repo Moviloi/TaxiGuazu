@@ -42,6 +42,10 @@ Cada instancia del pipeline tiene un estado:
 | `ROLLBACK` | Revertiendo cambios | → `COMPLETE` o `FAILED` |
 | `ABORTED` | Pipeline abortado | — |
 
+## Modos de fallo
+
+Cada fase tiene modos de fallo documentados en `ael/FAILURE.md`. Antes de iniciar cualquier fase, revisa los modos de fallo correspondientes como checklist de riesgos.
+
 ## Reglas de ejecución
 
 ### Secuencialidad
