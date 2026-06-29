@@ -240,7 +240,13 @@ export async function runExtractionPipeline(
         return null;
       }
     } else {
-      const completeness = evaluateCompleteness(raw!, domain);
+      // Si raw es null, usar roleLock del core + prevSlots como fallback
+      // para determinar qué campo falta preguntar
+      const effectiveSlots = raw ?? {
+        origin: coreDecisionEarly.roleLock.origin ?? prevSlotsEarly?.origin ?? null,
+        destination: coreDecisionEarly.roleLock.destination ?? prevSlotsEarly?.destination ?? null,
+      };
+      const completeness = evaluateCompleteness(effectiveSlots, domain);
       if (completeness.status === "ASK") {
         // FASE 22.1: bypass para afirmaciones y correcciones
         if (

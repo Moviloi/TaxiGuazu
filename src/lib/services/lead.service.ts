@@ -4,7 +4,7 @@ import { resetRequestState } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
 import type { Intent } from "@/lib/ai/types";
 import { mapIntentToDomain } from "@/lib/ai/domain";
-import { sendWhatsAppMessage } from "@/lib/sender";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 
@@ -20,7 +20,7 @@ import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/ev
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
-import { buildFieldSelector } from "@/lib/ai/slot-confirmation";
+import { buildFieldSelector, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
 import { detectLeadLang } from "@/lib/detect-lang";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
@@ -71,6 +71,20 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const memory = buildMemory(session, history);
     const leadCore = core(text, (memory.sessionMemory.lastIntent ?? undefined) as Intent | undefined);
 
+    // ── ZONE: GREETING SHORTCUT — bypass extraction y comprehension ──
+    if (leadCore.intent === "GREETING") {
+      log.info("[GREETING_SHORTCUT]", { text, confidence: leadCore.confidence });
+      await handlePolicyPipeline({
+        phone, text, conversation, history, customerName,
+        leadCore, extractionCtx: undefined, pricing: undefined,
+        workflowResult: undefined, confidenceResult: undefined,
+        prevSlotsEarly: {}, parsedData: undefined,
+        domain: mapIntentToDomain(leadCore.intent),
+        sessionUpdatedAt: session?.updated_at,
+      });
+      return;
+    }
+
     // ── ZONE: SLOT CONFIRMATION BUTTONS ──
     const SLOT_BUTTON_RE = /^(slot_confirm|slot_change|change_origin|change_destination|change_passengers|change_scheduled_at|change_back)$/;
     const slotButtonMatch = trimmed.match(SLOT_BUTTON_RE);
@@ -78,6 +92,107 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       await handleSlotConfirmationButton(phone, trimmed, conversation, history, customerName, leadCore, session);
       return;
     }
+
+    // ── ZONE: STRUCTURED TEXT IN SLOT_CONFIRMATION STATE ──
+    // If user is in slot_confirmation state but sends text instead of clicking buttons,
+    // handle affirmatives as confirm, negatives as change, or apply slot corrections.
+    const slotState = session?.conversational_state;
+    if (slotState === "slot_confirmation") {
+      log.info("[SLOT_TEXT_IN_CONFIRMATION]", { text, state: slotState });
+
+      const { isAffirmativeMessage, isNegativeMessage, isCorrectionMessage } = await import("@/lib/ai/patterns");
+
+      // 1) Affirmative → treat as slot_confirm
+      if (isAffirmativeMessage(trimmed)) {
+        log.info("[SLOT_TEXT] affirmative in slot_confirmation → slot_confirm");
+        await handleSlotConfirmationButton(phone, "slot_confirm", conversation, history, customerName, leadCore, session);
+        return;
+      }
+
+      // 2) Negative or correction → treat as slot_change (show field selector)
+      if (isNegativeMessage(trimmed) || isCorrectionMessage(trimmed)) {
+        log.info("[SLOT_TEXT] negative/correction in slot_confirmation → slot_change");
+        await handleSlotConfirmationButton(phone, "slot_change", conversation, history, customerName, leadCore, session);
+        return;
+      }
+
+      // 3) Detect slot corrections from core() roleLock or simple patterns
+      let rawSlots: Record<string, any> = {};
+      let rawConfidence: Record<string, number> = {};
+      try {
+        if (session?.slots) rawSlots = JSON.parse(session.slots);
+        if (session?.confidence) rawConfidence = JSON.parse(session.confidence);
+      } catch { /* ignore parse errors */ }
+
+      let updatedSlots = false;
+
+      // 3a) Core roleLock extraction (catches "estoy en X quiero ir a Y", "viajar desde X hasta Y", etc.)
+      if (leadCore.roleLock?.destination && leadCore.roleLock.destination !== (rawSlots.destination ?? '')) {
+        rawSlots.destination = leadCore.roleLock.destination;
+        rawConfidence.destination = 1.0;
+        updatedSlots = true;
+      }
+      if (leadCore.roleLock?.origin && leadCore.roleLock.origin !== (rawSlots.origin ?? '')) {
+        rawSlots.origin = leadCore.roleLock.origin;
+        rawConfidence.origin = 1.0;
+        updatedSlots = true;
+      }
+
+      // 3b) Simple regex patterns for corrections like "al centro", "desde el hotel"
+      if (!updatedSlots) {
+        const SIMPLE_DEST_RE = /^(?:a[sls]?\s+|para\s+|hasta\s+|hacia\s+)(.+)$/i;
+        const destMatch = trimmed.match(SIMPLE_DEST_RE);
+        if (destMatch && destMatch[1].trim() !== (rawSlots.destination ?? '')) {
+          rawSlots.destination = destMatch[1].trim();
+          rawConfidence.destination = 1.0;
+          updatedSlots = true;
+        }
+      }
+      if (!updatedSlots) {
+        const SIMPLE_ORIGIN_RE = /^(?:desde\s+|de[l]?\s+|saliendo\s+(?:de\s+)?)(.+)$/i;
+        const originMatch = trimmed.match(SIMPLE_ORIGIN_RE);
+        if (originMatch && originMatch[1].trim() !== (rawSlots.origin ?? '')) {
+          rawSlots.origin = originMatch[1].trim();
+          rawConfidence.origin = 1.0;
+          updatedSlots = true;
+        }
+      }
+
+      // 4) Fallback message (defined here for use below)
+      const fallbackMsg = "¿Querés confirmar o cambiar los datos? Usá los botones de abajo 👇";
+
+      if (updatedSlots) {
+        const { upsertChatSession } = await import("@/lib/db/database");
+        await upsertChatSession(phone, rawSlots, rawConfidence, "slot_confirmation", undefined);
+
+        // Re-build extraction context from updated slots for confirmation UI
+        const updatedExtractionCtx = buildExtractionContext(
+          { origin: rawSlots.origin, destination: rawSlots.destination } as any,
+          undefined,
+          { state: "slot_confirmation", overallConfidence: 1.0, clarifyField: null, action: "clarify", askForConfirmation: true } as any,
+          undefined,
+          { origin: rawSlots.origin ?? null, destination: rawSlots.destination ?? null },
+          { origin: "locked", destination: "locked" },
+          {},
+        );
+
+        if (!updatedExtractionCtx) {
+          await sendWhatsAppMessage(phone, fallbackMsg);
+          await insertMessage(conversation.id, "assistant", fallbackMsg);
+          return;
+        }
+        const confirm = buildSlotConfirmationMessage(updatedExtractionCtx, detectLeadLang(text));
+        await sendInteractiveButtons(phone, confirm.message!, confirm.buttons!);
+        await insertMessage(conversation.id, "assistant", confirm.message!);
+        return;
+      }
+
+      // Send fallback: remind user to use buttons
+      await sendWhatsAppMessage(phone, fallbackMsg);
+      await insertMessage(conversation.id, "assistant", fallbackMsg);
+      return;
+    }
+
     log.info("[CORE_RESULT]", {
       input: text,
       facts: leadCore.facts,
