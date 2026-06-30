@@ -1,4 +1,5 @@
 import type { RoleLock, SlotStabilityMap } from "./types";
+import { getKnownPlacesPrompt } from "@/lib/ai/iguazu-knowledge";
 
 // el prompt base se complementa con contexto dinámico sobre
 // lo que CORE ya detectó. Si CORE fijó role lock para origin/destination, el
@@ -17,6 +18,8 @@ export interface ExtractionContext {
 export function getExtractionPrompt(): string {
   return `
 Eres un extractor de datos de transporte turístico. Dado el mensaje del usuario, extraé SOLO los datos que puedas identificar con certeza.
+
+${getKnownPlacesPrompt()}
 
 Devuelve un objeto JSON con estos campos (todos opcionales — incluí solo los que el usuario haya mencionado explícitamente):
 {

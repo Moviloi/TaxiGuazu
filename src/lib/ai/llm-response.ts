@@ -3,6 +3,7 @@ import { getEnv } from "@/config/env";
 import { GROQ_MODEL, GROQ_TIMEOUT_MS, GROQ_RESPONSE_MAX_TOKENS, GROQ_RESPONSE_TEMPERATURE } from "@/config/constants";
 import type { PolicyOutput, HandlerContext } from "./types";
 import { log } from "@/lib/utils/logger";
+import { IGUAZU_KNOWLEDGE } from "@/lib/ai/iguazu-knowledge";
 
 function getGroq(): Groq | null {
   try {
@@ -34,7 +35,22 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
   ];
   if (ctx?.customerName) lines.push(`- Nombre del pasajero: ${ctx.customerName}`);
 
+  const isInformational = policy.policyHint?.includes("(info)") || policy.policyHint?.includes("INFORMATION");
   const isGreeting = policy.policyHint?.includes("GREETING");
+
+  // If informational, inject Iguazú knowledge so the bot can answer questions about prices, hours, migration
+  if (isInformational) {
+    const knownNames = IGUAZU_KNOWLEDGE.knownPlaces.map(p => p.name).join(", ");
+    lines.push(
+      ``,
+      `CONOCIMIENTO DE REFERENCIA (usalo si el usuario pregunta sobre estos temas):`,
+      `- Lugares conocidos: ${knownNames}`,
+      `- Migración AR→BR: DNI físico obligatorio (no digital). Pre-Cadastro QR recomendado. Franquicia USD 300/adulto, USD 150/menor.`,
+      `- Transporte: Aeropuerto IGR a 15 km del centro (20-25 min). Taxi y remís tienen tarifas preestablecidas. Uber no recomendado.`,
+      `- Cataratas lado AR: $45.000 ARS turista general, 8:00-18:00. Lado BR: R$ 134,00, 09:00-16:00.`,
+      `- NO inventes precios ni horarios — usá SOLO esta referencia o decí que consulten en el sitio oficial.`,
+    );
+  }
 
   lines.push(
     ``,

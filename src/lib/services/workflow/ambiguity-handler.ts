@@ -14,7 +14,6 @@ import { getConversationalState, setConversationalState } from "@/lib/db/state-a
 import { searchPlaces } from "@/lib/db/domains/geo";
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
 import { getChatSession, updateChatSessionSlots } from "@/lib/db/database";
-import { buildPlaceOptions } from "@/lib/ai/slot-confirmation";
 import { interpretAmbiguity } from "@/lib/ai/ambiguity-interpreter";
 import { detectLeadLang } from "@/lib/detect-lang";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
@@ -33,6 +32,48 @@ export interface AmbiguityState {
   resolvedDest: string | null;
   originOptions: AmbiguityOption[];
   destOptions: AmbiguityOption[];
+  /** Raw user term for the origin slot (e.g., "iguazu", "aeropuerto") — needed for risk node detection in response handler */
+  originRawTerm?: string;
+  /** Raw user term for the destination slot */
+  destRawTerm?: string;
+}
+
+/** 
+ * Nodos de riesgo hardcodeados — solo ESTOS 3 casos muestran alternativas.
+ * Todo lo demás → pregunta contextual SIN listar opciones.
+ * 
+ * UX: Pregunta natural en WhatsApp, sin números ni botones.
+ *     "Entendí que salís del aeropuerto. ¿Aeropuerto IGR (Argentina), IGU (Brasil) o AGT (Paraguay)?"
+ */
+const RISK_NODES: Record<string, AmbiguityOption[]> = {
+  aeropuerto: [
+    { display: "Aeropuerto IGR (Argentina)", canonical: "Aeropuerto IGR" },
+    { display: "Aeropuerto IGU (Brasil)", canonical: "Aeropuerto IGU" },
+    { display: "Aeropuerto AGT (Paraguay)", canonical: "Aeropuerto AGT" },
+  ],
+  centro: [
+    { display: "Centro de Puerto Iguazú (Argentina)", canonical: "Centro de Puerto Iguazú" },
+    { display: "Centro de Foz do Iguaçu (Brasil)", canonical: "Centro de Foz do Iguaçu" },
+    { display: "Microcentro de Ciudad del Este (Paraguay)", canonical: "Microcentro de Ciudad del Este" },
+  ],
+  aduana: [
+    { display: "Aduana lado Argentino (Tancredo Neves)", canonical: "Aduana Tancredo Neves" },
+    { display: "Aduana lado Brasileño", canonical: "Aduana de Foz (lado BR)" },
+  ],
+};
+
+/** Detecta si el término del usuario coincide con un risk node (match fuzzy en español/portugués/inglés) */
+function detectRiskNode(rawTerm: string): string | null {
+  const term = rawTerm.toLowerCase().trim();
+  // español
+  if (term.includes("aeropuerto") || term === "airport") return "aeropuerto";
+  if (term.includes("centro") || term === "centro" || term === "downtown" || term === "centro comercial") return "centro";
+  if (term.includes("aduana") || term.includes("frontera") || term === "customs" || term === "border") return "aduana";
+  // portugués
+  if (term.includes("aeroporto")) return "aeroporto";
+  if (term === "centro" || term.includes("centro de")) return "centro";
+  if (term.includes("alfândega") || term.includes("fronteira")) return "aduana";
+  return null;
 }
 
 function toOptions(candidates: PlaceCandidate[]): AmbiguityOption[] {
@@ -40,10 +81,6 @@ function toOptions(candidates: PlaceCandidate[]): AmbiguityOption[] {
     display: c.display_name || c.canonical_name,
     canonical: c.canonical_name,
   }));
-}
-
-function getDisplayNames(options: AmbiguityOption[]): string[] {
-  return options.map(o => o.display);
 }
 
 export async function startAmbiguityResolution(
@@ -126,14 +163,30 @@ export async function startAmbiguityResolution(
     return true;
   }
 
-  // Build ambiguity state with display names
+  // Build ambiguity state with display names + raw terms for risk node detection
   const ambiguityMeta: AmbiguityState = {
     resolvedOrigin: llmResolvedOrigin,
     resolvedDest: llmResolvedDest,
     originOptions: toOptions(originCandidates),
     destOptions: toOptions(destCandidates),
+    originRawTerm: rawOrigin ?? undefined,
+    destRawTerm: rawDest ?? undefined,
   };
-  await persistAmbiguityState(phone, ambiguityMeta);
+
+  // ── FIX CONTEXT LOSS: Persist non-ambiguous resolved slots BEFORE entering ambiguity_pending
+  // So that subsequent messages can reference them (e.g., user says "desde el hotel Amerian" 
+  // and we still have destination "cataratas" from the first message)
+  const resolvedSlots: Record<string, any> = {};
+  if (llmResolvedOrigin && !originAmbiguous) {
+    resolvedSlots.origin = { value: llmResolvedOrigin, score: 1.0, reason: "core_extracted", source: "CORE", status: "CONFIRMED" };
+  }
+  if (llmResolvedDest && !destAmbiguous) {
+    resolvedSlots.destination = { value: llmResolvedDest, score: 1.0, reason: "core_extracted", source: "CORE", status: "CONFIRMED" };
+  }
+  // Merge with existing slots + ambiguity metadata
+  const currentSlots = session?.slots ? safeParseSlots(session.slots) : {};
+  const mergedSlots = { ...currentSlots, ...resolvedSlots, __ambiguity: ambiguityMeta };
+  await updateChatSessionSlots(phone, mergedSlots);
 
   // Ask for the first unresolved ambiguous slot
   const firstSlot = (!llmResolvedOrigin && originAmbiguous) ? "origin" : "destination";
@@ -148,7 +201,6 @@ export async function startAmbiguityResolution(
   const entityCount = isOrigin ? originCandidates.length : destCandidates.length;
 
   const msg = buildContextualPlaceOptions(
-    options,
     firstSlot,
     lang,
     slotHigh,
@@ -185,30 +237,100 @@ export async function handleAmbiguityResponse(
   if (!ambState) return false;
 
   const clarifyField = freshSession?.clarify_field ?? "origin";
+  const rawTerm = clarifyField === "origin" ? (ambState.originRawTerm ?? "") : (ambState.destRawTerm ?? "");
+  const isRiskNode = rawTerm ? detectRiskNode(rawTerm) !== null : false;
 
   // Determine which options to use based on clarifyField
   const options = clarifyField === "origin" ? ambState.originOptions : ambState.destOptions;
   if (options.length === 0) return false;
 
+  const lang = detectLeadLang(text);
+
   // Parse user selection — returns canonical name
   const selected = parseSelection(text, options);
   if (!selected) {
-    // User didn't pick a valid option — show again
-    const lang = detectLeadLang(text);
-    const msg = buildPlaceOptions(getDisplayNames(options), clarifyField, lang);
-    await sendAndPersist(phone, conversationId, msg);
-    return true;
-  }
+    if (isRiskNode) {
+      // Risk node: user typed something we don't recognize
+      // Ask again with the risk node question (no numbers, just natural language)
+      const msg = buildContextualPlaceOptions(
+        clarifyField, lang, true, rawTerm, options.length,
+      );
+      await sendAndPersist(phone, conversationId, msg);
+      return true;
+    }
 
-  const lang = detectLeadLang(text);
+    // Non-risk node: user typed a free-form location — do a fresh search
+    const searchText = extractLocationFromText(text);
+    const newCandidates = await searchPlaces(searchText, 5);
+    if (newCandidates.length === 1) {
+      // Perfect match — resolve directly and persist to session slots
+      const newCanonical = newCandidates[0].canonical_name;
+      log.info("[AMBIGUITY_RESOLVED_FROM_TEXT]", { field: clarifyField, value: newCanonical });
+      if (clarifyField === "origin") {
+        ambState.resolvedOrigin = newCanonical;
+      } else {
+        ambState.resolvedDest = newCanonical;
+      }
+      // Persist resolved slot to chat_sessions.slots (context preservation)
+      const slotUpdate: Record<string, any> = {};
+      const resolvedKey = clarifyField === "origin" ? "origin" : "destination";
+      slotUpdate[resolvedKey] = { value: newCanonical, score: 1.0, reason: "user_typed", source: "USER_CONFIRMED", status: "CONFIRMED" };
+      const currentSlots = freshSession?.slots ? safeParseSlots(freshSession.slots) : {};
+      const merged = { ...currentSlots, ...slotUpdate, __ambiguity: ambState };
+      await updateChatSessionSlots(phone, merged);
+    } else if (newCandidates.length > 1) {
+      // Still ambiguous — check if the new term is now a risk node
+      const newRiskKey = detectRiskNode(text);
+      if (newRiskKey && RISK_NODES[newRiskKey]) {
+        // Now it's a risk node — show risk alternatives
+        const riskOptions = RISK_NODES[newRiskKey];
+        const msg = buildContextualPlaceOptions(
+          clarifyField, lang, true, text, riskOptions.length,
+        );
+        // Update the stored options to the risk node options
+        if (clarifyField === "origin") {
+          ambState.originOptions = riskOptions;
+          ambState.originRawTerm = text;
+        } else {
+          ambState.destOptions = riskOptions;
+          ambState.destRawTerm = text;
+        }
+        await persistAmbiguityState(phone, ambState);
+        await sendAndPersist(phone, conversationId, msg);
+        return true;
+      }
+      // Still not a risk node — ask to be more specific
+      if (lang === "en") {
+        await sendAndPersist(phone, conversationId, `I still can't find the exact place. Can you tell me the specific name?`);
+      } else if (lang === "pt") {
+        await sendAndPersist(phone, conversationId, `Ainda não encontrei o lugar exato. Pode me dizer o nome específico?`);
+      } else {
+        await sendAndPersist(phone, conversationId, `Todavía no encuentro el lugar exacto. ¿Podés decirme el nombre específico?`);
+      }
+      return true;
+    } else {
+      // 0 matches — ask to be more specific
+      if (lang === "en") {
+        await sendAndPersist(phone, conversationId, `I couldn't find that place. Can you write the exact name?`);
+      } else if (lang === "pt") {
+        await sendAndPersist(phone, conversationId, `Não encontrei esse lugar. Pode escrever o nome exato?`);
+      } else {
+        await sendAndPersist(phone, conversationId, `No encontré ese lugar. ¿Podés escribir el nombre exacto?`);
+      }
+      return true;
+    }
 
-  // Update resolved slot (store canonical name)
-  if (clarifyField === "origin") {
-    ambState.resolvedOrigin = selected;
-    log.info("[AMBIGUITY_RESOLVED]", { field: "origin", value: selected });
+    // If we reach here, we resolved from text
+    await persistAmbiguityState(phone, ambState);
   } else {
-    ambState.resolvedDest = selected;
-    log.info("[AMBIGUITY_RESOLVED]", { field: "destination", value: selected });
+    // User selected a known option — resolve
+    log.info("[AMBIGUITY_RESOLVED]", { field: clarifyField, value: selected });
+    if (clarifyField === "origin") {
+      ambState.resolvedOrigin = selected;
+    } else {
+      ambState.resolvedDest = selected;
+    }
+    await persistAmbiguityState(phone, ambState);
   }
 
   // Check if both are resolved now
@@ -221,14 +343,28 @@ export async function handleAmbiguityResponse(
   // One more slot to resolve — ask for it
   const nextSlot = !ambState.resolvedOrigin ? "origin" : "destination";
   const nextOptions = nextSlot === "origin" ? ambState.originOptions : ambState.destOptions;
+  const nextRawTerm = nextSlot === "origin" ? (ambState.originRawTerm ?? "") : (ambState.destRawTerm ?? "");
+  const nextIsRiskNode = nextRawTerm ? detectRiskNode(nextRawTerm) !== null : false;
+  const nextRiskKey = nextIsRiskNode ? detectRiskNode(nextRawTerm) : null;
 
-  await persistAmbiguityState(phone, ambState);
   await setConversationalState(phone, "ambiguity_pending", nextSlot);
 
-  const msg = buildPlaceOptions(getDisplayNames(nextOptions), nextSlot, lang);
+  // For the next slot, use contextual message (risk node with alternatives or generic without)
+  const msg = buildContextualPlaceOptions(
+    nextSlot,
+    lang,
+    true,
+    nextRawTerm,
+    nextOptions.length,
+  );
   await sendAndPersist(phone, conversationId, msg);
 
-  log.info("[AMBIGUITY_NEXT]", { slot: nextSlot, optionsCount: nextOptions.length });
+  log.info("[AMBIGUITY_NEXT]", {
+    slot: nextSlot,
+    optionsCount: nextOptions.length,
+    isRiskNode: nextIsRiskNode,
+    riskKey: nextRiskKey,
+  });
   return true;
 }
 
@@ -275,37 +411,69 @@ async function finalizeAmbiguity(
   });
 }
 
-// ── Mensaje contextual basado en la matriz de confianza ──
+// ── Mensaje contextual: Risk Nodes con alternativas SIN números, no-risk nodes sin opciones ──
 
 function buildContextualPlaceOptions(
-  options: AmbiguityOption[],
   slotKey: string,
   lang: string,
   slotConfidenceHigh: boolean,
   rawTerm: string,
   entityCount: number,
 ): string {
-  // Si sabemos con alta certeza qué slot es pero hay múltiples entidades,
-  // hacemos una pregunta contextual que demuestre comprensión.
-  if (slotConfidenceHigh && entityCount > 1) {
-    const slotLabel = slotKey === "origin" ? "salís" : "vas";
-    const placeLabel = rawTerm.charAt(0).toUpperCase() + rawTerm.slice(1);
+  const slotLabel = slotKey === "origin" ? "salís" : "vas";
+  const placeLabel = rawTerm.charAt(0).toUpperCase() + rawTerm.slice(1);
 
-    if (lang === "en") {
-      return `I understand you're departing from "${placeLabel}". Which one?\n\n${options.map((o, i) => `${i + 1}. ${o.display}`).join("\n")}\n\n${options.length + 1}. Other`;
+  // Detectar si es un nodo de riesgo → mostrar alternativas en lenguaje natural (SIN números)
+  const riskKey = detectRiskNode(rawTerm);
+  if (riskKey) {
+    const riskOptions = RISK_NODES[riskKey];
+    if (riskOptions) {
+      const alternatives = riskOptions.map(o => o.display).join(", ");
+      // Replace last ", " with " o " for natural language
+      const lastComma = alternatives.lastIndexOf(", ");
+      const naturalAlternatives = lastComma >= 0
+        ? alternatives.substring(0, lastComma) + " o " + alternatives.substring(lastComma + 2)
+        : alternatives;
+
+      if (lang === "en") {
+        if (slotKey === "origin") {
+          return `I understand you're departing from ${placeLabel.toLowerCase()}. Do you mean ${naturalAlternatives}?`;
+        }
+        return `I understand you're going to ${placeLabel.toLowerCase()}. Do you mean ${naturalAlternatives}?`;
+      }
+      if (lang === "pt") {
+        if (slotKey === "origin") {
+          return `Entendi que você está saindo de ${placeLabel.toLowerCase()}. Você quer dizer ${naturalAlternatives}?`;
+        }
+        return `Entendi que você está indo para ${placeLabel.toLowerCase()}. Você quer dizer ${naturalAlternatives}?`;
+      }
+      // Spanish (default)
+      if (slotKey === "origin") {
+        return `Entendí que salís de ${placeLabel.toLowerCase()}. ¿Decís ${naturalAlternatives}?`;
+      }
+      return `Entendí que vas a ${placeLabel.toLowerCase()}. ¿Decís ${naturalAlternatives}?`;
     }
-    if (lang === "pt") {
-      return `Entendi que você está saindo de "${placeLabel}". Qual exatamente?\n\n${options.map((o, i) => `${i + 1}. ${o.display}`).join("\n")}\n\n${options.length + 1}. Outro`;
-    }
-    return `Entendí que ${slotLabel} de "${placeLabel}". ¿De cuál exactamente?\n\n${options.map((o, i) => `${i + 1}. ${o.display}`).join("\n")}\n\n${options.length + 1}. Otro`;
   }
 
-  // Fallback genérico
-  return buildPlaceOptions(
-    options.map(o => o.display),
-    slotKey,
-    lang as any,
-  );
+  // No es nodo de riesgo → pregunta contextual SIN listar opciones
+  if (slotConfidenceHigh && entityCount > 1) {
+    if (lang === "en") {
+      return `I understand you're ${slotLabel === "salís" ? "departing from" : "going to"} "${placeLabel}". What exact place do you mean?`;
+    }
+    if (lang === "pt") {
+      return `Entendi que você está ${slotLabel === "salís" ? "saindo de" : "indo para"} "${placeLabel}". Qual lugar exato você quer dizer?`;
+    }
+    return `Entendí que ${slotLabel} de "${placeLabel}". ¿A qué lugar exacto te referís?`;
+  }
+
+  // Fallback genérico (baja confianza o pocas entidades)
+  if (lang === "en") {
+    return `I see you mentioned "${placeLabel}". Can you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
+  }
+  if (lang === "pt") {
+    return `Vi que você mencionou "${placeLabel}". Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
+  }
+  return `Entendí que mencionaste "${placeLabel}". ¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -322,23 +490,37 @@ function extractRawValue(slotsJson: string, key: string): string | null {
 function parseSelection(text: string, options: AmbiguityOption[]): string | null {
   const trimmed = text.trim();
 
-  // 1) Try number selection: "1", "2", etc.
+  // 1) "otro" / "other" → null (user wants to type a different place)
+  if (/^(otro|other|otra|outro|outra)$/i.test(trimmed)) {
+    return null;
+  }
+
+  // 2) Try partial match on display or canonical text (PRIORITY — no numbered options shown)
+  const lower = trimmed.toLowerCase();
+  const match = options.find(o =>
+    o.display.toLowerCase().includes(lower) ||
+    o.canonical.toLowerCase().includes(lower),
+  );
+  if (match) return match.canonical;
+
+  // 3) Try number selection (backward compat for sessions started before this change)
   const num = parseInt(trimmed, 10);
   if (!isNaN(num) && num >= 1 && num <= options.length) {
     return options[num - 1].canonical;
   }
-
-  // 2) "otro" / "other" / last option number → null (user will type manually)
-  if (/^(otro|other|otra)$/i.test(trimmed) || num === options.length + 1) {
+  if (!isNaN(num) && num === options.length + 1) {
     return null;
   }
 
-  // 3) Try partial match on display text
-  const lower = trimmed.toLowerCase();
-  const match = options.find(o => o.display.toLowerCase().includes(lower) || o.canonical.toLowerCase().includes(lower));
-  if (match) return match.canonical;
-
   return null;
+}
+
+/** Extrae el nombre de lugar del texto del usuario, removiendo prefijos comunes como "desde", "del", "dsde" */
+function extractLocationFromText(text: string): string {
+  return text
+    .replace(/^(?:desde\s+|de[l]?\s+|saliendo\s+(?:de\s+)?|del\s+|en\s+el\s+|en\s+|no\s+el\s+|dsde\s+|dde\s+|dede\s+|para\s+el\s+|para\s+|pa\s+ra\s+el\s+|pa\s+ra\s+|pa\s+)/i, '')
+    .replace(/^(?:a[sls]?\s+|hasta\s+|hacia\s+)/i, '')
+    .trim();
 }
 
 function getAmbiguityStateFromSlots(slotsJson: string): AmbiguityState | null {

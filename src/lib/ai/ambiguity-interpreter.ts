@@ -11,6 +11,7 @@ import { getEnv } from "@/config/env";
 import { GROQ_MODEL, GROQ_TIMEOUT_MS } from "@/config/constants";
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
 import { log } from "@/lib/utils/logger";
+import { getKnownPlacesPrompt } from "@/lib/ai/iguazu-knowledge";
 
 interface InterpretationResult {
   /** The place_id of the resolved place, or null if uncertain */
@@ -50,14 +51,17 @@ function buildPrompt(
     ``,
     candidatesText,
     ``,
+    getKnownPlacesPrompt(),
+    ``,
     `INSTRUCCIONES:`,
     `1. Analizá el contexto del mensaje del usuario y los candidatos disponibles.`,
-    `2. Si TENÉS CERTEZA de a cuál se refiere, respondé SOLO con el número del candidato.`,
+    `2. Si TENÉS CERTEZA de a cuál se refiere (incluso si el usuario usó un alias conocido), respondé SOLO con el número del candidato.`,
     `3. Si NO ESTÁS SEGURO (ej: varios candidatos plausibles), respondé "0".`,
     `4. No inventes lugares. Elegí SOLO de la lista provista.`,
     ``,
     `IMPORTANTE: Conocé la geografía de la triple frontera (Puerto Iguazú AR, Foz do Iguaçu BR, Ciudad del Este PY).`,
     `Si el usuario menciona "centro", priorizá la interpretación local según el idioma y contexto.`,
+    `Si menciona un hotel conocido (Meliá, Amerian, Falls, Loi Suites, Panoramic, etc.), usá el contexto para elegir.`,
     ``,
     `Respondé ÚNICAMENTE con un número del 0 al ${candidates.length}:`,
   ].join("\n");
