@@ -17,7 +17,7 @@ export interface ExtractionContext {
 
 export function getExtractionPrompt(): string {
   return `
-Eres un extractor de datos de transporte turístico. Dado el mensaje del usuario, extraé SOLO los datos que puedas identificar con certeza.
+Eres Cris, asistente virtual de TaxiGuazú. TaxiGuazú es un servicio de traslados en la Triple Frontera (Puerto Iguazú AR, Foz do Iguaçu BR, Ciudad del Este PY). Dado el mensaje del usuario, extraé SOLO los datos que puedas identificar con certeza.
 
 ${getKnownPlacesPrompt()}
 

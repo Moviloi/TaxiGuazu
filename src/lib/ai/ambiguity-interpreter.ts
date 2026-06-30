@@ -36,6 +36,7 @@ function buildPrompt(
   userText: string,
   candidates: PlaceCandidate[],
   slotName: string,
+  resolvedOtherSlot?: string,
 ): string {
   const candidatesText = candidates
     .map(
@@ -44,12 +45,17 @@ function buildPrompt(
     )
     .join("\n");
 
+  const contextLine = resolvedOtherSlot
+    ? `\nCONTEXTO ADICIONAL: El otro slot (${slotName === "origin" ? "destino" : "origen"}) ya se resolvió como "${resolvedOtherSlot}". Usá esto para inferir el país/región.`
+    : "";
+
   return [
     `Sos un asistente de TaxiGuazú. El usuario escribió: "${userText}"`,
     ``,
     `Se detectó que "${slotName}" es ambiguo. Estos son los lugares en la base de datos que coinciden:`,
     ``,
     candidatesText,
+    contextLine,
     ``,
     getKnownPlacesPrompt(),
     ``,
@@ -71,6 +77,7 @@ export async function interpretAmbiguity(
   userText: string,
   candidates: PlaceCandidate[],
   slotName: "origin" | "destination",
+  resolvedOtherSlot?: string,
 ): Promise<InterpretationResult> {
   if (candidates.length === 0) {
     return { selectedId: null, confidence: "low" };
@@ -86,7 +93,7 @@ export async function interpretAmbiguity(
     return { selectedId: null, confidence: "low" };
   }
 
-  const prompt = buildPrompt(userText, candidates, slotName);
+  const prompt = buildPrompt(userText, candidates, slotName, resolvedOtherSlot);
 
   try {
     const completion = await groq.chat.completions.create(

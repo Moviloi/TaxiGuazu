@@ -148,15 +148,37 @@ export async function startAmbiguityResolution(
         ? destCandidates[0].canonical_name
         : null;
 
+  // ── CONTEXT-AWARE RETRY: if one slot resolved but the other didn't, re-attempt with context ──
+  // This mimics how Cristian resolves "centro" based on "aeropuerto IGR" context without asking
+  let finalResolvedOrigin = llmResolvedOrigin;
+  let finalResolvedDest = llmResolvedDest;
+
+  if (llmResolvedOrigin && !llmResolvedDest && destAmbiguous) {
+    // Origin resolved (e.g., Aeropuerto IGR), destination ambiguous (e.g., "centro")
+    // Retry destination with origin as context
+    const retryDest = await interpretAmbiguity(text, destCandidates, "destination", llmResolvedOrigin);
+    if (retryDest.confidence === "high" && retryDest.selectedId) {
+      finalResolvedDest = destCandidates.find(c => c.place_id === retryDest.selectedId)?.canonical_name ?? null;
+      log.info("[AMBIGUITY_RETRY_WITH_CONTEXT]", { slot: "destination", resolved: finalResolvedDest, context: llmResolvedOrigin });
+    }
+  } else if (llmResolvedDest && !llmResolvedOrigin && originAmbiguous) {
+    // Destination resolved, origin ambiguous
+    const retryOrigin = await interpretAmbiguity(text, originCandidates, "origin", llmResolvedDest);
+    if (retryOrigin.confidence === "high" && retryOrigin.selectedId) {
+      finalResolvedOrigin = originCandidates.find(c => c.place_id === retryOrigin.selectedId)?.canonical_name ?? null;
+      log.info("[AMBIGUITY_RETRY_WITH_CONTEXT]", { slot: "origin", resolved: finalResolvedOrigin, context: llmResolvedDest });
+    }
+  }
+
   // If both resolved → finalize directly
-  if (llmResolvedOrigin && llmResolvedDest) {
+  if (finalResolvedOrigin && finalResolvedDest) {
     log.info("[AMBIGUITY_LLM_AUTO]", {
-      origin: llmResolvedOrigin,
-      destination: llmResolvedDest,
+      origin: finalResolvedOrigin,
+      destination: finalResolvedDest,
     });
     await finalizeAmbiguity(phone, conversationId, {
-      resolvedOrigin: llmResolvedOrigin,
-      resolvedDest: llmResolvedDest,
+      resolvedOrigin: finalResolvedOrigin,
+      resolvedDest: finalResolvedDest,
       originOptions: toOptions(originCandidates),
       destOptions: toOptions(destCandidates),
     }, null, text);
@@ -165,8 +187,8 @@ export async function startAmbiguityResolution(
 
   // Build ambiguity state with display names + raw terms for risk node detection
   const ambiguityMeta: AmbiguityState = {
-    resolvedOrigin: llmResolvedOrigin,
-    resolvedDest: llmResolvedDest,
+    resolvedOrigin: finalResolvedOrigin,
+    resolvedDest: finalResolvedDest,
     originOptions: toOptions(originCandidates),
     destOptions: toOptions(destCandidates),
     originRawTerm: rawOrigin ?? undefined,
@@ -199,12 +221,14 @@ export async function startAmbiguityResolution(
   const isOrigin = firstSlot === "origin";
   const slotHigh = isOrigin ? originSlotHigh : destSlotHigh;
   const entityCount = isOrigin ? originCandidates.length : destCandidates.length;
+  // FIX: use the correct rawTerm for the slot being asked (not rawOrigin ?? rawDest)
+  const rawTerm = isOrigin ? rawOrigin ?? "" : rawDest ?? "";
 
   const msg = buildContextualPlaceOptions(
     firstSlot,
     lang,
     slotHigh,
-    rawOrigin ?? rawDest ?? "",
+    rawTerm,
     entityCount,
   );
   await sendAndPersist(phone, conversationId, msg);
