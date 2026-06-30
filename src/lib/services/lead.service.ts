@@ -405,8 +405,8 @@ export async function handleSlotConfirmationButton(
     const { evaluateWorkflowTransition } = await import("@/lib/services/workflow/slot-workflow");
 
     const syntheticSlots: ExtractionResult["slots"] = {};
-    if (rawSlots.origin != null) syntheticSlots.origin = { value: String(rawSlots.origin), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
-    if (rawSlots.destination != null) syntheticSlots.destination = { value: String(rawSlots.destination), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
+    if (rawSlots.origin != null) syntheticSlots.origin = { value: rawSlots.origin?.value ?? rawSlots.origin, score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
+    if (rawSlots.destination != null) syntheticSlots.destination = { value: rawSlots.destination?.value ?? rawSlots.destination, score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
     if (rawSlots.passengers != null) syntheticSlots.passengers = { value: String(rawSlots.passengers), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
     if (rawSlots.scheduled_at != null) syntheticSlots.scheduled_at = { value: String(rawSlots.scheduled_at), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
 

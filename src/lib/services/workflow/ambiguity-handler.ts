@@ -406,8 +406,8 @@ async function finalizeAmbiguity(
 ): Promise<void> {
   // Write resolved values into chat_sessions.slots
   const currentSlots = freshSession?.slots ? safeParseSlots(freshSession.slots) : {};
-  const originPlace = ambState.resolvedOrigin ? await findPlaceByName(ambState.resolvedOrigin) : null;
-  const destPlace = ambState.resolvedDest ? await findPlaceByName(ambState.resolvedDest) : null;
+  const originPlace = ambState.resolvedOrigin ? await findPlaceByName(ambState.resolvedOrigin.toLowerCase()) : null;
+  const destPlace = ambState.resolvedDest ? await findPlaceByName(ambState.resolvedDest.toLowerCase()) : null;
   const originDisplay = originPlace?.display_name ?? ambState.resolvedOrigin;
   const destDisplay = destPlace?.display_name ?? ambState.resolvedDest;
   const updatedSlots = {
