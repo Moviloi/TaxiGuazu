@@ -95,27 +95,3 @@ export function buildPlaceOptions(
   return [header, ...options, `${canonicalNames.length + 1}. Otro lugar`].join("\n");
 }
 
-export function applyConfirmation(
-  slots: Record<string, { value: unknown; score: number; reason: string; source?: string; status?: string }>,
-): Record<string, { value: unknown; score: number; reason: string; source?: string; status?: string }> {
-  const result = { ...slots };
-  for (const [k, v] of Object.entries(result)) {
-    if (v?.status === "CONFIRMATION_PENDING" || v?.status === "INFERRED") {
-      result[k] = {
-        ...v,
-        score: 1.0,
-        reason: "user_confirmed",
-        source: "USER_CONFIRMED",
-        status: "CONFIRMED",
-      };
-    }
-  }
-  log.info("[USER_SLOT_CONFIRM]", {
-    action: "confirm",
-    confirmedSlots: Object.entries(slots)
-      .filter(([, v]) => (v as any)?.status === "CONFIRMATION_PENDING" || (v as any)?.status === "INFERRED")
-      .map(([k]) => k),
-    correctedSlots: [],
-  });
-  return result;
-}

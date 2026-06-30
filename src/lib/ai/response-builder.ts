@@ -8,7 +8,7 @@
 //   3. Fleet — capacidad, tarifa faltante
 //   4. Error — fallback, escalación, error global
 
-import type { FinalDecision, Lang, OpportunityResult, ExtractionContext } from "./types";
+import type { CoreDecision, Lang, OpportunityResult, ExtractionContext } from "./types";
 import { buildSlotConfirmationMessage, type SlotConfirmationUI } from "./slot-confirmation";
 
 // ─── 1. CONVERSACIONAL ───────────────────────────────────────────────────────
@@ -20,8 +20,8 @@ export function buildGreeting(lang: Lang, customerName?: string): string {
 
 // ─── 2. OPERACIONAL ──────────────────────────────────────────────────────────
 
-export function inferMissingFieldFromCore(decision: FinalDecision): string | null {
-  const facts = decision.core.facts;
+export function inferMissingFieldFromCore(decision: CoreDecision): string | null {
+  const facts = decision.facts;
   if (!facts.some((f) => f.startsWith("origin:"))) return "origin";
   if (!facts.some((f) => f.startsWith("destination:"))) return "destination";
   if (facts.includes("location_ambiguous:true")) return "location_ambiguous";

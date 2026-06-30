@@ -1,5 +1,5 @@
 import { updateChatSessionComprehension, insertF4Log, setChatSessionEscalationReason } from "@/lib/db/database";
-import { buildEscalationMessage } from "@/lib/ai/response-builder";
+import { buildEscalationMessage, buildGenericClarify, inferMissingFieldFromCore } from "@/lib/ai/response-builder";
 import { enrichComprehensionSignals } from "@/lib/services/memory/predictive-routing";
 import { logEscalation } from "@/lib/services/learning/event-tracking";
 import { recordComprehensionOutcome, getComprehensionThresholdAdjustment } from "@/lib/services/learning/learning-utils";
@@ -11,6 +11,7 @@ import type { CoreDecision } from "@/lib/ai/types";
 import type { PredictedContext } from "@/lib/services/memory/predictive-routing";
 import type { ChatSessionRow } from "@/lib/db/types";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
+import { detectLeadLang } from "@/lib/detect-lang";
 
 export interface ComprehensionRunnerParams {
   phone: string;
@@ -85,7 +86,17 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
       phone: phone.slice(-4),
       textLen: text.length,
     });
-    const recoveryMsg = getRecoveryMessage(comprehensionState, session);
+    let recoveryMsg = await getRecoveryMessage(comprehensionState, session, leadCore.roleLock, text, leadCore.facts);
+
+    // Fallback: if getRecoveryMessage returned generic, try inferring from core facts
+    if (recoveryMsg === buildGenericClarify(null, detectLeadLang(text))) {
+      const missingField = inferMissingFieldFromCore(leadCore);
+      if (missingField) {
+        recoveryMsg = buildGenericClarify(missingField, detectLeadLang(text));
+        log.info("[COMPREHENSION] core facts inferred missing field", { field: missingField });
+      }
+    }
+
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_RECOVERY", text: recoveryMsg });
     await sendAndPersist(phone, conversationId, recoveryMsg);
     return true;

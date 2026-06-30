@@ -80,6 +80,36 @@ Si R2 se viola:
 
 ---
 
+## R4: AI-First Interpretation (ADR 005)
+
+**Regla:** No heuristic patches for context-sensitive interpretation.  
+Cuando el sistema necesita interpretar datos ambiguos (nombres de lugares, expresiones temporales, reglas de tarifa) debe usar el LLM con contexto completo, NO heurísticas hardcodeadas en queries.
+
+### Enforcement
+
+```bash
+# Verificar que geo.ts NO tiene CASE/WHEN en ORDER BY (heuristic ranking)
+grep -n "CASE.*WHEN" src/lib/db/domains/geo.ts | grep -i "order" && echo "VIOLATION: heuristic rank in geo.ts"
+
+# Verificar que no hay mapas de prioridad hardcodeados en geo.ts
+grep -n "CITY_PRIORITY\|TYPE_PRIORITY\|_PRIORITY" src/lib/db/domains/geo.ts && echo "VIOLATION: hardcoded priority map in geo.ts"
+```
+
+### Archivos monitoreados
+
+| Archivo | Contrato | Viola R4 |
+|---------|----------|----------|
+| `src/lib/db/domains/geo.ts` | No heuristic ORDER BY con CASE/WHEN, no priority maps | OK |
+| `src/lib/services/extraction/comprehension.ts` | getRecoveryMessage no debe hardcodear preguntas contextuales (debe usar LLM si hay ambigüedad) | OK |
+
+### Acción en violación
+
+Si R4 se viola:
+1. Pipeline entra en `REJECTED`
+2. Se escala a Director para decidir: reemplazar por AI-driven o crear ADR que justifique la heurística
+
+---
+
 ## R3: Code Existence Validation
 
 **Regla:** No asumir implementación que no exista en código fuente real.

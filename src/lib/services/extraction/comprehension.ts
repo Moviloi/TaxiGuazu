@@ -4,6 +4,8 @@ import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 import { buildGenericClarify } from "@/lib/ai/response-builder";
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
+import { detectLeadLang } from "@/lib/detect-lang";
+import { log } from "@/lib/utils/logger";
 
 export type ComprehensionState = "FULL_CONTROL" | "CLARIFICATION" | "RECOVERY" | "ESCALATION";
 
@@ -169,15 +171,91 @@ export function getComprehensionState(score: number, thresholdAdjustment = 0): C
   return "ESCALATION";
 }
 
-export function getRecoveryMessage(state: ComprehensionState, session: ChatSessionRow | null): string {
-  const lang = "es";
+export async function getRecoveryMessage(
+  state: ComprehensionState,
+  session: ChatSessionRow | null,
+  roleLock?: RoleLock,
+  text?: string,
+  facts?: string[],
+): Promise<string> {
+  const lang = text ? detectLeadLang(text) : "es";
+
+  // ADR 005: If there's ambiguity, try LLM for contextual recovery first
+  if (facts?.includes("location_ambiguous:true") && text) {
+    const llmMsg = await generateContextualRecovery(text, lang);
+    if (llmMsg) return llmMsg;
+  }
+
+  // ADR 005: If there's a location mention in text but no roleLock/slots,
+  // the user already provided info — acknowledge it
+  if (text && facts?.some(f => f.startsWith("origin:") || f.startsWith("destination:"))) {
+    const mentioned = facts.find(f => f.startsWith("origin:") || f.startsWith("destination:"))?.split(":")[1];
+    if (mentioned) {
+      // User mentioned a place but comprehension is still low — ask with context
+      if (lang === "en") return `I see you mentioned "${mentioned}". Where do you need to go?`;
+      if (lang === "pt") return `Vi que você mencionou "${mentioned}". Para onde precisa ir?`;
+      return `Entendí que mencionaste "${mentioned}". ¿A dónde necesitás ir?`;
+    }
+  }
+
   if (state === "CLARIFICATION") {
+    // 1) Check current extraction state (roleLock) first
+    if (roleLock) {
+      const hasOrigin = !!roleLock.origin;
+      const hasDest = !!roleLock.destination;
+      if (hasOrigin && !hasDest) return buildGenericClarify("destination", lang);
+      if (hasDest && !hasOrigin) return buildGenericClarify("origin", lang);
+    }
+
+    // 2) Fall back to persisted session slots
     if (session?.slots) {
       const slots = parseSessionSlots(session.slots);
       if (!slots.origin) return buildGenericClarify("origin", lang);
       if (!slots.destination) return buildGenericClarify("destination", lang);
     }
+
+    // 3) Generic fallback
     return buildGenericClarify(null, lang);
   }
+
   return buildGenericClarify(null, lang);
 }
+
+// ── AI-FIRST: contextual recovery via LLM (ADR 005) ──────────────────────
+
+async function generateContextualRecovery(userText: string, _lang: string): Promise<string | null> {
+  try {
+    const { getEnv } = await import("@/config/env");
+    const Groq = (await import("groq-sdk")).default;
+    const groq = new Groq({ apiKey: getEnv().GROQ_API_KEY });
+
+    const prompt = [
+      `Sos Cris, asistente de TaxiGuazú.`,
+      `El usuario escribió: "${userText}"`,
+      ``,
+      `El sistema no entendió completamente el mensaje y necesita pedir aclaración.`,
+      `Redactá UNA SOLA PREGUNTA breve que demuestre que entendiste algo de lo que dijo el usuario.`,
+      `No seas genérico — referenciá específicamente lo que mencionó.`,
+      ``,
+      `Ejemplo bueno: "Entendí que tu viaje es desde el centro. ¿De qué lugar exacto salís?"`,
+      `Ejemplo malo: "¿Desde dónde salís?" (demasiado genérico, ignora lo que dijo el usuario)`,
+      ``,
+      `Respondé EN EL MISMO IDIOMA que el usuario. Máximo 2 líneas.`,
+      `No inventes datos. No agregues opciones numeradas.`,
+    ].join("\n");
+
+    const completion = await groq.chat.completions.create({
+      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      messages: [{ role: "system", content: prompt }],
+      max_tokens: 80,
+      temperature: 0.3,
+    }, { timeout: 5000 });
+
+    return completion.choices[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    log.warn("[RECOVERY_LLM]", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
+

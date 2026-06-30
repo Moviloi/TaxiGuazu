@@ -48,6 +48,20 @@ Cada fase tiene modos de fallo documentados en `ael/FAILURE.md`. Antes de inicia
 
 ## Reglas de ejecución
 
+### Señal de identidad
+
+Cada mensaje del pipeline (Director, Explorer, Architect, Implementer, Auditor, Memory, Learning) debe comenzar con el identificador del rol activo entre corchetes:
+
+- `[ael]` — Director
+- `[ael-explore]` — Explorer
+- `[ael-architect]` — Architect
+- `[ael-implementer]` — Implementer
+- `[ael-audit]` — Auditor
+- `[ael-memory]` — Memory
+- `[ael-learning]` — Learning
+
+Esto aplica a todo output visible para el usuario durante la ejecución del pipeline. No aplica a artefactos internos (archivos .md en ael/artifacts/).
+
 ### Secuencialidad
 
 El pipeline es **estrictamente secuencial**. Ninguna fase puede iniciar hasta que la anterior complete con estado `COMPLETE` o transición válida.

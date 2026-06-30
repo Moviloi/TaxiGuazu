@@ -39,6 +39,10 @@ El output del Director es válido si y solo si:
 - **SÍ** define prioridades y orden de ejecución
 - **SÍ** resuelve conflictos entre roles cuando escalan
 
+## Señal de identidad
+
+Todo output visible del Director debe comenzar con `[ael]`.
+
 ## Artefacto
 
 ```

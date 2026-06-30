@@ -43,6 +43,12 @@ vi.mock("@/lib/services/admin/admin.service", () => ({
 
 vi.mock("@/lib/ai/response-builder", () => ({
   buildEscalationMessage: vi.fn().mockReturnValue("Te transfiero con un operador"),
+  buildGenericClarify: vi.fn().mockImplementation((field: string | null) => {
+    if (field === "origin") return "¿Desde dónde salís?";
+    if (field === "destination") return "¿A dónde necesitás ir?";
+    return "¿Podés contarme un poco más sobre el viaje que necesitás?";
+  }),
+  inferMissingFieldFromCore: vi.fn().mockReturnValue(null),
 }));
 
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";

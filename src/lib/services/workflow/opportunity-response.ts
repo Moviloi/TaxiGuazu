@@ -11,7 +11,7 @@ export async function handleOpportunityResponse(
   phone: string,
   text: string,
   conversationId: number,
-  _workflow: { state: string } | null,
+  _workflow: { state: string } | null, // kept for interface compatibility
 ): Promise<boolean> {
   const session = await getChatSession(phone);
   if (session?.trip_state !== "opportunity") return false;

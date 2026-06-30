@@ -34,6 +34,8 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
   ];
   if (ctx?.customerName) lines.push(`- Nombre del pasajero: ${ctx.customerName}`);
 
+  const isGreeting = policy.policyHint?.includes("GREETING");
+
   lines.push(
     ``,
     `REGLAS (obligatorias):`,
@@ -45,6 +47,7 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
     `6. Si no entendiste, admitilo y pedí reformular.`,
     `7. Si es confirmación con precio, mostrá resumen y pedí confirmación.`,
     `8. No uses viñetas ni formato de lista. Escribí en párrafo natural.`,
+    ...(isGreeting ? [`9. Es un SALUDO. Respondé en máximo 1-2 líneas. Sé muy breve y no preguntes nada adicional.`] : []),
     ``,
     `TEMPLATE DE REFERENCIA (mejoralo manteniendo los datos):`,
     policy.finalResponse,
@@ -89,8 +92,12 @@ export function validateLLMResponse(
   const dest = String(slots.destination?.value ?? "").toLowerCase();
 
   if (origin && dest && origin.length > 3 && dest.length > 3) {
-    const swapped = llmText.toLowerCase().includes(dest) && llmText.includes(origin);
-    if (!swapped) return { valid: false, reason: "origin_dest_mismatch" };
+    const llmLow = llmText.toLowerCase();
+    const matchesDest = llmLow.includes(dest);
+    const matchesOrigin = llmLow.includes(origin);
+    if (!matchesDest || !matchesOrigin) {
+      return { valid: false, reason: `origin_dest_mismatch: expected '${origin}' and '${dest}' in response` };
+    }
   }
 
   return { valid: true };

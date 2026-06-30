@@ -18,7 +18,7 @@
 //   (el rol está fijo pero el valor necesita refinamiento).
 
 import { AMBIGUOUS_LOCATION_RE } from "./patterns";
-import type { CoreDecision, Intent, RoleLock, SlotStabilityMap } from "./types";
+import type { CoreDecision, Intent, RoleLock, SlotStabilityMap, SlotAssignmentConfidence } from "./types";
 import { applyLaterals } from "./laterals";
 
 const URGENCY_RE = /\b(ahora|ya|inmediato|urgente|hoy|enseguida)\b/i;
@@ -58,9 +58,14 @@ const HASTA_RE = /(?:hasta|hacia)\s+(?:el\s+|la\s+|los\s+|las\s+|al\s+|del\s+)?(
 // v5.x: patrón "origen X y|, destino Y" / "origen: X destino: Y"
 const ORIGEN_DESTINO_RE = /origen\s*:?\s*([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)\s*(?:,|\by\b)?\s*destino\s*:?\s*([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:\bpor\b|\bpara\b|\bgracias\b|\by\b|$|[.,!?]))/i;
 
-function detectStructure(input: string): { roleLock: RoleLock; slotStability: SlotStabilityMap } {
+function detectStructure(input: string): {
+  roleLock: RoleLock;
+  slotStability: SlotStabilityMap;
+  slotAssignmentConfidence: SlotAssignmentConfidence;
+} {
   const roleLock: RoleLock = { origin: null, destination: null };
   const slotStability: SlotStabilityMap = { origin: "open", destination: "open" };
+  const slotAssignmentConfidence: SlotAssignmentConfidence = { origin: 0, destination: 0 };
 
   // Prioridad: "estoy en X" (más específico, marca ubicación actual) > "desde X" (marca partida).
   // En español rioplatense, "estoy en el aeropuerto quiero ir al centro" es lo más natural.
@@ -69,6 +74,7 @@ function detectStructure(input: string): { roleLock: RoleLock; slotStability: Sl
     const value = cleanExtractedValue(estoyEn[1]);
     roleLock.origin = value;
     slotStability.origin = isValueAmbiguous(value) ? "ambiguous" : "locked";
+    slotAssignmentConfidence.origin = 0.95; // "estoy en {X}" → certeza muy alta de que es origen
   }
 
   // "ir a Y" / "voy a Y" → destination
@@ -77,30 +83,30 @@ function detectStructure(input: string): { roleLock: RoleLock; slotStability: Sl
     const value = cleanExtractedValue(irA[1]);
     roleLock.destination = value;
     slotStability.destination = isValueAmbiguous(value) ? "ambiguous" : "locked";
+    slotAssignmentConfidence.destination = 0.90; // "ir a {Y}" → certeza alta de que es destino
   }
 
   // "hasta Y" / "hacia Y" → destination. Solo asigna si IR_A no lo hizo.
-  // Cubre: "viajar desde X hasta Y", "necesito ir desde X hacia Y"
   if (!roleLock.destination) {
     const hasta = input.match(HASTA_RE);
     if (hasta) {
       const value = cleanExtractedValue(hasta[1]);
       roleLock.destination = value;
       slotStability.destination = isValueAmbiguous(value) ? "ambiguous" : "locked";
+      slotAssignmentConfidence.destination = 0.80; // "hasta {Y}" → certeza moderada-alta
     }
   }
 
   // "desde X" → origin. Solo asigna si "estoy en" no lo hizo.
-  // Patrón: "voy a Y desde X" — X es origin.
   const desdeX = input.match(DESDE_RE);
   if (desdeX && !roleLock.origin) {
     const value = cleanExtractedValue(desdeX[1]);
     roleLock.origin = value;
     slotStability.origin = isValueAmbiguous(value) ? "ambiguous" : "locked";
+    slotAssignmentConfidence.origin = 0.85; // "desde {X}" → certeza alta
   }
 
   // v5.x: "origen X y|, destino Y" / "origen: X destino: Y"
-  // Llenar slots que sigan vacíos — no sobreescribe si ESTOY_EN/IR_A/DESDE ya fijaron.
   const origenDestino = input.match(ORIGEN_DESTINO_RE);
   if (origenDestino) {
     const originValue = cleanExtractedValue(origenDestino[1]);
@@ -108,14 +114,16 @@ function detectStructure(input: string): { roleLock: RoleLock; slotStability: Sl
     if (!roleLock.origin) {
       roleLock.origin = originValue;
       slotStability.origin = isValueAmbiguous(originValue) ? "ambiguous" : "locked";
+      slotAssignmentConfidence.origin = 0.95;
     }
     if (!roleLock.destination) {
       roleLock.destination = destValue;
       slotStability.destination = isValueAmbiguous(destValue) ? "ambiguous" : "locked";
+      slotAssignmentConfidence.destination = 0.95;
     }
   }
 
-  return { roleLock, slotStability };
+  return { roleLock, slotStability, slotAssignmentConfidence };
 }
 
 function cleanExtractedValue(raw: string): string {
@@ -135,6 +143,7 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
       confidence: 0,
       slotStability: { origin: "open", destination: "open" },
       roleLock: { origin: null, destination: null },
+      slotAssignmentConfidence: { origin: 0, destination: 0 },
     };
   }
 
@@ -201,8 +210,8 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
   const cs = trimmed.match(CONSULTA_RE);
   if (cs) facts.push(`consulta:${cs[1].toLowerCase()}`);
 
-  // detectar estructura sintáctica para role lock.
-  const { roleLock, slotStability } = detectStructure(trimmed);
+  // detectar estructura sintáctica para role lock y confianza de asignación.
+  const { roleLock, slotStability, slotAssignmentConfidence } = detectStructure(trimmed);
   if (roleLock.origin) facts.push(`origin:${roleLock.origin}`);
   if (roleLock.destination) facts.push(`destination:${roleLock.destination}`);
   if (slotStability.origin !== "open") facts.push(`origin_stability:${slotStability.origin}`);
@@ -215,6 +224,7 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
       confidence: 0,
       slotStability,
       roleLock,
+      slotAssignmentConfidence,
     };
   }
 
@@ -231,8 +241,8 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
 
   confidence = computeConfidence(facts, finalIntent);
 
-  const lateral = applyLaterals({ intent: finalIntent, facts, confidence, slotStability, roleLock });
-  return { intent: finalIntent, facts, confidence, slotStability, roleLock, lateral };
+  const lateral = applyLaterals({ intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence });
+  return { intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence, lateral };
 }
 
 function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Intent {

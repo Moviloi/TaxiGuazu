@@ -513,25 +513,6 @@ export async function getTariffById(tariffId: number): Promise<{ driver_price_4p
   );
 }
 
-interface TariffWithPrice extends TariffRow {
-  price: number;
-}
-
-// DEPRECATED: bypasses tariff-resolver domain boundary
-// TODO: migrate all callers to tariff-resolver.resolveTariff()
-export async function findTariff(origin: string, destination: string, passengers: number): Promise<TariffWithPrice | null> {
-  const o = origin.toLowerCase().trim();
-  const d = destination.toLowerCase().trim();
-  const t = await queryOne<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) = ? AND LOWER(destination) = ? LIMIT 1", [o, d]);
-  if (!t) return null;
-  return {
-    ...t,
-    price: passengers > 4
-      ? (t.public_price_6p ?? 0)
-      : (t.public_price_4p ?? 0),
-  };
-}
-
 export async function searchTariffs(text: string): Promise<TariffRow[]> {
   const q = `%${text.toLowerCase()}%`;
   return query<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) LIKE ? OR LOWER(destination) LIKE ?", [q, q]);
@@ -632,6 +613,16 @@ export async function updateChatSessionConversation(phone: string, conversationa
   await getDb().execute({
     sql: "UPDATE chat_sessions SET conversational_state = ?, clarify_field = ?, updated_at = unixepoch() WHERE phone = ?",
     args: [conversationalState, clarifyField || null, phone],
+  });
+}
+
+/** Update ONLY the slots JSON column (does not touch confidence, state, etc.).
+ *  Used by ambiguity-handler to store resolved place selections. */
+export async function updateChatSessionSlots(phone: string, slots: Record<string, any>): Promise<void> {
+  await ensureSchema();
+  await getDb().execute({
+    sql: "UPDATE chat_sessions SET slots = ?, updated_at = unixepoch() WHERE phone = ?",
+    args: [JSON.stringify(slots), phone],
   });
 }
 
@@ -804,5 +795,4 @@ export {
   findPlaceByAlias,
   findPlaceByName,
   getPlaceZone,
-  getOperationalZone,
 } from "./domains/geo";

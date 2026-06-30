@@ -14,7 +14,7 @@ export type OutputType = "EXECUTE" | "ANSWER" | "CLARIFY" | "SAFE_FALLBACK";
 
 export type ConversationDomain = "information" | "commercial" | "reservation" | "dispatch";
 
-export type ConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_confirmation" | "pending_human_review";
+export type ConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_confirmation" | "pending_human_review" | "ambiguity_pending";
 
 export type DispatchState = "idle" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver" | "closed";
 
@@ -46,6 +46,16 @@ export interface SlotStabilityMap {
   destination: SlotStability;
 }
 
+/** Confianza de asignación de slot basada en sintaxis.
+ *  "estoy en {X}" → origin=0.95, "ir a {Y}" → destination=0.90
+ *  0 = no detectado, 1 = certeza absoluta del rol.
+ *  Esto NO es confianza de entidad (cuál lugar específico).
+ */
+export interface SlotAssignmentConfidence {
+  origin: number;
+  destination: number;
+}
+
 import type { CoreLateral } from "./laterals/types";
 
 export interface CoreDecision {
@@ -54,6 +64,7 @@ export interface CoreDecision {
   confidence: number;
   slotStability: SlotStabilityMap;
   roleLock: RoleLock;
+  slotAssignmentConfidence?: SlotAssignmentConfidence;
   // lateral metadata (optional for backward compat)
   lateral?: CoreLateral;
 }

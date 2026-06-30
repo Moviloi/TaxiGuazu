@@ -130,36 +130,36 @@ describe("Comprehension Engine", () => {
   });
 
   describe("getRecoveryMessage", () => {
-    it("CLARIFICATION with missing origin → asks origin", () => {
+    it("CLARIFICATION with missing origin → asks origin", async () => {
       const s = session({ slots: JSON.stringify({ destination: "X" }) });
-      const msg = getRecoveryMessage("CLARIFICATION", s);
+      const msg = await getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
       expect(msg.toLowerCase()).toContain("salís");
     });
 
-    it("CLARIFICATION with missing destination → asks destination", () => {
+    it("CLARIFICATION with missing destination → asks destination", async () => {
       const s = session({ slots: JSON.stringify({ origin: "X" }) });
-      const msg = getRecoveryMessage("CLARIFICATION", s);
+      const msg = await getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
       expect(msg.toLowerCase()).toContain("ir");
     });
 
-    it("CLARIFICATION with no slots → generic", () => {
+    it("CLARIFICATION with no slots → generic", async () => {
       const s = session({ slots: null });
-      const msg = getRecoveryMessage("CLARIFICATION", s);
+      const msg = await getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
     });
 
-    it("RECOVERY → generic confirmation message", () => {
+    it("RECOVERY → generic confirmation message", async () => {
       const s = session({ slots: JSON.stringify({ origin: "A", destination: "B" }) });
-      const msg = getRecoveryMessage("RECOVERY", s);
+      const msg = await getRecoveryMessage("RECOVERY", s);
       expect(msg).toBeTruthy();
       expect(msg.toLowerCase()).toContain("viaje");
     });
 
-    it("ESCALATION → still returns RECOVERY message (fallback)", () => {
+    it("ESCALATION → still returns RECOVERY message (fallback)", async () => {
       const s = session();
-      const msg = getRecoveryMessage("ESCALATION", s);
+      const msg = await getRecoveryMessage("ESCALATION", s);
       expect(msg).toBeTruthy();
     });
   });
@@ -193,9 +193,9 @@ describe("Comprehension Engine", () => {
       expect(getComprehensionState(score)).toBe("ESCALATION");
     });
 
-    it("CLARIFICATION when missing slots → message mentions missing field", () => {
+    it("CLARIFICATION when missing slots → message mentions missing field", async () => {
       const s = session({ slots: JSON.stringify({ origin: "Hotel" }) });
-      const msg = getRecoveryMessage("CLARIFICATION", s);
+      const msg = await getRecoveryMessage("CLARIFICATION", s);
       expect(msg).toBeTruthy();
       expect(msg).toContain("ir");
     });

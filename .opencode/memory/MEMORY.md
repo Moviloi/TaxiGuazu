@@ -1,18 +1,18 @@
 ﻿# Anchored Summary
 
 ## Goal
-- Complete and deploy the frozen geo-tariff dataset (ASE 32 + ASE 33) into Turso DB, purge legacy column debt from schema and service layer, then audit the delivered TARIFARIO TRASLADOS.xlsx against the live DB to determine if a tariff restructuring pass is needed before updating. Build tours + waiting_rates tables for round trips and additional waiting services.
+- P0 fixes for test conversation failures: LLM validation bug, G7 comprehension asking wrong question, GREETING too verbose
+- Fix case-sensitivity bug in llm-response.ts validation that silently rejected valid LLM responses
+- Make extraction fall through to LLM when regex/entity finds only partial slots (not returning early)
+- Make getRecoveryMessage() consult roleLock to ask specifically for missing field (origin vs destination)
+- Activate dormant inferMissingFieldFromCore() as fallback when roleLock doesn't resolve
+- Constrain GREETING LLM enhancement to 2 lines max via system prompt
 
 ## Constraints & Preferences
-- Only the final DB result matters; the theoretical zone modelling process is irrelevant once the data is in Turso
-- Legacy columns `price_4p`, `price_6p`, `base_price_4p`, `base_price_6p` must be fully replaced, not kept as backward compat â€” no fallback chains anywhere
-- Turso DB has old schema (extra columns `piso_4p`, `piso_6p`, `piso_4p_low`, `piso_6p_low`, `garantizado_4p`, `garantizado_6p` not in current `CREATE TABLE`) â€” any mutation the seed does must satisfy all `NOT NULL` constraints of the live remote table
-- TARIFARIO TRASLADOS.xlsx is the single source of truth for commercial pricing; the DB must mirror it exactly
-- Tours (ida y vuelta con espera) go into separate `tours` table with all-inclusive pricing, waypoints, wait_hours
-- Waiting rates (Hora de espera) go into `waiting_rates` table per zone/country
-- Key differentiator for table routing: whether a trip has waiting time or a return leg, not whether it's "shopping" vs "sightseeing"
-- `tariffs` stays clean: one-way trips only (Solo ida), modality='one_way'
-- Architecture: hybrid (tariffs + tours + waiting_rates) â€” least wiring complexity, no changes to existing resolver
+- Bug fixes are P0 — unblock the test conversation flow before any new features
+- Changes must be minimal and targeted — no refactors, no dead code cleanup in this pass
+- Mock files must be updated alongside production code when imports change
+- All 591 tests must continue passing
 
 ## Progress
 ### Done
@@ -62,14 +62,39 @@
   - Fallback: recuerda al usuario usar los botones
   - 50 tests, 591 tests PASS, 0 errores TS en lead.service.ts
 
-### In Progress
-- (ninguno)
+### Done (P0 fixes — 2026-06-29)
+- **P0.1: Bug `!swapped` en llm-response.ts** — Corregido error de case-sensitivity en `validateLLMResponse()`: `llmText.includes(origin)` → `llmText.toLowerCase().includes(origin)`. La validación ahora compara ambas cadenas en lowercase, evitando falsos negativos cuando el LLM capitaliza nombres de lugares. Variable `swapped` renombrada a `llmLow`/`matchesDest`/`matchesOrigin` para claridad.
+- **P0.2a: Liberar Groq para extracción con typos** — `extract-slots.ts`: cambiada condición de early-return: solo retorna temprano cuando regex/entity encuentra AMBOS slots (origin AND destination). Si encuentra solo uno, continúa al LLM para completar el faltante. Esto permite detectar "queiro ira al centro" (typos) via LLM aunque regex falle.
+- **P0.2b: getRecoveryMessage() consulta roleLock** — `comprehension.ts`: agregados parámetros `roleLock?: RoleLock` y `text?: string` (para detección de idioma). Ahora verifica primero `roleLock.origin/destination` del CORE (estado actual) antes de caer a `session.slots` (estado persistido). Si detecta que el origen está presente pero el destino no, responde "¿A dónde necesitás ir?" en lugar de "contame un poco más". Idioma detectado dinámicamente vía `detectLeadLang()` de `@/lib/detect-lang`.
+- **P0.2c: inferMissingFieldFromCore() activado** — `response-builder.ts`: cambiado tipo de parámetro de `FinalDecision` a `CoreDecision` (más simple, sin wrapper). `comprehension-runner.ts`: importado `inferMissingFieldFromCore` y `buildGenericClarify`; agregado fallback que, si `getRecoveryMessage` retorna mensaje genérico, intenta inferir el campo faltante desde `core.facts`.
+- **P0.3: GREETING corto vía system prompt** — `llm-response.ts:buildResponsePrompt()`: detecta `policy.policyHint.includes("GREETING")` y agrega regla obligatoria: "Es un SALUDO. Respondé en máximo 1-2 líneas. Sé muy breve y no preguntes nada adicional."
+- **Mock actualizado** — `comprehension-runner.test.ts`: agregados mocks de `buildGenericClarify` e `inferMissingFieldFromCore` al mock de `@/lib/ai/response-builder`.
+
+- **Desambiguación interactiva batch (2026-06-29)** — Nuevo sistema multi-turn que permite al usuario resolver lugares ambiguos seleccionando entre opciones concretas:
+  - **Nuevo estado**: `ambiguity_pending` agregado a `ConversationalState` + `VALID_SLOT_TRANSITIONS`
+  - **Nueva función DB**: `searchPlaces()` en `geo.ts` — busca lugares con LIKE en `canonical_name` y `aliases`, retorna múltiples candidatos ordenados por relevancia (exact match → LIKE match)
+  - **Nuevo archivo**: `ambiguity-handler.ts` — orquestador multi-turn: detecta ambigüedad, muestra opciones via `buildPlaceOptions()`, procesa selección del usuario (número o texto parcial), avanza al siguiente slot, finaliza en `slot_confirmation` cuando ambos están resueltos
+  - **Nueva función DB facade**: `updateChatSessionSlots()` en `database.ts` — actualiza solo la columna `slots` sin tocar confidence/state
+  - **Integración en lead.service.ts**: hook antes del comprehension check — primero maneja respuesta pendiente, luego chequea si hay términos ambiguos para iniciar resolución
+  - Flujo batch: opciones de origen → usuario selecciona → opciones de destino → usuario selecciona → slot_confirmation con valores resueltos
+  - Datos de ambigüedad almacenados bajo clave `__ambiguity` en el JSON de `slots`
+- **Dead code cleanup (10 items)**:
+  - 🗑️ `applyConfirmation()` en `slot-confirmation.ts` — lógica inlineada
+  - 🗑️ `clamp()` en `utils/clamp.ts` — nunca usado (solo `clamp01` tiene callers)
+  - 🗑️ `findTariff()` + `TariffWithPrice` en `database.ts` — DEPRECATED sin callers
+  - 🗑️ `DriverInvitationRow` en `types.ts` — tabla existe pero 0 consultas
+  - 🗑️ `ExtractionLanguage` en `extraction-schema.ts` — nunca importado
+  - 🗑️ `getOperationalZone` alias en `geo.ts` + re-export en `database.ts`
+  - 🗑️ 4 params legacy conservados con comentarios (`_parsedData`, `_history`, `_customerName`, `_leadCore`, `_workflow`)
+
+### Verified
+- 591/591 tests PASS
+- `npm run build` PASS
+- `bash ael/contracts/enforce.sh` PASS (R1, R2, R3)
 
 ### Open
-- **P5: Geo alias resolution en slot_confirmation text handler** â€” Integrar `resolveAlias()` en P4 para resolver raw values a nombres canÃ³nicos antes de mostrar confirmaciÃ³n. No crÃ­tico porque `resolvePricingForSlots()` resuelve alias downstream al confirmar.
-
-### Blocked
-- (none)
+- **P5: Geo alias resolution en slot_confirmation text handler** — Integrar `resolveAlias()` en P4 para resolver raw values a nombres canónicos antes de mostrar confirmación. No crítico porque `resolvePricingForSlots()` resuelve alias downstream al confirmar.
+- **Desambiguación interactiva batch** — Próximo feature mayor: wirear `buildPlaceOptions()` con nuevo estado `ambiguity_pending` para que el usuario seleccione origen Y destino antes de enviar respuesta única, no responder después de cada click.
 
 ## Hardening (2026-06-29)
 - **CHECK resolution_priority (1-4)** via triggers + in CREATE TABLE
@@ -78,7 +103,35 @@
 - **connection.ts sincronizado**: `operational_zone` en places, NOT NULL constraints, `crosses_border` CHECK, place_type CHECK expandido
 - **Modality**: NO se agregÃ³ CHECK â€” datos tienen valores diversos en espaÃ±ol; se mantiene TEXT sin restricciÃ³n para compatibilidad futura
 
-## Key Decisions
+## Key Decisions (P0 fixes — 2026-06-29)
+- **`!swapped` NO se invirtió** — El análisis de código demostró que la variable `swapped` (ahora reemplazada por `matchesDest && matchesOrigin`) verifica PRESENCIA de ambos lugares en el texto, no orden swap. El único bug era CASE-SENSITIVITY en `llmText.includes(origin)` (origin está en lowercase pero llmText no). La lógica `if (!bothFound)` es correcta: rechazar cuando uno de los dos lugares no aparece en la respuesta del LLM.
+- **extract-slots early-return solo en FULL match** — Antes, si regex encontraba SOLO origin o SOLO destination, retornaba inmediatamente sin llamar al LLM. Esto significaba que "estoy en aeropuerto y queiro ira al centro" perdía el destino (typo rompía IR_A_RE). Ahora solo retorna temprano si regex/entity encuentra AMBOS slots. Partial match → continúa al LLM.
+- **getRecoveryMessage prioriza roleLock sobre session.slots** — `roleLock` refleja el estado ACTUAL del CORE (lo que se detectó en este turno), mientras `session.slots` es estado PERSISTIDO (posiblemente de turnos anteriores). roleLock es más relevante para preguntar qué falta AHORA.
+- **inferMissingFieldFromCore acepta CoreDecision** — Cambié el tipo de parámetro de `FinalDecision` (que requería un wrapper `{ core: ... }`) a `CoreDecision` directo. La función no tenía callers, así que el cambio es seguro. También se importó en comprehension-runner.ts como fallback cuando getRecoveryMessage retorna mensaje genérico.
+- **GREETING usa system prompt, no hardcode** — En lugar de cambiar la respuesta hardcodeada en `buildInformationalResponse()`, se agregó una regla en `buildResponsePrompt()` que el LLM debe seguir al mejorar el texto. Esto permite que el GREETING siga siendo LLM-generado (más natural) pero limitado a 1-2 líneas. La detección se hace por `policy.policyHint`: contiene "GREETING" cuando es un saludo.
+
+## Relevant Files (P0 changes)
+- `src/lib/ai/llm-response.ts` — Bug case-sensitivity en validateLLMResponse (lines 91-94) + regla GREETING en buildResponsePrompt
+- `src/lib/services/extraction/extract-slots.ts` — Early-return condicional a FULL match en regex/entity
+- `src/lib/services/extraction/comprehension.ts` — getRecoveryMessage con roleLock + text params, lang dinámico
+- `src/lib/services/extraction/comprehension-runner.ts` — Importa inferMissingFieldFromCore y buildGenericClarify, fallback por core facts
+- `src/lib/ai/response-builder.ts` — inferMissingFieldFromCore acepta CoreDecision en vez de FinalDecision
+- `tests/services/comprehension-runner.test.ts` — Mock de buildGenericClarify e inferMissingFieldFromCore agregado
+
+## Relevant Files (Desambiguación interactiva)
+- `src/lib/ai/types.ts` — ConversationalState extendido con "ambiguity_pending"
+- `src/lib/db/domains/geo.ts` — Nueva función searchPlaces() con LIKE search multi-resultado
+- `src/lib/db/database.ts` — Nueva función facade updateChatSessionSlots() + eliminación de findTariff/TariffWithPrice
+- `src/lib/services/workflow/ambiguity-handler.ts` — Nuevo orquestador multi-turn de desambiguación
+- `src/lib/services/workflow/slot-workflow.ts` — VALID_SLOT_TRANSITIONS extendido con ambiguity_pending
+- `src/lib/services/lead.service.ts` — Hooks de ambigüedad antes de comprehension check
+- `src/lib/ai/slot-confirmation.ts` — buildPlaceOptions() ahora activo (antes dormido) + applyConfirmation eliminado
+
+## Dead code removed
+- `src/lib/ai/extraction-schema.ts` — ExtractionLanguage type
+- `src/lib/db/types.ts` — DriverInvitationRow interface
+- `src/lib/db/domains/geo.ts` — getOperationalZone alias
+- `src/lib/utils/clamp.ts` — clamp() function
 - **Legacy columns dropped, not deprecated** â€” The original plan treated them as "preserved for backward compat". User explicitly wants full replacement. `ALTER TABLE ... DROP COLUMN` used for existing DBs; no fallback `??` chains remain anywhere.
 - **Hybrid model for tariff data** â€” Three tables instead of one: `tariffs` (one-way), `tours` (round trips with waiting), `waiting_rates` (hourly charges). This minimized wiring changes (no changes to existing resolver) and keeps each table's schema clean.
 - **Trip type determines table, not shopping/sightseeing** â€” The user clarified that what matters is whether a service involves waiting/return (â†’ `tours`) or is a simple transfer (â†’ `tariffs`). "Adicional" (hourly waiting) â†’ `waiting_rates`.
@@ -136,6 +189,46 @@
 - Pattern: Cada mock debe cubrir todas las funciones que el codigo bajo test importa de ese modulo. Si faltan, el test falla con TypeError: module_1.funcName is not a function.
 - Common misses: findPlaceByAlias, findPlaceByName, findTariffByPriority, queryOne en modulos DB; display-name, location-resolver en servicios de geo.
 - Mitigation: Ejecutar el test individualmente con npx vitest run tests/path/to/test.ts y observar el primer error de mock faltante. Agregar y repetir.
+
+### Pattern: Mock coverage for new imports in existing modules
+- Trigger: When adding a new import from an already-mocked module in a test file.
+- Risk: Adding `import { newFunc } from "@/lib/module"` in production code will crash tests if `vi.mock("@/lib/module")` doesn't export `newFunc`.
+- Mitigation: After adding any new import to a file that has `vi.mock()` in its test file, update the mock to include the newly imported function. Run the failing test individually (`npx vitest run tests/path/to/file.test.ts`) to catch missing mocks immediately.
+- Tools: Check all test files that mock the same module — there may be multiple.
+
+### Pattern: Partial match slug in extract-slots
+- Trigger: When regex or entity extractor finds only one of two mandatory slots (e.g., origin but not destination).
+- Pattern: Don't return early. Log as "partial match" and continue to the next extraction layer (entity → LLM). The LLM can semantically understand intent even when regex fails due to typos.
+- Files: src/lib/services/extraction/extract-slots.ts
+
+### Pattern: RoleLock before SessionSlots for current-turn state
+
+### Architecture: AI-First Interpretation over Heuristics (ADR 005)
+- **R4 en contratos AEL**: No heuristic patches for context-sensitive data. Prohibido CASE/WHEN ranking en queries y mapas de prioridad hardcodeados.
+- **searchPlaces()** retorna datos crudos (city, country, place_type, score) — sin ranking artificial. Orden simple: exact match → relevance → alphabetical.
+- **ambiguity-handler.ts** usa `interpretAmbiguity()` (LLM) antes de mostrar opciones. Si LLM resuelve con alta confianza → auto-resuelve. Si no → `buildPlaceOptions()` como fallback.
+- **getRecoveryMessage()** usa LLM cuando detecta `location_ambiguous:true` en facts, generando preguntas contextuales ("Entendí que tu viaje es desde el centro...") en vez de templates genéricos ("¿Desde dónde salís?").
+- La LLM recibe candidatos con metadata completa (ciudad, país, tipo, score) para interpretación geográficamente informada.
+
+### Pattern: Ambiguity resolution as multi-turn state machine
+- Trigger: When CORE's `AMBIGUOUS_LOCATION_RE` detects a generic term ("aeropuerto", "centro") that matches multiple places in DB.
+- Flow: Extract raw roleLock values → `searchPlaces()` via LIKE → if >1 match, present options → user picks → store in `__ambiguity` metadata in slots JSON → repeat for next ambiguous slot → both resolved → transition to `slot_confirmation`.
+- Key decision: Use `clarify_field` to track which slot is being resolved ("origin" or "destination"), not separate state for each.
+- Persistence: Ambiguity state stored under `__ambiguity` key in `chat_sessions.slots` JSON column (avoids schema migration).
+- Testing: New state must be added to `VALID_SLOT_TRANSITIONS` in slot-workflow.ts, otherwise the state machine rejects transitions.
+
+### Pattern: DB facade bypass detection
+- Trigger: Any service file calling `getDb().execute()` directly instead of going through `database.ts` facade functions.
+- Enforcement: `ael/contracts/enforce.sh` R2 checks for `getDb().execute` in service files and fails if found.
+- Fix: Add a new facade function in `database.ts` (e.g., `updateChatSessionSlots()`) that wraps the raw query, then import from there.
+
+### Pattern: Dead code classification - DORMANT vs TRULY DEAD
+- DORMANT: Function has a purpose in planned architecture (e.g., `buildPlaceOptions()`, `inferMissingFieldFromCore()`). Don't remove — wire up instead.
+- TRULY DEAD: Function replaced by inline logic (`applyConfirmation()`), deprecated (`findTariff()`), or never implemented (`DriverInvitationRow`). Safe to remove.
+- False positives: `clamp()` appears dead but is in `utils/` — utility functions may be added later; safe to remove but document.
+- Legacy params: Functions with `_` prefix params that are kept for interface compatibility should be documented but not removed (avoids cascading signature changes).
+- Trigger: When determining what slot is missing during the current user turn.
+- Pattern: Check `roleLock.origin`/`.destination` first — these reflect what CORE detected in THIS turn. Only fall back to `session.slots` (persisted from previous turns) if roleLock has no info. This ensures the system asks about the most current missing field.
 
 ### Pattern: SETUP_TEARDOWN para chequeo de state
 - Trigger: Tests que verifican slots confirmados, valores de DB, o cambios de estado despues de una operacion.

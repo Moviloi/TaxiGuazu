@@ -74,18 +74,6 @@ export interface TripRow {
 
 export type DriverStatus = "pending" | "active" | "inactive" | "blocked";
 
-export interface DriverInvitationRow {
-  id: number;
-  code: string;
-  phone: string | null;
-  created_by: string;
-  created_at: number | null;
-  expires_at: number | null;
-  used_at: number | null;
-  driver_id: string | null;
-  status: "pending" | "accepted" | "expired" | "revoked";
-}
-
 export interface DriverRow {
   driver_id: string;
   name: string | null;

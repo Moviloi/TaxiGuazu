@@ -21,6 +21,7 @@ import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-r
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { buildFieldSelector, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
+import { startAmbiguityResolution, handleAmbiguityResponse } from "@/lib/services/workflow/ambiguity-handler";
 import { detectLeadLang } from "@/lib/detect-lang";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
@@ -193,6 +194,17 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       return;
     }
 
+    // ── ZONE: AMBIGUITY HANDLER — resolve ambiguous locations interactively ──
+    const currentConvState = await getConversationalState(phone);
+    if (currentConvState === "ambiguity_pending") {
+      const ambHandled = await handleAmbiguityResponse(phone, conversation.id, trimmed, session);
+      if (ambHandled) return;
+    }
+    if (leadCore.facts?.some(f => f.startsWith("location_ambiguous:"))) {
+      const ambStarted = await startAmbiguityResolution(phone, conversation.id, trimmed, leadCore, session);
+      if (ambStarted) return;
+    }
+
     log.info("[CORE_RESULT]", {
       input: text,
       facts: leadCore.facts,
@@ -289,9 +301,9 @@ export async function handleSlotConfirmationButton(
   phone: string,
   buttonId: string,
   conversation: { id: number },
-  _history: any[],
-  _customerName: string | null,
-  _leadCore: ReturnType<typeof core>,
+  _history: any[], // kept for interface compatibility
+  _customerName: string | null, // kept for interface compatibility
+  _leadCore: ReturnType<typeof core>, // kept for interface compatibility
   session: Awaited<ReturnType<typeof getChatSession>>,
 ): Promise<void> {
   const lang = detectLeadLang(buttonId);

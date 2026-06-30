@@ -5,7 +5,7 @@ import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-s
 import { log } from "@/lib/utils/logger";
 
 export function buildExtractionContext(
-  _parsedData: TripExtraction | undefined,
+  _parsedData: TripExtraction | undefined, // kept for interface compatibility
   confidenceResult: ExtractionResult | undefined,
   workflowResult: SlotConversationalContext | undefined,
   pricing: PricingResult | undefined,

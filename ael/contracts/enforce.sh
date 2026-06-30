@@ -73,6 +73,33 @@ check_r2() {
   echo ""
 }
 
+# ── R4: AI-First Interpretation (ADR 005) ──
+check_r4() {
+  echo "[R4] AI-First Interpretation — no heuristic patches in DB queries"
+
+  # Check: geo.ts no tiene CASE/WHEN en ORDER BY
+  VIOLATIONS=$(grep -n "CASE.*WHEN" src/lib/db/domains/geo.ts 2>/dev/null | grep -i "order" || true)
+  if [ -n "$VIOLATIONS" ]; then
+    echo "  FAIL: Heuristic CASE/WHEN ranking in geo.ts"
+    echo "$VIOLATIONS"
+    FAILURES=$((FAILURES + 1))
+  else
+    echo "  PASS: No heuristic ORDER BY in geo.ts"
+  fi
+
+  # Check: geo.ts no tiene mapas de prioridad hardcodeados
+  VIOLATIONS=$(grep -n "_PRIORITY" src/lib/db/domains/geo.ts 2>/dev/null || true)
+  if [ -n "$VIOLATIONS" ]; then
+    echo "  FAIL: Hardcoded priority map in geo.ts"
+    echo "$VIOLATIONS"
+    FAILURES=$((FAILURES + 1))
+  else
+    echo "  PASS: No priority maps in geo.ts"
+  fi
+
+  echo ""
+}
+
 # ── R3: Code Existence ──
 check_r3() {
   echo "[R3] Code Existence Validation"
@@ -104,6 +131,7 @@ case "$RULE" in
       R1) check_r1 ;;
       R2) check_r2 ;;
       R3) check_r3 ;;
+      R4) check_r4 ;;
       *) echo "Unknown rule: $1"; exit 1 ;;
     esac
     ;;
@@ -111,6 +139,7 @@ case "$RULE" in
     check_r1
     check_r2
     check_r3
+    check_r4
     ;;
 esac
 

@@ -26,6 +26,7 @@ const VALID_SLOT_TRANSITIONS: Record<SlotConversationalState, SlotConversational
   slot_confirmation: ["collecting_slots", "awaiting_confirmation", "pending_human_review"],
   awaiting_confirmation: ["collecting_slots"],
   pending_human_review: ["idle"],
+  ambiguity_pending: ["slot_confirmation", "idle", "collecting_slots"],
 };
 
 async function checkSessionExpiry(phone: string): Promise<boolean> {

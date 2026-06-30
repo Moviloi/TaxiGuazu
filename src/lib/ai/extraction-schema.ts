@@ -12,8 +12,6 @@ export const TripExtractionSchema = z.object({
   language: z.enum(["es", "en", "pt", "fr", "de", "it", "zh"]).nullable().optional(),
 });
 
-export type ExtractionLanguage = z.infer<typeof TripExtractionSchema>["language"];
-
 export type TripExtraction = z.infer<typeof TripExtractionSchema>;
 
 export interface ExtractionResult {
