@@ -13,7 +13,7 @@
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { searchPlaces } from "@/lib/db/domains/geo";
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
-import { getChatSession, updateChatSessionSlots } from "@/lib/db/database";
+import { getChatSession, upsertChatSession } from "@/lib/db/database";
 import { interpretAmbiguity } from "@/lib/ai/ambiguity-interpreter";
 import { detectLeadLang } from "@/lib/detect-lang";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
@@ -208,7 +208,8 @@ export async function startAmbiguityResolution(
   // Merge with existing slots + ambiguity metadata
   const currentSlots = session?.slots ? safeParseSlots(session.slots) : {};
   const mergedSlots = { ...currentSlots, ...resolvedSlots, __ambiguity: ambiguityMeta };
-  await updateChatSessionSlots(phone, mergedSlots);
+  // FIX: usar upsertChatSession para crear fila si no existe (después de .limpiar)
+  await upsertChatSession(phone, mergedSlots, undefined, undefined, undefined);
 
   // Ask for the first unresolved ambiguous slot
   const firstSlot = (!llmResolvedOrigin && originAmbiguous) ? "origin" : "destination";
@@ -301,7 +302,7 @@ export async function handleAmbiguityResponse(
       slotUpdate[resolvedKey] = { value: newCanonical, score: 1.0, reason: "user_typed", source: "USER_CONFIRMED", status: "CONFIRMED" };
       const currentSlots = freshSession?.slots ? safeParseSlots(freshSession.slots) : {};
       const merged = { ...currentSlots, ...slotUpdate, __ambiguity: ambState };
-      await updateChatSessionSlots(phone, merged);
+      await upsertChatSession(phone, merged, undefined, undefined, undefined);
     } else if (newCandidates.length > 1) {
       // Still ambiguous — check if the new term is now a risk node
       const newRiskKey = detectRiskNode(text);
@@ -422,8 +423,10 @@ async function finalizeAmbiguity(
   // Remove ambiguity metadata from slots
   delete (updatedSlots as any).__ambiguity;
 
-  await updateChatSessionSlots(phone, updatedSlots);
-  await setConversationalState(phone, "slot_confirmation");
+  // FIX: usar upsertChatSession (INSERT+UPDATE) para que funcione incluso si
+  // el .limpiar borró la fila de chat_sessions. updateChatSessionSlots es solo
+  // UPDATE y falla silenciosamente si la fila no existe.
+  await upsertChatSession(phone, updatedSlots, undefined, "slot_confirmation", undefined);
 
   // Show confirmation with the resolved values
   const confirmationMsg = `Solo para confirmar los datos del viaje:\n\n📍 *Origen:*\n✅ ${ambState.resolvedOrigin}\n\n📍 *Destino:*\n✅ ${ambState.resolvedDest}\n\n¿Está correcto?`;
@@ -571,7 +574,7 @@ async function persistAmbiguityState(phone: string, state: AmbiguityState): Prom
   const session = await getChatSession(phone);
   const currentSlots = session?.slots ? safeParseSlots(session.slots) : {};
   (currentSlots as any).__ambiguity = state;
-  await updateChatSessionSlots(phone, currentSlots);
+  await upsertChatSession(phone, currentSlots, undefined, undefined, undefined);
 }
 
 function safeParseSlots(json: string): Record<string, any> {
