@@ -37,7 +37,11 @@ Devuelve un objeto JSON con estos campos (todos opcionales — incluí solo los 
 Reglas:
 - Si el usuario dice un destino turístico (cataratas, aeropuerto, centro, etc.), extraelo como destination.
 - Si menciona origen y destino, diferenciarlos.
-- passengers: solo si hay un número explícito de personas ("somos 4", "2 pasajeros").
+- passengers: número de personas que viajan. Detectalo de cualquier forma:
+  "somos 4", "tres pasajeros", "un grupo de 5", "dos personas",
+  "somos una familia de 4", "hay 3 de nosotros", "somo 3",
+  "3". Si el usuario responde con un número suelto y el contexto
+  del historial indica que se le preguntó por pasajeros, extraer ese número.
 - price: solo si el usuario menciona un monto explícito ("cuanto sale", "$32.000").
 - scheduled_at: solo si hay fecha y hora específica. NO inferir "hoy" o "mañana" como fecha exacta.
 - flight: solo número de vuelo explícito ("vuelo AR1234", "AR1782").

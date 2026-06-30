@@ -25,6 +25,82 @@ import { startAmbiguityResolution, handleAmbiguityResponse } from "@/lib/service
 import { detectLeadLang } from "@/lib/detect-lang";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
+import { extractSlots } from "@/lib/services/extraction/extract-slots";
+import type { ExtractionContext } from "@/lib/ai/extraction-prompt";
+import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+/** Mapa de números en español a dígitos. */
+const WORD_TO_NUM: Record<string, number> = {
+  un: 1, uno: 1, una: 1,
+  dos: 2,
+  tres: 3,
+  cuatro: 4,
+  cinco: 5,
+  seis: 6,
+  siete: 7,
+  ocho: 8,
+  nueve: 9,
+  diez: 10,
+  once: 11,
+  doce: 12,
+  trece: 13,
+  catorce: 14,
+  quince: 15,
+  veinte: 20,
+  treinta: 30,
+  cincuenta: 50,
+  cien: 100,
+};
+
+/**
+ * Intenta extraer un número de pasajeros del texto del usuario.
+ * Capa determinista (0ms, sin LLM) del híbrido regex+LLM.
+ * Retorna null si no puede determinarlo → invocar fallback LLM.
+ */
+function parsePassengerCount(text: string): number | null {
+  const trimmed = text.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  // Expresión regular: resuelve palabra N a dígito
+  const resolveNum = (raw: string): number | null => {
+    if (/^\d+$/.test(raw)) {
+      const n = parseInt(raw, 10);
+      return n >= 1 && n <= 99 ? n : null;
+    }
+    return WORD_TO_NUM[raw] ?? null;
+  };
+
+  // Patrones en orden de especificidad:
+  const patterns = [
+    // 1. "un grupo/familia/equipo de/con N":  "grupo de 4", "familia con 5", "un grupo de tres"
+    /\b(?:un\s+)?(?:grupo|familia|compañ[íi]a|equipo)\s+(?:de|con)\s+(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/i,
+
+    // 2. Colectivo + número: "somos 5", "somo 5", "viajamos 3", "hay 3", "son 4", "tenemos 2", "somos cinco"
+    /\b(?:somos?|viajamos?|vamos?|hay|son|tenemos?|ser[éa]mos?|andamos?)\s+(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/i,
+
+    // 3. Número + palabra clave: "5 personas", "3 pax", "2 pasajeros", "cinco personas"
+    /\b(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:personas?|pax|pasajeros?|adultos?|nenes?|chicos?|ni[ñn]os?|amigos?|familiares?|bebés?|mayor(?:es)?)\b/i,
+
+    // 4. Palabra clave + número: "pasajeros 3", "personas 5"
+    /\b(?:pasajeros?|personas?|pax)\s+(son\s+)?(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/i,
+
+    // 5. "N" suelto (solo dígito): "3", "5"
+    /^\s*(\d{1,2})\s*$/,
+  ];
+
+  for (const re of patterns) {
+    const m = trimmed.match(re);
+    if (m) {
+      const group = m.length >= 3 ? (m[2] || m[1]) : m[1];
+      const n = resolveNum(group);
+      if (n != null && n >= 1 && n <= 99) return n;
+    }
+  }
+
+  return null;
+}
 
 import { log } from "@/lib/utils/logger";
 
@@ -199,11 +275,30 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (slotState === "awaiting_passenger") {
       log.info("[AWAITING_PASSENGER]", { text });
 
-      const PAX_RE = /\b(\d+)\s*(personas?|pax|pasajeros?)\b/i;
-      const paxMatch = trimmed.match(PAX_RE);
+      // ── Capa 1: Regex determinista ──
+      let paxCount = parsePassengerCount(trimmed);
 
-      if (paxMatch) {
-        const paxCount = parseInt(paxMatch[1], 10);
+      // ── Capa 2: Fallback LLM si regex no pudo resolver ──
+      if (paxCount == null) {
+        log.info("[AWAITING_PASSENGER] regex falló → probando LLM fallback");
+        // Construir context mínimo con prevSlots para que el LLM tenga
+        // contexto de que se le preguntó por pasajeros
+        const prevSlots = session?.slots
+          ? (parseSessionSlots(session.slots) as Record<string, string | number>)
+          : undefined;
+        const llmCtx: ExtractionContext = prevSlots ? { prevSlots } : {};
+        const extracted = await extractSlots(trimmed, history, customerName || undefined, llmCtx)
+          .catch(() => null);
+        const llmPax = extracted?.passengers ?? null;
+        if (llmPax != null && llmPax > 0 && llmPax <= 99) {
+          paxCount = llmPax;
+          log.info("[AWAITING_PASSENGER] LLM resolvió pax:", { paxCount });
+        } else {
+          log.info("[AWAITING_PASSENGER] LLM tampoco resolvió");
+        }
+      }
+
+      if (paxCount != null) {
         if (paxCount > 6) {
           const msg = `Máximo 6 pasajeros por vehículo. Para ${paxCount} pasajeros necesitarían 2 vehículos. Contactanos para coordinar.`;
           await sendWhatsAppMessage(phone, msg);
@@ -235,11 +330,16 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           await insertMessage(conversation.id, "assistant", msg);
           await setConversationalState(phone, "awaiting_confirmation");
           return;
+        } else {
+          // Pricing falló sin precio — caer a re-pregunta
+          log.warn("[AWAITING_PASSENGER] pricing no devolvió precio para", { paxCount });
         }
       }
 
-      // Affirmative without passenger count
+      // ── Si llegamos acá: ni regex ni LLM resolvieron ──
       const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
+
+      // Affirmative without passenger count
       if (isAffirmativeMessage(trimmed)) {
         const msg = "¿Cuántos pasajeros son así busco el vehículo correcto?";
         await sendWhatsAppMessage(phone, msg);

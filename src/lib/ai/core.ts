@@ -24,7 +24,7 @@ import { applyLaterals } from "./laterals";
 const URGENCY_RE = /\b(ahora|ya|inmediato|urgente|hoy|enseguida)\b/i;
 const QUERY_RE = /\b(cu[aá]nto|cu[aá]l|c[oó]mo|d[oó]nde|qu[eé]|precio|tarifa|cuesta|sale|cu[aá]ndo|a qu[eé] hora)\b/i;
 const ACTION_RE = /\b(agend[ao]|confirm[oa]|reserv[ao]|reservar|reservame|quiero|necesito|deseo|contrat[ao])\b/i;
-const PAX_RE = /\b(\d+)\s*(personas?|pax|pasajeros?)\b/i;
+const PAX_RE = /\b(?:somos?|viajamos?|hay|son|tenemos?)\s+(\d+)\b|\b(\d+)\s*(?:personas?|pax|pasajeros?)\b/i;
 const FLIGHT_RE = /\b(?:vuelo\s*)?([A-Z]{2,3}\s?\d{2,4})\b/i;
 const DATE_RE = /\b(hoy|ma[ñn]ana|pasado\s*ma[ñn]ana|esta\s*semana|pr[oó]xim[oa]s?\s*d[ií]as|el\s+(lunes|martes|mi[ée]rcoles|jueves|viernes|s[aá]bado|domingo)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/i;
 const TIME_RE = /\b(?:a\s*las?\s*)?(\d{1,2}:\d{2}|\d{1,2}\s*(?:hs|horas|h))\b/i;
@@ -160,7 +160,10 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
   if (a) facts.push(`action:${a[1].toLowerCase()}`);
 
   const p = trimmed.match(PAX_RE);
-  if (p) facts.push(`passengers:${p[1]}`);
+  if (p) {
+    const paxVal = p[1] ?? p[2];
+    if (paxVal) facts.push(`passengers:${paxVal}`);
+  }
 
   const f = trimmed.match(FLIGHT_RE);
   if (f) facts.push(`flight:${f[1].replace(/\s+/g, "")}`);
