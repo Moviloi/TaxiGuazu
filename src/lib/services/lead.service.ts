@@ -399,31 +399,8 @@ export async function handleSlotConfirmationButton(
   }
 
   if (buttonType === "change_origin" || buttonType === "change_destination") {
-    const slotKey = buttonType === "change_origin" ? "origin" : "destination";
-    let rawSlots: Record<string, any> = {};
-    try {
-      const s = await getChatSession(phone);
-      if (s?.slots) rawSlots = JSON.parse(s.slots);
-    } catch { /* ignore */ }
-
-    const currentValue = rawSlots[slotKey];
-    if (!currentValue) {
-      await sendWhatsAppMessage(phone, `Escribí el ${slotKey === "origin" ? "origen" : "destino"} exacto.`);
-      await insertMessage(conversation.id, "assistant", `Escribí el ${slotKey === "origin" ? "origen" : "destino"} exacto.`);
-      return;
-    }
-
-    const { resolveAlias } = await import("@/lib/db/database");
-    const aliasResult = await resolveAlias(String(currentValue));
-    const options = aliasResult.resolved ? [...new Set(aliasResult.names.slice(0, 5))] : [];
-
-    let msg: string;
-    if (options.length > 0) {
-      const lines = options.map((name, i) => `${i + 1}. ${name}`);
-      msg = [`Elegí ${slotKey === "origin" ? "el origen" : "el destino"}:`, ...lines, `${options.length + 1}. Otro lugar`].join("\n");
-    } else {
-      msg = `Escribí el ${slotKey === "origin" ? "origen" : "destino"} exacto.`;
-    }
+    const label = buttonType === "change_origin" ? "origen" : "destino";
+    const msg = `Escribí el ${label} exacto.`;
     await sendWhatsAppMessage(phone, msg);
     await insertMessage(conversation.id, "assistant", msg);
     return;

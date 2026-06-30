@@ -77,21 +77,28 @@ export function buildSlotConfirmationMessage(
 
 export function buildFieldSelector(_lang: Lang): { text: string; prompt: string } {
   return {
-    text: "¿Qué dato querés cambiar?\n\n1. Origen\n2. Destino\n3. Pasajeros\n4. Fecha/Hora",
-    prompt: "Respondé con el número o nombre del campo que querés corregir.",
+    text: "¿Qué querés cambiar? Escribí el origen y destino correctos.",
+    prompt: "El usuario debe escribir los datos a corregir en texto libre.",
   };
 }
 
 export function buildPlaceOptions(
   canonicalNames: string[],
   slotKey: string,
-  _lang: Lang,
+  lang?: string,
 ): string {
   if (canonicalNames.length === 0) {
-    return "No encontré opciones. Escribí el lugar exacto.";
+    return "Escribí el lugar exacto.";
   }
-  const header = slotKey === "origin" ? "Elegí el origen:" : "Elegí el destino:";
-  const options = canonicalNames.map((name, i) => `${i + 1}. ${name}`);
-  return [header, ...options, `${canonicalNames.length + 1}. Otro lugar`].join("\n");
+  // UX sin números — pregunta contextual
+  const label = slotKey === "origin" ? "origen" : "destino";
+  const examples = canonicalNames.slice(0, 3).join(", ");
+  if (lang === "en") {
+    return `Please write the exact ${label} (e.g., ${examples}).`;
+  }
+  if (lang === "pt") {
+    return `Por favor, escreva o ${label} exato (ex: ${examples}).`;
+  }
+  return `Escribí el ${label} exacto (ej: ${examples}).`;
 }
 

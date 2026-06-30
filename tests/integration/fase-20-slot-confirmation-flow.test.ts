@@ -38,8 +38,8 @@ vi.mock("@/lib/ai/domain", () => ({
 
 vi.mock("@/lib/ai/slot-confirmation", () => ({
   buildFieldSelector: vi.fn().mockReturnValue({
-    text: "¿Qué dato querés cambiar?\n\n1. Origen\n2. Destino\n3. Pasajeros\n4. Fecha/Hora",
-    prompt: "Respondé con el número o nombre del campo que querés corregir.",
+    text: "¿Qué querés cambiar? Escribí el origen y destino correctos.",
+    prompt: "El usuario debe escribir los datos a corregir en texto libre.",
   }),
   shouldRequestConfirmation: vi.fn(),
   buildSlotConfirmationMessage: vi.fn(),
@@ -185,49 +185,24 @@ describe("FASE 20.5 — Slots CONFIRMATION_PENDING flujo completo", () => {
   });
 
   describe("TEST 2 — Botón slot_change", () => {
-    it("muestra selector de campos", async () => {
+    it("pide escribir origen y destino en texto libre", async () => {
       await handleLeadMessage(TEST_PHONE, "slot_change");
 
       expect(buildFieldSelector).toHaveBeenCalled();
       expect(sendWhatsAppMessage).toHaveBeenCalledWith(
         TEST_PHONE,
-        expect.stringContaining("¿Qué dato querés cambiar?"),
+        expect.stringContaining("Escribí el origen y destino correctos"),
       );
     });
   });
 
   describe("TEST 3 — Botón change_origin", () => {
-    it("resuelve alias del origen actual y muestra opciones", async () => {
-      vi.mocked(getChatSession).mockResolvedValue({
-        phone: TEST_PHONE,
-        slots: JSON.stringify({ origin: "Aeropuerto Cataratas (IGR)", destination: "Puerto Iguazú Centro" }),
-        confidence: JSON.stringify({ origin: 0.6, destination: 0.6 }),
-        extraction_count: 1,
-        last_extracted_at: null,
-        clarify_field: null,
-        pending_opportunity: null,
-        comprehension_state: null,
-        comprehension_score: null,
-        escalation_reason: null,
-        conversational_state: "slot_confirmation",
-        trip_state: null,
-        dispatch_state: null,
-        slot_states: null,
-        updated_at: Math.floor(Date.now() / 1000),
-      });
-
-      // Mock the dynamic import of resolveAlias in lead.service.ts
-      vi.mocked(resolveAlias).mockResolvedValue({
-        resolved: true,
-        names: ["Aeropuerto Cataratas (IGR)", "Aeropuerto Internacional Cataratas del Iguazú"],
-      });
-
+    it("pide escribir origen exacto sin opciones numeradas", async () => {
       await handleLeadMessage(TEST_PHONE, "change_origin");
 
-      expect(resolveAlias).toHaveBeenCalledWith("Aeropuerto Cataratas (IGR)");
       expect(sendWhatsAppMessage).toHaveBeenCalledWith(
         TEST_PHONE,
-        expect.stringContaining("Elegí el origen"),
+        "Escribí el origen exacto.",
       );
     });
   });
@@ -360,7 +335,7 @@ describe("handleSlotConfirmationButton — routing directo", () => {
     expect(buildFieldSelector).toHaveBeenCalled();
     expect(sendWhatsAppMessage).toHaveBeenCalledWith(
       TEST_PHONE,
-      expect.stringContaining("¿Qué dato querés cambiar?"),
+      expect.stringContaining("Escribí el origen y destino correctos"),
     );
     expect(insertMessage).toHaveBeenCalledWith(1, "assistant", expect.any(String));
   });
