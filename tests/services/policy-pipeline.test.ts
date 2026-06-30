@@ -73,9 +73,13 @@ function makeBaseInput(overrides: Partial<PolicyPipelineInput> = {}): PolicyPipe
 describe("policy-pipeline — executeTrip guard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset mocks whose mockReturnValue/mockResolvedValue leak between tests
+    // (clearAllMocks solo limpia call info, no implementations)
+    vi.mocked(isAffirmativeMessage).mockReset();
+    vi.mocked(getConversationalState).mockReset();
   });
 
-  it("Caso 1: commercial + awaiting_confirmation + affirmativo → NO executeTrip", async () => {
+  it("Caso 1: awaiting_confirmation + affirmativo → executeTrip (cualquier dominio)", async () => {
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
     vi.mocked(getChatSession).mockResolvedValue({
       slots: JSON.stringify({ origin: "iguazú", destination: "aeropuerto" }),
@@ -84,8 +88,8 @@ describe("policy-pipeline — executeTrip guard", () => {
 
     await handlePolicyPipeline(makeBaseInput({ domain: "commercial" }));
 
-    expect(executeTrip).not.toHaveBeenCalled();
-    expect(processLead).toHaveBeenCalled();
+    expect(executeTrip).toHaveBeenCalled();
+    expect(processLead).not.toHaveBeenCalled();
   });
 
   it("Caso 2: reservation + awaiting_confirmation + affirmativo → executeTrip", async () => {
@@ -115,14 +119,17 @@ describe("policy-pipeline — executeTrip guard", () => {
     expect(processLead).toHaveBeenCalled();
   });
 
-  it("Caso 4: information domain → NO executeTrip", async () => {
+  it("Caso 4: information domain + awaiting_confirmation + affirmativo → executeTrip", async () => {
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
+    vi.mocked(getChatSession).mockResolvedValue({
+      slots: JSON.stringify({ origin: "iguazú", destination: "aeropuerto" }),
+    } as any);
     vi.mocked(isAffirmativeMessage).mockReturnValue(true);
 
     await handlePolicyPipeline(makeBaseInput({ domain: "information" }));
 
-    expect(executeTrip).not.toHaveBeenCalled();
-    expect(processLead).toHaveBeenCalled();
+    expect(executeTrip).toHaveBeenCalled();
+    expect(processLead).not.toHaveBeenCalled();
   });
 
   it("Caso 5: reservation + non-affirmative → NO executeTrip", async () => {
@@ -135,7 +142,7 @@ describe("policy-pipeline — executeTrip guard", () => {
     expect(processLead).toHaveBeenCalled();
   });
 
-  it("Caso 6: commercial + 'sí' → NO trip creado (full flow guard)", async () => {
+  it("Caso 6: commercial + 'sí' + awaiting_confirmation → executeTrip (ya no hay gate)", async () => {
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
     vi.mocked(getChatSession).mockResolvedValue({
       slots: JSON.stringify({ origin: "iguazú", destination: "aeropuerto" }),
@@ -144,18 +151,21 @@ describe("policy-pipeline — executeTrip guard", () => {
 
     await handlePolicyPipeline(makeBaseInput({ domain: "commercial" }));
 
-    expect(executeTrip).not.toHaveBeenCalled();
-    expect(processLead).toHaveBeenCalled();
+    expect(executeTrip).toHaveBeenCalled();
+    expect(processLead).not.toHaveBeenCalled();
   });
 
-  it("Caso 7: dispatch domain → NO executeTrip (domain != reservation)", async () => {
+  it("Caso 7: dispatch domain + awaiting_confirmation + affirmativo → executeTrip", async () => {
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
+    vi.mocked(getChatSession).mockResolvedValue({
+      slots: JSON.stringify({ origin: "iguazú", destination: "aeropuerto" }),
+    } as any);
     vi.mocked(isAffirmativeMessage).mockReturnValue(true);
 
     await handlePolicyPipeline(makeBaseInput({ domain: "dispatch" }));
 
-    expect(executeTrip).not.toHaveBeenCalled();
-    expect(processLead).toHaveBeenCalled();
+    expect(executeTrip).toHaveBeenCalled();
+    expect(processLead).not.toHaveBeenCalled();
   });
 
   // ── FASE 9.2: F3 — Rechazo en awaiting_confirmation ──

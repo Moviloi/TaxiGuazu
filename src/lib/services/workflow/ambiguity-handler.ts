@@ -47,9 +47,9 @@ export interface AmbiguityState {
  */
 const RISK_NODES: Record<string, AmbiguityOption[]> = {
   aeropuerto: [
-    { display: "Aeropuerto IGR (Argentina)", canonical: "Aeropuerto IGR" },
-    { display: "Aeropuerto IGU (Brasil)", canonical: "Aeropuerto IGU" },
-    { display: "Aeropuerto AGT (Paraguay)", canonical: "Aeropuerto AGT" },
+    { display: "Aeropuerto IGR — Puerto Iguazú (Argentina)", canonical: "Aeropuerto IGR" },
+    { display: "Aeropuerto IGU — Foz do Iguaçu (Brasil)", canonical: "Aeropuerto IGU" },
+    { display: "Aeropuerto AGT — Ciudad del Este (Paraguay)", canonical: "Aeropuerto AGT" },
   ],
   centro: [
     { display: "Centro de Puerto Iguazú (Argentina)", canonical: "Centro de Puerto Iguazú" },
@@ -64,15 +64,14 @@ const RISK_NODES: Record<string, AmbiguityOption[]> = {
 
 /** Detecta si el término del usuario coincide con un risk node (match fuzzy en español/portugués/inglés) */
 function detectRiskNode(rawTerm: string): string | null {
-  const term = rawTerm.toLowerCase().trim();
+  const term = normalizeText(rawTerm).trim();
   // español
   if (term.includes("aeropuerto") || term === "airport") return "aeropuerto";
   if (term.includes("centro") || term === "centro" || term === "downtown" || term === "centro comercial") return "centro";
   if (term.includes("aduana") || term.includes("frontera") || term === "customs" || term === "border") return "aduana";
   // portugués
-  if (term.includes("aeroporto")) return "aeroporto";
-  if (term === "centro" || term.includes("centro de")) return "centro";
-  if (term.includes("alfândega") || term.includes("fronteira")) return "aduana";
+  if (term.includes("aeroporto")) return "aeropuerto";
+  if (term.includes("alfandega") || term.includes("fronteira")) return "aduana";
   return null;
 }
 
@@ -518,10 +517,16 @@ function buildContextualPlaceOptions(
 function extractRawValue(slotsJson: string, key: string): string | null {
   try {
     const slots = JSON.parse(slotsJson);
+    if (typeof slots !== "object" || slots === null || Array.isArray(slots)) return null;
     return slots[key]?.value ?? null;
   } catch {
     return null;
   }
+}
+
+/** Normaliza texto: lowercase + elimina acentos/diacríticos para matching */
+function normalizeText(t: string): string {
+  return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function parseSelection(text: string, options: AmbiguityOption[]): string | null {
@@ -532,13 +537,28 @@ function parseSelection(text: string, options: AmbiguityOption[]): string | null
     return null;
   }
 
-  // 2) Try partial match on display or canonical text (PRIORITY — no numbered options shown)
-  const lower = trimmed.toLowerCase();
-  const match = options.find(o =>
-    o.display.toLowerCase().includes(lower) ||
-    o.canonical.toLowerCase().includes(lower),
+  // 2) Partial match with accent normalization (acentos: "iguazú" == "iguazu")
+  const normalizedInput = normalizeText(trimmed);
+  let match = options.find(o =>
+    normalizeText(o.display).includes(normalizedInput) ||
+    normalizeText(o.canonical).includes(normalizedInput),
   );
   if (match) return match.canonical;
+
+  // 2b) Multi-word fallback: si el usuario escribió varias palabras,
+  //     verificar que TODAS aparezcan en el texto de la opción.
+  //     Ej: "aeropuerto iguazu" → todas las palabras están en
+  //     "Aeropuerto IGR (Argentina)" → match!
+  if (normalizedInput.includes(" ")) {
+    const userWords = normalizedInput.split(/\s+/).filter(w => w.length > 2);
+    if (userWords.length > 1) {
+      match = options.find(o => {
+        const optText = normalizeText(o.display) + " " + normalizeText(o.canonical);
+        return userWords.every(w => optText.includes(w));
+      });
+      if (match) return match.canonical;
+    }
+  }
 
   // 3) Try number selection (backward compat for sessions started before this change)
   const num = parseInt(trimmed, 10);
@@ -563,6 +583,10 @@ function extractLocationFromText(text: string): string {
 function getAmbiguityStateFromSlots(slotsJson: string): AmbiguityState | null {
   try {
     const parsed = JSON.parse(slotsJson);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      log.warn("[AMBIGUITY_PARSE] JSON.parse returned non-object", { type: typeof parsed });
+      return null;
+    }
     const amb = (parsed as any).__ambiguity;
     if (!amb) return null;
 
@@ -589,7 +613,12 @@ async function persistAmbiguityState(phone: string, state: AmbiguityState): Prom
 
 function safeParseSlots(json: string): Record<string, any> {
   try {
-    return JSON.parse(json);
+    const parsed = JSON.parse(json);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      log.warn("[SAFE_PARSE] JSON.parse returned non-object, returning {}", { type: typeof parsed });
+      return {};
+    }
+    return parsed;
   } catch {
     return {};
   }

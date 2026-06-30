@@ -584,6 +584,21 @@ export async function upsertChatSession(
   slotStates?: string | null,
 ): Promise<void> {
   await ensureSchema();
+
+  // ── TYPE GUARD: slots must be an object, not a string ──
+  // If a double-serialized string arrives (e.g. '"{}"' instead of {}),
+  // recover by parsing it back. This prevents "Cannot create property"
+  // crashes downstream and keeps the DB healthy.
+  if (typeof slots === "string") {
+    log.error("[SLOT_TYPE_GUARD] upsertChatSession received string instead of object", { phone: phone.slice(-4), value: (slots as string).substring(0, 80) });
+    try {
+      const recovered = JSON.parse(slots as string);
+      slots = typeof recovered === "object" && recovered !== null && !Array.isArray(recovered) ? recovered : {};
+    } catch {
+      slots = {};
+    }
+  }
+
   const existing = await getChatSession(phone);
   const now = Math.floor(Date.now() / 1000);
   if (existing) {
@@ -620,6 +635,16 @@ export async function updateChatSessionConversation(phone: string, conversationa
  *  Used by ambiguity-handler to store resolved place selections. */
 export async function updateChatSessionSlots(phone: string, slots: Record<string, any>): Promise<void> {
   await ensureSchema();
+  // ── TYPE GUARD: slots must be an object ──
+  if (typeof slots === "string") {
+    log.error("[SLOT_TYPE_GUARD] updateChatSessionSlots received string instead of object", { phone: phone.slice(-4), value: (slots as string).substring(0, 80) });
+    try {
+      const recovered = JSON.parse(slots as string);
+      slots = typeof recovered === "object" && recovered !== null && !Array.isArray(recovered) ? recovered : {};
+    } catch {
+      slots = {};
+    }
+  }
   await getDb().execute({
     sql: "UPDATE chat_sessions SET slots = ?, updated_at = unixepoch() WHERE phone = ?",
     args: [JSON.stringify(slots), phone],

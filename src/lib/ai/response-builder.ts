@@ -18,6 +18,19 @@ export function buildGreeting(lang: Lang, customerName?: string): string {
   return customerName ? `${greet} ${customerName}` : greet;
 }
 
+/** Intro corta con presentación de Cris, SIN instrucciones de viaje.
+ *  Se usa para mensajes combinados (saludo + pedido sustantivo en el mismo texto).
+ *  buildInformationalResponse("GREETING", lang) tiene la versión completa
+ *  con instrucciones "Decime desde dónde y hacia dónde".
+ */
+export function buildGreetingIntro(lang: Lang, customerName?: string): string {
+  const greet = lang === "en" ? "Hi!" : lang === "pt" ? "Olá!" : "¡Hola!";
+  const name = customerName ? ` ${customerName}` : "";
+  if (lang === "en") return `${greet}${name}! I'm Cris, from TaxiGuazú.`;
+  if (lang === "pt") return `${greet}${name}! Sou a Cris, da TaxiGuazú.`;
+  return `${greet}${name}! Soy Cris, de TaxiGuazú.`;
+}
+
 // ─── 2. OPERACIONAL ──────────────────────────────────────────────────────────
 
 export function inferMissingFieldFromCore(decision: CoreDecision): string | null {

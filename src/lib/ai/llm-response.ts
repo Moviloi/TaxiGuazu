@@ -52,18 +52,44 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
     );
   }
 
-  lines.push(
-    ``,
-    `REGLAS (obligatorias):`,
+  // ── Reglas base (aplican siempre) ──
+  const rules: string[] = [
     `1. No inventes datos. Usá SOLO la información del CONTEXTO.`,
     `2. Si hay precio, respetalo exactamente.`,
     `3. Tono amable, profesional, conciso (máx 3 oraciones).`,
-    `4. Respondé en el MISMO IDIOMA que el pasajero. Si escribe en portugués, respondé en portugués. Si escribe en francés, respondé en francés.`,
+    `4. Respondé en el MISMO IDIOMA que el pasajero. Si escribe en portugués, respondé en portugués.`,
     `5. Si necesitás un campo, preguntá solo por lo que falta de forma natural.`,
     `6. Si no entendiste, admitilo y pedí reformular.`,
-    `7. Si es confirmación con precio, mostrá resumen y pedí confirmación.`,
-    `8. No uses viñetas ni formato de lista. Escribí en párrafo natural.`,
-    ...(isGreeting ? [`9. Es un SALUDO. Respondé en máximo 1-2 líneas. Sé muy breve y no preguntes nada adicional.`] : []),
+    `7. No uses viñetas ni formato de lista. Escribí en párrafo natural.`,
+  ];
+
+  // ── Reglas por modo (behavioral guidelines, no scripts) ──
+  if (policy.mode === "AHORA") {
+    if (policy.decision === "EXECUTE") {
+      rules.push(`8. Es una ACCIÓN INMEDIATA. Confirmá el servicio sin demora y sin preguntar nada adicional.`);
+    } else if (policy.decision === "ANSWER") {
+      rules.push(`8. Es RESPUESTA DIRECTA. Dá el precio/ información sin extender la conversación.`);
+    } else if (policy.decision === "CLARIFY") {
+      rules.push(`8. Es CLARIFICACIÓN. Preguntá SOLO por el dato faltante (sin pedir confirmación ni repetir datos previos).`);
+    }
+  } else if (policy.mode === "RESERVA") {
+    if (policy.decision === "EXECUTE") {
+      rules.push(`8. Es una RESERVA FUTURA. Confirmá los datos y explicá que se notificará al pasajero antes del viaje.`);
+    } else if (policy.decision === "ANSWER") {
+      rules.push(`8. Respondé con contexto de la reserva. Si falta algún dato, mencionalo suavemente.`);
+    } else if (policy.decision === "CLARIFY") {
+      rules.push(`8. Es CLARIFICACIÓN PARA RESERVA. Preguntá por el dato faltante para programar el viaje futuro.`);
+    }
+  }
+
+  if (isGreeting) {
+    rules.push(`9. Es un SALUDO. Respondé en máximo 1-2 líneas. Sé muy breve y no preguntes nada adicional.`);
+  }
+
+  lines.push(
+    ``,
+    `REGLAS (obligatorias):`,
+    ...rules,
     ``,
     `TEMPLATE DE REFERENCIA (mejoralo manteniendo los datos):`,
     policy.finalResponse,

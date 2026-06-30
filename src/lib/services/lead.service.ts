@@ -1,5 +1,5 @@
 import { getConversationByPhone, insertMessage, getChatSession } from "@/lib/db/database";
-import { buildGlobalErrorMessage } from "@/lib/ai/response-builder";
+import { buildGlobalErrorMessage, buildGreetingIntro } from "@/lib/ai/response-builder";
 import { resetRequestState } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
 import type { Intent } from "@/lib/ai/types";
@@ -125,7 +125,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       log.info("[AUDIT_LIMPIAR]", {
         phone: phone.slice(-4),
         command: ".limpiar",
-        postClearSlots: postSession?.slots ? JSON.parse(postSession.slots) : null,
+        postClearSlots: postSession?.slots ? parseSessionSlots(postSession.slots) : null,
         postClearState: postState,
       });
       return;
@@ -162,6 +162,19 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       return;
     }
 
+    // ── ZONE: COMBINED GREETING + REQUEST — send persona intro before business response ──
+    // Detecta mensajes con saludo + pedido sustantivo en el mismo texto
+    // (ej: "hola quiero ir del aeropuerto al centro").
+    // Envía presentación corta de Cris y continúa al flujo normal para el mensaje de negocio.
+    if (leadCore.facts.some(f => f.startsWith("greeting:"))) {
+      const lang = detectLeadLang(text);
+      const introMsg = buildGreetingIntro(lang, customerName ?? undefined);
+      log.info("[COMBINED_GREETING]", { text, facts: leadCore.facts, introMsg });
+      await sendWhatsAppMessage(phone, introMsg);
+      await insertMessage(conversation.id, "assistant", introMsg);
+      // Continue to normal processing — the business response follows as a second message
+    }
+
     // ── ZONE: SLOT CONFIRMATION BUTTONS ──
     const SLOT_BUTTON_RE = /^(slot_confirm|slot_change|change_origin|change_destination|change_passengers|change_scheduled_at|change_back)$/;
     const slotButtonMatch = trimmed.match(SLOT_BUTTON_RE);
@@ -196,8 +209,8 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // 3) Detect slot corrections from core() roleLock or simple patterns
       let rawSlots: Record<string, any> = {};
       let rawConfidence: Record<string, number> = {};
+      rawSlots = parseSessionSlots(session?.slots ?? null) as Record<string, any>;
       try {
-        if (session?.slots) rawSlots = JSON.parse(session.slots);
         if (session?.confidence) rawConfidence = JSON.parse(session.confidence);
       } catch { /* ignore parse errors */ }
 
@@ -308,7 +321,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
         // Re-resolve pricing with actual passenger count
         let rawSlots: Record<string, any> = {};
-        try { if (session?.slots) rawSlots = JSON.parse(session.slots); } catch { /* ignore */ }
+        rawSlots = parseSessionSlots(session?.slots ?? null) as Record<string, any>;
 
         const recalculated = await resolvePricingForSlots({
           origin: rawSlots.origin?.value ?? rawSlots.origin ?? "",
@@ -492,7 +505,7 @@ export async function handleSlotConfirmationButton(
     let rawConfidence: Record<string, number> = {};
     try {
       const s = await getChatSession(phone);
-      if (s?.slots) rawSlots = JSON.parse(s.slots);
+      rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
       if (s?.confidence) rawConfidence = JSON.parse(s.confidence);
     } catch { /* ignore */ }
 

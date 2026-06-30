@@ -183,7 +183,7 @@ export async function runExtractionPipeline(
       log.info("[COMPLETENESS] awaiting_passenger: skipping completeness");
     } else if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
       log.info("[COMPLETENESS] awaiting_confirmation + affirmation: skipping completeness");
-    } else if (hasAffirmation && hasPrevSlotsLocation && convState !== "awaiting_confirmation" && convState !== "idle") {
+    } else if (hasAffirmation && hasPrevSlotsLocation && convState !== "awaiting_confirmation") {
       // User confirmed previously ambiguous location — promote existing slots
       log.info("[CONFIRMATION_STATE] affirmation + existing slots, promoting previous slots");
       log.info("[CONFIRMATION_DETECTED]", {
@@ -253,8 +253,7 @@ export async function runExtractionPipeline(
         // FASE 22.1: bypass para afirmaciones y correcciones
         if (
           (hasAffirmation || hasCorrection) &&
-          hasPrevSlotsLocation &&
-          convState !== "idle"
+          hasPrevSlotsLocation
         ) {
           log.info("[COMPLETENESS_BYPASS]", {
             reason: hasCorrection ? "user_correction" : "user_confirmation",

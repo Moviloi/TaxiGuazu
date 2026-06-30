@@ -152,7 +152,6 @@ export async function handlePolicyPipeline(
     return;
   }
 
-  if (domain === "reservation") {
     const convState = await getConversationalState(phone);
 
     if (convState === "awaiting_confirmation" && isNegativeMessage(text)) {
@@ -203,13 +202,18 @@ export async function handlePolicyPipeline(
       let rawSlots: any;
       rawSlots = parseSessionSlots(session.slots || null);
       if (Object.keys(rawSlots).length === 0) return;
-      const origin = rawSlots.origin || "";
-      const destination = rawSlots.destination || "";
-      const shortcutDispatchReady = isDispatchReady(extractionCtx, temporal);
+      const origin = String(rawSlots.origin?.value ?? rawSlots.origin ?? '');
+      const destination = String(rawSlots.destination?.value ?? rawSlots.destination ?? '');
+      const paxCount = Number(rawSlots.passengers?.value ?? rawSlots.passengers ?? 1);
+      // En el handler de afirmación, temporal "UNKNOWN" → tratarlo como NOW
+      // porque la conversación ya validó el viaje antes de llegar a awaiting_confirmation.
+      // Si el viaje requiere futuro (scheduled_at), temporalFromFacts lo detectará.
+      const effectiveTemporal = temporal === "UNKNOWN" ? "NOW" : temporal;
+      const shortcutDispatchReady = isDispatchReady(extractionCtx, effectiveTemporal);
       if (origin && destination && shortcutDispatchReady.allowed) {
         const shortcutPricing = pricing && pricing.final_price > 0
           ? pricing
-          : (await resolvePricingForSlots({ origin, destination, passengers: rawSlots.passengers || 1 })).pricingResult;
+          : (await resolvePricingForSlots({ origin, destination, passengers: paxCount })).pricingResult;
         log.info("[EXECUTION]", {
           executeNowTrip: false,
           executeTrip: true,
@@ -217,14 +221,14 @@ export async function handlePolicyPipeline(
           destination,
           price: shortcutPricing?.final_price ?? null,
           scheduled_at: rawSlots.scheduled_at ?? null,
-          passengers: rawSlots.passengers || 1,
+          passengers: paxCount,
         });
         await executeTrip({
           conversationId: conversation.id,
           phone,
           origin,
           destination,
-          passengers: rawSlots.passengers || 1,
+          passengers: paxCount,
           pricingResult: shortcutPricing,
           rawSlots,
           session,
@@ -239,7 +243,6 @@ export async function handlePolicyPipeline(
       }
       return;
     }
-  }
 
   // FASE 20.4 — Slot Confirmation UX: si hay CONFIRMATION_PENDING, mostrar confirmación antes de seguir
   if (shouldRequestConfirmation(extractionCtx)) {

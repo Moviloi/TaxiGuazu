@@ -83,6 +83,20 @@
   - 🗑️ `getOperationalZone` alias en `geo.ts` + re-export en `database.ts`
   - 🗑️ 4 params legacy conservados con comentarios (`_parsedData`, `_history`, `_customerName`, `_leadCore`, `_workflow`)
 
+### Done (2026-06-30 — Issue 1: Cover con combined greeting+request)
+- **Problema**: Usuario envía saludo + pedido en mismo mensaje ("hola quiero ir del aeropuerto al centro") → bot respondía solo con precio/confirmación sin presentarse.
+- **Solución**: Nuevo hook en `lead.service.ts` (COMBINED GREETING + REQUEST) que detecta facts `greeting:` en intents no-GREETING. Primero envía intro corta vía `buildGreetingIntro()` y luego continúa flujo normal.
+- **Implementación**:
+  - `src/lib/ai/response-builder.ts:21-32` — `buildGreetingIntro(lang, customerName?)`: intro sin instrucciones de viaje
+  - `src/lib/services/lead.service.ts:165-176` — Bloque COMBINED_GREETING entre GREETING_SHORTCUT y SLOT_CONFIRMATION_BUTTONS
+- **Por qué no buildInformationalResponse("GREETING")**: Incluye "Decime desde dónde y hacia dónde", confuso cuando usuario ya dio origen y destino.
+- **Tests**: 592/592 PASS, build PASS, enforce PASS
+
+### Done (2026-06-30 — Issue 6+7)
+- **Issue 7 — Implicit confirmation from idle**: Removido `convState !== "idle"` de extraction-runner.ts. Ahora afirmaciones como "sí" o "dale" son reconocidas incluso cuando el sistema está en estado idle, siempre que haya slots previos con origen+destino.
+- **Issue 6 — Prompt philosophy upgrade**: Refactorizado buildResponsePrompt() en llm-response.ts. policyHint ya no es decorativo — ahora genera reglas específicas por modo (AHORA/RESERVA) + decisión (EXECUTE/ANSWER/CLARIFY). Behavioral guidelines, no scripts.
+- **Validación**: 592/592 tests PASS, build PASS, enforce PASS
+
 ### Verified
 - 592/592 tests PASS
 - `npm run build` PASS
@@ -104,6 +118,7 @@
 - **getRecoveryMessage prioriza roleLock sobre session.slots** — `roleLock` refleja el estado ACTUAL del CORE (lo que se detectó en este turno), mientras `session.slots` es estado PERSISTIDO (posiblemente de turnos anteriores). roleLock es más relevante para preguntar qué falta AHORA.
 - **inferMissingFieldFromCore acepta CoreDecision** — Cambié el tipo de parámetro de `FinalDecision` (que requería un wrapper `{ core: ... }`) a `CoreDecision` directo. La función no tenía callers, así que el cambio es seguro. También se importó en comprehension-runner.ts como fallback cuando getRecoveryMessage retorna mensaje genérico.
 - **GREETING usa system prompt, no hardcode** — En lugar de cambiar la respuesta hardcodeada en `buildInformationalResponse()`, se agregó una regla en `buildResponsePrompt()` que el LLM debe seguir al mejorar el texto. Esto permite que el GREETING siga siendo LLM-generado (más natural) pero limitado a 1-2 líneas. La detección se hace por `policy.policyHint`: contiene "GREETING" cuando es un saludo.
+- **Combined greeting+request: dual-message response pattern** — Cuando el usuario envía saludo + pedido en el mismo mensaje ("hola quiero ir del aeropuerto al centro"), el bot respondía solo con el mensaje de negocio (precio/confirmación) sin presentarse. Se agregó un nuevo hook en `lead.service.ts` que detecta la presencia de facts `greeting:` en mensajes cuyo intent NO es GREETING (pure greeting ya se manejaba aparte). Cuando se detecta, envía PRIMERO un mensaje corto de presentación ("¡Hola! Soy Cris, de TaxiGuazú.") y LUEGO continúa con el flujo normal para el mensaje de negocio. Implementación: `response-builder.ts` — nueva función `buildGreetingIntro(lang, customerName?)` (intro corta SIN instrucciones de viaje); `lead.service.ts` — nuevo bloque COMBINED GREETING + REQUEST entre GREETING_SHORTCUT y SLOT_CONFIRMATION_BUTTONS. No se usó `buildInformationalResponse("GREETING")` porque incluye instrucciones "Decime desde dónde y hacia dónde", confusas cuando el usuario ya dio origen y destino.
 
 ## Relevant Files (P0 changes)
 - `src/lib/ai/llm-response.ts` — Bug case-sensitivity en validateLLMResponse (lines 91-94) + regla GREETING en buildResponsePrompt
@@ -271,6 +286,10 @@
 - **Trigger:** El usuario ve en tiempo real qué subagente está actuando y puede intervenir si detecta desvío.
 - **Cambio trivials:** Siguen exceptuados (typos, textos, config sin impacto funcional). Usar criterio del Director, documentar en MEMORY si se omitió pipeline.
 
+## Key Decisions (Issue 6+7 — 2026-06-30)
+- **Issue 7: convState !== "idle" removido — slots previos como guard principal**: Se removió `convState !== "idle"` de dos guards en extraction-runner.ts (línea 186 y 255-258). La razón: si el usuario ya tiene slots previos con origen+destino y dice "sí" o "dale" estando en idle, la afirmación es válida — no necesita re-colección. La condición `hasPrevSlotsLocation` (requiere origin AND destination) sigue siendo el guard principal. Si no hay slots previos, la afirmación cae al flujo normal de extracción. Esto resuelve el bug donde afirmaciones implícitas se ignoraban después de un pricing exitoso.
+- **Issue 6: policyHint como behavioral modifier, no etiqueta decorativa**: `policyHint` ("AHORA: ejecutar acción inmediata") era una etiqueta inyectada al prompt sin efecto real — el LLM recibía las mismas reglas base en todos los modos. Se refactorizó `buildResponsePrompt()` en `llm-response.ts` para generar reglas específicas por modo+decisión (6 combinaciones: AHORA+EXECUTE/ANSWER/CLARIFY, RESERVA+EXECUTE/ANSWER/CLARIFY). Filosofía: behavioral guidelines, no exact scripts. El LLM decide cómo decir, pero las reglas indican qué priorizar según el modo. policyHint pasó de decorativo a conductivo.
+
 ### Pattern: Silent data corruption at type/contract boundaries
 - **Trigger**: Cambio de formato de dato en estructura compartida (ej: slot de `string` a `{value, resolvedBy}`) o cambio de comportamiento de DB function (ej: `updateChatSessionSlots` de upsert a update-only). Los consumidores downstream no se actualizan porque TypeScript no detecta el mismatch en runtime y JS no lanza error.
 - **Comportamiento**: Sin error, sin warning — corrupción silenciosa.
@@ -283,3 +302,9 @@
   3. Para DB: preferir `upsert*` sobre `update*` cuando la existencia del row es incierta. Si se usa `update*`, verificar `result.rowsAffected > 0`.
   4. Type guards runtime: `typeof rawSlots.origin === "string"` para ramas legacy.
 - **Files**: `lead.service.ts:370-371,384-386` (FIX 6), `ambiguity-handler.ts` (FIX 5), `database.ts`
+
+### Pattern: Excluding idle from affirmation handling blocks implicit confirmation
+- Trigger: Feature que filtra por `convState !== "idle"` para decidir si procesar o ignorar input del usuario.
+- Risk: `idle` excluye demasiado — después de mostrar precio, el sistema puede estar en idle y el usuario afirmar naturalmente ("dale", "sí"). Excluir idle bloquea ese caso de uso aunque los slots con origen+destino estén presentes.
+- Mitigation: Usar guards de datos (ej: `hasPrevSlotsLocation`, que verifica origin AND destination en slots previos) en lugar de guards de estado para controlar si un input debe procesarse. El estado idle no implica "sin contexto" — los slots persisten en la sesión y son suficientes para procesar una afirmación.
+- Files: extraction-runner.ts
