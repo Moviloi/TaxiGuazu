@@ -194,6 +194,75 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       return;
     }
 
+    // ── ZONE: AWAITING_PASSENGER STATE ──
+    // User was shown both prices, waiting for passenger count
+    if (slotState === "awaiting_passenger") {
+      log.info("[AWAITING_PASSENGER]", { text });
+
+      const PAX_RE = /\b(\d+)\s*(personas?|pax|pasajeros?)\b/i;
+      const paxMatch = trimmed.match(PAX_RE);
+
+      if (paxMatch) {
+        const paxCount = parseInt(paxMatch[1], 10);
+        if (paxCount > 6) {
+          const msg = `Máximo 6 pasajeros por vehículo. Para ${paxCount} pasajeros necesitarían 2 vehículos. Contactanos para coordinar.`;
+          await sendWhatsAppMessage(phone, msg);
+          await insertMessage(conversation.id, "assistant", msg);
+          return;
+        }
+
+        // Re-resolve pricing with actual passenger count
+        let rawSlots: Record<string, any> = {};
+        try { if (session?.slots) rawSlots = JSON.parse(session.slots); } catch { /* ignore */ }
+
+        const recalculated = await resolvePricingForSlots({
+          origin: rawSlots.origin?.value ?? rawSlots.origin ?? "",
+          destination: rawSlots.destination?.value ?? rawSlots.destination ?? "",
+          passengers: paxCount,
+        });
+
+        if (recalculated.pricingResult.final_price > 0) {
+          const vehicleType = paxCount <= 4 ? "🚗 Auto" : "🚐 Camioneta";
+          const price = recalculated.pricingResult.final_price;
+          rawSlots.passengers = paxCount;
+          const slotsJson = JSON.stringify(rawSlots);
+          // Update session with passenger count
+          const { upsertChatSession } = await import("@/lib/db/database");
+          await upsertChatSession(phone, JSON.parse(slotsJson), undefined, "awaiting_confirmation", undefined);
+
+          const msg = `Perfecto, ${vehicleType} para ${paxCount}. El traslado cuesta $${price} ARS.\n\n¿Confirmamos el viaje?`;
+          await sendWhatsAppMessage(phone, msg);
+          await insertMessage(conversation.id, "assistant", msg);
+          await setConversationalState(phone, "awaiting_confirmation");
+          return;
+        }
+      }
+
+      // Affirmative without passenger count
+      const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
+      if (isAffirmativeMessage(trimmed)) {
+        const msg = "¿Cuántos pasajeros son así busco el vehículo correcto?";
+        await sendWhatsAppMessage(phone, msg);
+        await insertMessage(conversation.id, "assistant", msg);
+        return;
+      }
+
+      // Negative / cancel
+      if (isNegativeMessage(trimmed)) {
+        const msg = "¿Qué querés cambiar?";
+        await sendWhatsAppMessage(phone, msg);
+        await insertMessage(conversation.id, "assistant", msg);
+        await setConversationalState(phone, "collecting_slots");
+        return;
+      }
+
+      // Unrecognized — re-ask
+      const msg = "¿Cuántos pasajeros son? (ej: 'somos 3')";
+      await sendWhatsAppMessage(phone, msg);
+      await insertMessage(conversation.id, "assistant", msg);
+      return;
+    }
+
     // ── ZONE: AMBIGUITY HANDLER — resolve ambiguous locations interactively ──
     const currentConvState = await getConversationalState(phone);
     if (currentConvState === "ambiguity_pending") {
@@ -361,17 +430,21 @@ export async function handleSlotConfirmationButton(
     if (rawSlots.origin && rawSlots.destination) {
       try {
         const resolved = await resolvePricingForSlots({
-          origin: String(rawSlots.origin),
-          destination: String(rawSlots.destination),
+          origin: rawSlots.origin?.value ?? rawSlots.origin,
+          destination: rawSlots.destination?.value ?? rawSlots.destination,
           passengers: Number(rawSlots.passengers ?? 1),
         });
         if (resolved.pricingResult.final_price > 0) {
           const p = resolved.pricingResult;
           const originRaw = rawSlots.origin?.value ?? rawSlots.origin;
           const destRaw = rawSlots.destination?.value ?? rawSlots.destination;
-          const originName = p.origin.canonical_name ?? originRaw;
-          const destName = p.destination.canonical_name ?? destRaw;
-          priceMsg = `El traslado de ${originName} a ${destName} cuesta $${p.final_price} ARS.\n\n¿Confirmamos el viaje?`;
+          const originDisplay = rawSlots.origin?.display ?? originRaw;
+          const destDisplay = rawSlots.destination?.display ?? destRaw;
+          const originName = p.origin.canonical_name ?? originDisplay;
+          const destName = p.destination.canonical_name ?? destDisplay;
+          const p4p = resolved.publicPrice4p ?? p.final_price;
+          const p6p = resolved.publicPrice6p ?? p4p;
+          priceMsg = `El traslado de ${originName} a ${destName} cuesta:\n\n🚗 Auto (hasta 4): $${p4p} ARS\n🚐 Camioneta (hasta 6): $${p6p} ARS\n\n¿Cuántos pasajeros son?`;
         }
       } catch (e) {
         log.error("[SLOT_CONFIRM] pricing error:", e);
@@ -381,12 +454,12 @@ export async function handleSlotConfirmationButton(
     if (priceMsg) {
       await sendWhatsAppMessage(phone, priceMsg);
       await insertMessage(conversation.id, "assistant", priceMsg);
-      await setConversationalState(phone, "awaiting_confirmation");
+      await setConversationalState(phone, "awaiting_passenger");
     } else {
-      const originValue = rawSlots.origin?.value ?? rawSlots.origin;
-      const destValue = rawSlots.destination?.value ?? rawSlots.destination;
-      const originDn = originValue != null ? String(originValue) : "?";
-      const destDn = destValue != null ? String(destValue) : "?";
+      const originDisplay = rawSlots.origin?.display ?? rawSlots.origin?.value ?? rawSlots.origin;
+      const destDisplay = rawSlots.destination?.display ?? rawSlots.destination?.value ?? rawSlots.destination;
+      const originDn = originDisplay != null ? String(originDisplay) : "?";
+      const destDn = destDisplay != null ? String(destDisplay) : "?";
       const msg = `Gracias por confirmar los datos de tu viaje 🚖\n\n📍 De: ${originDn}\n📍 A: ${destDn}\n\nEstamos verificando la tarifa y te la confirmamos en breve por este chat.`;
       await sendWhatsAppMessage(phone, msg);
       await insertMessage(conversation.id, "assistant", msg);

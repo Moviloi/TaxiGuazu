@@ -14,9 +14,9 @@ export async function findPlaceByAlias(
 
 export async function findPlaceByName(
   name: string,
-): Promise<{ place_id: string; canonical_name: string; zone_id: string | null } | null> {
+): Promise<{ place_id: string; canonical_name: string; display_name: string | null; zone_id: string | null } | null> {
   return queryOne(
-    `SELECT place_id, canonical_name, zone_id FROM places
+    `SELECT place_id, canonical_name, display_name, zone_id FROM places
      WHERE LOWER(canonical_name) = ? AND active_status = 'active'
      LIMIT 1`,
     [name],

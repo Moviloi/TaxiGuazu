@@ -11,7 +11,7 @@
 //   8. Cuando ambos estan resueltos → transicion a slot_confirmation
 
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
-import { searchPlaces } from "@/lib/db/domains/geo";
+import { searchPlaces, findPlaceByName } from "@/lib/db/domains/geo";
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
 import { getChatSession, upsertChatSession } from "@/lib/db/database";
 import { interpretAmbiguity } from "@/lib/ai/ambiguity-interpreter";
@@ -200,10 +200,12 @@ export async function startAmbiguityResolution(
   // and we still have destination "cataratas" from the first message)
   const resolvedSlots: Record<string, any> = {};
   if (llmResolvedOrigin && !originAmbiguous) {
-    resolvedSlots.origin = { value: llmResolvedOrigin, score: 1.0, reason: "core_extracted", source: "CORE", status: "CONFIRMED" };
+    const originCand = originCandidates.find(c => c.canonical_name === llmResolvedOrigin);
+    resolvedSlots.origin = { value: llmResolvedOrigin, display: originCand?.display_name ?? llmResolvedOrigin, score: 1.0, reason: "core_extracted", source: "CORE", status: "CONFIRMED" };
   }
   if (llmResolvedDest && !destAmbiguous) {
-    resolvedSlots.destination = { value: llmResolvedDest, score: 1.0, reason: "core_extracted", source: "CORE", status: "CONFIRMED" };
+    const destCand = destCandidates.find(c => c.canonical_name === llmResolvedDest);
+    resolvedSlots.destination = { value: llmResolvedDest, display: destCand?.display_name ?? llmResolvedDest, score: 1.0, reason: "core_extracted", source: "CORE", status: "CONFIRMED" };
   }
   // Merge with existing slots + ambiguity metadata
   const currentSlots = session?.slots ? safeParseSlots(session.slots) : {};
@@ -289,7 +291,9 @@ export async function handleAmbiguityResponse(
     const newCandidates = await searchPlaces(searchText, 5);
     if (newCandidates.length === 1) {
       // Perfect match — resolve directly and persist to session slots
-      const newCanonical = newCandidates[0].canonical_name;
+      const newCand = newCandidates[0];
+      const newCanonical = newCand.canonical_name;
+      const newDisplay = newCand.display_name ?? newCanonical;
       log.info("[AMBIGUITY_RESOLVED_FROM_TEXT]", { field: clarifyField, value: newCanonical });
       if (clarifyField === "origin") {
         ambState.resolvedOrigin = newCanonical;
@@ -299,7 +303,7 @@ export async function handleAmbiguityResponse(
       // Persist resolved slot to chat_sessions.slots (context preservation)
       const slotUpdate: Record<string, any> = {};
       const resolvedKey = clarifyField === "origin" ? "origin" : "destination";
-      slotUpdate[resolvedKey] = { value: newCanonical, score: 1.0, reason: "user_typed", source: "USER_CONFIRMED", status: "CONFIRMED" };
+      slotUpdate[resolvedKey] = { value: newCanonical, display: newDisplay, score: 1.0, reason: "user_typed", source: "USER_CONFIRMED", status: "CONFIRMED" };
       const currentSlots = freshSession?.slots ? safeParseSlots(freshSession.slots) : {};
       const merged = { ...currentSlots, ...slotUpdate, __ambiguity: ambState };
       await upsertChatSession(phone, merged, undefined, undefined, undefined);
@@ -402,10 +406,15 @@ async function finalizeAmbiguity(
 ): Promise<void> {
   // Write resolved values into chat_sessions.slots
   const currentSlots = freshSession?.slots ? safeParseSlots(freshSession.slots) : {};
+  const originPlace = ambState.resolvedOrigin ? await findPlaceByName(ambState.resolvedOrigin) : null;
+  const destPlace = ambState.resolvedDest ? await findPlaceByName(ambState.resolvedDest) : null;
+  const originDisplay = originPlace?.display_name ?? ambState.resolvedOrigin;
+  const destDisplay = destPlace?.display_name ?? ambState.resolvedDest;
   const updatedSlots = {
     ...currentSlots,
     origin: {
       value: ambState.resolvedOrigin,
+      display: originDisplay,
       score: 1.0,
       reason: "user_selected",
       source: "USER_CONFIRMED",
@@ -413,6 +422,7 @@ async function finalizeAmbiguity(
     },
     destination: {
       value: ambState.resolvedDest,
+      display: destDisplay,
       score: 1.0,
       reason: "user_selected",
       source: "USER_CONFIRMED",
@@ -429,7 +439,7 @@ async function finalizeAmbiguity(
   await upsertChatSession(phone, updatedSlots, undefined, "slot_confirmation", undefined);
 
   // Show confirmation with the resolved values
-  const confirmationMsg = `Solo para confirmar los datos del viaje:\n\n📍 *Origen:*\n✅ ${ambState.resolvedOrigin}\n\n📍 *Destino:*\n✅ ${ambState.resolvedDest}\n\n¿Está correcto?`;
+  const confirmationMsg = `Solo para confirmar los datos del viaje:\n\n📍 *Origen:*\n✅ ${originDisplay}\n\n📍 *Destino:*\n✅ ${destDisplay}\n\n¿Está correcto?`;
   await sendAndPersist(phone, conversationId, confirmationMsg);
 
   log.info("[AMBIGUITY_COMPLETE]", {

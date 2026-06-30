@@ -23,7 +23,8 @@ export interface SlotConversationalContext {
 const VALID_SLOT_TRANSITIONS: Record<SlotConversationalState, SlotConversationalState[]> = {
   idle: ["collecting_slots", "awaiting_confirmation"],
   collecting_slots: ["collecting_slots", "slot_confirmation", "awaiting_confirmation"],
-  slot_confirmation: ["collecting_slots", "awaiting_confirmation", "pending_human_review"],
+  slot_confirmation: ["collecting_slots", "awaiting_passenger", "awaiting_confirmation", "pending_human_review"],
+  awaiting_passenger: ["collecting_slots", "awaiting_confirmation"],
   awaiting_confirmation: ["collecting_slots"],
   pending_human_review: ["idle"],
   ambiguity_pending: ["slot_confirmation", "idle", "collecting_slots"],

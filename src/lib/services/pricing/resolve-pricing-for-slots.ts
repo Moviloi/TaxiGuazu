@@ -23,6 +23,8 @@ export interface PricingDivergence {
 export interface ResolvedPricing {
   pricingResult: PricingResult;
   divergence: PricingDivergence | null;
+  publicPrice4p: number | null;
+  publicPrice6p: number | null;
 }
 
 export async function resolvePricingForSlots(input: PricingSlotsInput): Promise<ResolvedPricing> {
@@ -38,5 +40,10 @@ export async function resolvePricingForSlots(input: PricingSlotsInput): Promise<
     };
   }
 
-  return { pricingResult, divergence };
+  return { 
+    pricingResult, 
+    divergence,
+    publicPrice4p: tariffMatch.publicPrice4p,
+    publicPrice6p: tariffMatch.publicPrice6p,
+  };
 }

@@ -179,7 +179,9 @@ export async function runExtractionPipeline(
     // FASE 20.4: Correction detection — user correcting a previously extracted slot
     hasCorrection = isCorrectionMessage(text);
 
-    if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
+    if (convState === "awaiting_passenger") {
+      log.info("[COMPLETENESS] awaiting_passenger: skipping completeness");
+    } else if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
       log.info("[COMPLETENESS] awaiting_confirmation + affirmation: skipping completeness");
     } else if (hasAffirmation && hasPrevSlotsLocation && convState !== "awaiting_confirmation" && convState !== "idle") {
       // User confirmed previously ambiguous location — promote existing slots

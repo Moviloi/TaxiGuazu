@@ -45,6 +45,19 @@
   - Fallback: recuerda al usuario usar los botones
   - 50 tests, 591 tests PASS, 0 errores TS en lead.service.ts
 
+### Done (2026-06-30 — segunda parte: display_name, awaiting_passenger)
+- **FIX 6b — String(rawSlots.origin) en lead.service.ts (2 locations)**: Mismo bug que FIX 6 pero en los calls que alimentan resolvePricingForSlots. Desbloquea pricing.
+- **7d — Display_name poblado para 193 places en Turso**: Formato "Aeropuerto IGR (Argentina)", "Centro de Foz do Iguaçu (Brasil)". Seed-data.ts auto-genera display_name si es null.
+- **7a — display_name en slots al resolver ambigüedad**: ConfirmedSlot.display?: string. 4 lugares en ambiguity-handler.ts y slot-confirmation.ts.
+- **7e — .display ?? .value en mensajes al usuario**: lead.service.ts, ambiguity-handler.ts. Fix naming completo.
+- **7b+7c — Nuevo estado awaiting_passenger**:
+  - slot_confirmation muestra ambos precios (4p y 6p) + pregunta pasajeros
+  - PAX_RE match → re-resuelve pricing → awaiting_confirmation
+  - >6 pax → "máximo 6, contactanos"
+  - Afirmativo sin cantidad → "¿Cuántos pasajeros?"
+  - Negativo → collecting_slots
+  - 7 archivos modificados
+
 ### Done (P0 fixes — 2026-06-29)
 - **P0.1: Bug `!swapped` en llm-response.ts** — Corregido error de case-sensitivity en `validateLLMResponse()`: `llmText.includes(origin)` → `llmText.toLowerCase().includes(origin)`. La validación ahora compara ambas cadenas en lowercase, evitando falsos negativos cuando el LLM capitaliza nombres de lugares. Variable `swapped` renombrada a `llmLow`/`matchesDest`/`matchesOrigin` para claridad.
 - **P0.2a: Liberar Groq para extracción con typos** — `extract-slots.ts`: cambiada condición de early-return: solo retorna temprano cuando regex/entity encuentra AMBOS slots (origin AND destination). Si encuentra solo uno, continúa al LLM para completar el faltante. Esto permite detectar "queiro ira al centro" (typos) via LLM aunque regex falle.
@@ -71,13 +84,12 @@
   - 🗑️ 4 params legacy conservados con comentarios (`_parsedData`, `_history`, `_customerName`, `_leadCore`, `_workflow`)
 
 ### Verified
-- 591/591 tests PASS
+- 592/592 tests PASS
 - `npm run build` PASS
 - `bash ael/contracts/enforce.sh` PASS (R1, R2, R3)
 
 ### Open
-- **P5: Geo alias resolution en slot_confirmation text handler** — Integrar `resolveAlias()` en P4 para resolver raw values a nombres canónicos antes de mostrar confirmación. No crítico porque `resolvePricingForSlots()` resuelve alias downstream al confirmar.
-- **Desambiguación interactiva batch** — Próximo feature mayor: wirear `buildPlaceOptions()` con nuevo estado `ambiguity_pending` para que el usuario seleccione origen Y destino antes de enviar respuesta única, no responder después de cada click.
+- **P5: Display_name en toda la cadena de mensajes** — Parcialmente resuelto (7a/7e cubre slot_confirmation y ambiguity). Pendiente: propagar display_name a mensajes de recovery y extracción.
 
 ## Hardening (2026-06-29)
 - **CHECK resolution_priority (1-4)** via triggers + in CREATE TABLE

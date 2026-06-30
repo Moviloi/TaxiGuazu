@@ -155,7 +155,7 @@ function buildReservaFinalResponse(
 
   // Confirmación de booking: usuario afirma mientras el workflow esperaba confirmación.
   // La policy reconoce que el usuario ya dijo sí y produce el mensaje de booking aceptado.
-  if (decision.core.facts.some((f) => f.startsWith("affirmation:")) && extraction?.conversationalState === "awaiting_confirmation") {
+  if (decision.core.facts.some((f) => f.startsWith("affirmation:")) && (extraction?.conversationalState === "awaiting_confirmation" || extraction?.conversationalState === "awaiting_passenger")) {
     const origin = extraction.tariff?.displayOrigin ?? extraction.tariff?.canonicalOrigin ?? String(extraction.slots.origin?.value ?? "");
     const destination = extraction.tariff?.displayDestination ?? extraction.tariff?.canonicalDestination ?? String(extraction.slots.destination?.value ?? "");
     const price = extraction.tariff?.price;
@@ -198,7 +198,7 @@ function buildReservaFinalResponse(
         nextExpectedFields: [extraction.clarifyField],
       };
     }
-    if (extraction.conversationalState === "awaiting_confirmation") {
+    if (extraction.conversationalState === "awaiting_confirmation" || extraction.conversationalState === "awaiting_passenger") {
       return {
         finalResponse: buildNoTariffConfirmation(extraction, lang),
         nextExpectedFields: ["affirmation"],
@@ -408,7 +408,7 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { re
 
   if (extraction.slots.scheduled_at?.value) return null;
 
-  if (extraction.conversationalState === "awaiting_confirmation") return null;
+  if (extraction.conversationalState === "awaiting_confirmation" || extraction.conversationalState === "awaiting_passenger") return null;
 
   const displayOrigin = extraction.tariff?.displayOrigin;
   const displayDest = extraction.tariff?.displayDestination;

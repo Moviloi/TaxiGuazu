@@ -1,19 +1,29 @@
-# TASK PLAN — Bug [object Object] en confirmación de viaje
+# TASK PLAN — Orden lógico: pricing + naming + pasajeros
 
 ## Goal
-Corregir la interpolación de `[object Object]` en el mensaje post slot_confirmation. Los slots ahora se almacenan como objetos `ConfirmedSlot` (`{ value, score, reason, ... }`) pero `lead.service.ts` los trata como strings planos.
+1. **6b**: Desbloquear pricing (String(rawSlots.origin) → [object Object])
+2. **7d**: Poblar display_name = "canonical (País)" para los 214 places
+3. **7a+7e**: Almacenar y usar display_name en slots y mensajes al usuario
+4. **7b+7c**: Mostrar ambos precios (4p+6p) + pregunta pasajeros + flujo confirmación
 
 ## Scope
-- `src/lib/services/lead.service.ts` — 2 lugares: líneas ~370-371 y ~384-386
+- `src/lib/services/lead.service.ts` — 6b, 7b, 7c
+- `src/lib/services/workflow/ambiguity-handler.ts` — 7a
+- `scripts/seed-data.ts` — 7d
+- Migración SQL (conexión directa Turso) — 7d
+- Archivos que formatean mensajes al usuario (response-builder, slot-confirmation, etc.) — 7e
 
 ## Priority
-P0 — UX rota. El mensaje de confirmación muestra "[object Object]" en lugar del nombre del lugar.
+🔴 Bug 6b bloquea todo pricing → primero
+🟡 7d naming → base para 7a+7e
+🟡 7a+7e display_name en UX
+🟡 7b+7c flujo completo pasajeros
 
 ## Phases
-1. [DONE] Director — analizar, generar TASK_PLAN
-2. [DONE] Explorer — descubrir origen del bug
-3. [NOW] Architect — validar fix propuesto contra ADRs
-4. [NEXT] Implementer — aplicar fix en lead.service.ts
-5. [NEXT] Auditor — ejecutar tests, build, enforce
+1. [NOW] Director — planificar
+2. [NOW] Explorer — explorar country format, seed data, ambiguity storage
+3. [NEXT] Architect — validar plan contra ADRs
+4. [NEXT] Implementer — 6b + 7d + 7a + 7e + 7b + 7c
+5. [NEXT] Auditor — tests + build + enforce
 6. [NEXT] Memory — actualizar MEMORY.md
 7. [NEXT] Learning — extraer patrones

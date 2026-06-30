@@ -592,13 +592,16 @@ async function seed() {
   console.log(`  ✓ ${ZONES.length} zonas`);
 
   // ── Places ─────────────────────────────────────────────────────
+  const COUNTRY_MAP: Record<string, string> = { AR: "Argentina", BR: "Brasil", PY: "Paraguay" };
   for (const p of PLACES) {
+    const displayName = p.display_name
+      ?? `${p.canonical_name} (${COUNTRY_MAP[p.country ?? ""] ?? p.country ?? ""})`.trim();
     await db.execute({
       sql: `INSERT OR IGNORE INTO places
         (place_id, canonical_name, official_name, display_name, google_maps_name,
          place_type, city, country, tourist_relevance_score, zone_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [p.place_id, p.canonical_name, p.official_name, p.display_name, p.google_maps_name,
+      args: [p.place_id, p.canonical_name, p.official_name, displayName, p.google_maps_name,
         p.place_type, p.city, p.country, p.tourist_relevance_score, p.zone_id],
     });
   }

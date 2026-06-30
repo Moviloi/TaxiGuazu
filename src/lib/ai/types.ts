@@ -14,7 +14,7 @@ export type OutputType = "EXECUTE" | "ANSWER" | "CLARIFY" | "SAFE_FALLBACK";
 
 export type ConversationDomain = "information" | "commercial" | "reservation" | "dispatch";
 
-export type ConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_confirmation" | "pending_human_review" | "ambiguity_pending";
+export type ConversationalState = "idle" | "collecting_slots" | "slot_confirmation" | "awaiting_passenger" | "awaiting_confirmation" | "pending_human_review" | "ambiguity_pending";
 
 export type DispatchState = "idle" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver" | "closed";
 
@@ -79,6 +79,7 @@ export interface FinalDecision {
 // Slot confirmado (origen, destino, pasajeros, horario, vuelo, etc.)
 export interface ConfirmedSlot {
   value: string | number | null;
+  display?: string;
   score: number;
   reason: string;
   source?: string;
