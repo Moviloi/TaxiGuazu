@@ -367,8 +367,10 @@ export async function handleSlotConfirmationButton(
         });
         if (resolved.pricingResult.final_price > 0) {
           const p = resolved.pricingResult;
-          const originName = p.origin.canonical_name ?? rawSlots.origin;
-          const destName = p.destination.canonical_name ?? rawSlots.destination;
+          const originRaw = rawSlots.origin?.value ?? rawSlots.origin;
+          const destRaw = rawSlots.destination?.value ?? rawSlots.destination;
+          const originName = p.origin.canonical_name ?? originRaw;
+          const destName = p.destination.canonical_name ?? destRaw;
           priceMsg = `El traslado de ${originName} a ${destName} cuesta $${p.final_price} ARS.\n\n¿Confirmamos el viaje?`;
         }
       } catch (e) {
@@ -381,8 +383,10 @@ export async function handleSlotConfirmationButton(
       await insertMessage(conversation.id, "assistant", priceMsg);
       await setConversationalState(phone, "awaiting_confirmation");
     } else {
-      const originDn = String(rawSlots.origin ?? "?");
-      const destDn = String(rawSlots.destination ?? "?");
+      const originValue = rawSlots.origin?.value ?? rawSlots.origin;
+      const destValue = rawSlots.destination?.value ?? rawSlots.destination;
+      const originDn = originValue != null ? String(originValue) : "?";
+      const destDn = destValue != null ? String(destValue) : "?";
       const msg = `Gracias por confirmar los datos de tu viaje 🚖\n\n📍 De: ${originDn}\n📍 A: ${destDn}\n\nEstamos verificando la tarifa y te la confirmamos en breve por este chat.`;
       await sendWhatsAppMessage(phone, msg);
       await insertMessage(conversation.id, "assistant", msg);

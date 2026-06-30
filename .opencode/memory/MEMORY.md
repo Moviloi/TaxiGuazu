@@ -1,53 +1,36 @@
 ﻿# Anchored Summary
 
 ## Goal
-- P0 fixes for test conversation failures: LLM validation bug, G7 comprehension asking wrong question, GREETING too verbose
-- Fix case-sensitivity bug in llm-response.ts validation that silently rejected valid LLM responses
-- Make extraction fall through to LLM when regex/entity finds only partial slots (not returning early)
-- Make getRecoveryMessage() consult roleLock to ask specifically for missing field (origin vs destination)
-- Activate dormant inferMissingFieldFromCore() as fallback when roleLock doesn't resolve
-- Constrain GREETING LLM enhancement to 2 lines max via system prompt
+- Fix bot's slot assignment confusion: "desde el aeropuerto hasta el centro" was interpreted as "vas a aeropuerto" (rawOrigin/rawDest bug at line 207)
+- Remove numbered options from slot confirmation — natural language only
+- Establish bot persona ("Soy Cris, de TaxiGuazú") from first turn to guide user tacitly
+- Fix session row not created after .limpiar: UPDATE-only functions silently fail when row is DELETED
+- Real chat patterns show Cristian gives prices directly without clarification — match this behavior
 
 ## Constraints & Preferences
-- Bug fixes are P0 — unblock the test conversation flow before any new features
-- Changes must be minimal and targeted — no refactors, no dead code cleanup in this pass
-- Mock files must be updated alongside production code when imports change
-- All 591 tests must continue passing
+- No numbered options or buttons — natural language questions only
+- Bot should guide tacitly with persona, not rigid rules
+- Code acts as "resource of information, conditions, and certainty" — not handcuffs
+- All 592 tests must pass; build and AEL contracts green
 
 ## Progress
-### Done
-- **Schema purge** â€” `connection.ts`: removed `price_4p`, `price_6p`, `base_price_4p`, `base_price_6p` from `CREATE TABLE tariffs`; added `ALTER TABLE tariffs DROP COLUMN` for all four legacy columns; added missing `ALTER TABLE tariffs ADD COLUMN` for `public_price_4p/6p`, `driver_price_4p/6p`, `active`, `origin_place_id`, `destination_place_id`, `origin_zone_id`, `destination_zone_id`
-- **Types purge** â€” `types.ts`: removed `price_4p`, `price_6p`, `base_price_4p`, `base_price_6p` from `TariffRow`; `database.ts`: `getTariffById()` returns `driver_price_4p/6p` instead of legacy `base_price_4p/6p`
-- **Service layer purge** â€” all `?? row.price_4p` / `?? row.base_price_6p` fallback chains eliminated from `tariff-resolver.ts`, `trips.ts`, `database.ts`, `admin-commands.ts`, `dispatch.service.ts`
-- **Seed data cleanup** â€” `seed-data.ts`: removed `price_4p`, `price_6p` from INSERT; added `piso_4p`, `piso_6p` (aliased to `driver4p`/`driver6p`) to satisfy live Turso schema's `NOT NULL` constraint on the old columns
-- **Seed executed against Turso** â€” Full dataset live in Turso: 19 zones, 37 places, 158 aliases, 122 tariffs
-- **Tests updated** â€” `tariff-resolver.test.ts` and `dispatch.service.test.ts`: mocks use only `public_price_4p/6p`, `driver_price_4p/6p`, `resolution_priority`; no legacy fields
-- **Validation** â€” 591/591 tests PASS, `npm run build` PASS, `enforce.sh` PASS
-- **TARIFARIO TRASLADOS.xlsx analyzed** â€” 77 data rows classified: 49 solo ida, 24 tours (ida y vuelta), 4 waiting rates (adicional)
-- **Schema extensions** â€” Added `tours` and `waiting_rates` tables to `connection.ts` with proper CHECK constraints and FK references
-- **New interfaces** â€” `TourRow`, `WaitingRateRow` added to `types.ts`
-- **Domain modules** â€” `domains/tours.ts` (CRUD: getTourById, listActiveTours, findTour, insertTour, updateTour, deleteTour) and `domains/waitingRates.ts` (CRUD: getWaitingRateById, listActiveWaitingRates, findWaitingRateByZone, insertWaitingRate, updateWaitingRate)
-- **Tour resolver** â€” `services/pricing/tour-resolver.ts` with `resolveTour()` (by text) and `resolveTourByPlaceIds()` (by ID), returning `TourMatch` with prices, driver payout, waypoints, wait_hours
-- **CRUD script** â€” `scripts/tarifario-crud.ts`: reads TARIFARIO TRASLADOS.xlsx, classifies each row (tariff/tour/waiting_rate), resolves to Turso place/zone IDs, upserts with `INSERT OR IGNORE` and UPDATE by geo IDs then text fallback; cargÃ³ `.env` manualmente para funcionar con `npx tsx`
-- **Turso populated** â€” 29 zones, 214 places (all with zone_id assigned), 37 active tariffs (all with Excel prices), 22 tours, 4 waiting rates
-- **CRUD mapping correction** â€” Fixed place_ids/zone_ids from `puerto_iguazu_centro` â†’ `ar_centro_iguazu_area`, `foz_centro` â†’ `br_centro_foz_area`, `ZONE_IGR_CENTRO` â†’ `CENTRO`, etc. to match Turso convention (`{country}_{type}_{name}`)
-- **Orphans deleted** â€” 51 legacy tariffs without prices + 2 corrupt entries (empty origin, test data) â†’ soft-deleted
-- **37 final tariffs** â€” all with `public_price_4p/6p` and `driver_price_4p/6p` from Excel. Reference zones by `zone_id` directly (no place_id usage)
-- **Load masivo de places (114 nuevos)** â€” Basado en listado exhaustivo del usuario: hoteles, hostels, airbnbs, restaurantes, atracciones, landmarks, organizados por zona. Todos los 214 places tienen `zone_id` asignado.
-- **MigraciÃ³n tabla places** â€” CHECK constraints relajados: `city` sin restricciÃ³n, `country` sin restricciÃ³n, `place_type` expandido con `area`, `landmark`, `airbnb`, `bar`, `border`, `lodge`, `house`.
-- **DistribuciÃ³n final por zona**: CENTRO(58), CDE_MICROCENTRO(28), FOZ_CENTRO(25), FOZ_HOTEIS(18), CATARATAS(7), LD_SAN_IGNACIO(6), LD_MOCONA(6), ACCESO_RUTA12(6), LD_WANDA(5), ITAIPU(5), HITO_Y_COSTANERA(5), CATARATAS_BR(5), y 17 zonas mÃ¡s con 1-4 places cada una.
-- **Hardening completado (2026-06-29)**:
-  - CHECK `resolution_priority BETWEEN 1 AND 4` aplicado vÃ­a triggers + CREATE TABLE
-  - CHECK `crosses_border IN (0,1)` aplicado vÃ­a triggers + CREATE TABLE
-  - Modality NO restringida (valores diversos en espaÃ±ol)
-  - Ãndices creados: `places(zone_id)`, `places(place_type)`, `tariffs(active,resolution_priority)`
-  - `connection.ts` sincronizado con DB real (operational_zone, NOT NULLs, CHECKs)
-  - 4 triggers de integridad creados y verificados
-  - Data audit: 0 referencias huÃ©rfanas en tarifas activas
-- **Build fixes (2026-06-29)**:
-  - `connection.ts:506,512`: libSQL `Row` type casts via `as unknown as Array<{...}>` (TS no puede inferir schema de Row)
-  - `geo-engine.ts`: `ZoneExpansionResult` re-exportado (habÃ­a sido eliminado accidentalmente en refactor; `context-memory.ts` lo necesita)
-  - `driver.service.ts:545`: bug `tariff`â†’`tariffMatch` (variable no definida) + `id`â†’`tariffId` (propiedad incorrecta para `TariffV2Match`)
+### Done (archived — see git log for full detail)
+- Schema/tarifario/CRUD migration, 591 tests, Turso populated, hardening, build fixes (2026-06-29)
+- Regex lookahead fix for "desde el centro a cataratas": DESDE_RE, IR_A_RE, HASTA_RE (core.ts)
+- Phase A: Context loss fix — non-ambiguous slots persisted before ambiguity_pending
+- Phase B: Triple-risk nodes + no numbered options — RISK_NODES, detectRiskNode(), buildContextualPlaceOptions()
+- Phase C: Blog knowledge extraction — src/lib/ai/iguazu-knowledge.ts
+- Phase D: DB aliases already cover all blog places
+
+### Done (2026-06-30 — FIXES 1-5)
+- **FIX 1 — rawOrigin/rawDest bug (ambiguity-handler.ts:207)**: `rawOrigin ?? rawDest ?? ""` → `isOrigin ? rawOrigin : rawDest`. Fixes "Entendí que vas a aeropuerto" when user said "desde el aeropuerto hasta el centro"
+- **FIX 2 — Greeting with persona (response-builder.ts:141-147)**: "¡Hola! ¿En qué puedo ayudarte?" → "¡Hola! Soy Cris, de TaxiGuazú. Decime desde dónde y hacia dónde necesitás el traslado."
+- **FIX 3 — Persona in extraction prompt (extraction-prompt.ts:20)**: "Eres un extractor de datos" → "Eres Cris, asistente virtual de TaxiGuazú en la Triple Frontera..."
+- **FIX 4 — Context-aware retry (ambiguity-handler.ts + ambiguity-interpreter.ts)**: When LLM resolves one slot but not the other, retry the unresolved slot passing the resolved slot as context (e.g., origin="Aeropuerto IGR" → context to resolve "centro" as "Centro de Puerto Iguazú")
+- **FIX 5 — Session row creation after .limpiar (ambiguity-handler.ts)**: All 4 `updateChatSessionSlots` calls changed to `upsertChatSession`. Root cause: after `.limpiar`, `chat_sessions` row is DELETED; UPDATE-only silently affects 0 rows; session is never re-created → slot_confirmation → pricing flow broken → bot responds "¿Desde dónde salís?"
+- **FIX 6 — [object Object] en confirmación (lead.service.ts:370-371, 384-386)**: Los slots ahora son objetos `ConfirmedSlot` → `String(rawSlots.origin)` produce `"[object Object]"`. Fix: `rawSlots.origin?.value ?? rawSlots.origin` antes de interpolar. Tests 592/592 PASS.
+- **Validation**: 592/592 tests PASS, `npm run build` PASS, `enforce.sh` PASS
+- **Committed and pushed**: all 5 fixes in 2 commits (c953756 + 2b5362e) → Vercel auto-deploy
 - **Test fixes (2026-06-29)**:
   - `geo-engine.test.ts`: 6 tests adaptados â€” `resolveGeoRoute` ya no retorna zone IDs ni subzones; retorna `null` zones + `"MEDIUM"` routeType
   - Mocks agregados a 3 test files: `findPlaceByAlias`, `findPlaceByName`, `findTariffByPriority`, `queryOne`
@@ -233,3 +216,58 @@
 ### Pattern: SETUP_TEARDOWN para chequeo de state
 - Trigger: Tests que verifican slots confirmados, valores de DB, o cambios de estado despues de una operacion.
 - Note: Los tests actuales usan afterAll para restaurar state via SETUP_TEARDOWN. Si un test modifica getConnectionValue/setConnectionValue, el cleanup debe ocurrir en afterEach o afterAll dependiendo de si los tests comparten estado.
+
+### Critical Bug Pattern: rawOrigin ?? rawDest ?? "" siempre retorna rawOrigin
+- Trigger: Ambos slots son ambiguos pero solo uno está sin resolver. `rawOrigin ?? rawDest ?? ""` evalúa rawOrigin (no-null) aunque firstSlot sea destination.
+- Fix: Usar `isOrigin ? rawOrigin : rawDest` para que coincida con el slot que se está preguntando.
+- Archivo: `ambiguity-handler.ts:207`
+- Síntoma: Bot dice "Entendí que vas a aeropuerto" cuando firstSlot es origin y rawOrigin="aeropuerto".
+
+### Critical Bug Pattern: UPDATE-only silencioso tras DELETE (.limpiar)
+- Trigger: `.limpiar` borra la fila de `chat_sessions`. Luego `updateChatSessionSlots()` ejecuta UPDATE que afecta 0 filas sin error. La sesión nunca se recrea.
+- Síntoma: Bot ignora slots confirmados en turno anterior y vuelve a preguntar "¿Desde dónde salís?" en vez de dar precio.
+- Fix: Usar `upsertChatSession(phone, slots, undefined, convState, undefined)` que hace INSERT+UPDATE, creando la fila si no existe.
+- Archivo: `ambiguity-handler.ts` — 4 calls cambiados de `updateChatSessionSlots` a `upsertChatSession`.
+- Regla aprendida: Cualquier función que modifique `chat_sessions` después de `.limpiar` debe ser INSERT+UPDATE, no solo UPDATE.
+
+### Pattern: Bot persona desde el primer turno
+- Trigger: Primer mensaje del usuario ("hola", "buenas", etc.) detectado como GREETING.
+- Comportamiento: La respuesta incluye presentación ("Soy Cris, de TaxiGuazú") + pregunta tácita por ambos slots ("Decime desde dónde y hacia dónde").
+- Fundamento: En los chats reales, Cristian se presenta naturalmente y el usuario responde con ambos lugares. Guía sin preguntar explícitamente paso a paso.
+- Archivos: `response-builder.ts:141-147`
+
+### Pattern: LLM necesita persona en TODOS los prompts
+- Trigger: Cualquier llamada a LLM que procese input del usuario (extracción, interpretación, respuesta).
+- Regla: El system prompt debe establecer quién es el asistente ("Cris, asistente virtual de TaxiGuazú en la Triple Frontera") para que el LLM entienda geografía, contexto y rol.
+- Justificación: Sin persona, el LLM trata "centro" como genérico y no lo asocia con "Centro de Puerto Iguazú" cuando el origen es IGR.
+- Archivo: `extraction-prompt.ts:20`
+
+### Pattern: Context-aware retry para slots ambiguos
+- Trigger: LLM resuelve un slot (ej. origin="Aeropuerto IGR") pero el otro queda ambiguo (ej. "centro").
+- Comportamiento: En vez de preguntar al usuario, se reintenta el slot no resuelto pasando el resuelto como contexto adicional en el prompt.
+- Prompt: "CONTEXTO ADICIONAL: El otro slot ya se resolvió como: {nombre del lugar resuelto}. Usá esta información para desambiguar el slot restante."
+- Resultado: LLM infiere "centro" = "Centro de Puerto Iguazú" por coherencia geográfica, sin preguntar al usuario.
+- Coincide con: Comportamiento de Cristian en chats reales (nunca pregunta por "centro" cuando ya sabe que el origen es aeropuerto IGR).
+- Archivos: `ambiguity-interpreter.ts`, `ambiguity-handler.ts`
+
+### Decision: Modo de operación del ARNES (2026-06-30)
+- **Acordado:** A partir de ahora, el Director ejecuta el pipeline completo de 7 fases para TODO cambio que no sea trivial (typo, texto, config).
+- **Identidad visible:** Cada mensaje muestra el tag del rol activo: `[ael]` Director, `[ael-explore]` Explorer, `[ael-architect]` Architect, `[ael-implementer]` Implementer, `[ael-audit]` Auditor, `[ael-memory]` Memory, `[ael-learning]` Learning.
+- **Subagentes delegados:** Cada fase se delega al subagente correspondiente via `@ael-{rol}`. El Director ya no ejecuta fases que no le corresponden.
+- **Artefactos formales:** Cada fase genera su artefacto `.md` en `ael/artifacts/` antes del handoff.
+- **Velocidad vs formalidad:** Se acepta que el pipeline completo es más lento. La compensación (calidad, trazabilidad, veto independiente) se considera prioritaria.
+- **Trigger:** El usuario ve en tiempo real qué subagente está actuando y puede intervenir si detecta desvío.
+- **Cambio trivials:** Siguen exceptuados (typos, textos, config sin impacto funcional). Usar criterio del Director, documentar en MEMORY si se omitió pipeline.
+
+### Pattern: Silent data corruption at type/contract boundaries
+- **Trigger**: Cambio de formato de dato en estructura compartida (ej: slot de `string` a `{value, resolvedBy}`) o cambio de comportamiento de DB function (ej: `updateChatSessionSlots` de upsert a update-only). Los consumidores downstream no se actualizan porque TypeScript no detecta el mismatch en runtime y JS no lanza error.
+- **Comportamiento**: Sin error, sin warning — corrupción silenciosa.
+  - `String(rawSlots.origin)` → `"[object Object]"`
+  - `updateChatSessionSlots()` → UPDATE afecta 0 filas, sesión jamás recreada, bot se resetea
+- **Causa raíz**: TypeScript borra los tipos en runtime. `String(object)` es JS válido. `UPDATE` con 0 filas es SQL válido. No hay contratos defensivos en fronteras entre módulos.
+- **Mitigación sistemática**:
+  1. Al cambiar tipo de un dato (string→objeto), buscar TODOS los consumidores con `grep -r "rawSlots\." src/` o el nombre de propiedad afectado.
+  2. Patrón defensivo: `rawSlots.origin?.value ?? rawSlots.origin` — funciona con string legacy y objeto nuevo.
+  3. Para DB: preferir `upsert*` sobre `update*` cuando la existencia del row es incierta. Si se usa `update*`, verificar `result.rowsAffected > 0`.
+  4. Type guards runtime: `typeof rawSlots.origin === "string"` para ramas legacy.
+- **Files**: `lead.service.ts:370-371,384-386` (FIX 6), `ambiguity-handler.ts` (FIX 5), `database.ts`
