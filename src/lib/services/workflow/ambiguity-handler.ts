@@ -272,6 +272,53 @@ export async function handleAmbiguityResponse(
 
   const lang = detectLeadLang(text);
 
+  // Country filter: si el usuario dice un país (ej: "Argentina"), filtrar
+  // opciones a ese país y auto-seleccionar si solo queda una.
+  const PAIS_MAP: Record<string, string> = {
+    argentina: "Argentina", brasil: "Brasil", brazil: "Brasil",
+    paraguay: "Paraguay", paraguai: "Paraguay",
+  };
+  const normalizedInput = normalizeText(text);
+  const matchedCountry = Object.keys(PAIS_MAP).find(c => {
+    // Match exact country name (no partial — "argentina" sí, "argentino" no)
+    if (normalizedInput === c) return true;
+    // También si la frase termina con el país: "a argentina", "en argentina"
+    if (normalizedInput.endsWith(" " + c)) return true;
+    return false;
+  });
+  if (matchedCountry) {
+    const targetCountry = PAIS_MAP[matchedCountry];
+    const normalizedTarget = normalizeText(targetCountry);
+    const countryOpts = options.filter(o =>
+      normalizeText(o.display).includes(normalizedTarget),
+    );
+    if (countryOpts.length === 1) {
+      // Auto-resolve: única opción en ese país (ej: "Argentina" → Aeropuerto IGR)
+      const selected = countryOpts[0].canonical;
+      log.info("[AMBIGUITY_RESOLVED_BY_COUNTRY]", {
+        field: clarifyField, value: selected, country: targetCountry,
+      });
+      if (clarifyField === "origin") {
+        ambState.resolvedOrigin = selected;
+      } else {
+        ambState.resolvedDest = selected;
+      }
+      await persistAmbiguityState(phone, ambState);
+      if (ambState.resolvedOrigin && ambState.resolvedDest) {
+        await finalizeAmbiguity(phone, conversationId, ambState, freshSession, text);
+        return true;
+      }
+      // One more slot to resolve
+      const nextSlot = !ambState.resolvedOrigin ? "origin" : "destination";
+      const nextOptions = nextSlot === "origin" ? ambState.originOptions : ambState.destOptions;
+      const nextRawTerm = nextSlot === "origin" ? (ambState.originRawTerm ?? "") : (ambState.destRawTerm ?? "");
+      await setConversationalState(phone, "ambiguity_pending", nextSlot);
+      const nextMsg = buildContextualPlaceOptions(nextSlot, lang, true, nextRawTerm, nextOptions.length);
+      await sendAndPersist(phone, conversationId, nextMsg);
+      return true;
+    }
+  }
+
   // Parse user selection — returns canonical name
   const selected = parseSelection(text, options);
   if (!selected) {
@@ -317,7 +364,7 @@ export async function handleAmbiguityResponse(
         );
         // Update the stored options to the risk node options
         if (clarifyField === "origin") {
-          ambState.originOptions = riskOptions;
+          ambState.originOptions = riskOptions.filter(o => !o.canonical.includes("AGT"));
           ambState.originRawTerm = text;
         } else {
           ambState.destOptions = riskOptions;
@@ -464,7 +511,11 @@ function buildContextualPlaceOptions(
   if (riskKey) {
     const riskOptions = RISK_NODES[riskKey];
     if (riskOptions) {
-      const alternatives = riskOptions.map(o => o.display).join(", ");
+      // AGT solo como destino, no como origen (business rule)
+      const displayOptions = (slotKey === "origin" && riskKey === "aeropuerto")
+        ? riskOptions.filter(o => !o.canonical.includes("AGT"))
+        : riskOptions;
+      const alternatives = displayOptions.map(o => o.display).join(", ");
       // Replace last ", " with " o " for natural language
       const lastComma = alternatives.lastIndexOf(", ");
       const naturalAlternatives = lastComma >= 0

@@ -4,6 +4,7 @@ import { GROQ_MODEL, GROQ_TIMEOUT_MS, GROQ_RESPONSE_MAX_TOKENS, GROQ_RESPONSE_TE
 import type { PolicyOutput, HandlerContext } from "./types";
 import { log } from "@/lib/utils/logger";
 import { IGUAZU_KNOWLEDGE } from "@/lib/ai/iguazu-knowledge";
+import { getOperationalInfoPrompt } from "@/lib/ai/taxiguazu-knowledge";
 
 function getGroq(): Groq | null {
   try {
@@ -52,38 +53,46 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
     );
   }
 
+  // Operational knowledge: cómo funciona TaxiGuazú en la práctica (útil para responder preguntas del pasajero)
+  lines.push(
+    ``,
+    `INFORMACIÓN DEL SERVICIO TAXIGUAZÚ (referencia obligatoria):`,
+    getOperationalInfoPrompt(),
+  );
+
   // ── Reglas base (aplican siempre) ──
   const rules: string[] = [
-    `1. No inventes datos. Usá SOLO la información del CONTEXTO.`,
+    `1. No inventes datos. Usá SOLO la información del CONTEXTO y la REFERENCIA.`,
     `2. Si hay precio, respetalo exactamente.`,
-    `3. Tono amable, profesional, conciso (máx 3 oraciones).`,
+    `3. Tono natural y conversacional, como una persona real ayudando a un viajero en Iguazú. Sin jerga corporativa. Máx 3 oraciones.`,
     `4. Respondé en el MISMO IDIOMA que el pasajero. Si escribe en portugués, respondé en portugués.`,
     `5. Si necesitás un campo, preguntá solo por lo que falta de forma natural.`,
     `6. Si no entendiste, admitilo y pedí reformular.`,
     `7. No uses viñetas ni formato de lista. Escribí en párrafo natural.`,
+    `8. El bot prepara la reserva y pasa la información — el CHOFER es quien coordina los detalles del encuentro con el pasajero. No digas "llegaré" o "te buscaré": decí "el chofer se contactará con usted".`,
   ];
 
   // ── Reglas por modo (behavioral guidelines, no scripts) ──
   if (policy.mode === "AHORA") {
     if (policy.decision === "EXECUTE") {
-      rules.push(`8. Es una ACCIÓN INMEDIATA. Confirmá el servicio sin demora y sin preguntar nada adicional.`);
+      rules.push(`9. Es una ACCIÓN INMEDIATA. Confirmá el servicio sin demora y sin preguntar nada adicional. Explicá que el chofer se contactará.`);
     } else if (policy.decision === "ANSWER") {
-      rules.push(`8. Es RESPUESTA DIRECTA. Dá el precio/ información sin extender la conversación.`);
+      rules.push(`9. Es RESPUESTA DIRECTA. Dá el precio/información sin extender la conversación.`);
     } else if (policy.decision === "CLARIFY") {
-      rules.push(`8. Es CLARIFICACIÓN. Preguntá SOLO por el dato faltante (sin pedir confirmación ni repetir datos previos).`);
+      rules.push(`9. Es CLARIFICACIÓN. Preguntá SOLO por el dato faltante (sin pedir confirmación ni repetir datos previos).`);
     }
   } else if (policy.mode === "RESERVA") {
     if (policy.decision === "EXECUTE") {
-      rules.push(`8. Es una RESERVA FUTURA. Confirmá los datos y explicá que se notificará al pasajero antes del viaje.`);
+      rules.push(`10. Es una RESERVA FUTURA. Confirmá los datos y explicá que el chofer se contactará 1 día antes del viaje para reconfirmar.`);
     } else if (policy.decision === "ANSWER") {
-      rules.push(`8. Respondé con contexto de la reserva. Si falta algún dato, mencionalo suavemente.`);
+      rules.push(`10. Respondé con contexto de la reserva. Si falta algún dato, mencionalo suavemente.`);
     } else if (policy.decision === "CLARIFY") {
-      rules.push(`8. Es CLARIFICACIÓN PARA RESERVA. Preguntá por el dato faltante para programar el viaje futuro.`);
+      rules.push(`10. Es CLARIFICACIÓN PARA RESERVA. Preguntá por el dato faltante para programar el viaje futuro.`);
     }
   }
 
   if (isGreeting) {
-    rules.push(`9. Es un SALUDO. Respondé en máximo 1-2 líneas. Sé muy breve y no preguntes nada adicional.`);
+    rules.push(`11. Es un SALUDO. Respondé en máximo 1-2 líneas. Sé muy breve y no preguntes nada adicional.`);
   }
 
   lines.push(
