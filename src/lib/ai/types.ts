@@ -67,6 +67,8 @@ export interface CoreDecision {
   slotAssignmentConfidence?: SlotAssignmentConfidence;
   // lateral metadata (optional for backward compat)
   lateral?: CoreLateral;
+  // P0.6: detección de intención de compra (high = pasajero da datos específicos, low = especula)
+  purchaseIntent?: "high" | "medium" | "low";
 }
 
 export interface FinalDecision {

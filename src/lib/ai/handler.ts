@@ -106,8 +106,22 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
   );
   log.info(`[OUTPUT_SOURCE]=POLICY`);
 
-  // Intentar mejora LLM con validación → fallback silencioso a template
-  const llmResponse = await generateLLMResponse(policy, ctx);
+  // P0.3: Gatear llamada LLM para ahorrar calls innecesarias.
+  // - EXECUTE sin placeholders en template → usar template directo (ej: "Buscando chofer...")
+  // - purchaseIntent=low → especulador, no malgastar LLM, template basta
+  const hasPlaceholder = policy.finalResponse.includes("{");
+  const isExecute = policy.decision === "EXECUTE";
+  const isLowIntent = decision.core.purchaseIntent === "low";
+  const skipLLM = (isExecute && !hasPlaceholder) || isLowIntent;
+
+  let llmResponse: string | null = null;
+  if (!skipLLM) {
+    llmResponse = await generateLLMResponse(policy, ctx);
+  } else if (isLowIntent) {
+    log.info("[LLM_RESPONSE] skipped (low purchase intent — speculator path)");
+  } else if (isExecute) {
+    log.info("[LLM_RESPONSE] skipped (EXECUTE without placeholders — template is final)");
+  }
   if (llmResponse) {
     policy.finalResponse = llmResponse;
     log.info("[LLM_RESPONSE] applied");

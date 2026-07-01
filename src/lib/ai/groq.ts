@@ -1,7 +1,7 @@
 import Groq from "groq-sdk";
 import { getExtractionPrompt, getExtractionContextMessage, type ExtractionContext } from "./extraction-prompt";
 import { getEnv } from "@/config/env";
-import { GROQ_MODEL, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS } from "@/config/constants";
+import { GROQ_MODEL, GROQ_TIMEOUT_MS, GROQ_EXTRACTION_MAX_TOKENS, GROQ_EXTRACTION_TEMPERATURE } from "@/config/constants";
 import { log } from "@/lib/utils/logger";
 
 interface Message {
@@ -91,7 +91,7 @@ export async function generateGroqExtraction(
         messages,
         response_format: { type: "json_object" },
         max_tokens: GROQ_EXTRACTION_MAX_TOKENS,
-        temperature: 0.3,
+        temperature: GROQ_EXTRACTION_TEMPERATURE,
       },
       { timeout: GROQ_TIMEOUT_MS }
     );

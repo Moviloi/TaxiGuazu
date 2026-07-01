@@ -33,7 +33,7 @@ export const CONTEXT_SLOT_TIMEOUT_S = 3600;
 
 // Groq
 export const GROQ_MAX_TOKENS = 512;
-export const GROQ_TIMEOUT_MS = 8000;
+export const GROQ_TIMEOUT_MS = 5000;
 export const GROQ_MODEL = "llama-3.3-70b-versatile";
 export const GROQ_EXTRACTION_MAX_TOKENS = 256;
 export const GROQ_EXTRACTION_TEMPERATURE = 0.1;

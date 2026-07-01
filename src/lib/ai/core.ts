@@ -42,6 +42,12 @@ const POST_SERVICE_RE = /\b(gracias\s+por\s+(el\s+)?viaje|excelente\s+servicio|m
 const EMERGENCY_RE = /\b(emergencia|ayuda\b|me\s+pas[óo]\s+algo|no\s+(llega|aparece|viene|encuentro)|chofer\s+no\s+(llega|aparece|viene)|perd[ií]\s+el\s+viaje|estoy\s+varad[ao])\b/i;
 const CONSULTA_RE = /\b(consultar|consulta|informaci[oó]n|info)\b/i;
 
+// P0.6: Señales de intención de compra
+// HIGH: pasajero da datos específicos que indican compromiso real (vuelo, hora, pax, hotel)
+// LOW: pasajero especula sin compromiso ("averiguando", "consulto", futuro lejano, "después confirmo")
+const LOW_INTENT_RE = /\b(estoy\s+viendo|estoy\s+averiguando|averiguar|estoy\s+pensando|despu[eé]s\s+(confirmo|te\s+aviso|te\s+digo)|vuelvo\s+a\s+contactarme|cuando\s+est[eé]\s+ah[ií]|lo\s+pienso|lo\s+discutimos|estamos\s+viendo)\b/i;
+const HIGH_INTENT_SIGNALS = ["flight:", "passengers:", "time:", "urgency:"];
+
 // Términos de ubicación que el CORE NO extrae como hechos (son ambiguos para el CORE).
 // Definidos en patterns.ts — fuente única.
 
@@ -134,6 +140,23 @@ function isValueAmbiguous(value: string): boolean {
   return AMBIGUOUS_LOCATION_RE.test(value);
 }
 
+// P0.6: Detecta intención de compra para optimizar conversación.
+// HIGH: pasajero da datos operativos (vuelo, hora, pax, urgencia) → acelerar flujo
+// LOW: pasajero especula ("averiguando", "después confirmo", futuro lejano) → respuesta rápida, no malgastar LLM
+// MEDIUM: default (todo lo demás)
+function detectPurchaseIntent(facts: string[], hasSlots: boolean, inputText: string): "high" | "medium" | "low" {
+  // LOW: señales explícitas de especulación en el texto original
+  if (LOW_INTENT_RE.test(inputText)) return "low";
+  // Si el pasajero ya dio origen+destino + algún dato operativo → high
+  const hasHighSignal = HIGH_INTENT_SIGNALS.some(prefix => facts.some(f => f.startsWith(prefix)));
+  if (hasSlots && hasHighSignal) return "high";
+  // Si hay slots pero no datos operativos → medium (está cotizando pero no comprometido)
+  if (hasSlots) return "medium";
+  // Si no hay slots pero hay señales de consulta/pre_booking → low
+  if (facts.some(f => f.startsWith("consulta:") || f.startsWith("pre_booking:"))) return "low";
+  return "medium";
+}
+
 export function core(input: string, prevIntent?: Intent): CoreDecision {
   const trimmed = (input ?? "").trim();
   if (!trimmed) {
@@ -144,6 +167,7 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
       slotStability: { origin: "open", destination: "open" },
       roleLock: { origin: null, destination: null },
       slotAssignmentConfidence: { origin: 0, destination: 0 },
+      purchaseIntent: "low",
     };
   }
 
@@ -228,6 +252,7 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
       slotStability,
       roleLock,
       slotAssignmentConfidence,
+      purchaseIntent: "low",
     };
   }
 
@@ -245,7 +270,9 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
   confidence = computeConfidence(facts, finalIntent);
 
   const lateral = applyLaterals({ intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence });
-  return { intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence, lateral };
+  const hasSlots = !!(roleLock.origin || roleLock.destination);
+  const purchaseIntent = detectPurchaseIntent(facts, hasSlots, trimmed);
+  return { intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence, lateral, purchaseIntent };
 }
 
 function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Intent {

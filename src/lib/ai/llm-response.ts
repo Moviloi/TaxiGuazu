@@ -21,7 +21,7 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
   const tariff = ctx?.extraction?.tariff;
 
   const lines = [
-    `Eres Cris, asistente virtual de TaxiGuazú (remises y transfers en Puerto Iguazú, Argentina).`,
+    `Eres Cris Virtual, asistente 24/7 de TaxiGuazú (remises y transfers en Puerto Iguazú, Argentina). Sos un bot conversacional — no te hagas pasar por humano. Para reservas confirmadas o casos que requieran atención humana, Cristian o el chofer asignado se contactarán según su disponibilidad.`,
     `Redactá el mensaje al pasajero en base a este contexto.`,
     ``,
     `CONTEXTO (datos verificados — NO modificar ni inventar):`,
@@ -64,7 +64,7 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
   const rules: string[] = [
     `1. No inventes datos. Usá SOLO la información del CONTEXTO y la REFERENCIA.`,
     `2. Si hay precio, respetalo exactamente.`,
-    `3. Tono natural y conversacional, como una persona real ayudando a un viajero en Iguazú. Sin jerga corporativa. Máx 3 oraciones.`,
+    `3. Tono natural y conversacional, como una persona real ayudando a un viajero en Iguazú. Sin jerga corporativa. ${policy.decision === "ANSWER" ? "Máx 5 oraciones (es una respuesta informativa)." : (isGreeting ? "Máx 1-2 líneas, muy breve." : "Máx 2-3 oraciones.")}`,
     `4. Respondé en el MISMO IDIOMA que el pasajero. Si escribe en portugués, respondé en portugués.`,
     `5. Si necesitás un campo, preguntá solo por lo que falta de forma natural.`,
     `6. Si no entendiste, admitilo y pedí reformular.`,
@@ -139,15 +139,30 @@ export function validateLLMResponse(
   }
 
   const slots = ctx?.extraction?.slots ?? {};
-  const origin = String(slots.origin?.value ?? "").toLowerCase();
   const dest = String(slots.destination?.value ?? "").toLowerCase();
 
-  if (origin && dest && origin.length > 3 && dest.length > 3) {
-    const llmLow = llmText.toLowerCase();
-    const matchesDest = llmLow.includes(dest);
-    const matchesOrigin = llmLow.includes(origin);
-    if (!matchesDest || !matchesOrigin) {
-      return { valid: false, reason: `origin_dest_mismatch: expected '${origin}' and '${dest}' in response` };
+  // Normalizar: lowercase, sin acentos, tomar prefijo significativo (4+ chars).
+  // Esto permite que "aeropuerto_igr" matchee con "aeropuerto" en la respuesta.
+  function normalizeForMatch(s: string): string {
+    return s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // quitar acentos
+      .replace(/[_-]/g, " ")
+      .trim();
+  }
+
+  // Solo exigir que el DESTINO aparezca (es lo que el pasajero quiere saber).
+  // El origen puede omitirse si el contexto está claro (ej: "te busco a las 6am").
+  if (dest && dest.length > 3) {
+    const llmNorm = normalizeForMatch(llmText);
+    const destNorm = normalizeForMatch(dest);
+    const destToken = destNorm.split(" ")[0]; // primera palabra significativa
+    if (destToken.length >= 4 && !llmNorm.includes(destToken)) {
+      // Intentar también con el destino completo
+      if (!llmNorm.includes(destNorm)) {
+        return { valid: false, reason: `dest_mismatch: expected '${dest}' (token: '${destToken}') in response` };
+      }
     }
   }
 

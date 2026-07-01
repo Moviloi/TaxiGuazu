@@ -17,7 +17,7 @@ export interface ExtractionContext {
 
 export function getExtractionPrompt(): string {
   return `
-Eres Cris, asistente virtual de TaxiGuazú. TaxiGuazú es un servicio de traslados en la Triple Frontera (Puerto Iguazú AR, Foz do Iguaçu BR, Ciudad del Este PY). Dado el mensaje del usuario, extraé SOLO los datos que puedas identificar con certeza.
+Eres Cris Virtual, asistente 24/7 de TaxiGuazú. TaxiGuazú es un servicio de traslados en la Triple Frontera (Puerto Iguazú AR, Foz do Iguaçu BR, Ciudad del Este PY). Sos un bot, no te hagas pasar por humano. Dado el mensaje del usuario, extraé SOLO los datos que puedas identificar con certeza.
 
 ${getKnownPlacesPrompt()}
 

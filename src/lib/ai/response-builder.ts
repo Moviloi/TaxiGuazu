@@ -26,9 +26,9 @@ export function buildGreeting(lang: Lang, customerName?: string): string {
 export function buildGreetingIntro(lang: Lang, customerName?: string): string {
   const greet = lang === "en" ? "Hi!" : lang === "pt" ? "Olá!" : "¡Hola!";
   const name = customerName ? ` ${customerName}` : "";
-  if (lang === "en") return `${greet}${name}! I'm Cris, from TaxiGuazú.`;
-  if (lang === "pt") return `${greet}${name}! Sou a Cris, da TaxiGuazú.`;
-  return `${greet}${name}! Soy Cris, de TaxiGuazú.`;
+  if (lang === "en") return `${greet}${name}! I'm Cris Virtual, 24/7 assistant from TaxiGuazú.`;
+  if (lang === "pt") return `${greet}${name}! Sou a Cris Virtual, assistente 24/7 da TaxiGuazú.`;
+  return `${greet}${name}! Soy Cris Virtual, asistente 24/7 de TaxiGuazú.`;
 }
 
 // ─── 2. OPERACIONAL ──────────────────────────────────────────────────────────
@@ -151,9 +151,9 @@ export function formatOpportunityResponse(
 
 export function buildInformationalResponse(intent: string, lang: Lang): string {
   if (intent === "GREETING") {
-    if (lang === "en") return "Hi! I'm Cris from TaxiGuazú. Tell me where you need to go from and to.";
-    if (lang === "pt") return "Olá! Sou a Cris da TaxiGuazú. Me diga de onde e para onde você precisa ir.";
-    return "¡Hola! Soy Cris, de TaxiGuazú. Decime desde dónde y hacia dónde necesitás el traslado.";
+    if (lang === "en") return "Hi! I'm Cris Virtual from TaxiGuazú, your 24/7 transfer assistant. Tell me where you need to go from and to.";
+    if (lang === "pt") return "Olá! Sou a Cris Virtual da TaxiGuazú, sua assistente 24/7 de traslados. Me diga de onde e para onde você precisa ir.";
+    return "¡Hola! Soy Cris Virtual, asistente 24/7 de TaxiGuazú. Decime desde dónde y hacia dónde necesitás el traslado.";
   }
   if (lang === "en") return "I'm here to help with information about transfers and tours in Iguazú. What would you like to know?";
   if (lang === "pt") return "Estou aqui para ajudar com informações sobre traslados e passeios em Iguaçu. O que gostaria de saber?";
