@@ -1,4 +1,4 @@
-import { getConversationByPhone, insertMessage, getChatSession } from "@/lib/db/database";
+import { getConversationByPhone, insertMessage, getChatSession, upsertChatSession } from "@/lib/db/database";
 import { buildGlobalErrorMessage, buildGreetingIntro } from "@/lib/ai/response-builder";
 import { resetRequestState } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
@@ -453,6 +453,18 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // P0.9.5: Si ambState era null (estado perdido), resetear y dejar que
       // el pipeline normal procese el mensaje como fresco. No caer a
       // startAmbiguityResolution que tambien fallaría.
+      // P0.10.1: Antes de resetear, preservar slots resueltos de la sesión
+      const freshSession = await getChatSession(phone);
+      if (freshSession?.slots) {
+        const slots = JSON.parse(freshSession.slots);
+        const preservedSlots: Record<string, any> = {};
+        if (slots.origin?.status === "CONFIRMED") preservedSlots.origin = slots.origin;
+        if (slots.destination?.status === "CONFIRMED") preservedSlots.destination = slots.destination;
+        if (Object.keys(preservedSlots).length > 0) {
+          await upsertChatSession(phone, { ...slots, ...preservedSlots }, undefined, "collecting_slots", undefined);
+          log.info("[AMBIGUITY_STATE_LOST] preserved slots before reset", { preserved: Object.keys(preservedSlots) });
+        }
+      }
       log.warn("[AMBIGUITY_STATE_LOST] resetting to collecting_slots");
       await setConversationalState(phone, "collecting_slots", undefined);
     }

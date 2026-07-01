@@ -31,6 +31,7 @@ export function buildSlotConfirmationMessage(
 ): SlotConfirmationUI {
   const origin = extractionCtx.slots.origin;
   const dest = extractionCtx.slots.destination;
+  const passengers = extractionCtx.slots.passengers;
 
   const originDisplay = extractionCtx.tariff?.displayOrigin
     ?? (origin?.value != null ? String(origin.value) : "?");
@@ -45,20 +46,33 @@ export function buildSlotConfirmationMessage(
     "",
     "📍 *Destino:*",
     dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? `⚠️ ${destDisplay}` : destDisplay,
-    "",
-    "¿Está correcto?",
   ];
+
+  // P0.10.2: Incluir passengers si está presente
+  if (passengers?.value != null) {
+    lines.push(
+      "",
+      "👥 *Pasajeros:*",
+      passengers.status === "CONFIRMATION_PENDING" || passengers.status === "INFERRED"
+        ? `⚠️ ${passengers.value}`
+        : String(passengers.value),
+    );
+  }
+
+  lines.push("", "¿Está correcto?");
 
   log.info("[SLOT_CONFIRMATION_UI]", {
     pendingSlots: [
       ...(origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? ["origin"] : []),
       ...(dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? ["destination"] : []),
+      ...(passengers?.status === "CONFIRMATION_PENDING" || passengers?.status === "INFERRED" ? ["passengers"] : []),
     ],
     confidence: extractionCtx.overallConfidence,
     availableActions: ["confirm", "change"],
     nextStep: "user_decision",
     originDisplay,
     destDisplay,
+    passengersDisplay: passengers?.value ?? null,
   });
 
   return {
@@ -66,6 +80,7 @@ export function buildSlotConfirmationMessage(
     pendingSlots: [
       ...(origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? ["origin"] : []),
       ...(dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? ["destination"] : []),
+      ...(passengers?.status === "CONFIRMATION_PENDING" || passengers?.status === "INFERRED" ? ["passengers"] : []),
     ],
     message: lines.join("\n"),
     buttons: [

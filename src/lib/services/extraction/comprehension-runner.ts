@@ -13,6 +13,9 @@ import type { ChatSessionRow } from "@/lib/db/types";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 import { detectLeadLang } from "@/lib/detect-lang";
 
+// P0.10.3: Detección de frustración del usuario
+const FRUSTRATION_RE = /\b(ya\s+(te\s+)?dije|ya\s+respond[ií]|no\s+entend[ée]s|ya\s+lo\s+dije|te\s+lo\s+dije|obvio|evidente|ya\s+contest[ée]|repito|otra\s+vez|no\s+me\s+escuch[áa]s|no\s+le[ée]s|le[ée]\s+bien|ya\s+esta\s+respondid[ao]|ya\s+te\s+lo\s+dije|ya\s+te\s+contest[ée])\b/i;
+
 export interface ComprehensionRunnerParams {
   phone: string;
   text: string;
@@ -27,6 +30,18 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
   const { phone, text, conversationId, leadCore, predictedContext, session, isFirstTurn } = params;
 
   log.info("[TRACE INPUT]", { event: "comprehension_check", phone: phone.slice(-4), textLen: text.length });
+
+  // P0.10.3: Detectar frustración del usuario — usar LLM para interpretar
+  if (FRUSTRATION_RE.test(text)) {
+    log.info("[FRUSTRATION_DETECTED]", { phone: phone.slice(-4), text: text.slice(0, 100) });
+    const frustratedMsg = await generateFrustrationResponse(text, session);
+    if (frustratedMsg) {
+      log.info("[TRACE RESPONSE]", { source: "FRUSTRATION_RECOVERY", text: frustratedMsg });
+      await sendAndPersist(phone, conversationId, frustratedMsg);
+      return true;
+    }
+  }
+
   const domain = mapIntentToDomain(leadCore.intent);
   const comprehensionSignals = enrichComprehensionSignals(
     buildComprehensionSignals({
@@ -103,4 +118,61 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
   }
 
   return false;
+}
+
+// P0.10.3: LLM para interpretar mensajes frustrados del usuario
+async function generateFrustrationResponse(userText: string, session: ChatSessionRow | null): Promise<string | null> {
+  try {
+    const { getEnv } = await import("@/config/env");
+    const Groq = (await import("groq-sdk")).default;
+    const groq = new Groq({ apiKey: getEnv().GROQ_API_KEY });
+
+    // Construir contexto de la conversación
+    const contextLines: string[] = [];
+    if (session?.slots) {
+      try {
+        const slots = JSON.parse(session.slots);
+        if (slots.origin?.value) contextLines.push(`Origen: ${slots.origin.value}`);
+        if (slots.destination?.value) contextLines.push(`Destino: ${slots.destination.value}`);
+        if (slots.passengers?.value) contextLines.push(`Pasajeros: ${slots.passengers.value}`);
+        if (slots.scheduled_at?.value) contextLines.push(`Fecha/hora: ${slots.scheduled_at.value}`);
+      } catch { /* ignore parse errors */ }
+    }
+    const context = contextLines.length > 0
+      ? `Datos del viaje que ya tenemos:\n${contextLines.join("\n")}`
+      : "No tenemos datos del viaje todavía.";
+
+    const prompt = [
+      `Sos Cris, asistente de TaxiGuazú.`,
+      `El usuario está frustrado porque siente que no lo estás escuchando.`,
+      ``,
+      `Mensaje del usuario: "${userText}"`,
+      ``,
+      context,
+      ``,
+      `Tu tarea:`,
+      `1. Reconocé brevemente la frustración del usuario (una frase corta, empática).`,
+      `2. Intentá entender qué está tratando de decirte.`,
+      `3. Respondé de forma que demuestres que lo escuchaste.`,
+      ``,
+      `Ejemplo bueno: "Perdón, tenés razón. Entiendo que ya me dijiste que salís del aeropuerto. ¿A dónde necesitás ir?"`,
+      `Ejemplo malo: "¿Desde dónde salís?" (ignora lo que dijo, repite pregunta)`,
+      ``,
+      `Respondé EN EL MISMO IDIOMA que el usuario. Máximo 2-3 líneas.`,
+      `No inventes datos. No agregues opciones numeradas.`,
+      `Si el usuario mencionó un dato específico (origen, destino, pasajeros), reconocelo.`,
+    ].join("\n");
+
+    const completion = await groq.chat.completions.create({
+      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      messages: [{ role: "system", content: prompt }],
+      max_tokens: 120,
+      temperature: 0.3,
+    }, { timeout: 5000 });
+
+    return completion.choices[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    log.warn("[FRUSTRATION_LLM]", e instanceof Error ? e.message : String(e));
+    return null;
+  }
 }
