@@ -3,7 +3,7 @@ import type { ConfidenceMap, ConversationDomain, RoleLock, SlotStabilityMap } fr
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 import { buildGenericClarify } from "@/lib/ai/response-builder";
-import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
+import { parseSessionSlots, parseConfidenceJson } from "@/lib/services/shared/session-helpers";
 import { detectLeadLang } from "@/lib/detect-lang";
 import { log } from "@/lib/utils/logger";
 
@@ -83,11 +83,9 @@ function computeSlotCompleteness(effective: EffectiveSlots, profile: Comprehensi
 
 function computeExtractionConfidence(session: ChatSessionRow | null, effective: EffectiveSlots): number {
   if (session?.confidence) {
-    try {
-      const conf = JSON.parse(session.confidence);
-      const vals = Object.values(conf).filter((v): v is number => typeof v === "number");
-      if (vals.length > 0) return vals.reduce((a, b) => a + b, 0) / vals.length;
-    } catch {}
+    const conf = parseConfidenceJson(session.confidence);
+    const vals = Object.values(conf).filter((v): v is number => typeof v === "number");
+    if (vals.length > 0) return vals.reduce((a, b) => a + b, 0) / vals.length;
     return 0.5;
   }
   const coreDetected = [effective.origin, effective.destination].filter(Boolean).length;
@@ -99,13 +97,11 @@ function computeExtractionConfidence(session: ChatSessionRow | null, effective: 
 function computeMandatoryExtractionConfidence(session: ChatSessionRow | null, effective: EffectiveSlots, profile: ComprehensionProfile): number {
   if (profile.requiredSlots.length === 0) return 1.0;
   if (session?.confidence) {
-    try {
-      const conf = JSON.parse(session.confidence);
-      const vals = profile.requiredSlots
-        .map((k) => conf[k])
-        .filter((v): v is number => typeof v === "number");
-      if (vals.length > 0) return vals.reduce((a, b) => a + b, 0) / vals.length;
-    } catch {}
+    const conf = parseConfidenceJson(session.confidence);
+    const vals = profile.requiredSlots
+      .map((k) => conf[k])
+      .filter((v): v is number => typeof v === "number");
+    if (vals.length > 0) return vals.reduce((a, b) => a + b, 0) / vals.length;
     return 0.5;
   }
   return computeExtractionConfidence(session, effective);

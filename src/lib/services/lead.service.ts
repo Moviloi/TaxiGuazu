@@ -27,7 +27,7 @@ import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
 import type { ExtractionContext } from "@/lib/ai/extraction-prompt";
-import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
+import { parseSessionSlots, parseConfidenceJson } from "@/lib/services/shared/session-helpers";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -210,9 +210,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       let rawSlots: Record<string, any> = {};
       let rawConfidence: Record<string, number> = {};
       rawSlots = parseSessionSlots(session?.slots ?? null) as Record<string, any>;
-      try {
-        if (session?.confidence) rawConfidence = JSON.parse(session.confidence);
-      } catch { /* ignore parse errors */ }
+      rawConfidence = parseConfidenceJson(session?.confidence ?? null);
 
       let updatedSlots = false;
 
@@ -506,7 +504,7 @@ export async function handleSlotConfirmationButton(
     try {
       const s = await getChatSession(phone);
       rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
-      if (s?.confidence) rawConfidence = JSON.parse(s.confidence);
+      rawConfidence = parseConfidenceJson(s?.confidence ?? null);
     } catch { /* ignore */ }
 
     // Promote all CONFIRMATION_PENDING slots to CONFIRMED

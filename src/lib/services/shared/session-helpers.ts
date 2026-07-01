@@ -13,3 +13,16 @@ export function parseSessionSlots(slotsJson: string | null): Record<string, unkn
     return {};
   }
 }
+
+/**
+ * Parsea el JSON de confidence de una sesión con type guard.
+ * Previene crashes cuando el valor es un string triple-serializado (ej: '"{}"').
+ */
+export function parseConfidenceJson(json: string | null): Record<string, number> {
+  if (!json) return {};
+  try {
+    const parsed = JSON.parse(json);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    return parsed as Record<string, number>;
+  } catch { return {}; }
+}
