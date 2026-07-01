@@ -279,6 +279,20 @@ export async function handleAmbiguityResponse(
   // Fetch fresh session to get updated ambiguity state
   const freshSession = await getChatSession(phone);
   const ambState = freshSession?.slots ? getAmbiguityStateFromSlots(freshSession.slots) : null;
+
+  // P0.9.3: Logging de debug para entender por qué se pierde el estado
+  log.info("[AMBIGUITY_HANDLER_DEBUG]", {
+    hasFreshSession: !!freshSession,
+    freshSlotsKeys: freshSession?.slots ? Object.keys(JSON.parse(freshSession.slots || "{}")) : [],
+    hasAmbState: !!ambState,
+    resolvedOrigin: ambState?.resolvedOrigin ?? null,
+    resolvedDest: ambState?.resolvedDest ?? null,
+    originRawTerm: ambState?.originRawTerm ?? null,
+    destRawTerm: ambState?.destRawTerm ?? null,
+    originOptionsCount: ambState?.originOptions?.length ?? 0,
+    destOptionsCount: ambState?.destOptions?.length ?? 0,
+  });
+
   if (!ambState) return false;
 
   const clarifyField = freshSession?.clarify_field ?? "origin";
@@ -522,9 +536,11 @@ function buildContextualPlaceOptions(
   rawTerm: string,
   entityCount: number,
 ): string {
+  // P0.9.4: Sin comillas en placeLabel. Si rawTerm está vacío, pregunta directa.
   const slotLabel = slotKey === "origin" ? "salís" : "vas";
-  const safeRawTerm = rawTerm && rawTerm.trim().length > 0 ? rawTerm : "";
-  const placeLabel = safeRawTerm ? safeRawTerm.charAt(0).toUpperCase() + safeRawTerm.slice(1) : "";
+  const safeRawTerm = rawTerm && rawTerm.trim().length > 0 ? rawTerm.trim() : "";
+  const hasRawTerm = safeRawTerm.length > 0;
+  const placeLabel = hasRawTerm ? safeRawTerm.charAt(0).toUpperCase() + safeRawTerm.slice(1).toLowerCase() : "";
 
   // Detectar si es un nodo de riesgo → mostrar alternativas en lenguaje natural (SIN números)
   const riskKey = detectRiskNode(safeRawTerm);
@@ -562,27 +578,36 @@ function buildContextualPlaceOptions(
     }
   }
 
-  // No es nodo de riesgo → pregunta contextual SIN listar opciones
-  if (slotConfidenceHigh && entityCount > 1) {
-    const label = placeLabel || "el lugar que mencionaste";
+  // P0.9.4: Pregunta directa sin comillas cuando rawTerm está vacío.
+  if (!hasRawTerm) {
     if (lang === "en") {
-      return `I understand you're ${slotLabel === "salís" ? "departing from" : "going to"} "${label}". What exact place do you mean?`;
+      return `Could you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
     }
     if (lang === "pt") {
-      return `Entendi que você está ${slotLabel === "salís" ? "saindo de" : "indo para"} "${label}". Qual lugar exato você quer dizer?`;
+      return `Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
     }
-    return `Entendí que ${slotLabel} de "${label}". ¿A qué lugar exacto te referís?`;
+    return `¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
+  }
+
+  // No es nodo de riesgo → pregunta contextual SIN listar opciones
+  if (slotConfidenceHigh && entityCount > 1) {
+    if (lang === "en") {
+      return `I understand you ${slotLabel === "salís" ? "depart from" : "go to"} ${placeLabel.toLowerCase()}. What exact place do you mean?`;
+    }
+    if (lang === "pt") {
+      return `Entendi que você ${slotLabel === "salís" ? "sai de" : "vai para"} ${placeLabel.toLowerCase()}. Qual lugar exato você quer dizer?`;
+    }
+    return `Entendí que ${slotLabel} de ${placeLabel.toLowerCase()}. ¿A qué lugar exacto te referís?`;
   }
 
   // Fallback genérico (baja confianza o pocas entidades)
-  const label = placeLabel || "el lugar que mencionaste";
   if (lang === "en") {
-    return `I see you mentioned "${label}". Can you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
+    return `I see you mentioned ${placeLabel.toLowerCase()}. Can you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
   }
   if (lang === "pt") {
-    return `Vi que você mencionou "${label}". Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
+    return `Vi que você mencionou ${placeLabel.toLowerCase()}. Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
   }
-  return `Entendí que mencionaste "${label}". ¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
+  return `Entendí que mencionaste ${placeLabel.toLowerCase()}. ¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

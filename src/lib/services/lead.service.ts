@@ -450,8 +450,13 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     if (currentConvState === "ambiguity_pending") {
       const ambHandled = await handleAmbiguityResponse(phone, conversation.id, trimmed, session);
       if (ambHandled) return;
+      // P0.9.5: Si ambState era null (estado perdido), resetear y dejar que
+      // el pipeline normal procese el mensaje como fresco. No caer a
+      // startAmbiguityResolution que tambien fallaría.
+      log.warn("[AMBIGUITY_STATE_LOST] resetting to collecting_slots");
+      await setConversationalState(phone, "collecting_slots", undefined);
     }
-    if (leadCore.facts?.some(f => f.startsWith("location_ambiguous:"))) {
+    if (leadCore.facts?.some(f => f.startsWith("location_ambiguous:")) && currentConvState !== "ambiguity_pending") {
       const ambStarted = await startAmbiguityResolution(phone, conversation.id, trimmed, leadCore, session);
       if (ambStarted) return;
     }

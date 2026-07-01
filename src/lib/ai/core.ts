@@ -30,9 +30,14 @@ const DATE_RE = /\b(hoy|ma[ñn]ana|pasado\s*ma[ñn]ana|esta\s*semana|pr[oó]xim[
 const TIME_RE = /\b(?:a\s*las?\s*)?(\d{1,2}:\d{2}|\d{1,2}\s*(?:hs|horas|h))\b/i;
 const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo|correcto|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|todo bien)(?![a-záéíóúñ])/i;
 
-// 9 nuevos intents — patrones específicos
-const GREETING_RE = /\b(hola|buenas|buen[oa]s?\s*(d[ií]as|tardes|noches|morning|afternoon|evening)|qu[eé] tal|c[oó]mo est[áa]s|saludos|hey|hi|hello|ol[aá]|bom\s*dia|boa\s*tarde|boa\s*noite|good\s*morning|good\s*afternoon|good\s*evening)\b/i;
-const INFORMATIONAL_RE = /\b(horarios?|horario|funcionan|atienden|abren|cierran|abre|cierra|cu[aá]ndo\s+(abren|cierran|abre|cierra)|a\s+qu[eé]\s+hora|d[óo]nde\s+(est[áa]n|queda[n]?)|tienen\s+(servicio|traslado|viaje)|c[óo]mo\s+(funciona|trabajan|llegar|ir))\b/i;
+// P0.9.1: trailing \b reemplazado por (?=\W|$) para que funcione con
+// caracteres acentuados (á, é, í, ó, ú, ñ). En JavaScript, \b separa
+// word chars [a-zA-Z0-9_] de non-word chars. Como 'á' es non-word,
+// \b entre 'á' y fin de string NO matchea. El lookahead (?=\W|$)
+// funciona porque $ matchea fin de string, y \W matchea cualquier
+// no-word char (espacio, puntuación, acentos).
+const GREETING_RE = /\b(hola|buenas|buen[oa]s?\s*(d[ií]as|tardes|noches|morning|afternoon|evening)|qu[eé] tal|c[oó]mo est[áa]s|saludos|hey|hi|hello|ol[aá]|bom\s*dia|boa\s*tarde|boa\s*noite|good\s*morning|good\s*afternoon|good\s*evening)(?=\W|$)/i;
+const INFORMATIONAL_RE = /\b(horarios?|horario|funcionan|atienden|abren|cierran|abre|cierra|cu[aá]ndo\s+(abren|cierran|abre|cierra)|a\s+qu[eé]\s+hora|d[óo]nde\s+(est[áa]n|queda[n]?)|tienen\s+(servicio|traslado|viaje)|c[óo]mo\s+(funciona|trabajan|llegar|ir))(?=\W|$)/i;
 const COMMERCIAL_RE = /\b(cu[aá]nto\s+(cuesta|sale|vale|est[áa])|precio|tarifa|cotizaci[óo]n|presupuesto|a\s*cuanto|valor)\b/i;
 const PRE_BOOKING_RE = /\b(estoy\s+viendo|estoy\s+pensando|consultar\s+(un\s+)?viaje|info\S*\s+(de\s+)?(un\s+)?viaje|qu[eé]\s+(me\s+)?recomiendas|sugiere|opciones)\b/i;
 const BOOKING_RE = /\b(reserv[áa]r|confirm[áa]r|agendar|contratar)\b/i;

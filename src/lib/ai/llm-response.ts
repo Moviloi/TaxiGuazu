@@ -91,6 +91,12 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
     }
   }
 
+  // P0.9.2: Si es informational, respondé directamente con la REFERENCIA.
+  // NO pidas datos de viaje. El pasajero quiere info, no reservar.
+  if (isInformational) {
+    rules.push(`12. El pasajero pregunta por info (horarios, precios, funcionamiento). Respondé DIRECTAMENTE con la CONOCIMIENTO DE REFERENCIA. NO pidas datos de viaje, NO redirijas a booking, NO preguntes pasajeros/origen. Si la info está en REFERENCIA, dala. Si no, decí que consulten en el sitio oficial.`);
+  }
+
   if (isGreeting) {
     rules.push(`11. Es un SALUDO. Respondé en máximo 1-2 líneas. Sé muy breve y no preguntes nada adicional.`);
   }
