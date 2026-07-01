@@ -194,6 +194,25 @@ export async function startAmbiguityResolution(
     destRawTerm: rawDest ?? undefined,
   };
 
+  // ── ALIGN WITH RISK NODES: if rawTerm is a risk node, store RISK_NODES options
+  // so that stored options match what the user sees in the message (country filter + parseSelection)
+  const originRiskKey = rawOrigin ? detectRiskNode(rawOrigin) : null;
+  if (originRiskKey) {
+    const riskOptions = RISK_NODES[originRiskKey];
+    if (riskOptions) {
+      ambiguityMeta.originOptions = originRiskKey === "aeropuerto"
+        ? riskOptions.filter(o => !o.canonical.includes("AGT"))
+        : riskOptions;
+    }
+  }
+  const destRiskKey = rawDest ? detectRiskNode(rawDest) : null;
+  if (destRiskKey) {
+    const riskOptions = RISK_NODES[destRiskKey];
+    if (riskOptions) {
+      ambiguityMeta.destOptions = riskOptions;
+    }
+  }
+
   // ── FIX CONTEXT LOSS: Persist non-ambiguous resolved slots BEFORE entering ambiguity_pending
   // So that subsequent messages can reference them (e.g., user says "desde el hotel Amerian" 
   // and we still have destination "cataratas" from the first message)
@@ -626,7 +645,7 @@ function parseSelection(text: string, options: AmbiguityOption[]): string | null
 /** Extrae el nombre de lugar del texto del usuario, removiendo prefijos comunes como "desde", "del", "dsde" */
 function extractLocationFromText(text: string): string {
   return text
-    .replace(/^(?:desde\s+|de[l]?\s+|saliendo\s+(?:de\s+)?|del\s+|en\s+el\s+|en\s+|no\s+el\s+|dsde\s+|dde\s+|dede\s+|para\s+el\s+|para\s+|pa\s+ra\s+el\s+|pa\s+ra\s+|pa\s+)/i, '')
+    .replace(/^(?:digo\s+(?:que\s+)?(?:desde\s+)?|al\s+de\s+|quiero\s+(?:ir\s+)?(?:desde\s+)?|quisiera\s+(?:ir\s+)?(?:desde\s+)?|me\s+(?:gustaria|gustaría)\s+(?:ir\s+)?(?:desde\s+)?|desde\s+|de[l]?\s+|saliendo\s+(?:de\s+)?|del\s+|en\s+el\s+|en\s+|no\s+el\s+|dsde\s+|dde\s+|dede\s+|para\s+el\s+|para\s+|pa\s+ra\s+el\s+|pa\s+ra\s+|pa\s+)/i, '')
     .replace(/^(?:a[sls]?\s+|hasta\s+|hacia\s+)/i, '')
     .trim();
 }
