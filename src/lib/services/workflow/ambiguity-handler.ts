@@ -523,10 +523,11 @@ function buildContextualPlaceOptions(
   entityCount: number,
 ): string {
   const slotLabel = slotKey === "origin" ? "salís" : "vas";
-  const placeLabel = rawTerm.charAt(0).toUpperCase() + rawTerm.slice(1);
+  const safeRawTerm = rawTerm && rawTerm.trim().length > 0 ? rawTerm : "";
+  const placeLabel = safeRawTerm ? safeRawTerm.charAt(0).toUpperCase() + safeRawTerm.slice(1) : "";
 
   // Detectar si es un nodo de riesgo → mostrar alternativas en lenguaje natural (SIN números)
-  const riskKey = detectRiskNode(rawTerm);
+  const riskKey = detectRiskNode(safeRawTerm);
   if (riskKey) {
     const riskOptions = RISK_NODES[riskKey];
     if (riskOptions) {
@@ -563,23 +564,25 @@ function buildContextualPlaceOptions(
 
   // No es nodo de riesgo → pregunta contextual SIN listar opciones
   if (slotConfidenceHigh && entityCount > 1) {
+    const label = placeLabel || "el lugar que mencionaste";
     if (lang === "en") {
-      return `I understand you're ${slotLabel === "salís" ? "departing from" : "going to"} "${placeLabel}". What exact place do you mean?`;
+      return `I understand you're ${slotLabel === "salís" ? "departing from" : "going to"} "${label}". What exact place do you mean?`;
     }
     if (lang === "pt") {
-      return `Entendi que você está ${slotLabel === "salís" ? "saindo de" : "indo para"} "${placeLabel}". Qual lugar exato você quer dizer?`;
+      return `Entendi que você está ${slotLabel === "salís" ? "saindo de" : "indo para"} "${label}". Qual lugar exato você quer dizer?`;
     }
-    return `Entendí que ${slotLabel} de "${placeLabel}". ¿A qué lugar exacto te referís?`;
+    return `Entendí que ${slotLabel} de "${label}". ¿A qué lugar exacto te referís?`;
   }
 
   // Fallback genérico (baja confianza o pocas entidades)
+  const label = placeLabel || "el lugar que mencionaste";
   if (lang === "en") {
-    return `I see you mentioned "${placeLabel}". Can you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
+    return `I see you mentioned "${label}". Can you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
   }
   if (lang === "pt") {
-    return `Vi que você mencionou "${placeLabel}". Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
+    return `Vi que você mencionou "${label}". Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
   }
-  return `Entendí que mencionaste "${placeLabel}". ¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
+  return `Entendí que mencionaste "${label}". ¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -628,6 +631,25 @@ function parseSelection(text: string, options: AmbiguityOption[]): string | null
       });
       if (match) return match.canonical;
     }
+  }
+
+  // 2c) Single-word partial: si el usuario escribió una palabra significativa
+  //     que aparece en alguna opción, matchear. Ej: "puerto" → "Centro de Puerto Iguazú"
+  if (!match && normalizedInput.length >= 4) {
+    match = options.find(o =>
+      normalizeText(o.display).includes(normalizedInput) ||
+      normalizeText(o.canonical).includes(normalizedInput),
+    );
+    if (match) return match.canonical;
+  }
+
+  // 2d) Fuzzy matching con distancia de Levenshtein para typos (ej: "cetnro" → "centro")
+  if (!match && normalizedInput.length >= 4) {
+    match = options.find(o => {
+      const optWords = normalizeText(o.display + " " + o.canonical).split(/\s+/);
+      return optWords.some(w => w.length >= 4 && levenshtein(normalizedInput, w) <= 2);
+    });
+    if (match) return match.canonical;
   }
 
   // 3) Try number selection (backward compat for sessions started before this change)
@@ -692,4 +714,26 @@ function safeParseSlots(json: string): Record<string, any> {
   } catch {
     return {};
   }
+}
+
+/** Distancia de Levenshtein para matching tolerante a typos (ej: "cetnro" → "centro") */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+  return dp[m][n];
 }
