@@ -19,6 +19,7 @@ import { buildPredictedContext } from "@/lib/services/memory/predictive-routing"
 import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/event-tracking";
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
+import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { buildFieldSelector, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
 import { startAmbiguityResolution, handleAmbiguityResponse } from "@/lib/services/workflow/ambiguity-handler";
@@ -369,6 +370,76 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
       // Unrecognized — re-ask
       const msg = "¿Cuántos pasajeros son? (ej: 'somos 3')";
+      await sendWhatsAppMessage(phone, msg);
+      await insertMessage(conversation.id, "assistant", msg);
+      return;
+    }
+
+    // ── ZONE: AWAITING_CONFIRMATION — user said "si" to confirm the trip ──
+    if (slotState === "awaiting_confirmation") {
+      log.info("[AWAITING_CONFIRMATION]", { text: trimmed, phoneLen: phone.length });
+
+      const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
+
+      // Negative / cancel → go back to collecting slots
+      if (isNegativeMessage(trimmed)) {
+        const msg = "¿Qué querés cambiar?";
+        await sendWhatsAppMessage(phone, msg);
+        await insertMessage(conversation.id, "assistant", msg);
+        await setConversationalState(phone, "collecting_slots");
+        return;
+      }
+
+      // Affirmative → confirm and execute
+      if (isAffirmativeMessage(trimmed)) {
+        const s = await getChatSession(phone);
+        const rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
+        const passengers = rawSlots?.passengers?.value ?? rawSlots?.passengers ?? 1;
+
+// Resolve pricing with actual passenger count
+        const resolved = await resolvePricingForSlots({
+          origin: rawSlots?.origin?.value ?? rawSlots?.origin ?? "",
+          destination: rawSlots?.destination?.value ?? rawSlots?.destination ?? "",
+          passengers: passengers,
+        });
+
+        const p = resolved.pricingResult;
+        const vehicleType = passengers <= 4 ? "🚗 Auto" : "🚐 Camioneta";
+        const priceMsg = p.final_price > 0
+          ? `Confirmado ✅ ${vehicleType} para ${passengers}. El traslado cuesta $${p.final_price} ARS.\n\nBuscando chofer...`
+          : `Confirmado ✅ para ${passengers}.\n\nBuscando chofer...`;
+
+        await sendWhatsAppMessage(phone, priceMsg);
+        await insertMessage(conversation.id, "assistant", priceMsg);
+
+        // Determine temporal mode from facts or default to NOW if we have all slots
+        const temporal = leadCore.facts.some(f => f.startsWith("now:") || f.startsWith("urgency:")) ? "NOW" : "FUTURO";
+        const isNow = temporal === "NOW";
+
+        // Execute trip
+        if (isNow) {
+          await executeNowTrip({
+            phone,
+            conversationId: conversation.id,
+            origin: rawSlots?.origin?.value ?? rawSlots?.origin ?? "",
+            destination: rawSlots?.destination?.value ?? rawSlots?.destination ?? "",
+            passengers: Number(passengers),
+            pricing: p.final_price > 0 ? p : undefined,
+            customerName,
+            lang: detectLeadLang(trimmed),
+            text: trimmed,
+          });
+        } else {
+          // For FUTURO (reservation), just confirm and set state
+          await setConversationalState(phone, "pending_human_review");
+          await sendWhatsAppMessage(phone, "Tu reserva quedó registrada. Te confirmamos horario y chofer en breve.");
+          await insertMessage(conversation.id, "assistant", "Tu reserva quedó registrada. Te confirmamos horario y chofer en breve.");
+        }
+        return;
+      }
+
+      // Not affirmative/negative → re-ask
+      const msg = "¿Confirmamos el viaje?";
       await sendWhatsAppMessage(phone, msg);
       await insertMessage(conversation.id, "assistant", msg);
       return;
