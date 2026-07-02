@@ -384,17 +384,22 @@ export async function handleAmbiguityResponse(
 
   const lang = detectLeadLang(text);
 
-  // Country filter: si el usuario dice un país (ej: "Argentina"), filtrar
+  // Country filter: si el usuario dice un país (ej: "Argentina" o "Argentino"), filtrar
   // opciones a ese país y auto-seleccionar si solo queda una.
   const PAIS_MAP: Record<string, string> = {
+    // Nombres de país
     argentina: "Argentina", brasil: "Brasil", brazil: "Brasil",
     paraguay: "Paraguay", paraguai: "Paraguay",
+    // Formas adjetivas (usuario dice "argentino", "brasileño", etc.)
+    argentino: "Argentina",
+    brasileño: "Brasil", brasileno: "Brasil",
+    paraguayo: "Paraguay",
   };
   const normalizedInput = normalizeText(text);
   const matchedCountry = Object.keys(PAIS_MAP).find(c => {
-    // Match exact country name (no partial — "argentina" sí, "argentino" no)
+    // Match exact country name or adjective
     if (normalizedInput === c) return true;
-    // También si la frase termina con el país: "a argentina", "en argentina"
+    // También si la frase termina con el país/adjetivo: "del argentino", "a argentina"
     if (normalizedInput.endsWith(" " + c)) return true;
     return false;
   });
