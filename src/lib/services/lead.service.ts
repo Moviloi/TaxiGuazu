@@ -469,7 +469,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       await setConversationalState(phone, "collecting_slots", undefined);
     }
     if (leadCore.facts?.some(f => f.startsWith("location_ambiguous:")) && currentConvState !== "ambiguity_pending") {
-      const ambStarted = await startAmbiguityResolution(phone, conversation.id, trimmed, leadCore, session);
+      // P0.8.5: Re-leer session fresca para incluir slots extraídos en este turno
+      // (passengers, origin, destination). La session original fue leída antes de
+      // extraction-runner, por lo que no tiene los datos del mensaje actual.
+      const freshSessionForAmbiguity = await getChatSession(phone);
+      const ambStarted = await startAmbiguityResolution(phone, conversation.id, trimmed, leadCore, freshSessionForAmbiguity);
       if (ambStarted) return;
     }
 
