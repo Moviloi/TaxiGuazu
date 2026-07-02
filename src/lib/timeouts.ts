@@ -15,6 +15,7 @@ import {
   setConnectionValue,
   getTripsWithMissingCommission,
   getStaleWorkflows,
+  getStaleLeadConversations,
 } from "@/lib/db/database";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
@@ -29,6 +30,7 @@ import {
   CRON_12H_S,
   CRON_24H_S,
   STALE_WORKFLOW_THRESHOLD_S,
+  STALE_LEAD_TIMEOUT_S,
 } from "@/config/constants";
 
 export async function checkTimeouts(): Promise<void> {
@@ -56,6 +58,7 @@ export async function checkTimeouts(): Promise<void> {
   }
 
   // === CRON JOBS ===
+  await checkReengagement();
   await checkReconfirmacion24hs();
   await checkMensajeFelicidad12hs();
   await checkCierreChofer();
@@ -260,5 +263,45 @@ async function checkSessionCleanup(): Promise<void> {
   await setConnectionValue("last_session_cleanup_date", today);
 
   log.info(`[CLEANUP] Ejecutado para ${today}: ${expiredTrips.length} trips, ${stale.length} workflows`);
+}
+
+// === RE-ENGAGEMENT DE LEADS ESTANCADOS (C-05 / S-06) ===
+async function checkReengagement(): Promise<void> {
+  const cutoff = Math.floor(Date.now() / 1000) - STALE_LEAD_TIMEOUT_S;
+  const stale = await getStaleLeadConversations(cutoff);
+
+  for (const conv of stale) {
+    const flagKey = `reengagement_${conv.phone}`;
+    if (await getConnectionValueFlag(flagKey)) continue;
+
+    let slots: Record<string, any> = {};
+    try {
+      slots = JSON.parse(conv.slots || "{}");
+    } catch {
+      slots = {};
+    }
+
+    const origin = slots.origin?.value ?? slots.origin ?? "";
+    const destination = slots.destination?.value ?? slots.destination ?? "";
+    const state = conv.conversational_state || "idle";
+
+    let message: string;
+    if (state === "idle" && origin && destination) {
+      message = `¿Todavía necesitás el traslado de ${origin} a ${destination}? Decime y te ayudo a coordinar.`;
+    } else if (state === "slot_confirmation" && (origin || destination)) {
+      message = `¿Seguís necesitando el viaje? Confirmame los datos y lo gestionamos.`;
+    } else {
+      message = `¡Hola! ¿Necesitás ayuda con un traslado? Decime desde dónde y hacia dónde y te paso los precios.`;
+    }
+
+    await sendWhatsAppMessage(conv.phone, message);
+    await setConnectionFlag(flagKey);
+
+    log.info(`[REENGAGEMENT] Enviado a ******${conv.phone.slice(-4)} state=${state} msg="${message.substring(0, 60)}"`);
+  }
+
+  if (stale.length > 0) {
+    log.info(`[REENGAGEMENT] ${stale.length} re-engagement(s) enviado(s)`);
+  }
 }
 

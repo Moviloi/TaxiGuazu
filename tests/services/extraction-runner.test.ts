@@ -25,13 +25,14 @@ vi.mock("@/lib/ai/response-builder", () => ({
 }));
 
 vi.mock("@/lib/ai/guard", () => ({
-  assertCoreRouterPolicy: vi.fn(),
+  assertCoreRouterPolicy: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("@/lib/ai/patterns", () => ({
   isAffirmativeMessage: vi.fn().mockReturnValue(false),
   isNegativeMessage: vi.fn().mockReturnValue(false),
   isCorrectionMessage: vi.fn().mockReturnValue(false),
+  AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i,
 }));
 
 vi.mock("@/lib/db/state-accessors", () => ({
@@ -92,21 +93,7 @@ describe("runExtractionPipeline", () => {
     vi.clearAllMocks();
   });
 
-  it("returns null when guard blocks extraction", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue("BLOCKED_LEGACY_FLOW" as any);
-
-    const result = await runExtractionPipeline(
-      "+54911111111", "Hola", 1, makeCoreDecision(), [], null,
-    );
-
-    expect(result).toBeNull();
-  });
-
   it("returns null and sends clarification when slots are incomplete", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
-
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue({ origin: "Aeropuerto IGR" } as any);
 

@@ -1,58 +1,132 @@
 # 03 — CORE Phase
 
+> **Resumen:** Detecci�n determinista de intenci�n: extrae facts, fija roles de origen/destino, clasifica en 11 intents y aplica laterales.
+
+
 Detección determinista de intención y extracción de hechos. Sin LLM, sin inferencia.
+Integra el sistema de laterales (5 intents) y detecta intención de compra.
 
 ```mermaid
 flowchart TD
-    A[Mensaje Usuario] --> B[CORE]
+    A[Mensaje Usuario] --> B[CORE core.ts]
 
     B --> C[Detectar Facts]
 
-    C --> C1[action]
-    C --> C2[booking]
-    C --> C3[now]
-    C --> C4[date/time]
-    C --> C5[locations]
-    C --> C6[query]
-    C --> C7[greeting]
+    C --> C1[action / booking]
+    C --> C2[now / urgency]
+    C --> C3[date / time]
+    C --> C4[passengers / flight]
+    C --> C5[origin / destination]
+    C --> C6[query / commercial]
+    C --> C7[informational / consulta]
+    C --> C8[greeting]
+    C --> C9[pre_booking]
+    C --> C10[reschedule / post_service]
+    C --> C11[emergency]
+    C --> C12[affirmation]
+    C --> C13[location_ambiguous]
+    C --> C14[origin_stability / dest_stability]
 
-    C --> D[Role Lock]
+    C --> D[detectStructure]
 
-    D --> D1["ESTOY_EN → origin"]
-    D --> D2["VOY_A → destination"]
-    D --> D3["DESDE → origin"]
+    D --> D1["ESTOY_EN → origin 0.95"]
+    D --> D2["IR_A / VOY_A → destination 0.90"]
+    D --> D3["HASTA / HACIA → destination 0.80"]
+    D --> D4["DESDE → origin 0.85"]
+    D --> D5["origen X destino Y → ambos 0.95"]
 
-    D --> E[Slot Analysis]
+    D --> E[Slot Stability]
+    E --> E1["locked — rol fijo"]
+    E --> E2["ambiguous — valor genérico"]
+    E --> E3["open — no detectado"]
 
-    E --> E1["locked (syntactic)"]
-    E --> E2["ambiguous (needs refinement)"]
-    E --> E3["open (not detected)"]
+    C --> F[purchaseIntent]
+    F --> F1[high — slots + flight/pax/time]
+    F --> F2[medium — consulta/pre-booking]
+    F --> F3[low — especulando]
 
-    E --> F[Intent Classifier]
+    E --> G[classifyIntent]
+    F --> G
+    G --> H[11-intent priority hierarchy]
 
-    F --> G[Confidence]
+    H --> I[applyLaterals]
+    I --> I1["GREETING → engagementLevel"]
+    I --> I2["BOOKING → urgencyScore, timeSensitivity"]
+    I --> I3["NOW → dispatchPriority"]
+    I --> I4["POST_SERVICE → sentimentRisk"]
+    I --> I5["EMERGENCY → escalationLevel MAX"]
 
-    G --> H[CoreDecision]
+    I --> J[Confidence]
+    J --> K[CoreDecision]
 
     style B fill:#e1f5fe
-    style H fill:#c8e6c9
+    style K fill:#c8e6c9
 ```
 
 ## CoreDecision Output
 
 ```typescript
 interface CoreDecision {
-  intent: Intent;           // 11 valores posibles
-  facts: string[];          // hechos extraídos
-  confidence: number;       // 0.0 - 1.0
-  slotStability: SlotStabilityMap;
-  roleLock: RoleLock;
+  intent: Intent;                  // 11 valores posibles
+  facts: string[];                 // hechos extraídos (15+ categorías)
+  confidence: number;              // 0.0 - 1.0
+  slotStability: SlotStabilityMap; // locked / ambiguous / open
+  roleLock: RoleLock;              // { origin, destination }
+  slotAssignmentConfidence?: SlotAssignmentConfidence; // { origin, destination } scores
+  lateral?: CoreLateral;           // metadata de riesgo/prioridad
+  purchaseIntent?: "high" | "medium" | "low";
 }
 ```
 
-## Referencia
+## Intents (11)
 
-- Facts extraction: `src/lib/ai/core.ts:120-200`
-- Role lock: `src/lib/ai/core.ts:60-107`
-- Intent classification: `src/lib/ai/core.ts:226-299`
-- Confidence: `src/lib/ai/core.ts:301-341`
+```typescript
+export type Intent =
+  | "GREETING"
+  | "INFORMATIONAL"
+  | "COMMERCIAL"
+  | "PRE_BOOKING"
+  | "BOOKING"
+  | "NOW"
+  | "RESCHEDULE"
+  | "POST_SERVICE"
+  | "EMERGENCY"
+  | "CONSULTA"
+  | "AMBIGUOUS";
+```
+
+## Sistema de Laterals
+
+Solo 5 intents tienen lateral; el resto retorna `EMPTY_LATERAL`.
+
+| Intent | Lateral | Metadata |
+|--------|---------|----------|
+| GREETING | `greetingLateral` | `engagementLevel: warm \| neutral` |
+| BOOKING | `bookingLateral` | `urgencyScore: 0-1`, `timeSensitivity: immediate \| today \| flexible` |
+| NOW | `nowLateral` | `dispatchPriority: max \| high \| normal \| low` |
+| POST_SERVICE | `postServiceLateral` | `sentimentRisk: satisfied \| neutral \| complaint`, `riskLevel` |
+| EMERGENCY | `emergencyLateral` | `escalationLevel: MAX`, `riskLevel: high` |
+
+## Contexto de intención previa
+
+`core(input, prevIntent)` puede modificar el intent detectado:
+- Si `prevIntent` es válido (no AMBIGUOUS/GREETING) y el nuevo intent es `PRE_BOOKING` → hereda `prevIntent`
+- Si el nuevo intent === `prevIntent` y hay fact `commercial:` o `consulta:` → se convierte a `CONSULTA`
+
+## Referencias
+
+- Facts extraction: `src/lib/ai/core.ts:179-250`
+- Structure detection (role lock): `src/lib/ai/core.ts:72-138`
+- Intent classification: `src/lib/ai/core.ts:283-356`
+- Confidence: `src/lib/ai/core.ts:358-398`
+- Laterals entry: `src/lib/ai/laterals/index.ts:10-25`
+- Lateral handlers: `src/lib/ai/laterals/handlers.ts`
+- Laterals types: `src/lib/ai/laterals/types.ts`
+- CoreDecision type: `src/lib/ai/types.ts:61-72`
+---
+
+## Diagramas relacionados
+
+- [04-router-phase.md](04-router-phase.md) � router-phase
+- [05-extraction-phase.md](05-extraction-phase.md) � extraction-phase
+- [16-policy-pipeline.md](16-policy-pipeline.md) � policy-pipeline

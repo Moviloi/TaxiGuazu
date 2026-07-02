@@ -17,7 +17,7 @@
 // - Si el valor matchea términos ambiguos (centro, hotel) → stability = "ambiguous"
 //   (el rol está fijo pero el valor necesita refinamiento).
 
-import { AMBIGUOUS_LOCATION_RE } from "./patterns";
+import { AMBIGUOUS_LOCATION_RE, AFFIRMATION_RE } from "./patterns";
 import type { CoreDecision, Intent, RoleLock, SlotStabilityMap, SlotAssignmentConfidence } from "./types";
 import { applyLaterals } from "./laterals";
 
@@ -28,7 +28,7 @@ const PAX_RE = /\b(?:somos?|viajamos?|hay|son|tenemos?)\s+(\d+)\b|\b(\d+)\s*(?:p
 const FLIGHT_RE = /\b(?:vuelo\s*)?([A-Z]{2,3}\s?\d{2,4})\b/i;
 const DATE_RE = /\b(hoy|ma[ñn]ana|pasado\s*ma[ñn]ana|esta\s*semana|pr[oó]xim[oa]s?\s*d[ií]as|el\s+(lunes|martes|mi[ée]rcoles|jueves|viernes|s[aá]bado|domingo)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/i;
 const TIME_RE = /\b(?:a\s*las?\s*)?(\d{1,2}:\d{2}|\d{1,2}\s*(?:hs|horas|h))\b/i;
-const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo|correcto|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|todo bien)(?![a-záéíóúñ])/i;
+// AFFIRMATION_RE importado desde patterns.ts (fuente única)
 
 // P0.9.1: trailing \b reemplazado por (?=\W|$) para que funcione con
 // caracteres acentuados (á, é, í, ó, ú, ñ). En JavaScript, \b separa

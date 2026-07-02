@@ -19,6 +19,9 @@ import {
 } from "@/lib/services/dispatch/driver.service";
 import { getConversationByPhone, getDriverByPhone, tryRegisterMessage } from "@/lib/db/database";
 import { handleSurveyResponse, handleNewTripResponse } from "@/lib/services/trip-execution/survey.service";
+import { reverseGeocode } from "@/lib/services/geo/reverse-geocode";
+import { getMediaDownloadUrl } from "@/lib/sender";
+import { transcribeAudio } from "@/lib/ai/transcribe";
 import { getEnv } from "@/config/env";
 import { log } from "@/lib/utils/logger";
 
@@ -228,8 +231,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 
+    // === FUT-03: Mensajes multimedia (location / image) ===
+    if (message.type === "location" && message.location) {
+      const { latitude, longitude } = message.location;
+      log.info(`[LOCATION] lat=${latitude} lon=${longitude} phone=******${phone.slice(-4)}`);
+      const address = await reverseGeocode(latitude, longitude);
+      log.info(`[LOCATION] resuelto="${address}" phone=******${phone.slice(-4)}`);
+      await handleLeadMessage(phone, address);
+      return NextResponse.json({ status: "ok" }, { status: 200 });
+    }
+
+    if (message.type === "image" && message.image) {
+      const caption = message.image.caption || "📷 [imagen recibida]";
+      log.info(`[IMAGE] caption="${caption}" phone=******${phone.slice(-4)}`);
+      await handleLeadMessage(phone, caption);
+      return NextResponse.json({ status: "ok" }, { status: 200 });
+    }
+
+    // === FUT-02: Transcripción de audios WhatsApp ===
+    if (message.type === "audio" && message.audio) {
+      const mimeType = message.audio.mime_type || "audio/ogg";
+      log.info(`[AUDIO] id=${message.audio.id} mime=${mimeType} phone=******${phone.slice(-4)}`);
+
+      try {
+        const { url } = await getMediaDownloadUrl(message.audio.id);
+        const token = getEnv().WHATSAPP_TOKEN;
+
+        const downloadRes = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(15_000),
+        });
+
+        if (!downloadRes.ok) {
+          throw new Error(`Download failed: ${downloadRes.status}`);
+        }
+
+        const arrayBuffer = await downloadRes.arrayBuffer();
+        const audioBuffer = Buffer.from(arrayBuffer);
+
+        const transcribed = await transcribeAudio(audioBuffer, mimeType);
+        log.info(`[AUDIO] transcribed="${transcribed.substring(0, 80)}" phone=******${phone.slice(-4)}`);
+        await handleLeadMessage(phone, transcribed);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error(`[AUDIO ERROR] phone=******${phone.slice(-4)} error=${msg}`);
+        await handleLeadMessage(phone, "🎤 [mensaje de voz]");
+      }
+
+      return NextResponse.json({ status: "ok" }, { status: 200 });
+    }
+
     const text = message.text?.body;
     if (!text) {
+      log.info(`[WEBHOOK] mensaje ignorado: type=${message.type} phone=******${phone.slice(-4)}`);
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
 

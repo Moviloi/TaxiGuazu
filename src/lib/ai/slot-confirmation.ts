@@ -4,6 +4,7 @@
 
 import type { ExtractionContext, Lang } from "./types";
 import { log } from "@/lib/utils/logger";
+import { t } from "@/lib/services/i18n/t";
 
 export interface SlotConfirmationUI {
   showConfirmation: boolean;
@@ -27,7 +28,7 @@ export function shouldRequestConfirmation(extractionCtx?: ExtractionContext): bo
 
 export function buildSlotConfirmationMessage(
   extractionCtx: ExtractionContext,
-  _lang: Lang,
+  lang: Lang,
 ): SlotConfirmationUI {
   const origin = extractionCtx.slots.origin;
   const dest = extractionCtx.slots.destination;
@@ -39,12 +40,12 @@ export function buildSlotConfirmationMessage(
     ?? (dest?.value != null ? String(dest.value) : "?");
 
   const lines: string[] = [
-    "Solo para confirmar los datos del viaje:",
+    t("confirm.summary", lang),
     "",
-    "📍 *Origen:*",
+    t("confirm.origin", lang),
     origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? `⚠️ ${originDisplay}` : originDisplay,
     "",
-    "📍 *Destino:*",
+    t("confirm.destination", lang),
     dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? `⚠️ ${destDisplay}` : destDisplay,
   ];
 
@@ -52,14 +53,14 @@ export function buildSlotConfirmationMessage(
   if (passengers?.value != null) {
     lines.push(
       "",
-      "👥 *Pasajeros:*",
+      t("confirm.passengers", lang),
       passengers.status === "CONFIRMATION_PENDING" || passengers.status === "INFERRED"
         ? `⚠️ ${passengers.value}`
         : String(passengers.value),
     );
   }
 
-  lines.push("", "¿Está correcto?");
+  lines.push("", t("confirm.ask", lang));
 
   log.info("[SLOT_CONFIRMATION_UI]", {
     pendingSlots: [
@@ -84,36 +85,31 @@ export function buildSlotConfirmationMessage(
     ],
     message: lines.join("\n"),
     buttons: [
-      { id: "slot_confirm", title: "✅ Confirmar" },
-      { id: "slot_change", title: "✏️ Cambiar" },
+      { id: "slot_confirm", title: t("confirm.buttonConfirm", lang) },
+      { id: "slot_change", title: t("confirm.buttonChange", lang) },
     ],
   };
 }
 
-export function buildFieldSelector(_lang: Lang): { text: string; prompt: string } {
+export function buildFieldSelector(lang: Lang): { text: string; prompt: string } {
   return {
-    text: "¿Qué querés cambiar? Escribí el origen y destino correctos.",
-    prompt: "El usuario debe escribir los datos a corregir en texto libre.",
+    text: t("disamb.fieldSelector", lang),
+    prompt: t("confirm.fieldSelectorPrompt", lang),
   };
 }
 
 export function buildPlaceOptions(
   canonicalNames: string[],
   slotKey: string,
-  lang?: string,
+  lang: Lang = "es",
 ): string {
   if (canonicalNames.length === 0) {
-    return "Escribí el lugar exacto.";
+    return t("disamb.writeExact", lang);
   }
-  // UX sin números — pregunta contextual
-  const label = slotKey === "origin" ? "origen" : "destino";
+  const label = slotKey === "origin"
+    ? t("confirm.labelOrigin", lang)
+    : t("confirm.labelDestination", lang);
   const examples = canonicalNames.slice(0, 3).join(", ");
-  if (lang === "en") {
-    return `Please write the exact ${label} (e.g., ${examples}).`;
-  }
-  if (lang === "pt") {
-    return `Por favor, escreva o ${label} exato (ex: ${examples}).`;
-  }
-  return `Escribí el ${label} exacto (ej: ${examples}).`;
+  return t("disamb.writeExactWith", lang, { label, examples });
 }
 

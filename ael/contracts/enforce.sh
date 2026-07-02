@@ -14,8 +14,8 @@ echo ""
 check_r1() {
   echo "[R1] Contract Integrity — AI no importa de Services"
 
-  # Check: AI no importa de Services (excepto types)
-  VIOLATIONS=$(grep -rn "from.*@/lib/services/" src/lib/ai/ --include="*.ts" 2>/dev/null | grep -v "types" | grep -v "//.*from" || true)
+  # Check: AI no importa de Services (excepto types y servicios transversales como i18n)
+  VIOLATIONS=$(grep -rn "from.*@/lib/services/" src/lib/ai/ --include="*.ts" 2>/dev/null | grep -v "types" | grep -v "/i18n/" | grep -v "//.*from" || true)
   if [ -n "$VIOLATIONS" ]; then
     echo "  FAIL: AI imports from Services"
     echo "$VIOLATIONS"

@@ -27,6 +27,7 @@ vi.mock("@/lib/services/dispatch/dispatch-workflow", () => ({
 vi.mock("@/lib/ai/patterns", () => ({
   isAffirmativeMessage: vi.fn(),
   isNegativeMessage: vi.fn(),
+  AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i,
 }));
 vi.mock("@/lib/ai/response-builder", () => ({
   buildOpportunityAcceptedMessage: vi.fn().mockReturnValue("¡Genial! Te esperamos."),

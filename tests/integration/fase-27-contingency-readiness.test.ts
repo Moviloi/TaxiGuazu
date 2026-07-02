@@ -65,6 +65,7 @@ vi.mock("@/lib/services/geo/geo-engine", () => ({
 
 vi.mock("@/lib/ai/patterns", () => ({
   AMBIGUOUS_LOCATION_RE: /test/i,
+  AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i,
 }));
 
 import { getConnectionValue, getActiveTripByPhone, createTrip, findTariff, getTripById, getConversationByPhone, getPrincipalDriver } from "@/lib/db/database";

@@ -1,76 +1,128 @@
-# TASK PLAN — Issue 6+7: Prompt philosophy + confirmación implícita
+# TASK PLAN — FUT-01: i18n framework real (es/pt)
+
+**Status: IN PROGRESS**
+**Priority: HIGH (P1)**
+**Effort: M (~105 strings en ~10 archivos)**
 
 ## Goal
-Cerrar los gaps de confirmación implícita y hacer que `policyHint` modifique activamente el comportamiento del LLM de respuesta según el modo (AHORA vs RESERVA vs INFO).
+
+Crear un framework de traducción centralizado y traducir al portugués todos los mensajes al usuario. Brasileños reciben español hoy — el sistema detecta idioma pero responde hardcodeado en español.
 
 ## Scope
-Archivos a modificar:
-- `src/lib/ai/llm-response.ts` — policyHint como behavioral modifier real
-- `src/lib/ai/types.ts` — si hace falta extender PolicyOutput
-- `src/lib/services/workflow/policy-pipeline.ts` — hook de implicit confirmation en idle
-- `src/lib/services/lead.service.ts` — manejar "sí" suelto en estados no-standard
 
-Archivos solo lectura:
-- `src/lib/ai/policy-ahora.ts`
-- `src/lib/ai/policy-reserva.ts`
-- `src/lib/ai/extraction-prompt.ts`
-- `src/lib/ai/ambiguity-interpreter.ts`
+### Archivos a crear:
+- `src/lib/services/i18n/catalog.ts` — Catálogo centralizado con TODAS las traducciones (es → pt)
+- `src/lib/services/i18n/t.ts` — Función `t(key, lang)` simple para lookup
 
-## Priority
-HIGH
+### Archivos a modificar:
+- `src/lib/ai/types.ts` — Extender Lang (si hace falta)
+- `src/lib/ai/response-builder.ts` — Reemplazar strings hardcodeados con t()
+- `src/lib/ai/slot-confirmation.ts` — Usar `lang` param (hoy lo recibe pero lo ignora)
+- `src/lib/timeouts.ts` — Agregar `lang` y traducir mensajes (re-engagement, driver, notificaciones)
+- `src/lib/services/lead.service.ts` — Reemplazar strings hardcodeados con t()
+- `src/lib/services/workflow/ambiguity-handler.ts` — Reemplazar strings en finalizeAmbiguity, handleAmbiguityResponse
+- `src/lib/ai/handler.ts` — buildSafeFallback traducido
+- `src/lib/ai/disambiguation-templates.ts` — Expandir catálogo de traducciones existente (ya tiene patrón)
+- `src/lib/ai/policy-reserva.ts` — Strings ya tienen `lang`, migrar a catálogo central
+- `src/lib/ai/policy-ahora.ts` — Idem
 
-## Analysis (from Explorer)
+### Archivos NO modificados:
+- `src/lib/detect-lang.ts` — Ya funciona, no tocar
+- `src/lib/db/` — Sin cambios
+- `src/app/api/` — Sin cambios (el lang ya se resuelve en servicios)
+- `src/config/` — Sin cambios
 
-### Issue 6 — Prompt philosophy
-- `extraction-prompt.ts` y `llm-response.ts` ya son behavioral: guían QUÉ hacer, no CÓMO decirlo exactamente
-- `policyHint` se inyecta en `buildResponsePrompt()` como un string genérico:
-  - AHORA: `"AHORA: ejecutar acción inmediata."`
-  - RESERVA: `"RESERVA: ejecutar acción con confirmación obligatoria."`
-  - Estos NO modifican el comportamiento real del LLM — son decorativos
-- **Fix:** Convertir policyHint en behavioral guidelines diferentes por modo
+## Design
 
-### Issue 7 — Implicit confirmation
-| Estado | Affirmation manejado? |
-|--------|----------------------|
-| `awaiting_confirmation` | ✅ (Issue 5 fix) |
-| `slot_confirmation` | ✅ |
-| `awaiting_passenger` | ✅ |
-| `idle` | ❌ |
-| `collecting_slots` | ❌ (sin prevSlotsLocation) |
-| AHORA mode | ❌ (no usa awaiting_confirmation) |
+### Translation Catalog (`src/lib/i18n/catalog.ts`)
 
-- **Fix:** Agregar manejo de afirmación en idle (con prevSlots check) y en collecting_slots
+```typescript
+type Lang = "es" | "en" | "pt";
+
+type TranslationValue = string | ((...args: any[]) => string);
+
+interface TranslationCatalog {
+  [key: string]: Record<Lang, TranslationValue>;
+}
+```
+
+Estructura plana con keys semánticas agrupadas por categoría:
+- `greeting.intro`, `greeting.withName`
+- `clarify.origin`, `clarify.destination`, `clarify.time`, `clarify.passengers`
+- `price.quote` — `"El traslado de {origin} a {destination} cuesta ${price} ARS."`
+- `confirmation.summary`, `confirmation.ask`
+- `reengagement.idle`, `reengagement.collecting`, `reengagement.generic`
+- `error.fallback`, `error.escalation`, `error.global`
+- `dispatch.searching`
+- `booking.confirmed`, `booking.confirmedNoPrice`
+- etc.
+
+### t() function
+
+```typescript
+export function t(key: string, lang: Lang, params?: Record<string, string>): string {
+  const entry = CATALOG[key];
+  if (!entry) return `[MISSING:${key}]`;
+  const value = entry[lang] ?? entry.es; // fallback a español
+  if (typeof value === "function") return value(params);
+  return params ? interpolate(value, params) : value;
+}
+```
+
+### Prioridad de traducción
+1. **Portugués (pt)** — objetivo principal (brasileños)
+2. Español (es) — base, ya existe
+3. Inglés (en) — secundario, menos urgente
+
+### Flujo de lang
+El `lang` ya se detecta en múltiples puntos vía `detectLeadLang(text)`. Muchas funciones ya lo reciben como parámetro. Donde no llega, se agrega como parámetro (timeouts.ts, handler.ts, etc.).
 
 ## Phases
 
-### Phase 1: Architect
-Validar plan contra ADRs. Especial atención a:
-- ADR 001 (capsulas vs monolitos) — el prompt upgrade no rompe capsulas
-- ADR 004 (llamadas a db desde AI) — no aplica
-- R5 implícito: "No atar las manos del LLM" — behavioral guidelines están OK
+### Phase 1: Framework (catalog.ts + t.ts)
+1. Crear `src/lib/i18n/t.ts` con función `t(key, lang, params?)`
+2. Crear `src/lib/i18n/catalog.ts` con TODAS las ~105 strings agrupadas por categoría
+3. Traducir cada string al portugués
+4. Verificar: import limpio, sin dependencias circulares
 
-### Phase 2: Implementer — Issue 7 (implicit confirmation gaps)
-1. En `lead.service.ts`, después del COMBINED_GREETING zone:
-   - Detectar `isAffirmativeMessage(trimmed)` en estados `idle` o `collecting_slots`
-   - Si hay session slots previos → tratar como confirmation implícita y redirigir a policy pipeline
-2. En `policy-pipeline.ts`:
-   - Asegurar que AHORA mode también pueda pasar por `awaiting_confirmation`
-   - (Opcional, requiere más análisis)
+### Phase 2: Wire en response-builder.ts y slot-confirmation.ts
+1. `response-builder.ts` — Reemplazar ~15 strings hardcodeados con `t()`
+2. `slot-confirmation.ts` — Activar el `lang` param que ya recibe pero ignora (~7 strings)
+3. `ambiguity-handler.ts` — finalizeAmbiguity, handleAmbiguityResponse
 
-### Phase 3: Implementer — Issue 6 (policyHint upgrade)
-1. En `llm-response.ts:buildResponsePrompt()`:
-   - Expandir `policyHint` a behavioral guidelines según el modo
-   - AHORA: énfasis en inmediatez, sin preguntar de más
-   - RESERVA: énfasis en claridad, opciones de horario
-   - INFO: énfasis en informar, dirigir a booking si aplica
+### Phase 3: Wire en timeouts.ts
+1. Agregar `lang` param a checkReengagement(), checkReconfirmacion24hs(), etc.
+2. El lang se puede detectar del phone del lead (o pasar como config)
+3. Traducir ~10 strings entre re-engagement, driver, notificaciones
 
-### Phase 4: Auditor
-- `npm test` — todos los tests existentes deben seguir pasando
+### Phase 4: Wire en lead.service.ts y handler.ts
+1. `lead.service.ts` — Reemplazar ~12 strings hardcodeados en handleLeadMessage, handleSlotConfirmationButton
+2. `handler.ts` — buildSafeFallback (detectar lang del contexto)
+3. `policy-reserva.ts` y `policy-ahora.ts` — migrar strings existentes a catalog.ts (ya tienen lang param)
+
+### Phase 5: Auditor
+- `npm test` — todos los tests deben pasar (mocks de t() necesarios)
 - `npm run build` — sin errores
-- `bash ael/contracts/enforce.sh` — R1, R2, R3
+- `bash ael/contracts/enforce.sh` — R1-R4
 
-### Phase 5: Memory
-- Registrar decisión: prompt philosophy upgrade + implicit confirmation gaps
+### Phase 6: Memory
+- Registrar decisión FUT-01
 
-### Phase 6: Learning
-- Extraer patrón: no relevante
+## Archivos de test a modificar
+- Múltiples test files mockean detect-lang — verificar que no se rompan con el nuevo import de t()
+- Los tests existentes que verifican strings literales en español deben seguir pasando (es=default)
+- timeouts.test.ts: verificar que los strings de re-engagement sigan funcionando con lang="es"
+
+## Strings por archivo (estimado)
+| Archivo | Strings | Ya tiene lang? |
+|---------|---------|----------------|
+| src/lib/ai/response-builder.ts | ~25 | Sí (mayoría) |
+| src/lib/ai/slot-confirmation.ts | ~7 | Sí (ignorado) |
+| src/lib/timeouts.ts | ~10 | NO |
+| src/lib/services/lead.service.ts | ~12 | NO (mayoría) |
+| src/lib/services/workflow/ambiguity-handler.ts | ~8 | Sí (parcial) |
+| src/lib/ai/handler.ts | ~1 | NO |
+| src/lib/ai/disambiguation-templates.ts | ~15 | Sí (con traducciones parciales) |
+| src/lib/ai/policy-reserva.ts | ~18 | Sí |
+| src/lib/ai/policy-ahora.ts | ~2 | Sí |
+| **Total** | **~98** | |

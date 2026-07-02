@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildLocationConfirmationResponse } from "@/lib/ai/response-builder";
 import { buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
+import { AFFIRMATION_RE } from "@/lib/ai/patterns";
 import type { ExtractionContext } from "@/lib/ai/types";
 
 function ctx(slots: ExtractionContext["slots"]): ExtractionContext {
@@ -63,8 +64,7 @@ describe("FASE 25 — No legacy confirmation", () => {
     expect(msg).toContain("¿Está correcto?");
   });
 
-  it("AFFIRMATION_RE ya no reconoce 'esas son las direcciones exactas'", () => {
-    const AFFIRMATION_RE = /^(s[ií]|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|listo|correcto|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|todo bien)(?![a-záéíóúñ])/i;
+  it("AFFIRMATION_RE (desde patterns.ts) no reconoce 'esas son las direcciones exactas'", () => {
     expect(AFFIRMATION_RE.test("esas son las direcciones exactas")).toBe(false);
     expect(AFFIRMATION_RE.test("sí")).toBe(true);
     expect(AFFIRMATION_RE.test("confirmo")).toBe(true);

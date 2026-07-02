@@ -22,15 +22,17 @@ export const AMBIGUOUS_LOCATION_TERMS = [
 ];
 
 /**
- * Patrones de afirmación/negación del usuario.
- * Usado por lead.service para detectar aceptación/rechazo de oportunidades y confirmaciones.
- * core.ts tiene su propio AFFIRMATION_RE para clasificación de intención (con patrones similares pero no idénticos).
+ * Fuente ÚNICA para AFFIRMATION_RE.
+ * Unifica los patrones que antes vivían duplicados en core.ts y patterns.ts.
+ * Incluye tokens de afirmación en español, portugués (sim) e inglés (yes).
+ * Usa negative lookahead `(?![a-záéíóúñ])` para no cortar palabras con acentos.
  */
-const AFFIRMATIVE_RE = /^(s[ií]|sim|yes|s[ií] confirmo|ok|okey|dale|confirmo|confirmado|de acuerdo|est[aá] bien|perfecto|mandale|adelante|s[ií] dale|s[ií] gracias)(?=\s|$|[.,!?;])/i;
+export const AFFIRMATION_RE = /^(s[ií] confirmo|s[ií] dale|s[ií] gracias|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|de acuerdo|confirmado|perfecto|adelante|mandale|correcto|todo bien|est[aá] bien|confirmo|listo|s[ií]|sim|yes|ok|okey|dale)(?![a-záéíóúñ])/i;
 
 export function isAffirmativeMessage(text: string): boolean {
   const t = text.trim().toLowerCase();
-  if (AFFIRMATIVE_RE.test(t)) return true;
+  if (AFFIRMATION_RE.test(t)) return true;
+  // Fallback: detectar tokens sueltos incluso con ruido (espacios extra, puntuación)
   const clean = t.replace(/[^a-záéíóúñ\s]/g, "").trim();
   return /\b(ok\b|dale\b|confirmo\b|sim\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b)/.test(clean);
 }

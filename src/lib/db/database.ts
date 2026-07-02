@@ -461,6 +461,29 @@ export async function getStaleWorkflows(cutoff: number): Promise<{ conversation_
   return rs.rows as unknown as { conversation_id: number }[];
 }
 
+/**
+ * Retorna leads estancados — conversaciones donde el cliente dejó de responder
+ * en estados que requieren input del usuario (idle con slots, collecting_slots,
+ * slot_confirmation, awaiting_passenger) y no tienen un trip activo.
+ * Usado por checkReengagement() para re-engagement automático.
+ */
+export async function getStaleLeadConversations(
+  cutoff: number
+): Promise<{ phone: string; slots: string | null; conversational_state: string | null }[]> {
+  const rs = await getDb().execute({
+    sql: `SELECT cs.phone, cs.slots, cs.conversational_state
+          FROM chat_sessions cs
+          LEFT JOIN conversations c ON c.phone = cs.phone
+          WHERE cs.updated_at < ?
+            AND cs.conversational_state IN ('idle', 'collecting_slots', 'slot_confirmation', 'awaiting_passenger')
+            AND (c.trip_id IS NULL OR c.id IS NULL)
+            AND cs.slots IS NOT NULL
+          ORDER BY cs.updated_at ASC`,
+    args: [cutoff],
+  });
+  return rs.rows as unknown as { phone: string; slots: string | null; conversational_state: string | null }[];
+}
+
 export async function debugGetActiveDriversWithConversationStatus(cutoff: number): Promise<void> {
   await getDb().execute({
     sql: `SELECT d.phone, d.name, d.status, d.tier, d.country,

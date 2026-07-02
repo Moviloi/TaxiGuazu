@@ -13,6 +13,7 @@ import type { SlotConfirmationUI } from "./slot-confirmation";
 import { resolveNextRequiredField } from "./field-resolver";
 import { AMBIGUOUS_HOTEL_LANDMARKS_RE, AMBIGUOUS_LOCATION_RE } from "./patterns";
 import type { ExtractionContext, FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
+import { t } from "@/lib/services/i18n/t";
 import { log } from "@/lib/utils/logger";
 
 function isAmbiguous(value: string | number | null | undefined): boolean {
@@ -318,17 +319,9 @@ export function buildConfirmationMessage(extraction: ExtractionContext, lang: La
 }
 
 export function buildNoTariffConfirmation(extraction: ExtractionContext, lang: Lang): string {
-  const slots = extraction.slots;
-  const origin = extraction.tariff?.displayOrigin ?? extraction.tariff?.canonicalOrigin ?? String(slots.origin?.value ?? "");
-  const destination = extraction.tariff?.displayDestination ?? extraction.tariff?.canonicalDestination ?? String(slots.destination?.value ?? "");
-
-  if (lang === "en") {
-    return `I couldn't find a published rate for that route (${origin} → ${destination}). An operator will confirm availability and final price. Do you want to proceed?`;
-  }
-  if (lang === "pt") {
-    return `Não localizei uma tarifa publicada para essa rota (${origin} → ${destination}). Um operador vai confirmar disponibilidade e valor final. Deseja prosseguir?`;
-  }
-  return `No encontré una tarifa publicada para esa ruta (${origin} → ${destination}). Un operador va a confirmar disponibilidad y precio final. ¿Querés que sigamos?`;
+  const origin = extraction.tariff?.displayOrigin ?? extraction.tariff?.canonicalOrigin ?? String(extraction.slots.origin?.value ?? "");
+  const destination = extraction.tariff?.displayDestination ?? extraction.tariff?.canonicalDestination ?? String(extraction.slots.destination?.value ?? "");
+  return t("booking.noTariff", lang, { origin, destination });
 }
 
 function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string {
@@ -341,22 +334,12 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
   if (field === "destination") {
     if (destValue && AMBIGUOUS_HOTEL_LANDMARKS_RE.test(destValue)) {
       const label = extraction.tariff?.displayDestination ?? formatHotelLandmarkLabel(destValue);
-      if (lang === "en") {
-        return `Do you mean ${label} in the city centre or a specific address?`;
-      }
-      if (lang === "pt") {
-        return `Você se refere a ${label} no centro ou a outro endereço específico?`;
-      }
-      return `¿Te referís a ${label} o a otra dirección específica?`;
+      return t("clarify.hotel", lang, { label });
     }
     if (slots.destination?.reason === "ambiguous_term") {
-      if (lang === "en") return `To which specific place are you going?`;
-      if (lang === "pt") return `Para qual local específico você vai?`;
-      return `¿A qué lugar específico vas?`;
+      return t("clarify.destinationAmbiguous", lang);
     }
-    if (lang === "en") return `Where do you need to go?`;
-    if (lang === "pt") return `Para onde você precisa ir?`;
-    return `¿A dónde necesitás ir?`;
+    return t("clarify.destination", lang);
   }
 
   if (field === "origin") {
@@ -364,28 +347,18 @@ function buildClarifyMessage(extraction: ExtractionContext, lang: Lang): string 
     // El policy respeta lo que el extractor ya asignó. Si origin es ambiguo,
     // pregunta genéricamente sin asumir "centro" como referencia.
     if (slots.origin?.reason === "ambiguous_term" || (originValue && isAmbiguous(originValue))) {
-      if (lang === "en") return `Could you give a more specific origin (street, hotel name, reference)?`;
-      if (lang === "pt") return `Pode indicar um local de origem mais específico (rua, hotel, referência)?`;
-      return `¿Podés indicarme un origen más específico (calle, nombre de hotel, referencia)?`;
+      return t("clarify.originAmbiguous", lang);
     }
-    if (lang === "en") return `Where are you leaving from?`;
-    if (lang === "pt") return `De onde você está saindo?`;
-    return `¿Desde dónde salís?`;
+    return t("clarify.origin", lang);
   }
 
   if (field === "passengers") {
-    if (lang === "en") return `How many passengers?`;
-    if (lang === "pt") return `Quantos passageiros?`;
-    return `¿Cuántos pasajeros?`;
+    return t("clarify.passengers", lang);
   }
   if (field === "scheduled_at" || field === "scheduled_at_date" || field === "scheduled_at_time") {
-    if (lang === "en") return `What date and time do you need the ride?`;
-    if (lang === "pt") return `Para que dia e horário você precisa da corrida?`;
-    return `¿Para qué día y horario necesitás el viaje?`;
+    return t("clarify.time", lang);
   }
-  if (lang === "en") return `Could you provide ${field}?`;
-  if (lang === "pt") return `Pode informar ${field}?`;
-  return `¿Podés indicarme ${field}?`;
+  return t("clarify.field", lang, { field });
 }
 
 
@@ -434,18 +407,10 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { re
   // FASE 18.1: preguntar pasajeros antes que horario
   const paxScore = extraction.slots.passengers?.score ?? 0;
   if (paxScore < 0.7) {
-    if (lang === "en") return { response: `Got it. Origin: ${originStr}. Destination: ${destStr}. How many passengers?`, nextField: "passengers" };
-    if (lang === "pt") return { response: `Certo. Origem: ${originStr}. Destino: ${destStr}. Quantos passageiros?`, nextField: "passengers" };
-    return { response: `Perfecto. Tengo origen en ${originStr} y destino hacia ${destStr}. ¿Cuántos pasajeros son?`, nextField: "passengers" };
+    return { response: t("booking.acknowledgePax", lang, { origin: originStr, dest: destStr }), nextField: "passengers" };
   }
 
-  if (lang === "en") {
-    return { response: `Got it. Origin: ${originStr}. Destination: ${destStr}. What time do you need the ride?`, nextField: "scheduled_at" };
-  }
-  if (lang === "pt") {
-    return { response: `Certo. Origem: ${originStr}. Destino: ${destStr}. A que horas você precisa da corrida?`, nextField: "scheduled_at" };
-  }
-  return { response: `Perfecto. Tengo origen en ${originStr} y destino hacia ${destStr}. ¿A qué hora necesitás el traslado?`, nextField: "scheduled_at" };
+  return { response: t("booking.acknowledgeTime", lang, { origin: originStr, dest: destStr }), nextField: "scheduled_at" };
 }
 
 // prepend artículo definido cuando el value es un sustantivo
@@ -470,15 +435,11 @@ function withDefiniteArticle(value: string, lang: Lang): string {
 // ── booking accepted response builders ──────────────────────
 
 function buildBookingAcceptedResponse(origin: string | number | null, destination: string | number | null, price: number, lang: Lang): string {
-  if (lang === "en") return `✅ Booking confirmed.\n\nFrom: ${origin}\nTo: ${destination}\nPrice: $${price} ARS\n\nA driver will contact you shortly.`;
-  if (lang === "pt") return `✅ Solicitação confirmada.\n\nOrigem: ${origin}\nDestino: ${destination}\nValor: R$ ${price} ARS\n\nEm breve um motorista entrará em contato.`;
-  return `✅ Solicitud confirmada.\n\nOrigen: ${origin}\nDestino: ${destination}\nPrecio: $${price} ARS\n\nEn breve un chofer se pondrá en contacto con vos.`;
+  return t("booking.confirmed", lang, { origin: String(origin ?? ""), destination: String(destination ?? ""), price: String(price) });
 }
 
 function buildBookingAcceptedNoPriceResponse(origin: string | number | null, destination: string | number | null, lang: Lang): string {
-  if (lang === "en") return `✅ Booking confirmed.\n\nFrom: ${origin}\nTo: ${destination}\n\nAn operator will confirm availability and final price. A driver will contact you shortly.`;
-  if (lang === "pt") return `✅ Solicitação confirmada.\n\nOrigem: ${origin}\nDestino: ${destination}\n\nUm operador vai confirmar disponibilidade e valor final. Em breve um motorista entrará em contato.`;
-  return `✅ Solicitud confirmada.\n\nOrigen: ${origin}\nDestino: ${destination}\n\nUn operador va a confirmar disponibilidad y precio final. En breve un chofer se pondrá en contacto con vos.`;
+  return t("booking.confirmedNoPrice", lang, { origin: String(origin ?? ""), destination: String(destination ?? "") });
 }
 
 function formatSchedule(value: string, lang: Lang): string {
@@ -497,21 +458,15 @@ function formatSchedule(value: string, lang: Lang): string {
 // ── lateral intent response builders ───────────────────────────
 
 export function buildLateralEmergencyResponse(lang: Lang): string {
-  if (lang === "en") return "🚨 We're notifying our team. An operator will contact you urgently.";
-  if (lang === "pt") return "🚨 Estamos notificando nossa equipe. Um operador entrará em contato urgente.";
-  return "🚨 Estamos notificando a nuestro equipo. Un operador te va a contactar urgente.";
+  return t("emergency.response", lang);
 }
 
 export function buildLateralRescheduleResponse(lang: Lang): string {
-  if (lang === "en") return "Understood. An operator will review your reservation and contact you to reschedule.";
-  if (lang === "pt") return "Entendido. Um operador vai revisar sua reserva e entrar em contato para reprogramar.";
-  return "Entendido. Un operador va a revisar tu reserva y te contacta para reprogramar.";
+  return t("reschedule.response", lang);
 }
 
 function buildLateralPostServiceResponse(lang: Lang): string {
-  if (lang === "en") return "Thank you for your message. If you need help with billing or have a complaint, an operator will contact you.";
-  if (lang === "pt") return "Obrigado pela mensagem. Se precisar de ajuda com faturamento ou tiver alguma reclamação, um operador entrará em contato.";
-  return "Gracias por tu mensaje. Si necesitás ayuda con facturación o tenés algún reclamo, un operador te va a contactar.";
+  return t("postService.response", lang);
 }
 
 export function buildAdminNotifyBody(intent: string, phone: string | undefined, userText: string | undefined): string {

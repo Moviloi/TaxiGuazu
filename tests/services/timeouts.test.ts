@@ -23,6 +23,7 @@ vi.mock("@/lib/db/database", () => ({
   setConnectionValue: vi.fn().mockResolvedValue(undefined),
   getTripsWithMissingCommission: vi.fn().mockResolvedValue([]),
   getStaleWorkflows: vi.fn().mockResolvedValue([]),
+  getStaleLeadConversations: vi.fn().mockResolvedValue([]),
   insertHousekeepingLog: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -56,6 +57,7 @@ import {
   getTripsByScheduledAtWindow, getDriverByPhone, setConnectionFlag,
   getConnectionValueFlag, getTripsPendingCloseOut, getTripsWithMissingCommission,
   getConnectionValue, setConnectionValue, getExpiredTrips, getStaleWorkflows,
+  getStaleLeadConversations,
   insertHousekeepingLog,
 } from "@/lib/db/database";
 import { sendInteractiveButtons, sendWhatsAppMessage } from "@/lib/sender";
@@ -249,4 +251,38 @@ describe("checkTimeouts", () => {
     });
   });
 
+  describe("checkReengagement", () => {
+    it("envía re-engagement contextual para idle con ambos slots", async () => {
+      vi.mocked(getStaleLeadConversations).mockResolvedValueOnce([
+        { phone: "+54911223344", slots: JSON.stringify({ origin: { value: "Aeropuerto IGR" }, destination: { value: "Centro" } }), conversational_state: "idle" },
+      ]);
+      await checkTimeouts();
+      expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911223344", expect.stringContaining("Aeropuerto IGR"));
+      expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911223344", expect.stringContaining("Centro"));
+      expect(setConnectionFlag).toHaveBeenCalledWith("reengagement_+54911223344");
+    });
+
+    it("salta si ya fue re-enganchado (flag existe)", async () => {
+      vi.mocked(getConnectionValueFlag).mockResolvedValueOnce(true);
+      vi.mocked(getStaleLeadConversations).mockResolvedValueOnce([
+        { phone: "+54911223344", slots: "{}", conversational_state: "idle" },
+      ]);
+      await checkTimeouts();
+      expect(sendWhatsAppMessage).not.toHaveBeenCalled();
+    });
+
+    it("no envía si no hay leads estancados", async () => {
+      vi.mocked(getStaleLeadConversations).mockResolvedValueOnce([]);
+      await checkTimeouts();
+      expect(sendWhatsAppMessage).not.toHaveBeenCalledWith(expect.any(String), expect.stringContaining("traslado"));
+    });
+
+    it("maneja slots parciales con mensaje genérico", async () => {
+      vi.mocked(getStaleLeadConversations).mockResolvedValueOnce([
+        { phone: "+54911223344", slots: JSON.stringify({ origin: { value: "Aeropuerto IGR" } }), conversational_state: "collecting_slots" },
+      ]);
+      await checkTimeouts();
+      expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911223344", expect.stringContaining("ayuda"));
+    });
+  });
 });

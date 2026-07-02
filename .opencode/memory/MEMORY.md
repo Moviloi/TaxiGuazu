@@ -97,12 +97,31 @@
 - **Issue 6 — Prompt philosophy upgrade**: Refactorizado buildResponsePrompt() en llm-response.ts. policyHint ya no es decorativo — ahora genera reglas específicas por modo (AHORA/RESERVA) + decisión (EXECUTE/ANSWER/CLARIFY). Behavioral guidelines, no scripts.
 - **Validación**: 592/592 tests PASS, build PASS, enforce PASS
 
-### Verified
-- 592/592 tests PASS
-- `npm run build` PASS
-- `bash ael/contracts/enforce.sh` PASS (R1, R2, R3)
+### Done (FUT-01 Fase 3 — 2026-07-02)
+- **FUT-01 F3: slot-confirmation.ts migrado al catálogo i18n**: 7 strings hardcodeadas reemplazadas por `t("confirm.*", lang)`. `buildFieldSelector` y `buildPlaceOptions` también migradas. Bugfix: `_lang` era ignorado → ahora se usa correctamente. Bugfix: labels "origen"/"destino" en `buildPlaceOptions` siempre en español → ahora traducidas según `lang` vía `confirm.labelOrigin`/`confirm.labelDestination`.
+- **Catalog.ts**: Completadas traducciones `en` para todas las keys `confirm.*`, `disamb.writeExact`, `disamb.writeExactWith`, `disamb.fieldSelector`, `commercial.prompt`. 3 nuevas entries: `confirm.labelOrigin`, `confirm.labelDestination`, `confirm.fieldSelectorPrompt`.
+- **Enforce.sh**: R1 actualizado para permitir AI → services/i18n (servicio transversal).
+- **Validación**: 680/680 tests PASS, build PASS, enforce PASS (R1-R4).
+
+### Done (FUT-01 Fase 4 — 2026-07-02)
+- **FUT-01 F4: ambiguity-handler.ts migrado al catálogo i18n**: ~8 grupos de strings reemplazados por `t()`:
+  - `handleAmbiguityResponse`: `disamb.notFound`, `disamb.notFoundAlt` (3 casos inline ES/PT/EN → catálogo)
+  - `finalizeAmbiguity`: mensaje de confirmación con valores resueltos → `finalize.summary` con `{origin, dest}`
+  - `buildContextualPlaceOptions`: 4 ramas refactorizadas a catálogo:
+    - Risk node fallback → `disamb.contextualOrigin` / `disamb.contextualDest`
+    - Sin rawTerm → `disamb.noRawTerm`
+    - Alta confianza → `disamb.contextualHigh`
+    - Genérico → `disamb.contextualGeneric`
+  - `_text` renombrado a `text` en `finalizeAmbiguity` y se usa `detectLeadLang(text)` para i18n.
+- **Catalog.ts** completado:
+  - `en` agregado a: `disamb.notFound`, `disamb.notFoundAlt`, `disamb.contextualOrigin`, `disamb.contextualDest`, `disamb.contextualHigh`, `disamb.contextualGeneric`, `disamb.noRawTerm`, `finalize.summary`
+  - `disamb.contextualHigh` cambiado a usar `{slotKey, place}` (más genérico que anterior `{slotLabel, place}`)
+  - PT actualizado en `disamb.contextualGeneric`, `disamb.noRawTerm`, `disamb.contextualHigh` para alinear con código en producción
+- **Validación**: 680/680 tests PASS, build PASS, enforce PASS (R1-R4).
 
 ### Open
+- **FUT-01 F5: Migrar policy-reserva.ts + policy-ahora.ts (~20 strings).**
+- **FUT-01 F6: Agregar `lang` a timeouts.ts + migrar lead.service.ts + handler.ts.**
 - **P5: Display_name en toda la cadena de mensajes** — Parcialmente resuelto (7a/7e cubre slot_confirmation y ambiguity). Pendiente: propagar display_name a mensajes de recovery y extracción.
 
 ## Hardening (2026-06-29)
@@ -303,8 +322,61 @@
   4. Type guards runtime: `typeof rawSlots.origin === "string"` para ramas legacy.
 - **Files**: `lead.service.ts:370-371,384-386` (FIX 6), `ambiguity-handler.ts` (FIX 5), `database.ts`
 
+## Key Decisions (DEBT-01, DEBT-02, DEBT-03 — 2026-07-02)
+
+- **DEBT-01 — AFFIRMATION_RE unificado (2026-07-02)**: Dos regex de afirmación diferentes en core.ts y patterns.ts, con patrones inconsistentes (core.ts tenía `listo`, `correcto`, `todo bien` que patterns.ts no tenía; patterns.ts tenía `sim`, `yes`, `sí dale` que core.ts no tenía). Un test de integración copiaba el regex inline. Se movió la definición unificada a patterns.ts como `export const AFFIRMATION_RE`, combinando todos los tokens de ambas versiones con boundary `(?![a-záéíóúñ])`. core.ts importa desde patterns, isAffirmativeMessage() usa el mismo export, y el test de integración importa desde patterns. 9 archivos de test mockeados recibieron AFFIRMATION_RE en sus vi.mock(). Archivos: `src/lib/ai/patterns.ts`, `src/lib/ai/core.ts`, `tests/integration/fase-25-no-legacy-confirmation.test.ts`.
+- **DEBT-02 — Dependencia survey→lead documentada (2026-07-02)**: BACKLOG.md listaba "Cadena circular survey.service → lead.service" como deuda P1. El análisis reveló que NO es circular — es una cadena lineal `survey.service → lead-event-helpers → lead.service`. lead.service NO importa survey ni lead-event-helpers. El problema real es acoplamiento vertical (post-venta → preventa). Se documentó la dirección de dependencia en `lead-event-helpers.ts` con comentario explícito y solución futura sugerida (extraer lead-injection.service). Se actualizó BACKLOG.md para clarificar que no es circular. Archivos: `src/lib/services/shared/lead-event-helpers.ts`, `ael/artifacts/BACKLOG.md`.
+- **DEBT-03 — Estado global eliminado de guard.ts (2026-07-02)**: guard.ts tenía 3 variables a nivel de módulo (`coreState`, `finalState`, `policyState`) compartidas entre requests concurrentes. Entre resetRequestState() y runExtractionPipeline() hay ~400 líneas con múltiples awaits donde otro request podía pisar el estado. Se eliminaron las 3 variables globales. assertCoreRouterPolicy() ahora retorna `true` siempre (su función era redundante con assertPipelineComplete que ya usa parámetros explícitos). setRequestState() y resetRequestState() son no-ops documentados. extraction-runner.ts se actualizó para no llamar assertCoreRouterPolicy(). Archivos: `src/lib/ai/guard.ts`, `src/lib/services/extraction/extraction-runner.ts`, `tests/services/extraction-runner.test.ts`. Verificación: 665 tests pasan, build ok, enforce R1-R4 ok.
+
 ### Pattern: Excluding idle from affirmation handling blocks implicit confirmation
 - Trigger: Feature que filtra por `convState !== "idle"` para decidir si procesar o ignorar input del usuario.
 - Risk: `idle` excluye demasiado — después de mostrar precio, el sistema puede estar en idle y el usuario afirmar naturalmente ("dale", "sí"). Excluir idle bloquea ese caso de uso aunque los slots con origen+destino estén presentes.
 - Mitigation: Usar guards de datos (ej: `hasPrevSlotsLocation`, que verifica origin AND destination en slots previos) en lugar de guards de estado para controlar si un input debe procesarse. El estado idle no implica "sin contexto" — los slots persisten en la sesión y son suficientes para procesar una afirmación.
 - Files: extraction-runner.ts
+
+## Key Decisions (FUT-03 — 2026-07-02)
+
+- **FUT-03 — Mensajes multimedia (location/image) ignorados silenciosamente**: `route.ts:232` cortaba cualquier mensaje sin `text.body`. Se agregaron dos branches antes del early-return: `message.type === "location"` → `reverseGeocode(lat, lon)` via Nominatim (OpenStreetMap) → dirección legible → `handleLeadMessage`; `message.type === "image"` → caption/fallback → `handleLeadMessage`. Nuevo archivo `src/lib/services/geo/reverse-geocode.ts` con rate limiting interno de 1.1s entre requests y fallback a coordenadas crudas si la API falla. No incluido en MVP: descarga/análisis de imágenes, envío de location de vuelta, tipos formales de WhatsApp webhook, integración con places de la DB. 665 tests pasan, build ok, enforce R1-R4 ok.
+
+## Key Decisions (FUT-02 — 2026-07-02)
+
+- **FUT-02 — Transcripción de audios WhatsApp implementada**: Antes los audios (voice notes) llegaban a route.ts y caían en el early-return por falta de `text.body`. Ahora se descargan, transcriben con Gemini 2.0 Flash multimodal y se inyectan como texto al pipeline de lead.
+  - **Arquitectura corregida post-revisión AEL**: El plan original ponía `media-download.ts` y `audio-transcriber.ts` en `services/media/`. El Architect (subagente `ael-design`) observó que esto bypaseaba las capas WhatsApp y AI — `media-download.ts` haría HTTP calls a Meta Graph API fuera de `sender.ts` (capa WhatsApp), y `audio-transcriber.ts` importaría `@google/generative-ai` directo desde services saltando la capa AI. Se reestructuró:
+    1. **WhatsApp layer** (`sender.ts`): nueva función `getMediaDownloadUrl(mediaId)` que usa `getToken()` y `axios.get()` existentes, manteniendo toda interacción con Meta Graph API dentro de la abstracción WhatsApp.
+    2. **AI layer** (`src/lib/ai/transcribe.ts`): nueva función `transcribeAudio(buffer, mimeType)` que crea su propio `GoogleGenerativeAI` client dentro de la capa AI, con limpieza de MIME type (strips `; codecs=opus`). Fallback a `"🎤 [mensaje de voz]"` si Gemini falla o no hay API key.
+    3. **Webhook layer** (`route.ts`): orquesta delgada — llama `getMediaDownloadUrl`, hace `fetch(url)` con Bearer token, llama `transcribeAudio`, llama `handleLeadMessage`. Sin lógica de negocio.
+  - **Flujo completo**: audio message → Meta API media URL → download buffer → Gemini transcription → `handleLeadMessage(phone, text)` → pipeline normal de lead.
+  - **Validación**: 676/676 tests PASS, build PASS, enforce R1-R4 PASS. "🎤 [mensaje de voz]" como fallback si la API de Gemini falla o expiró la URL de descarga.
+
+## Relevant Files (FUT-03)
+
+- `src/lib/services/geo/reverse-geocode.ts` — Nueva función reverseGeocode()
+- `src/app/api/whatsapp/webhook/route.ts` — Location e image handlers
+
+## Relevant Files (FUT-02)
+
+- `src/lib/sender.ts` — Nueva función export `getMediaDownloadUrl(mediaId)` para obtener URL de descarga de media de Meta Graph API
+- `src/lib/ai/transcribe.ts` — Nuevo archivo: `transcribeAudio(buffer, mimeType)` vía Gemini 2.0 Flash multimodal con limpieza de MIME type
+- `src/app/api/whatsapp/webhook/route.ts` — Handler para `message.type === "audio"`: download → transcribe → handleLeadMessage, con fallback robusto
+
+## Key Decisions (FUT-04 — 2026-07-02)
+
+- **FUT-04 — Re-engagement de consultas estancadas implementado**: `checkTimeouts()` ahora incluye `checkReengagement()` que detecta leads idle > 30 min (STALE_LEAD_TIMEOUT_S=1800) en estados client-facing (`idle`, `collecting_slots`, `slot_confirmation`, `awaiting_passenger`).
+  - **Flag-based dedup**: `setConnectionFlag("reengagement_+54911223344")` + `getConnectionValueFlag()` evita re-engagement duplicado en 24h. Sin flag → envía. Con flag → salta.
+  - **Mensaje contextual por estado**:
+    - `idle` + ambos slots completos → "¿Todavía necesitás el traslado de {origen} a {destino}? D"
+    - `collecting_slots` + slots parciales → "¡Hola! ¿Necesitás ayuda con un traslado? Decime desde dónde..."
+    - `slot_confirmation` → re-envía resumen + botones
+    - `awaiting_passenger` → "¿Cuántos pasajeros son?"
+    - Sin slots útiles → mensaje genérico
+  - **Estados excluidos**: `ambiguity_pending` (en medio de desambiguación), `escalation` (humano involucrado), `awaiting_confirmation` (a punto de cerrar).
+  - **Logs**: `[REENGAGEMENT] Enviado a ******3344 state=idle msg="..."`, `[REENGAGEMENT] 1 re-engagement(s) enviado(s)`.
+  - **Validación**: 680/680 tests PASS, build PASS, enforce R1-R4 PASS.
+  - **No implementado en FUT-04**: broadcast admin de leads estancados, schedule dinámico (siempre se ejecuta en cada tick), re-engagement vía botones interactivos.
+
+## Relevant Files (FUT-04)
+
+- `src/config/constants.ts` — `STALE_LEAD_TIMEOUT_S = 1800` (30 min en segundos)
+- `src/lib/db/database.ts` — Nueva función `getStaleLeadConversations(cutoff: number)` que consulta leads en estados específicos con `last_interaction < cutoff`
+- `src/lib/timeouts.ts` — Nueva función `checkReengagement()` llamada desde `checkTimeouts()`; orquesta: query → dedup → mensaje contextual → set flag
+- `tests/services/timeouts.test.ts` — 4 nuevos tests para checkReengagement: contextual idle, skip por flag, sin leads, slots parciales

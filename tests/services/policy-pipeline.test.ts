@@ -23,7 +23,7 @@ vi.mock("@/lib/ai/core", () => ({ core: vi.fn() }));
 vi.mock("@/lib/ai/display-name", () => ({ getPlaceDisplayName: vi.fn().mockResolvedValue({ displayName: "Mock Place", source: "canonical_name" }) }));
 vi.mock("@/lib/services/memory/context-memory", () => ({ saveContext: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/services/geo/geo-engine", () => ({ resolveGeoRoute: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/lib/ai/patterns", () => ({ isAffirmativeMessage: vi.fn(), isNegativeMessage: vi.fn(), AMBIGUOUS_LOCATION_RE: /aeropuerto|aero|terminal/i }));
+vi.mock("@/lib/ai/patterns", () => ({ isAffirmativeMessage: vi.fn(), isNegativeMessage: vi.fn(), AMBIGUOUS_LOCATION_RE: /aeropuerto|aero|terminal/i, AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i }));
 vi.mock("@/lib/services/learning/opportunity-engine", () => ({
   evaluateOpportunities: vi.fn().mockResolvedValue([]),
   isOpportunityQuery: vi.fn().mockReturnValue(false),

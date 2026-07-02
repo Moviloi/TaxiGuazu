@@ -1,18 +1,24 @@
 // GUARD — Hard enforcement del flujo CORE → ROUTER → POLICY → OUTPUT.
-// cualquier intento de emitir output fuera de POLICY se BLOQUEA.
+// Cualquier intento de emitir output fuera de POLICY se BLOQUEA.
 //
-// Reglas:
-// - handleMessage() setea el state (CORE, FinalDecision, PolicyOutput).
-// - extraction-runner llama assertCoreRouterPolicy() para verificar que no haya
-//   estado parcial corrupto (algunos módulos inicializados y otros no).
+// Historia: Este módulo tenía estado global (coreState, finalState, policyState)
+// que causaba riesgos de contaminación cross-request en Node.js single-threaded
+// con awaits entre resetRequestState() (lead.service.ts:115) y
+// runExtractionPipeline() (lead.service.ts:511).
+//
+// Solución (DEBT-03): Eliminado el estado global. assertPipelineComplete y
+// assertOutputSource ya estaban correctamente parametrizadas.
+// assertCoreRouterPolicy() retorna true siempre — su función de detectar estado
+// mixto era un safety net redundante con assertPipelineComplete().
+// setRequestState() y resetRequestState() se mantienen como no-ops documentados
+// para señalizar intención en el flujo sin riesgo de concurrencia.
+//
+// Reglas vigentes:
 // - Cualquier output final al usuario debe pasar assertOutputSource("POLICY").
 // - El pipeline completo debe estar armado antes de emitir (assertPipelineComplete).
-//
-// El state es module-level. lead.service.ts llama resetRequestState() al inicio.
-// La extracción corre entre core() y handleMessage(), por lo que el estado inicial
-// (todo null) es válido — assertCoreRouterPolicy solo bloquea estado mixto.
+// - LEADING PRINCIPLE: toda validación usa parámetros explícitos, no estado global.
 
-import type { CoreDecision, FinalDecision, OutputSource, PolicyOutput } from "./types";
+import type { CoreDecision, OutputSource, PolicyOutput, FinalDecision } from "./types";
 import { log } from "@/lib/utils/logger";
 
 export interface BlockResult {
@@ -21,39 +27,30 @@ export interface BlockResult {
   context: string;
 }
 
-let coreState: CoreDecision | null = null;
-let finalState: FinalDecision | null = null;
-let policyState: PolicyOutput | null = null;
-
-export function setRequestState(core: CoreDecision, final: FinalDecision, policy: PolicyOutput): void {
-  coreState = core;
-  finalState = final;
-  policyState = policy;
+/**
+ * No-op documentado. Antes escribía en vars globales (coreState, finalState, policyState).
+ * Ahora el estado se pasa por parámetro donde sea necesario.
+ * Se conserva para señalizar intención en handler.ts sin riesgo de concurrencia.
+ */
+export function setRequestState(_core: CoreDecision, _final: FinalDecision, _policy: PolicyOutput): void {
+  // No-op intencional. El estado se valida vía assertPipelineComplete con params explícitos.
 }
 
+/**
+ * Siempre retorna true. Antes verificaba estado mixto en vars globales.
+ * Su función es redundante con assertPipelineComplete (que usa parámetros explícitos).
+ * Se conserva la firma para compatibilidad con extraction-runner.ts.
+ */
 export function assertCoreRouterPolicy(): true | BlockResult {
-  const hasCore = coreState !== null;
-  const hasFinal = finalState !== null;
-  const hasPolicy = policyState !== null;
-  const hasAny = hasCore || hasFinal || hasPolicy;
-  const hasAll = hasCore && hasFinal && hasPolicy;
-
-  // Only block on mixed state (partial initialization = corruption).
-  // All-null (initial state before pipeline) and all-set (pipeline complete) are valid.
-  if (hasAny && !hasAll) {
-    const block: BlockResult = {
-      status: "BLOCKED_LEGACY_FLOW",
-      reason: "CORE_ROUTER_REQUIRED",
-      context: `core=${hasCore} router=${hasFinal} policy=${hasPolicy}`,
-    };
-    log.info("[BLOCKED]", block);
-    return block;
-  }
+  // No-op intencional. Sin estado global, no hay estado mixto que verificar.
+  // La validación real del pipeline ocurre en assertPipelineComplete().
   return true;
 }
 
-// hard guardrail para outputs no-POLICY.
-// Lanza OUTPUT_VIOLATION. Uso: assertOutputSource(policy.outputSource).
+/**
+ * Hard guardrail para outputs no-POLICY.
+ * Lanza OUTPUT_VIOLATION. Uso: assertOutputSource(policy.outputSource).
+ */
 export function assertOutputSource(source: OutputSource | string): true {
   if (source !== "POLICY") {
     const err = new Error(
@@ -65,8 +62,11 @@ export function assertOutputSource(source: OutputSource | string): true {
   return true;
 }
 
-// assert runtime que el pipeline CORE+ROUTER+POLICY está armado.
-// Uso: assertPipelineComplete(decision.core, decision, policy).
+/**
+ * Assert runtime que el pipeline CORE+ROUTER+POLICY está armado.
+ * Uso: assertPipelineComplete(decision.core, decision, policy).
+ * ÚNICO guardrail real del pipeline (usa parámetros explícitos).
+ */
 export function assertPipelineComplete(
   core: CoreDecision | null | undefined,
   decision: FinalDecision | null | undefined,
@@ -84,8 +84,10 @@ export function assertPipelineComplete(
   return true;
 }
 
+/**
+ * No-op documentado. Antes limpiaba vars globales (coreState, finalState, policyState).
+ * Se conserva para señalizar intención en lead.service.ts.
+ */
 export function resetRequestState(): void {
-  coreState = null;
-  finalState = null;
-  policyState = null;
+  // No-op intencional. Sin estado global, no hay estado que resetear.
 }

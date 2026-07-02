@@ -3,6 +3,7 @@ import type { ConfidenceMap, ConversationDomain, RoleLock, SlotStabilityMap } fr
 import { clamp01 } from "@/lib/utils/clamp";
 import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 import { buildGenericClarify } from "@/lib/ai/response-builder";
+import { t } from "@/lib/services/i18n/t";
 import { parseSessionSlots, parseConfidenceJson } from "@/lib/services/shared/session-helpers";
 import { detectLeadLang } from "@/lib/detect-lang";
 import { log } from "@/lib/utils/logger";
@@ -188,9 +189,7 @@ export async function getRecoveryMessage(
     const mentioned = facts.find(f => f.startsWith("origin:") || f.startsWith("destination:"))?.split(":")[1];
     if (mentioned) {
       // User mentioned a place but comprehension is still low — ask with context
-      if (lang === "en") return `I see you mentioned "${mentioned}". Where do you need to go?`;
-      if (lang === "pt") return `Vi que você mencionou "${mentioned}". Para onde precisa ir?`;
-      return `Entendí que mencionaste "${mentioned}". ¿A dónde necesitás ir?`;
+      return t("recovery.contextual", lang, { mentioned });
     }
   }
 

@@ -150,6 +150,7 @@ vi.mock("@/lib/ai/response-builder", () => ({
 vi.mock("@/lib/ai/patterns", () => ({
   isAffirmativeMessage: vi.fn().mockReturnValue(false),
   isNegativeMessage: vi.fn().mockReturnValue(false),
+  AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i,
 }));
 
 vi.mock("@/lib/ai/extraction-schema", () => ({

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencodego/qwen3.7 plus",
+  "small_model": "opencode/big-pickle",
+  "agent": {
+    "ael-explore": {
+      "description": "Explorador — descubre estado real del codigo, solo lectura",
+      "mode": "subagent",
+      "model": "opencode/DeepSeek V4 Flash"
+    },
+    "ael-architect": {
+      "description": "Arquitecto — valida diseno contra ADRs y contratos",
+      "mode": "subagent",
+      "model": "opencode/DeepSeek V4 Flash"
+    },
+    "ael-implementer": {
+      "description": "Implementador — aplica cambios aprobados al codigo",
+      "mode": "subagent",
+      "model": "opencodego/DeepSeek V4 Pro"
+    },
+    "ael-audit": {
+      "description": "Auditor — valida calidad con tests, lint, build, enforce",
+      "mode": "subagent",
+      "model": "opencode/Nemotron"
+    },
+    "ael-memory": {
+      "description": "Memoria — conserva conocimiento estructurado del equipo",
+      "mode": "subagent",
+      "model": "opencode/North Mini Code Free"
+    },
+    "ael-learning": {
+      "description": "Aprendizaje — detecta patrones de exito y fallo",
+      "mode": "subagent",
+      "model": "opencode/North Mini Code Free"
+    }
+  }
+}

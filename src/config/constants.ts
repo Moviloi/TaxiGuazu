@@ -28,6 +28,9 @@ export const STALE_WORKFLOW_THRESHOLD_S = 86400;
 // Confirmation expiration (awaiting_confirmation stale after 30 min)
 export const CONFIRMATION_TIMEOUT_S = 1800;
 
+// Stale lead re-engagement (lead idle in client-facing state > 30 min)
+export const STALE_LEAD_TIMEOUT_S = 1800;
+
 // Context slot staleness (slots older than this are not inherited across turns)
 export const CONTEXT_SLOT_TIMEOUT_S = 3600;
 

@@ -1,87 +1,106 @@
 # 15 — Data Flow
 
+> **Resumen:** Flujo completo de datos entre extracci�n, CORE, policy pipeline, pricing, dispatch y salida.
+
+
 Flujo completo de datos a través del sistema.
 
 ```mermaid
 flowchart TD
-    A[Datos extracción] --> B{Acción requerida}
 
-    B --> C[COTIZAR]
+    subgraph IN["Entrada"]
+        A[Mensaje WhatsApp]
+        B[Historial de mensajes]
+        C[chat_sessions.slots]
+        D[chat_sessions.state]
+    end
 
-    C --> C1{Resolución ubicación}
-    C1 --> C2[ZONE→ZONE ✓]
-    C1 --> C3[ZONE→PLACE ✓]
-    C1 --> C4[PLACE→ZONE ✓]
-    C1 --> C5[PLACE→PLACE ✓]
+    A --> E[Webhook route.ts]
+    E --> F[lead.service.ts]
 
+    F --> G[Extraction Pipeline]
+    G --> H[ExtractionResult]
+    H --> I[confidence.ts]
+    I --> J[ConfidenceMap]
+    J --> K[slot-state.ts]
+    K --> L[SlotStateEntry]
 
+    F --> M[CORE core.ts]
+    M --> N[CoreDecision]
+    N --> O[laterals/]
+    O --> P[CoreLateral]
 
-    B --> D[RESERVA FUTURA]
+    F --> Q[policy-pipeline.ts]
 
-    D --> D1{Datos mínimos}
+    Q --> R[buildExtractionContext]
+    R --> S[ExtractionContext]
 
-    D1 --> D2[Origen ✓]
-    D2 --> D3[Destino ✓]
-    D3 --> D4[Fecha/Hora ✓]
-    D4 --> D5[Pasajeros ✓]
+    Q --> T[temporalFromFacts]
+    T --> U[OperationalMode]
+    U --> V[Mode AHORA/RESERVA]
 
-    D5 --> D6[
-ZONE→ZONE permitido
-]
+    S --> W[operational-readiness.ts]
+    W --> X{canPrepareQuote / canQuote / canDispatch}
 
+    S --> Y[pricing-engine.ts]
+    Y --> Z[PricingResult]
 
-    B --> E[DESPACHO AHORA]
+    Q --> AA[learning/opportunity-engine.ts]
+    AA --> AB[OpportunityResult]
 
-    E --> E1{Ejecutabilidad física}
+    Q --> AC[executeNowTrip]
+    Q --> AD[processLead]
 
-    E1 --> E2[PLACE→PLACE ✓]
-    E1 --> E3[PLACE→ZONE ✓]
-    E1 --> E4[ZONE→ZONE ✗]
+    AD --> AE[handler.ts]
+    AE --> AF[policy-ahora.ts / policy-reserva.ts]
+    AF --> AG[response-builder.ts]
+    AG --> AH[PolicyOutput]
 
+    AH --> AI[guard.ts]
+    AI --> AJ[sendWhatsAppMessage]
+    AJ --> AK[messages table]
 
-    B --> F[DESPACHO RESERVA]
+    AC --> AL[trips table]
 
-    F --> F1[
-ZONE→ZONE ✓
-PLACE→ZONE ✓
-PLACE→PLACE ✓
-]
-```
-
-## Flujo de Datos por Fase
-
-```mermaid
-flowchart LR
-    A[Slots]
-
-    A --> B[Confidence Map]
-
-    B --> C[Readiness Resolver]
-
-    C --> D1{Cotizable}
-    C --> D2{Reservable}
-    C --> D3{Despachable}
-
-    D1 --> E[Tariff Resolver]
-
-    D2 --> F[Await Confirmation]
-
-    D3 --> G[Execute Trip]
+    style Q fill:#fff9c4
+    style AC fill:#c8e6c9
+    style AK fill:#c8e6c9
 ```
 
 ## Datos por Fase
 
 | Fase | Input | Output | Almacena en |
 |------|-------|--------|-------------|
-| CORE | Texto | CoreDecision | memory |
+| CORE | Texto | CoreDecision | memory (transient) |
 | EXTRACTION | Texto + History | ExtractionResult | chat_sessions.slots |
 | CONFIDENCE | Slots | ConfidenceMap | chat_sessions.confidence |
-| POLICY | ExtractionContext | PolicyOutput | — (stateless) |
+| SLOT STATE | ConfidenceMap + prev states | SlotStateEntry[] | chat_sessions.slots |
+| POLICY PIPELINE | CoreDecision + ExtractionContext + Pricing | PolicyOutput | — (orquesta) |
+| POLICY | HandlerContext | PolicyOutput | — (stateless) |
 | DISPATCH | Trip + Fleet | Assignment | trips |
 | OUTPUT | PolicyOutput | WhatsApp message | messages |
+| LEARNING | Pricing + context | Opportunities | learning tables |
 
-## Referencia
+## Flujo de contexto
+
+```mermaid
+flowchart LR
+    A[loadContext] --> B[mergeContext]
+    B --> C[HandlerContext]
+    C --> D[Policy]
+    D --> E[saveContext]
+```
+
+## Referencias
 
 - Context builder: `src/lib/services/workflow/build-extraction-context.ts`
+- Context memory: `src/lib/services/memory/context-memory.ts`
+- Policy pipeline: `src/lib/services/workflow/policy-pipeline.ts`
 - Types: `src/lib/ai/types.ts`
-- Memory: `src/lib/services/memory/context-memory.ts`
+---
+
+## Diagramas relacionados
+
+- [01-system-overview.md](01-system-overview.md) � system-overview
+- [16-policy-pipeline.md](16-policy-pipeline.md) � policy-pipeline
+- [09-location-resolution.md](09-location-resolution.md) � location-resolution

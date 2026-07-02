@@ -27,6 +27,8 @@ import {
   buildConfirmationQuestion,
 } from "@/lib/ai/disambiguation-templates";
 import type { Language } from "@/lib/ai/disambiguation-templates";
+import { t } from "@/lib/services/i18n/t";
+import type { Lang } from "@/lib/ai/types";
 
 /** Opción con display name (para el usuario) y canonical (para matching interno). */
 export interface AmbiguityOption {
@@ -485,23 +487,11 @@ export async function handleAmbiguityResponse(
         return true;
       }
       // Still not a risk node — ask to be more specific
-      if (lang === "en") {
-        await sendAndPersist(phone, conversationId, `I still can't find the exact place. Can you tell me the specific name?`);
-      } else if (lang === "pt") {
-        await sendAndPersist(phone, conversationId, `Ainda não encontrei o lugar exato. Pode me dizer o nome específico?`);
-      } else {
-        await sendAndPersist(phone, conversationId, `Todavía no encuentro el lugar exacto. ¿Podés decirme el nombre específico?`);
-      }
+      await sendAndPersist(phone, conversationId, t("disamb.notFound", lang as any));
       return true;
     } else {
       // 0 matches — ask to be more specific
-      if (lang === "en") {
-        await sendAndPersist(phone, conversationId, `I couldn't find that place. Can you write the exact name?`);
-      } else if (lang === "pt") {
-        await sendAndPersist(phone, conversationId, `Não encontrei esse lugar. Pode escrever o nome exato?`);
-      } else {
-        await sendAndPersist(phone, conversationId, `No encontré ese lugar. ¿Podés escribir el nombre exacto?`);
-      }
+      await sendAndPersist(phone, conversationId, t("disamb.notFoundAlt", lang as any));
       return true;
     }
 
@@ -558,7 +548,7 @@ async function finalizeAmbiguity(
   conversationId: number,
   ambState: AmbiguityState,
   freshSession: ChatSessionRow | null,
-  _text: string,
+  text: string,
 ): Promise<void> {
   // Write resolved values into chat_sessions.slots
   const currentSlots = freshSession?.slots ? safeParseSlots(freshSession.slots) : {};
@@ -566,6 +556,7 @@ async function finalizeAmbiguity(
   const destPlace = ambState.resolvedDest ? await findPlaceByName(ambState.resolvedDest.toLowerCase()) : null;
   const originDisplay = originPlace?.display_name ?? ambState.resolvedOrigin;
   const destDisplay = destPlace?.display_name ?? ambState.resolvedDest;
+  const lang = detectLeadLang(text) as Lang;
   const updatedSlots = {
     ...currentSlots,
     origin: {
@@ -595,7 +586,7 @@ async function finalizeAmbiguity(
   await upsertChatSession(phone, updatedSlots, undefined, "slot_confirmation", undefined);
 
   // Show confirmation with the resolved values
-  const confirmationMsg = `Solo para confirmar los datos del viaje:\n\n📍 *Origen:*\n✅ ${originDisplay}\n\n📍 *Destino:*\n✅ ${destDisplay}\n\n¿Está correcto?`;
+  const confirmationMsg = t("finalize.summary", lang, { origin: originDisplay ?? "", dest: destDisplay ?? "" });
   await sendAndPersist(phone, conversationId, confirmationMsg);
 
   log.info("[AMBIGUITY_COMPLETE]", {
@@ -613,11 +604,10 @@ function buildContextualPlaceOptions(
   rawTerm: string,
   entityCount: number,
 ): string {
-  // P0.9.4: Sin comillas en placeLabel. Si rawTerm está vacío, pregunta directa.
-  const slotLabel = slotKey === "origin" ? "salís" : "vas";
   const safeRawTerm = rawTerm && rawTerm.trim().length > 0 ? rawTerm.trim() : "";
   const hasRawTerm = safeRawTerm.length > 0;
   const placeLabel = hasRawTerm ? safeRawTerm.charAt(0).toUpperCase() + safeRawTerm.slice(1).toLowerCase() : "";
+  const l = lang as Lang;
 
   // Detectar si es un nodo de riesgo → usar templates contextuales
   const riskKey = detectRiskNode(safeRawTerm);
@@ -629,7 +619,6 @@ function buildContextualPlaceOptions(
         ? riskOptions.filter(o => !o.canonical.includes("AGT"))
         : riskOptions;
       const alternatives = displayOptions.map(o => o.display).join(", ");
-      // Replace last ", " with " o " for natural language
       const lastComma = alternatives.lastIndexOf(", ");
       const naturalAlternatives = lastComma >= 0
         ? alternatives.substring(0, lastComma) + " o " + alternatives.substring(lastComma + 2)
@@ -638,64 +627,34 @@ function buildContextualPlaceOptions(
       // P1: Usar templates contextuales en lugar de preguntas hardcodeadas
       const slotContext = detectSlotContext(safeRawTerm);
       const tone = detectConversationTone(safeRawTerm);
-      const templateQuestion = selectDisambiguationTemplate(slotContext, tone, lang as Language);
+      const templateQuestion = selectDisambiguationTemplate(slotContext, tone, lang);
       
-      // Si hay un template contextual, usarlo; sino fallback a la lógica anterior
+      // Si hay un template contextual, usarlo; sino fallback al catálogo
       if (templateQuestion) {
         return templateQuestion;
       }
 
-      // Fallback: lógica anterior (por si el template no está disponible)
-      if (lang === "en") {
-        if (slotKey === "origin") {
-          return `I understand you're departing from ${placeLabel.toLowerCase()}. Do you mean ${naturalAlternatives}?`;
-        }
-        return `I understand you're going to ${placeLabel.toLowerCase()}. Do you mean ${naturalAlternatives}?`;
-      }
-      if (lang === "pt") {
-        if (slotKey === "origin") {
-          return `Entendi que você está saindo de ${placeLabel.toLowerCase()}. Você quer dizer ${naturalAlternatives}?`;
-        }
-        return `Entendi que você está indo para ${placeLabel.toLowerCase()}. Você quer dizer ${naturalAlternatives}?`;
-      }
-      // Spanish (default)
+      // Fallback: catálogo i18n
+      const place = placeLabel.toLowerCase();
       if (slotKey === "origin") {
-        return `Entendí que salís de ${placeLabel.toLowerCase()}. ¿Decís ${naturalAlternatives}?`;
+        return t("disamb.contextualOrigin", l, { place, alternatives: naturalAlternatives });
       }
-      return `Entendí que vas a ${placeLabel.toLowerCase()}. ¿Decís ${naturalAlternatives}?`;
+      return t("disamb.contextualDest", l, { place, alternatives: naturalAlternatives });
     }
   }
 
   // P0.9.4: Pregunta directa sin comillas cuando rawTerm está vacío.
   if (!hasRawTerm) {
-    if (lang === "en") {
-      return `Could you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
-    }
-    if (lang === "pt") {
-      return `Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
-    }
-    return `¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
+    return t("disamb.noRawTerm", l, { slotKey });
   }
 
   // No es nodo de riesgo → pregunta contextual SIN listar opciones
   if (slotConfidenceHigh && entityCount > 1) {
-    if (lang === "en") {
-      return `I understand you ${slotLabel === "salís" ? "depart from" : "go to"} ${placeLabel.toLowerCase()}. What exact place do you mean?`;
-    }
-    if (lang === "pt") {
-      return `Entendi que você ${slotLabel === "salís" ? "sai de" : "vai para"} ${placeLabel.toLowerCase()}. Qual lugar exato você quer dizer?`;
-    }
-    return `Entendí que ${slotLabel} de ${placeLabel.toLowerCase()}. ¿A qué lugar exacto te referís?`;
+    return t("disamb.contextualHigh", l, { slotKey, place: placeLabel.toLowerCase() });
   }
 
   // Fallback genérico (baja confianza o pocas entidades)
-  if (lang === "en") {
-    return `I see you mentioned ${placeLabel.toLowerCase()}. Can you tell me the exact ${slotKey === "origin" ? "starting point" : "destination"}?`;
-  }
-  if (lang === "pt") {
-    return `Vi que você mencionou ${placeLabel.toLowerCase()}. Pode me dizer o ${slotKey === "origin" ? "local de partida" : "destino"} exato?`;
-  }
-  return `Entendí que mencionaste ${placeLabel.toLowerCase()}. ¿Me decís el ${slotKey === "origin" ? "origen" : "destino"} exacto?`;
+  return t("disamb.contextualGeneric", l, { slotKey, place: placeLabel.toLowerCase() });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -39,6 +39,38 @@ async function postToWhatsApp(payload: any): Promise<void> {
   }
 }
 
+/**
+ * Obtiene la URL de descarga y MIME type de un media de WhatsApp.
+ * GET a `https://graph.facebook.com/v18.0/{mediaId}` con token de acceso.
+ * Retorna la URL efímera y el MIME type para descargar el archivo.
+ */
+export async function getMediaDownloadUrl(
+  mediaId: string
+): Promise<{ url: string; mimeType: string }> {
+  const token = getToken();
+  if (!token) throw new Error("WhatsApp token not configured");
+
+  const url = `https://graph.facebook.com/v18.0/${mediaId}`;
+  log.info(`[MEDIA URL] fetching download info for media ${mediaId}`);
+
+  try {
+    const res = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10_000,
+    });
+    const { url: downloadUrl, mime_type } = res.data;
+    if (!downloadUrl || !mime_type) {
+      throw new Error(`Invalid media response for ${mediaId}`);
+    }
+    log.info(`[MEDIA URL] ${mime_type} → ${downloadUrl.substring(0, 60)}...`);
+    return { url: downloadUrl, mimeType: mime_type };
+  } catch (error: any) {
+    const detail = error?.response?.data || error.message;
+    log.error(`[MEDIA URL ERROR] media ${mediaId}:`, detail);
+    throw new Error("Failed to get media download URL");
+  }
+}
+
 export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
   const payload = {
     messaging_product: "whatsapp",

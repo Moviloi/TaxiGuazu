@@ -7,7 +7,7 @@ import type { TripExtraction, ExtractionResult as ExtractionSchemaResult } from 
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import { evaluateWorkflowTransition } from "@/lib/services/workflow/slot-workflow";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
-import { assertCoreRouterPolicy } from "@/lib/ai/guard";
+// assertCoreRouterPolicy removed in DEBT-03 (no more global state in guard.ts)
 import { isAffirmativeMessage, isNegativeMessage, isCorrectionMessage } from "@/lib/ai/patterns";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import type { CoreDecision, ConfidenceMap } from "@/lib/ai/types";
@@ -141,11 +141,7 @@ export async function runExtractionPipeline(
   let hasCorrection = false;
   try {
     log.info("[EXTRACTION] Iniciando extraction, textLen:", text.length);
-    const extractionGuard = assertCoreRouterPolicy();
-    if (extractionGuard !== true) {
-      log.info("[BLOCKED] generateGroqExtraction", extractionGuard);
-      return null;
-    }
+    // assertCoreRouterPolicy() eliminado (DEBT-03): sin estado global, no hay estado mixto que verificar.
     const [prevSlotsEarlyResult, prevSlotStatesResult, ctxMemory] = await Promise.all([
       loadPreviousSlots(phone),
       loadPreviousSlotStates(phone),

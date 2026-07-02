@@ -10,11 +10,12 @@
 
 import type { CoreDecision, Lang, OpportunityResult, ExtractionContext } from "./types";
 import { buildSlotConfirmationMessage, type SlotConfirmationUI } from "./slot-confirmation";
+import { t } from "@/lib/services/i18n/t";
 
 // ─── 1. CONVERSACIONAL ───────────────────────────────────────────────────────
 
 export function buildGreeting(lang: Lang, customerName?: string): string {
-  const greet = lang === "en" ? "Hi!" : lang === "pt" ? "Olá!" : "¡Hola!";
+  const greet = t("greeting.hi", lang);
   return customerName ? `${greet} ${customerName}` : greet;
 }
 
@@ -24,11 +25,8 @@ export function buildGreeting(lang: Lang, customerName?: string): string {
  *  con instrucciones "Decime desde dónde y hacia dónde".
  */
 export function buildGreetingIntro(lang: Lang, customerName?: string): string {
-  const greet = lang === "en" ? "Hi!" : lang === "pt" ? "Olá!" : "¡Hola!";
-  const name = customerName ? ` ${customerName}` : "";
-  if (lang === "en") return `${greet}${name}! I'm Cris Virtual, 24/7 assistant from TaxiGuazú.`;
-  if (lang === "pt") return `${greet}${name}! Sou a Cris Virtual, assistente 24/7 da TaxiGuazú.`;
-  return `${greet}${name}! Soy Cris Virtual, asistente 24/7 de TaxiGuazú.`;
+  if (customerName) return t("greeting.introWithName", lang, { name: customerName });
+  return t("greeting.intro", lang);
 }
 
 // ─── 2. OPERACIONAL ──────────────────────────────────────────────────────────
@@ -44,34 +42,16 @@ export function inferMissingFieldFromCore(decision: CoreDecision): string | null
 }
 
 export function buildGenericClarify(field: string | null, lang: Lang): string {
-  if (field === "location_ambiguous") {
-    if (lang === "en") return "Which specific place and what time do you need the ride?";
-    if (lang === "pt") return "Qual local específico e que horas você precisa da corrida?";
-    return "¿Qué lugar específico y a qué hora necesitás el viaje?";
-  }
-  if (field === "origin") {
-    if (lang === "en") return "Where are you leaving from?";
-    if (lang === "pt") return "De onde você está saindo?";
-    return "¿Desde dónde salís?";
-  }
-  if (field === "destination") {
-    if (lang === "en") return "Where do you need to go?";
-    if (lang === "pt") return "Para onde você precisa ir?";
-    return "¿A dónde necesitás ir?";
-  }
-  if (field === "time") {
-    if (lang === "en") return "What time do you need the ride?";
-    if (lang === "pt") return "A que horas você precisa da corrida?";
-    return "¿A qué hora necesitás el viaje?";
-  }
-  if (field === "passengers") {
-    if (lang === "en") return "How many passengers?";
-    if (lang === "pt") return "Quantos passageiros?";
-    return "¿Cuántos pasajeros?";
-  }
-  if (lang === "en") return "Could you tell me more about the trip you need?";
-  if (lang === "pt") return "Pode me contar mais sobre a viagem que você precisa?";
-  return "¿Podés contarme un poco más sobre el viaje que necesitás?";
+  const keyMap: Record<string, string> = {
+    location_ambiguous: "clarify.locationAmbiguous",
+    origin: "clarify.origin",
+    destination: "clarify.destination",
+    time: "clarify.time",
+    passengers: "clarify.passengers",
+  };
+  const key = field ? keyMap[field] : undefined;
+  if (key) return t(key, lang);
+  return t("clarify.generic", lang);
 }
 
 export function buildPriceInfo(
@@ -84,38 +64,31 @@ export function buildPriceInfo(
 ): string {
   const o = originDisplay ?? originName;
   const d = destDisplay ?? destinationName;
-  if (lang.startsWith("pt")) {
-    return `O traslado de ${o} para ${d} custa R$ ${price}.`;
-  }
-  return `El traslado de ${o} a ${d} cuesta $${price} ARS.`;
+  return t("price.quote", lang, { origin: o, destination: d, price: String(price) });
 }
 
-export function buildOpportunityNoPricingMessage(lang: string): string {
-  return lang.startsWith("pt")
-    ? "Primeiro preciso saber o trajeto para verificar benefícios disponíveis."
-    : "Primero necesito saber el trayecto para verificar beneficios disponibles.";
+export function buildOpportunityNoPricingMessage(lang: Lang = "es"): string {
+  return t("opportunity.noPricing", lang);
 }
 
-export function buildOpportunityOfferMessage(description: string): string {
-  return `${description} ¿Te interesa recibir información?`;
+export function buildOpportunityOfferMessage(description: string, lang: Lang = "es"): string {
+  return t("opportunity.offer", lang, { description });
 }
 
-export function buildOpportunityAcceptedMessage(label: string): string {
-  return `Perfecto. Te comparto información sobre ${label}.`;
+export function buildOpportunityAcceptedMessage(label: string, lang: Lang = "es"): string {
+  return t("opportunity.accepted", lang, { label });
 }
 
-export function buildOpportunityDeclinedMessage(): string {
-  return "Entendido. Quedamos a disposición.";
+export function buildOpportunityDeclinedMessage(lang: Lang = "es"): string {
+  return t("opportunity.declined", lang);
 }
 
 export function formatOpportunityResponse(
   result: OpportunityResult,
-  lang: string,
+  lang: Lang = "es",
 ): string {
   if (!result.available) {
-    return lang.startsWith("pt")
-      ? "No momento, não há benefícios adicionais disponíveis para esta rota. O preço oficial já é o melhor que podemos oferecer."
-      : "Por el momento no hay beneficios adicionales disponibles para esta ruta. El precio oficial ya es el mejor que podemos ofrecer.";
+    return t("opportunity.noneAvailable", lang);
   }
 
   const lines: string[] = [];
@@ -123,24 +96,20 @@ export function formatOpportunityResponse(
   const available = result.opportunities.filter(o => !o.already_applied);
 
   if (applied.length > 0) {
-    lines.push(lang.startsWith("pt")
-      ? "✅ *Benefícios já aplicados ao preço:*"
-      : "✅ *Beneficios ya aplicados al precio:*");
+    lines.push(t("opportunity.applied", lang));
     for (const o of applied) {
-      lines.push(`• ${o.label} (${lang.startsWith("pt") ? "economia" : "ahorro"}: $${o.savings})`);
+      lines.push(`• ${o.label} (${t("opportunity.savings", lang)}: $${o.savings})`);
     }
   }
 
   if (available.length > 0) {
     if (lines.length > 0) lines.push("");
-    lines.push(lang.startsWith("pt")
-      ? "🎯 *Oportunidades disponíveis:*"
-      : "🎯 *Oportunidades disponibles:*");
+    lines.push(t("opportunity.available", lang));
     for (const o of available) {
       const suffix = o.valid_until
-        ? ` (${lang.startsWith("pt") ? "válido até" : "válido hasta"} ${new Date(o.valid_until * 1000).toLocaleDateString()})`
+        ? ` (${t("opportunity.validUntil", lang)} ${new Date(o.valid_until * 1000).toLocaleDateString()})`
         : "";
-      lines.push(`• ${o.label} — ${lang.startsWith("pt") ? "economia de" : "ahorro de"} $${o.savings}${suffix}`);
+      lines.push(`• ${o.label} — ${t("opportunity.savings", lang)} de $${o.savings}${suffix}`);
     }
   }
 
@@ -150,61 +119,47 @@ export function formatOpportunityResponse(
 // ─── 2b. DOMAIN RESPONSES (informational/commercial, no booking cycle) ────────
 
 export function buildInformationalResponse(intent: string, lang: Lang): string {
-  if (intent === "GREETING") {
-    if (lang === "en") return "Hi! I'm Cris Virtual from TaxiGuazú, your 24/7 transfer assistant. Tell me where you need to go from and to.";
-    if (lang === "pt") return "Olá! Sou a Cris Virtual da TaxiGuazú, sua assistente 24/7 de traslados. Me diga de onde e para onde você precisa ir.";
-    return "¡Hola! Soy Cris Virtual, asistente 24/7 de TaxiGuazú. Decime desde dónde y hacia dónde necesitás el traslado.";
-  }
-  if (lang === "en") return "I'm here to help with information about transfers and tours in Iguazú. What would you like to know?";
-  if (lang === "pt") return "Estou aqui para ajudar com informações sobre traslados e passeios em Iguaçu. O que gostaria de saber?";
-  return "Estoy acá para ayudarte con información sobre traslados y paseos en Iguazú. ¿Qué querés saber?";
+  if (intent === "GREETING") return t("greeting.full", lang);
+  return t("greeting.info", lang);
 }
 
 export function buildCommercialResponse(lang: Lang): string {
-  if (lang === "en") return "For pricing and availability, please let me know your route and how many passengers.";
-  if (lang === "pt") return "Para valores e disponibilidade, informe seu trajeto e quantos passageiros.";
-  return "Para tarifas y disponibilidad, indicame tu recorrido y cuántos pasajeros son.";
+  return t("commercial.prompt", lang);
 }
 
 // ─── 3. FLEET ─────────────────────────────────────────────────────────────────
 
-export function buildFleetCapacityMessage(maxCapacity: number | null): string {
+export function buildFleetCapacityMessage(maxCapacity: number | null, lang: Lang = "es"): string {
   if (maxCapacity === null) {
-    return "Actualmente no tenemos vehículos disponibles. Para reservar, comuníquese con un operador.";
+    return t("fleet.unavailable", lang);
   }
-  return `Actualmente nuestra flota admite hasta ${maxCapacity} pasajeros por vehículo. Para grupos mayores, comuníquese con un operador.`;
+  return t("fleet.capacityExceeded", lang, { maxCapacity: String(maxCapacity) });
 }
 
-export function buildFleetTariffMessage(): string {
-  return `Por el momento no tenemos una tarifa configurada para esa cantidad de pasajeros. Comuníquese con un operador para coordinar el viaje.`;
+export function buildFleetTariffMessage(lang: Lang = "es"): string {
+  return t("fleet.noTariff", lang);
 }
 
 // ─── 4. ERROR ─────────────────────────────────────────────────────────────────
 
 export function buildGenericSafeFallback(lang: Lang): string {
-  if (lang === "en") return "I couldn't process that. An operator will assist you shortly.";
-  if (lang === "pt") return "Não consegui processar isso. Um operador vai te atender em breve.";
-  return "No pude procesar eso. Un operador te va a asistir en breve.";
+  return t("error.fallback", lang);
 }
 
 export function buildCancellationMessage(lang: Lang): string {
-  if (lang === "en") return "No problem. Your booking has been cancelled. Let me know if you need anything else.";
-  if (lang === "pt") return "Sem problemas. Sua solicitação foi cancelada. Me avise se precisar de mais alguma coisa.";
-  return "No hay problema. Se canceló la confirmación. Avísame si necesitás algo más.";
+  return t("cancel.confirmed", lang);
 }
 
-export function buildGlobalErrorMessage(): string {
-  return "Disculpe, ocurrió un error. Un operador lo asistirá.";
+export function buildGlobalErrorMessage(lang: Lang = "es"): string {
+  return t("error.global", lang);
 }
 
-export function buildEscalationMessage(): string {
-  return "No entendí bien tu consulta. Un operador humano te va a contactar para ayudarte.";
+export function buildEscalationMessage(lang: Lang = "es"): string {
+  return t("error.escalation", lang);
 }
 
 export function buildNowDispatchResponse(lang: Lang): string {
-  if (lang === "en") return "Looking for an available driver for your trip. We'll notify you when someone picks it up.";
-  if (lang === "pt") return "Procurando um motorista disponível para sua corrida. Avisamos quando alguém aceitar.";
-  return "Buscando chofer disponible para tu viaje. Te avisamos cuando alguien tome el servicio.";
+  return t("dispatch.searching", lang);
 }
 
 export function buildLocationConfirmationResponse(

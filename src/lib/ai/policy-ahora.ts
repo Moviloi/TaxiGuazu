@@ -11,6 +11,7 @@ import {
 } from "./policy-reserva";
 import type { FinalDecision, HandlerContext, Lang, PolicyOutput } from "./types";
 import { resolveNextRequiredField } from "./field-resolver";
+import { t } from "@/lib/services/i18n/t";
 import { log } from "@/lib/utils/logger";
 
 export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): PolicyOutput {
@@ -115,9 +116,7 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
           ),
         };
       }
-      if (lang === "en") return { finalResponse: `${greet}, for pricing and availability, an operator will assist you shortly.` };
-      if (lang === "pt") return { finalResponse: `${greet}, para valores e disponibilidade, um operador vai te atender em breve.` };
-      return { finalResponse: `${greet}, para tarifas y disponibilidad, un operador te va a asistir en breve.` };
+      return { finalResponse: `${greet}${t("policy.ahoraAnswer", lang)}` };
     }
     case "CLARIFY": {
       const next = resolveNextRequiredField(ctx, decision.core.facts);
@@ -133,9 +132,7 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
     }
     case "SAFE_FALLBACK":
     default: {
-      if (lang === "en") return { finalResponse: `${greet}, I didn't catch that. Could you rephrase?` };
-      if (lang === "pt") return { finalResponse: `${greet}, não entendi. Pode reformular?` };
-      return { finalResponse: `${greet}, no entendí. ¿Podés repetir?` };
+      return { finalResponse: `${greet}${t("policy.ahoraSafeFallback", lang)}` };
     }
   }
 }

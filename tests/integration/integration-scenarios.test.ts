@@ -25,6 +25,7 @@ vi.mock("@/lib/ai/patterns", () => ({
   isNegativeMessage: vi.fn(),
   AMBIGUOUS_LOCATION_RE: /ambitious/i,
   AMBIGUOUS_HOTEL_LANDMARKS_RE: /ambitious/i,
+  AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i,
 }));
 vi.mock("@/lib/ai/handler", () => ({ handleMessage: vi.fn() }));
 vi.mock("@/lib/ai/core", () => ({ core: vi.fn() }));
