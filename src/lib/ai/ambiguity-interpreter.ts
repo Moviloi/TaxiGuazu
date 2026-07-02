@@ -5,13 +5,13 @@
 // decides: auto-resolve (high confidence) or ask (low confidence).
 //
 // Output is always validated against the candidate list — no hallucination.
+//
+// P5: Ahora usa LLMProvider (Gemini por defecto, Groq fallback)
 
-import Groq from "groq-sdk";
-import { getEnv } from "@/config/env";
-import { GROQ_MODEL, GROQ_TIMEOUT_MS } from "@/config/constants";
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
 import { log } from "@/lib/utils/logger";
 import { getKnownPlacesPrompt } from "@/lib/ai/iguazu-knowledge";
+import { getLLMProvider } from "./llm-provider";
 
 interface InterpretationResult {
   /** The place_id of the resolved place, or null if uncertain */
@@ -20,16 +20,6 @@ interface InterpretationResult {
   confidence: "high" | "low" | "failed";
   /** Suggested question to ask the user (only when confidence ≠ "high") */
   question?: string;
-}
-
-function getGroq(): Groq | null {
-  try {
-    const env = getEnv();
-    return new Groq({ apiKey: env.GROQ_API_KEY });
-  } catch (e) {
-    log.error("[AMBIGUITY_LLM]", e instanceof Error ? e.message : String(e));
-    return null;
-  }
 }
 
 function buildPrompt(
@@ -87,31 +77,16 @@ export async function interpretAmbiguity(
     return { selectedId: candidates[0].place_id, confidence: "high" };
   }
 
-  const groq = getGroq();
-  if (!groq) {
-    // LLM unavailable — fall back to asking user
-    return { selectedId: null, confidence: "low" };
-  }
-
+  const provider = getLLMProvider();
   const prompt = buildPrompt(userText, candidates, slotName, resolvedOtherSlot);
 
   try {
-    const completion = await groq.chat.completions.create(
-      {
-        model: GROQ_MODEL,
-        messages: [{ role: "system", content: prompt }],
-        max_tokens: 10,
-        temperature: 0.1, // Low temp for deterministic selection
-      },
-      { timeout: GROQ_TIMEOUT_MS },
-    );
-
-    const content = completion.choices[0]?.message?.content?.trim();
+    const content = await provider.interpretAmbiguity(prompt, 10, 0.1);
     if (!content) {
       return { selectedId: null, confidence: "failed" };
     }
 
-    const num = parseInt(content, 10);
+    const num = parseInt(content.trim(), 10);
     if (isNaN(num) || num < 0 || num > candidates.length) {
       return { selectedId: null, confidence: "failed" };
     }

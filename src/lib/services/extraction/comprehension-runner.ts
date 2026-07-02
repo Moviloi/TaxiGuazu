@@ -121,11 +121,11 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
 }
 
 // P0.10.3: LLM para interpretar mensajes frustrados del usuario
+// P5: Ahora usa LLMProvider (Gemini por defecto, Groq fallback)
 async function generateFrustrationResponse(userText: string, session: ChatSessionRow | null): Promise<string | null> {
   try {
-    const { getEnv } = await import("@/config/env");
-    const Groq = (await import("groq-sdk")).default;
-    const groq = new Groq({ apiKey: getEnv().GROQ_API_KEY });
+    const { getLLMProvider } = await import("@/lib/ai/llm-provider");
+    const provider = getLLMProvider();
 
     // Construir contexto de la conversación
     const contextLines: string[] = [];
@@ -163,14 +163,7 @@ async function generateFrustrationResponse(userText: string, session: ChatSessio
       `Si el usuario mencionó un dato específico (origen, destino, pasajeros), reconocelo.`,
     ].join("\n");
 
-    const completion = await groq.chat.completions.create({
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: prompt }],
-      max_tokens: 120,
-      temperature: 0.3,
-    }, { timeout: 5000 });
-
-    return completion.choices[0]?.message?.content?.trim() || null;
+    return await provider.generateResponse(prompt, 120, 0.3);
   } catch (e) {
     log.warn("[FRUSTRATION_LLM]", e instanceof Error ? e.message : String(e));
     return null;

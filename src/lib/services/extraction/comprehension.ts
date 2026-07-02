@@ -218,12 +218,12 @@ export async function getRecoveryMessage(
 }
 
 // ── AI-FIRST: contextual recovery via LLM (ADR 005) ──────────────────────
+// P5: Ahora usa LLMProvider (Gemini por defecto, Groq fallback)
 
 async function generateContextualRecovery(userText: string, _lang: string): Promise<string | null> {
   try {
-    const { getEnv } = await import("@/config/env");
-    const Groq = (await import("groq-sdk")).default;
-    const groq = new Groq({ apiKey: getEnv().GROQ_API_KEY });
+    const { getLLMProvider } = await import("@/lib/ai/llm-provider");
+    const provider = getLLMProvider();
 
     const prompt = [
       `Sos Cris, asistente de TaxiGuazú.`,
@@ -240,14 +240,7 @@ async function generateContextualRecovery(userText: string, _lang: string): Prom
       `No inventes datos. No agregues opciones numeradas.`,
     ].join("\n");
 
-    const completion = await groq.chat.completions.create({
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: prompt }],
-      max_tokens: 80,
-      temperature: 0.3,
-    }, { timeout: 5000 });
-
-    return completion.choices[0]?.message?.content?.trim() || null;
+    return await provider.generateResponse(prompt, 80, 0.3);
   } catch (e) {
     log.warn("[RECOVERY_LLM]", e instanceof Error ? e.message : String(e));
     return null;

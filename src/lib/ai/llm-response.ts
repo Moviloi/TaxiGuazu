@@ -1,20 +1,9 @@
-import Groq from "groq-sdk";
-import { getEnv } from "@/config/env";
-import { GROQ_MODEL, GROQ_TIMEOUT_MS, GROQ_RESPONSE_MAX_TOKENS, GROQ_RESPONSE_TEMPERATURE } from "@/config/constants";
+import { GROQ_RESPONSE_MAX_TOKENS, GROQ_RESPONSE_TEMPERATURE } from "@/config/constants";
+import { getLLMProvider } from "./llm-provider";
 import type { PolicyOutput, HandlerContext } from "./types";
 import { log } from "@/lib/utils/logger";
 import { IGUAZU_KNOWLEDGE } from "@/lib/ai/iguazu-knowledge";
 import { getOperationalInfoPrompt } from "@/lib/ai/taxiguazu-knowledge";
-
-function getGroq(): Groq | null {
-  try {
-    const env = getEnv();
-    return new Groq({ apiKey: env.GROQ_API_KEY });
-  } catch (e) {
-    log.error("[LLM_GROQ]", e instanceof Error ? e.message : String(e));
-    return null;
-  }
-}
 
 function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string {
   const slots = ctx?.extraction?.slots ?? {};
@@ -175,29 +164,18 @@ export function validateLLMResponse(
   return { valid: true };
 }
 
+// P5: generateLLMResponse ahora usa el LLMProvider (Gemini por defecto, Groq fallback)
 export async function generateLLMResponse(
   policy: PolicyOutput,
   ctx?: HandlerContext,
 ): Promise<string | null> {
   if (policy.decision === "SAFE_FALLBACK") return null;
 
-  const groq = getGroq();
-  if (!groq) return null;
-
+  const provider = getLLMProvider();
   const prompt = buildResponsePrompt(policy, ctx);
 
   try {
-    const completion = await groq.chat.completions.create(
-      {
-        model: GROQ_MODEL,
-        messages: [{ role: "system", content: prompt }],
-        max_tokens: GROQ_RESPONSE_MAX_TOKENS,
-        temperature: GROQ_RESPONSE_TEMPERATURE,
-      },
-      { timeout: GROQ_TIMEOUT_MS },
-    );
-
-    const content = completion.choices[0]?.message?.content?.trim();
+    const content = await provider.generateResponse(prompt, GROQ_RESPONSE_MAX_TOKENS, GROQ_RESPONSE_TEMPERATURE);
     if (!content || content.length < 5) return null;
 
     const validation = validateLLMResponse(content, ctx);

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const envSchema = z.object({
   GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY es obligatoria. Creala en https://console.groq.com/keys"),
+  GEMINI_API_KEY: z.string().optional(),
+  LLM_PROVIDER: z.enum(["gemini", "groq", "fallback"]).optional(),
   WHATSAPP_TOKEN: z.string().min(1, "WHATSAPP_TOKEN es obligatorio. Obtenelo del panel de Meta for Developers"),
   WHATSAPP_PHONE_ID: z.string().min(1, "WHATSAPP_PHONE_ID es obligatorio. Obtenelo del panel de Meta for Developers"),
   WHATSAPP_VERIFY_TOKEN: z.string().min(1, "WHATSAPP_VERIFY_TOKEN es obligatorio. Seteá uno seguro en el webhook de Meta"),
@@ -33,5 +35,3 @@ export function getEnv(): Env {
   _parsed = result.data;
   return _parsed;
 }
-
-
