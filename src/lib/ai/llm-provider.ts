@@ -33,7 +33,7 @@ export function getLLMProvider(): LLMProvider {
     case "gemini":
       try {
         _provider = new GeminiProvider();
-        log.info("[LLM_PROVIDER]", { provider: "gemini", model: "gemini-2.0-flash-exp" });
+        log.info("[LLM_PROVIDER]", { provider: "gemini", model: "gemini-2.0-flash" });
       } catch (e) {
         log.warn("[LLM_PROVIDER]", { error: "Gemini init failed, using fallback", message: e instanceof Error ? e.message : String(e) });
         _provider = new FallbackProvider();

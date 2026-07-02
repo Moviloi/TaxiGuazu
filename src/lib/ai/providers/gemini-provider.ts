@@ -9,7 +9,7 @@ import type { LLMProvider } from "../llm-provider";
 export class GeminiProvider implements LLMProvider {
   name = "gemini";
   private genAI: GoogleGenerativeAI;
-  private model = "gemini-2.0-flash-exp";
+  private model = "gemini-2.0-flash";
 
   constructor() {
     const env = getEnv();

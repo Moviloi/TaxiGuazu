@@ -20,6 +20,13 @@ import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 import type { ChatSessionRow } from "@/lib/db/types";
 import type { CoreDecision } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
+import {
+  detectSlotContext,
+  detectConversationTone,
+  selectDisambiguationTemplate,
+  buildConfirmationQuestion,
+} from "@/lib/ai/disambiguation-templates";
+import type { Language } from "@/lib/ai/disambiguation-templates";
 
 /** Opción con display name (para el usuario) y canonical (para matching interno). */
 export interface AmbiguityOption {
@@ -169,8 +176,40 @@ export async function startAmbiguityResolution(
     }
   }
 
-  // If both resolved → finalize directly
-  if (finalResolvedOrigin && finalResolvedDest) {
+  // ── P1: CONTEXTUAL INFERENCE — Si un slot está resuelto y el otro es ambiguo,
+  // inferir la opción más obvia basada en el contexto y confirmar en lugar de preguntar.
+  // Ejemplo: origen = "Aeropuerto IGR" + destino = "centro" → confirmar "Centro de Puerto Iguazú"
+  let usedContextualInference = false;
+  if (finalResolvedOrigin && !finalResolvedDest && destAmbiguous && destCandidates.length > 1) {
+    const inferredDest = inferFromContext(finalResolvedOrigin, destCandidates);
+    if (inferredDest) {
+      finalResolvedDest = inferredDest;
+      usedContextualInference = true;
+      log.info("[CONTEXTUAL_INFERENCE]", { 
+        resolvedSlot: "origin", 
+        resolvedValue: finalResolvedOrigin,
+        inferredSlot: "destination",
+        inferredValue: finalResolvedDest,
+        method: "context_based"
+      });
+    }
+  } else if (finalResolvedDest && !finalResolvedOrigin && originAmbiguous && originCandidates.length > 1) {
+    const inferredOrigin = inferFromContext(finalResolvedDest, originCandidates);
+    if (inferredOrigin) {
+      finalResolvedOrigin = inferredOrigin;
+      usedContextualInference = true;
+      log.info("[CONTEXTUAL_INFERENCE]", { 
+        resolvedSlot: "destination", 
+        resolvedValue: finalResolvedDest,
+        inferredSlot: "origin",
+        inferredValue: finalResolvedOrigin,
+        method: "context_based"
+      });
+    }
+  }
+
+  // If both resolved by LLM (no inference) → finalize directly
+  if (finalResolvedOrigin && finalResolvedDest && !usedContextualInference) {
     log.info("[AMBIGUITY_LLM_AUTO]", {
       origin: finalResolvedOrigin,
       destination: finalResolvedDest,
@@ -181,6 +220,44 @@ export async function startAmbiguityResolution(
       originOptions: toOptions(originCandidates),
       destOptions: toOptions(destCandidates),
     }, null, text);
+    return true;
+  }
+
+  // If both resolved by contextual inference → ask confirmation instead of finalizing
+  if (finalResolvedOrigin && finalResolvedDest && usedContextualInference) {
+    log.info("[AMBIGUITY_INFERENCE_CONFIRMATION]", {
+      origin: finalResolvedOrigin,
+      destination: finalResolvedDest,
+      method: "contextual_inference_pending_confirmation"
+    });
+    
+    const lang = detectLeadLang(text) as Language;
+    
+    // Wait for user confirmation before finalizing
+    // We store both slots as resolved BUT with a confirmation flag
+    // The handleAmbiguityResponse will detect "sí"/"yes"/"sim" and finalize
+    const ambiguityMeta: AmbiguityState = {
+      resolvedOrigin: finalResolvedOrigin,
+      resolvedDest: finalResolvedDest,
+      originOptions: toOptions(originCandidates),
+      destOptions: toOptions(destCandidates),
+      originRawTerm: rawOrigin ?? undefined,
+      destRawTerm: rawDest ?? undefined,
+    };
+    
+    const currentSlots = session?.slots ? safeParseSlots(session.slots) : {};
+    const mergedSlots = { ...currentSlots, __ambiguity: ambiguityMeta };
+    await upsertChatSession(phone, mergedSlots, undefined, undefined, undefined);
+    await setConversationalState(phone, "ambiguity_pending", "destination"); // any non-null slot
+    
+    // Build confirmation question using template
+    const resolvedOriginCand = originCandidates.find(c => c.canonical_name === finalResolvedOrigin);
+    const resolvedDestCand = destCandidates.find(c => c.canonical_name === finalResolvedDest);
+    const originDisplay = resolvedOriginCand?.display_name ?? finalResolvedOrigin;
+    const destDisplay = resolvedDestCand?.display_name ?? finalResolvedDest;
+    
+    const confirmationMsg = buildConfirmationQuestion(originDisplay, destDisplay, lang);
+    await sendAndPersist(phone, conversationId, confirmationMsg);
     return true;
   }
 
@@ -531,7 +608,7 @@ async function finalizeAmbiguity(
 
 function buildContextualPlaceOptions(
   slotKey: string,
-  lang: string,
+  lang: Language,
   slotConfidenceHigh: boolean,
   rawTerm: string,
   entityCount: number,
@@ -542,7 +619,7 @@ function buildContextualPlaceOptions(
   const hasRawTerm = safeRawTerm.length > 0;
   const placeLabel = hasRawTerm ? safeRawTerm.charAt(0).toUpperCase() + safeRawTerm.slice(1).toLowerCase() : "";
 
-  // Detectar si es un nodo de riesgo → mostrar alternativas en lenguaje natural (SIN números)
+  // Detectar si es un nodo de riesgo → usar templates contextuales
   const riskKey = detectRiskNode(safeRawTerm);
   if (riskKey) {
     const riskOptions = RISK_NODES[riskKey];
@@ -558,6 +635,17 @@ function buildContextualPlaceOptions(
         ? alternatives.substring(0, lastComma) + " o " + alternatives.substring(lastComma + 2)
         : alternatives;
 
+      // P1: Usar templates contextuales en lugar de preguntas hardcodeadas
+      const slotContext = detectSlotContext(safeRawTerm);
+      const tone = detectConversationTone(safeRawTerm);
+      const templateQuestion = selectDisambiguationTemplate(slotContext, tone, lang as Language);
+      
+      // Si hay un template contextual, usarlo; sino fallback a la lógica anterior
+      if (templateQuestion) {
+        return templateQuestion;
+      }
+
+      // Fallback: lógica anterior (por si el template no está disponible)
       if (lang === "en") {
         if (slotKey === "origin") {
           return `I understand you're departing from ${placeLabel.toLowerCase()}. Do you mean ${naturalAlternatives}?`;
@@ -695,6 +783,55 @@ function extractLocationFromText(text: string): string {
     .replace(/^(?:digo\s+(?:que\s+)?(?:desde\s+)?|al\s+de\s+|quiero\s+(?:ir\s+)?(?:desde\s+)?|quisiera\s+(?:ir\s+)?(?:desde\s+)?|me\s+(?:gustaria|gustaría)\s+(?:ir\s+)?(?:desde\s+)?|desde\s+|de[l]?\s+|saliendo\s+(?:de\s+)?|del\s+|en\s+el\s+|en\s+|no\s+el\s+|dsde\s+|dde\s+|dede\s+|para\s+el\s+|para\s+|pa\s+ra\s+el\s+|pa\s+ra\s+|pa\s+)/i, '')
     .replace(/^(?:a[sls]?\s+|hasta\s+|hacia\s+)/i, '')
     .trim();
+}
+
+/**
+ * P1: CONTEXTUAL INFERENCE — Infiere la opción más obvia basada en el contexto del slot resuelto.
+ * 
+ * Lógica:
+ * - Si el slot resuelto contiene "Argentina" o "IGR" → preferir opciones con "Argentina" o "Puerto Iguazú"
+ * - Si el slot resuelto contiene "Brasil" o "IGU" o "Foz" → preferir opciones con "Brasil" o "Foz"
+ * - Si el slot resuelto contiene "Paraguay" o "AGT" o "CDE" → preferir opciones con "Paraguay" o "CDE"
+ * 
+ * Retorna el canonical_name de la opción inferida, o null si no hay una opción obvia.
+ */
+function inferFromContext(
+  resolvedSlotValue: string,
+  candidates: PlaceCandidate[],
+): string | null {
+  const resolved = resolvedSlotValue.toLowerCase();
+  
+  // Detectar país/región del slot resuelto
+  let targetCountry: "argentina" | "brasil" | "paraguay" | null = null;
+  
+  if (resolved.includes("argentina") || resolved.includes("igr") || resolved.includes("puerto iguazú") || resolved.includes("puerto iguazu")) {
+    targetCountry = "argentina";
+  } else if (resolved.includes("brasil") || resolved.includes("brazil") || resolved.includes("igu") || resolved.includes("foz")) {
+    targetCountry = "brasil";
+  } else if (resolved.includes("paraguay") || resolved.includes("agt") || resolved.includes("cde") || resolved.includes("ciudad del este")) {
+    targetCountry = "paraguay";
+  }
+  
+  if (!targetCountry) {
+    return null; // No hay contexto claro
+  }
+  
+  // Buscar opción que coincida con el país/región
+  const matchingCandidate = candidates.find(c => {
+    const candidateText = (c.canonical_name + " " + (c.display_name || "")).toLowerCase();
+    
+    if (targetCountry === "argentina") {
+      return candidateText.includes("argentina") || candidateText.includes("puerto iguazú") || candidateText.includes("puerto iguazu");
+    } else if (targetCountry === "brasil") {
+      return candidateText.includes("brasil") || candidateText.includes("brazil") || candidateText.includes("foz");
+    } else if (targetCountry === "paraguay") {
+      return candidateText.includes("paraguay") || candidateText.includes("cde") || candidateText.includes("ciudad del este");
+    }
+    
+    return false;
+  });
+  
+  return matchingCandidate?.canonical_name ?? null;
 }
 
 function getAmbiguityStateFromSlots(slotsJson: string): AmbiguityState | null {

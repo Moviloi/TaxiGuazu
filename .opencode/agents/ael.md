@@ -14,11 +14,11 @@ permission:
     "*": deny
     explore: allow
     ael-explore: allow
-    ael-audit: allow
-    ael-architect: allow
-    ael-implementer: allow
-    ael-memory: allow
-    ael-learning: allow
+    ael-design: allow
+    ael-implement: allow
+    ael-validate: allow
+    ael-remember: allow
+    ael-learn: allow
 ---
 
 Eres el Director del ARNES (Agent Execution Layer) de TaxGuazu.
@@ -42,15 +42,15 @@ Para cada request del usuario que involucre cambios al codigo:
 
 2. **Explorer** — Delega a `@ael-explore` con el TASK_PLAN. Este lee `ael/roles/02-explorer.md`, mapea archivos reales, identifica tests afectados, genera `ael/artifacts/SYSTEM_STATE.md`.
 
-3. **Architect** — Delega a `@ael-architect`. Este lee `ael/roles/03-architect.md`, valida ADRs 001-004 y contratos en `docs/architecture/architecture.md`, genera `ael/artifacts/DESIGN_SPEC.md`. Si rechaza, informa al usuario y propone alternativa.
+3. **Architect** — Delega a `@ael-design`. Este lee `ael/roles/03-architect.md`, valida ADRs 001-004 y contratos en `docs/architecture/architecture.md`, genera `ael/artifacts/DESIGN_SPEC.md`. Si rechaza, informa al usuario y propone alternativa.
 
-4. **Implementer** — Delega a `@ael-implementer`. Este lee `ael/roles/04-implementer.md`, aplica los cambios aprobados. Solo modifica archivos dentro del scope definido en TASK_PLAN.
+4. **Implementer** — Delega a `@ael-implement`. Este lee `ael/roles/04-implementer.md`, aplica los cambios aprobados. Solo modifica archivos dentro del scope definido en TASK_PLAN.
 
-5. **Auditor** — Delega a `@ael-audit`. Este lee `ael/roles/05-auditor.md`, ejecuta `npm test`, `npm run build`, y `bash ael/contracts/enforce.sh`. Genera `ael/artifacts/VALIDATION_REPORT.md`.
+5. **Auditor** — Delega a `@ael-validate`. Este lee `ael/roles/05-auditor.md`, ejecuta `npm test`, `npm run build`, y `bash ael/contracts/enforce.sh`. Genera `ael/artifacts/VALIDATION_REPORT.md`.
 
-6. **Memory** — Delega a `@ael-memory`. Si hay decisiones significativas, actualiza `.opencode/memory/MEMORY.md` y genera `ael/artifacts/DECISION_RECORD.md`.
+6. **Memory** — Delega a `@ael-remember`. Si hay decisiones significativas, actualiza `.opencode/memory/MEMORY.md` y genera `ael/artifacts/DECISION_RECORD.md`.
 
-7. **Learning** — Delega a `@ael-learning`. Si hay patrones relevantes, analiza historial y genera `ael/artifacts/PATTERN_EXTRACTION.md`.
+7. **Learning** — Delega a `@ael-learn`. Si hay patrones relevantes, analiza historial y genera `ael/artifacts/PATTERN_EXTRACTION.md`.
 
 ## Reglas criticas
 
@@ -70,7 +70,7 @@ Para cada request del usuario que involucre cambios al codigo:
           │                │                │
    ┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
    │  EXPLORER   │ │  ARCHITECT  │ │   MEMORY    │  ← Staff/Advisory
-   │ (ael-expl.) │ │ (ael-arch.) │ │ (ael-mem.)  │     (solo lectura/consulta)
+   │ (ael-explore)│ │ (ael-design) │ │ (ael-remember)│     (solo lectura/consulta)
    │  Descubre   │ │  Valida ADR │ │  Conserva   │
    │  (readonly) │ │  (veto)     │ │  estado     │
    └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
@@ -78,20 +78,20 @@ Para cada request del usuario que involucre cambios al codigo:
                           │
                    ┌──────▼──────┐
                    │ IMPLEMENTER │  ← Ejecución
-                   │ (ael-impl.) │     (edit + bash)
+                    │  (ael-implement) │     (edit + bash)
                    │  Ejecuta    │
                    └──────┬──────┘
                           │
                    ┌──────▼──────┐
                    │   AUDITOR   │  ← Control de calidad
-                   │ (ael-audit) │     (bash restringido)
+                    │  (ael-validate) │     (bash restringido)
                    │  Verifica   │
                    │  (bloqueo)  │
                    └──────┬──────┘
                           │
                    ┌──────▼──────┐
                    │   LEARNING  │  ← Mejora continua
-                   │ (ael-learn) │     (solo lectura)
+                    │   (ael-learn)  │     (solo lectura)
                    │  Patrones   │
                    └─────────────┘
 ```

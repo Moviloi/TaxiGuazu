@@ -318,7 +318,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           return;
         }
 
-        // Re-resolve pricing with actual passenger count
+        // P1: Resolve pricing UNA SOLA vez con el count real de pasajeros
         let rawSlots: Record<string, any> = {};
         rawSlots = parseSessionSlots(session?.slots ?? null) as Record<string, any>;
 
@@ -624,36 +624,49 @@ export async function handleSlotConfirmationButton(
       correctedSlots: [],
     });
 
-    // Resolve pricing and ask for final confirmation
+    // P1: Ask passengers BEFORE resolving pricing
+    // So pricing is resolved ONCE with the actual passenger count
     let priceMsg: string | null = null;
     if (rawSlots.origin && rawSlots.destination) {
-      try {
-        const resolved = await resolvePricingForSlots({
-          origin: rawSlots.origin?.value ?? rawSlots.origin,
-          destination: rawSlots.destination?.value ?? rawSlots.destination,
-          passengers: Number(rawSlots.passengers ?? 1),
-        });
-        if (resolved.pricingResult.final_price > 0) {
-          const p = resolved.pricingResult;
-          const originRaw = rawSlots.origin?.value ?? rawSlots.origin;
-          const destRaw = rawSlots.destination?.value ?? rawSlots.destination;
-          const originDisplay = rawSlots.origin?.display ?? originRaw;
-          const destDisplay = rawSlots.destination?.display ?? destRaw;
-          const originName = p.origin.canonical_name ?? originDisplay;
-          const destName = p.destination.canonical_name ?? destDisplay;
-          const p4p = resolved.publicPrice4p ?? p.final_price;
-          const p6p = resolved.publicPrice6p ?? p4p;
-          priceMsg = `El traslado de ${originName} a ${destName} cuesta:\n\n🚗 Auto (hasta 4): $${p4p} ARS\n🚐 Camioneta (hasta 6): $${p6p} ARS\n\n¿Cuántos pasajeros son?`;
+      // Check if passengers already known
+      const existingPax = rawSlots.passengers?.value ?? rawSlots.passengers;
+      if (existingPax) {
+        // Passengers known → resolve pricing directly
+        try {
+          const resolved = await resolvePricingForSlots({
+            origin: rawSlots.origin?.value ?? rawSlots.origin,
+            destination: rawSlots.destination?.value ?? rawSlots.destination,
+            passengers: Number(existingPax),
+          });
+          if (resolved.pricingResult.final_price > 0) {
+            const p = resolved.pricingResult;
+            const originRaw = rawSlots.origin?.value ?? rawSlots.origin;
+            const destRaw = rawSlots.destination?.value ?? rawSlots.destination;
+            const originDisplay = rawSlots.origin?.display ?? originRaw;
+            const destDisplay = rawSlots.destination?.display ?? destRaw;
+            const originName = p.origin.canonical_name ?? originDisplay;
+            const destName = p.destination.canonical_name ?? destDisplay;
+            priceMsg = `El traslado de ${originName} a ${destName} cuesta $${p.final_price} ARS.\n\n¿Confirmamos el viaje?`;
+            // Set awaiting_confirmation for final confirmation
+            await setConversationalState(phone, "awaiting_confirmation");
+          }
+        } catch (e) {
+          log.error("[SLOT_CONFIRM] pricing error:", e);
         }
-      } catch (e) {
-        log.error("[SLOT_CONFIRM] pricing error:", e);
+      } else {
+        // Passengers missing → just ask, no pricing yet
+        priceMsg = lang === "en"
+          ? "How many passengers will there be?"
+          : lang === "pt"
+            ? "Quantos passageiros serão?"
+            : "¿Cuántos pasajeros son?";
+        await setConversationalState(phone, "awaiting_passenger");
       }
     }
 
     if (priceMsg) {
       await sendWhatsAppMessage(phone, priceMsg);
       await insertMessage(conversation.id, "assistant", priceMsg);
-      await setConversationalState(phone, "awaiting_passenger");
     } else {
       const originDisplay = rawSlots.origin?.display ?? rawSlots.origin?.value ?? rawSlots.origin;
       const destDisplay = rawSlots.destination?.display ?? rawSlots.destination?.value ?? rawSlots.destination;

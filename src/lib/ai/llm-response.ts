@@ -2,7 +2,7 @@ import { GROQ_RESPONSE_MAX_TOKENS, GROQ_RESPONSE_TEMPERATURE } from "@/config/co
 import { getLLMProvider } from "./llm-provider";
 import type { PolicyOutput, HandlerContext } from "./types";
 import { log } from "@/lib/utils/logger";
-import { IGUAZU_KNOWLEDGE } from "@/lib/ai/iguazu-knowledge";
+import { IGUAZU_KNOWLEDGE, getAttractionsDetailPrompt, getMigrationDetailPrompt, getBordersDetailPrompt } from "@/lib/ai/iguazu-knowledge";
 import { getOperationalInfoPrompt } from "@/lib/ai/taxiguazu-knowledge";
 
 function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string {
@@ -28,16 +28,41 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
   const isInformational = policy.policyHint?.includes("(info)") || policy.policyHint?.includes("INFORMATION");
   const isGreeting = policy.policyHint?.includes("GREETING");
 
-  // If informational, inject Iguazú knowledge so the bot can answer questions about prices, hours, migration
+  // If informational, inject comprehensive Iguazú knowledge so the bot can answer questions about prices, hours, migration, borders, etc.
   if (isInformational) {
     const knownNames = IGUAZU_KNOWLEDGE.knownPlaces.map(p => p.name).join(", ");
     lines.push(
       ``,
       `CONOCIMIENTO DE REFERENCIA (usalo si el usuario pregunta sobre estos temas):`,
       `- Lugares conocidos: ${knownNames}`,
-      `- Migración AR→BR: DNI físico obligatorio (no digital). Pre-Cadastro QR recomendado. Franquicia USD 300/adulto, USD 150/menor.`,
-      `- Transporte: Aeropuerto IGR a 15 km del centro (20-25 min). Taxi y remís tienen tarifas preestablecidas. Uber no recomendado.`,
-      `- Cataratas lado AR: $45.000 ARS turista general, 8:00-18:00. Lado BR: R$ 134,00, 09:00-16:00.`,
+      ``,
+      `--- ATRACTIVOS (precios 2026) ---`,
+      getAttractionsDetailPrompt(),
+      ``,
+      `--- MIGRACIÓN ---`,
+      getMigrationDetailPrompt(),
+      ``,
+      `--- CRUCE DE FRONTERAS ---`,
+      getBordersDetailPrompt(),
+      ``,
+      `--- INFO PRÁCTICA ---`,
+      `- Clima: subtropical húmedo. ${IGUAZU_KNOWLEDGE.practical.weather.slice(0, 3).join(" ")}`,
+      `- Moneda: ARS (AR), BRL (BR), PYG (PY). USD aceptado en hoteles y turismo.`,
+      `- Seguridad: Puerto Iguazú muy segura. Foz segura en zona turística. CDE: solo horario comercial (07:00-16:00).`,
+      `- Restaurantes recomendados: Aqva (premium cocina de autor), El Quincho del Tío Querido (asado tradicional), La Rueda 1975, Pizza Color, La Mamma.`,
+      `- Horarios de comida AR: almuerzo 12:30-14:30, cena 21:00-23:30. BR: almuerzo 11:30-13:30, cena 19:30-21:30.`,
+      ``,
+      `--- EVENTOS ---`,
+      `- Paseo Luna Llena: ${IGUAZU_KNOWLEDGE.calendar.lunaLlena.slice(1, 4).join(" | ")}`,
+      `- Temporada alta: enero, febrero, julio, Semana Santa, feriados puente.`,
+      `- Temporada baja: marzo-junio (excl. Semana Santa), agosto-noviembre (excl. feriados).`,
+      ``,
+      `--- COMPRAS CDE ---`,
+      `- Tiendas certificadas: Shopping Paris, Shopping China, Monalisa, Nissei.`,
+      `- El chofer de TaxiGuazú acompaña y asesora en compras en CDE para evitar estafas.`,
+      `- Precios referenciales: iPhone ~USD 850 en CDE vs ~USD 1.800 en AR. Perfumes ~USD 95 vs ~USD 200.`,
+      `- Operar solo en horario comercial (07:00-16:00). Retornar antes de las 16:00.`,
+      ``,
       `- NO inventes precios ni horarios — usá SOLO esta referencia o decí que consulten en el sitio oficial.`,
     );
   }

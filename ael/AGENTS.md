@@ -30,11 +30,11 @@ Pipeline de 7 fases que gobierna la evolucion del sistema. OpenCode entra por aq
 |-----------|-----|-----------|------|---------|
 | `ael` | Director | Orquesta pipeline, define prioridad, resuelve escalaciones | primary | `/ael:plan` |
 | `ael-explore` | Explorer | Descubre estado real del codigo (solo lectura) | subagent | `/ael:explore` |
-| `ael-architect` | Architect | Veto arquitectonico sobre disenos que violen ADRs | subagent | `/ael:design` |
-| `ael-implementer` | Implementer | Aplica cambios aprobados al codigo | subagent | `/ael:implement` |
-| `ael-audit` | Auditor | Bloqueo por calidad (tests/build/enforce) | subagent | `/ael:validate` |
-| `ael-memory` | Memory | Conserva estado del sistema y decisiones | subagent | `/ael:remember` |
-| `ael-learning` | Learning | Detecta patrones de exito y fallo | subagent | `/ael:learn` |
+| `ael-design` | Architect | Veto arquitectonico sobre disenos que violen ADRs | subagent | `/ael:design` |
+| `ael-implement` | Implementer | Aplica cambios aprobados al codigo | subagent | `/ael:implement` |
+| `ael-validate` | Auditor | Bloqueo por calidad (tests/build/enforce) | subagent | `/ael:validate` |
+| `ael-remember` | Memory | Conserva estado del sistema y decisiones | subagent | `/ael:remember` |
+| `ael-learn` | Learning | Detecta patrones de exito y fallo | subagent | `/ael:learn` |
 
 ## Organigrama funcional
 
@@ -68,7 +68,7 @@ Jerarquia de autoridad y responsabilidad entre los 7 roles del ARNES:
                           │
                    ┌──────▼──────┐
                    │   AUDITOR   │
-                   │ (ael-audit) │
+                   │  (ael-validate) │
                    │             │
                    │ Control     │
                    │ (bash restr)│

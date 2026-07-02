@@ -176,10 +176,10 @@ describe("FASE 20.5 — Slots CONFIRMATION_PENDING flujo completo", () => {
         undefined,
       );
 
-      // Debe enviar mensaje de verificación humana cuando pricing falla
+      // Debe preguntar pasajeros antes de resolver pricing
       expect(sendWhatsAppMessage).toHaveBeenCalledWith(
         TEST_PHONE,
-        expect.stringContaining("Gracias por confirmar los datos"),
+        expect.stringContaining("¿Cuántos pasajeros son"),
       );
     });
   });
@@ -320,7 +320,7 @@ describe("handleSlotConfirmationButton — routing directo", () => {
     expect(upsertChatSession).toHaveBeenCalled();
     expect(sendWhatsAppMessage).toHaveBeenCalledWith(
       TEST_PHONE,
-      expect.stringContaining("Gracias por confirmar los datos"),
+      expect.stringContaining("¿Cuántos pasajeros son"),
     );
   });
 
