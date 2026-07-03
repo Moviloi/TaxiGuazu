@@ -164,7 +164,10 @@ async function generateReinterpretResponse(
       ? `Datos del viaje que ya tenemos:\n${contextLines.join("\n")}`
       : "No tenemos datos del viaje todavía.";
 
-    const scoreInfo = `(score de comprensión: ${comprehensionScore.toFixed(2)}, donde 1.0 = perfecto, 0.0 = nula)`;
+    const lang = detectLangWithFallback(userText, session?.lang);
+    const langName = lang === "en" ? "English" : lang === "pt" ? "Portuguese" : "Spanish";
+
+    const scoreInfo = `(comprehension score: ${comprehensionScore.toFixed(2)}, where 1.0 = perfect, 0.0 = none)`;
     const prompt = [
       `Sos Cris, asistente de TaxiGuazú.`,
       `El usuario escribió un mensaje que no pudimos interpretar automáticamente ${scoreInfo}.`,
@@ -173,6 +176,8 @@ async function generateReinterpretResponse(
       ``,
       context,
       ``,
+      `IDIOMA_DETECTADO: ${langName} — Respondé EXCLUSIVAMENTE en ${langName}.`,
+      ``,
       `Tu tarea:`,
       `1. Leé el mensaje del usuario con mente abierta. ¿Qué podría estar queriendo decir?`,
       `2. Si entendés algo (un origen, un destino, una queja, una consulta), respondé`,
@@ -180,13 +185,13 @@ async function generateReinterpretResponse(
       `   una aclaración específica.`,
       `3. Si NO entendés absolutamente nada, respondé SOLO: "NULL" (sin comillas).`,
       ``,
-      `Ejemplo bueno: "¿Estás consultando por un traslado desde la aduana?`,
-      `Decime a dónde necesitás ir y te paso el precio."`,
-      `Ejemplo bueno: "Perdón, no me quedó claro. ¿Es un viaje de la aduana`,
-      `a las cataratas o de las cataratas al centro?"`,
+      `Ejemplo: "Are you asking about a transfer from the border?`,
+      `Tell me where you need to go and I'll give you the price."`,
+      `Ejemplo: "Sorry, I didn't get that. Is it a trip from the border`,
+      `to the falls or from the falls to downtown?"`,
       `Ejemplo de NO entender: "NULL"`,
       ``,
-      `Respondé EN EL MISMO IDIOMA que el usuario. Máximo 2-3 líneas.`,
+      `Máximo 2-3 líneas.`,
       `No inventes datos. No agregues opciones numeradas.`,
       `No uses la palabra NULL dentro de una respuesta válida.`,
     ].join("\n");
@@ -223,6 +228,9 @@ async function generateFrustrationResponse(userText: string, session: ChatSessio
       ? `Datos del viaje que ya tenemos:\n${contextLines.join("\n")}`
       : "No tenemos datos del viaje todavía.";
 
+    const lang = detectLangWithFallback(userText, session?.lang);
+    const langName = lang === "en" ? "English" : lang === "pt" ? "Portuguese" : "Spanish";
+
     const prompt = [
       `Sos Cris, asistente de TaxiGuazú.`,
       `El usuario está frustrado porque siente que no lo estás escuchando.`,
@@ -231,15 +239,17 @@ async function generateFrustrationResponse(userText: string, session: ChatSessio
       ``,
       context,
       ``,
+      `IDIOMA_DETECTADO: ${langName} — Respondé EXCLUSIVAMENTE en ${langName}.`,
+      ``,
       `Tu tarea:`,
       `1. Reconocé brevemente la frustración del usuario (una frase corta, empática).`,
       `2. Intentá entender qué está tratando de decirte.`,
       `3. Respondé de forma que demuestres que lo escuchaste.`,
       ``,
-      `Ejemplo bueno: "Perdón, tenés razón. Entiendo que ya me dijiste que salís del aeropuerto. ¿A dónde necesitás ir?"`,
-      `Ejemplo malo: "¿Desde dónde salís?" (ignora lo que dijo, repite pregunta)`,
+      `Ejemplo: "Sorry, you're right. I understand you said you're leaving from the airport. Where do you need to go?"`,
+      `Malo: "Where are you leaving from?" (ignores what they said, repeats question)`,
       ``,
-      `Respondé EN EL MISMO IDIOMA que el usuario. Máximo 2-3 líneas.`,
+      `Máximo 2-3 líneas.`,
       `No inventes datos. No agregues opciones numeradas.`,
       `Si el usuario mencionó un dato específico (origen, destino, pasajeros), reconocelo.`,
     ].join("\n");
