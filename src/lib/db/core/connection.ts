@@ -278,6 +278,7 @@ async function initSchema(): Promise<void> {
       last_extracted_at INTEGER,
       workflow_state TEXT DEFAULT 'idle',
       clarify_field TEXT,
+      lang TEXT,
       updated_at INTEGER NOT NULL DEFAULT (unixepoch())
     )`,
     `CREATE TABLE IF NOT EXISTS processed_messages (

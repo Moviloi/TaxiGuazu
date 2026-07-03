@@ -156,6 +156,7 @@ describe("FASE 20.5 — Slots CONFIRMATION_PENDING flujo completo", () => {
         trip_state: null,
         dispatch_state: null,
         slot_states: null,
+        lang: null,
         updated_at: Math.floor(Date.now() / 1000),
       });
 
@@ -225,6 +226,7 @@ describe("FASE 20.5 — Slots CONFIRMATION_PENDING flujo completo", () => {
         trip_state: null,
         dispatch_state: null,
         slot_states: null,
+        lang: null,
         updated_at: Math.floor(Date.now() / 1000),
       });
 
@@ -263,6 +265,7 @@ describe("FASE 20.5 — Slots CONFIRMATION_PENDING flujo completo", () => {
         trip_state: null,
         dispatch_state: null,
         slot_states: null,
+        lang: null,
         updated_at: Math.floor(Date.now() / 1000),
       });
 
@@ -307,6 +310,7 @@ describe("handleSlotConfirmationButton — routing directo", () => {
       trip_state: null,
       dispatch_state: null,
       slot_states: null,
+      lang: null,
       updated_at: Math.floor(Date.now() / 1000),
     });
 

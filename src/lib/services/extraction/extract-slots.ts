@@ -19,12 +19,33 @@ interface Message {
   created_at: number;
 }
 
+// Detecta indicadores de multi-ride en el texto.
+// Si el usuario describe múltiples viajes, regex/entity no pueden capturar legs
+// y cortocircuitarían al LLM sin la información de multi-ride.
+function hasMultiRideIndicators(text: string): boolean {
+  const indicators = [
+    /\bRide\s+\d\b/i,
+    /\bLeg\s+\d\b/i,
+    /\bTrip\s+\d\b/i,
+    /\bViaje\s+\d\b/i,
+    /\bTramo\s+\d\b/i,
+    /(?:primero|first).+(?:luego|despu[eé]s|then|second)/i,
+    /(?:pick up|recoger|buscar).+(?:drop off|dejar|deixar).+(?:pick up|recoger|buscar)/i,
+  ];
+  return indicators.some((re) => re.test(text));
+}
+
 export async function extractSlots(
   text: string,
   history: Message[],
   customerName?: string,
   extractionContext?: ExtractionContext,
 ): Promise<Record<string, any> | null> {
+  if (hasMultiRideIndicators(text)) {
+    log.info("[EXTRACT] multi-ride indicators detected — skipping regex/entity, calling LLM directly");
+    return generateGroqExtraction(text, history, customerName, extractionContext);
+  }
+
   // 1. Try regex extractor (deterministic, no LLM)
   const regexResult = regexExtractSlots(text);
   const regexFull = regexResult && regexResult.origin && regexResult.destination;
@@ -36,9 +57,9 @@ export async function extractSlots(
     log.info("[EXTRACT] regex partial match — continuing to LLM to fill missing slots", regexResult);
   }
 
-  // 2. Try entity extractor (known locations, no LLM)
+  // 2. Try entity extractor (known locations + DB aliases + fuzzy matching)
   // Only return early if entity found BOTH mandatory slots
-  const entityResult = entityExtractSlots(text);
+  const entityResult = await entityExtractSlots(text);
   const entityFull = entityResult && entityResult.origin && entityResult.destination;
   if (entityFull) {
     log.info("[EXTRACT] entity full match — both origin and destination found, returning early");

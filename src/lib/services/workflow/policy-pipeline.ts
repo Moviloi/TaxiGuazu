@@ -20,7 +20,7 @@ import type { ExtractionContext, ConversationDomain, Mode, TemporalMode, Operati
 import { temporalFromFacts, operationalModeFromIntent, operationalModeToMode } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
-import { detectLeadLang, resolveLang } from "@/lib/detect-lang";
+import { detectLangWithFallback, resolveLang } from "@/lib/detect-lang";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 import { buildConfirmationMessage, buildNoTariffConfirmation } from "@/lib/ai/policy-reserva";
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
@@ -45,6 +45,7 @@ export interface PolicyPipelineInput {
   parsedData: TripExtraction | undefined;
   domain: ConversationDomain;
   multiRideBreakdown?: MultiRideBreakdown;
+  sessionLang?: string | null;
   sessionUpdatedAt?: number;
 }
 
@@ -55,6 +56,7 @@ export async function handlePolicyPipeline(
     phone, text, conversation, history, customerName, leadCore,
     pricing, confidenceResult, workflowResult, prevSlotsEarly, parsedData, domain,
     multiRideBreakdown,
+    sessionLang,
     sessionUpdatedAt,
   } = input;
 
@@ -68,7 +70,7 @@ export async function handlePolicyPipeline(
     prevSlotsEarly,
   );
 
-  const lang: Lang = detectLeadLang(text);
+  const lang: Lang = detectLangWithFallback(text, sessionLang);
   const extendedLang = resolveLang(text, parsedData);
   if (extendedLang !== lang) {
     log.info("[LANG_EXTENDED]", { fastPath: lang, extended: extendedLang });

@@ -337,6 +337,7 @@ export interface ChatSessionRow {
   comprehension_state: string | null;
   comprehension_score: number | null;
   escalation_reason: string | null;
+  lang: string | null;
   updated_at: number;
   conversational_state: string | null;
   dispatch_state: string | null;

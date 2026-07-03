@@ -11,7 +11,7 @@ import type { CoreDecision } from "@/lib/ai/types";
 import type { PredictedContext } from "@/lib/services/memory/predictive-routing";
 import type { ChatSessionRow } from "@/lib/db/types";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
-import { detectLeadLang } from "@/lib/detect-lang";
+import { detectLangWithFallback } from "@/lib/detect-lang";
 
 // P0.10.3: Detección de frustración del usuario
 const FRUSTRATION_RE = /\b(ya\s+(te\s+)?dije|ya\s+respond[ií]|no\s+entend[ée]s|ya\s+lo\s+dije|te\s+lo\s+dije|obvio|evidente|ya\s+contest[ée]|repito|otra\s+vez|no\s+me\s+escuch[áa]s|no\s+le[ée]s|le[ée]\s+bien|ya\s+esta\s+respondid[ao]|ya\s+te\s+lo\s+dije|ya\s+te\s+contest[ée])\b/i;
@@ -83,6 +83,25 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
   recordComprehensionOutcome(resolvedState === "ESCALATION");
 
   if (resolvedState === "ESCALATION") {
+    // P1b: Si la sesión está en modo slot-filling (clarify_field activo o collecting_slots),
+    // no escalar — dejar que el pipeline de extracción procese el texto como valor del slot.
+    if (session?.clarify_field || session?.conversational_state === "collecting_slots" || session?.conversational_state === "slot_confirmation") {
+      log.info("[COMPREHENSION] slot-filling active — skipping escalation, letting pipeline process", {
+        clarifyField: session.clarify_field,
+        state: session.conversational_state,
+      });
+      return false;
+    }
+
+    // P3: Antes de escalar, intentar que el LLM reinterprete el mensaje libremente
+    // y genere una pregunta aclaratoria. Solo escalar a humano si el LLM también falla.
+    const reinterpretMsg = await generateReinterpretResponse(text, session, comprehensionScore);
+    if (reinterpretMsg) {
+      log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_REINTERPRET", text: reinterpretMsg });
+      await sendAndPersist(phone, conversationId, reinterpretMsg);
+      return true;
+    }
+
     const reason = `comprehension_score=${comprehensionScore.toFixed(2)} state=${comprehensionState}`;
     await setChatSessionEscalationReason(phone, reason);
     logEscalation(String(conversationId), reason, comprehensionScore);
@@ -104,10 +123,10 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
     let recoveryMsg = await getRecoveryMessage(comprehensionState, session, leadCore.roleLock, text, leadCore.facts);
 
     // Fallback: if getRecoveryMessage returned generic, try inferring from core facts
-    if (recoveryMsg === buildGenericClarify(null, detectLeadLang(text))) {
+    if (recoveryMsg === buildGenericClarify(null, detectLangWithFallback(text, session?.lang))) {
       const missingField = inferMissingFieldFromCore(leadCore);
       if (missingField) {
-        recoveryMsg = buildGenericClarify(missingField, detectLeadLang(text));
+        recoveryMsg = buildGenericClarify(missingField, detectLangWithFallback(text, session?.lang));
         log.info("[COMPREHENSION] core facts inferred missing field", { field: missingField });
       }
     }
@@ -118,6 +137,68 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
   }
 
   return false;
+}
+
+// P3: LLM re-prompt antes de escalación — reinterpretar el mensaje libremente
+// y generar una pregunta aclaratoria. Retorna null si no puede interpretar.
+async function generateReinterpretResponse(
+  userText: string,
+  session: ChatSessionRow | null,
+  comprehensionScore: number,
+): Promise<string | null> {
+  try {
+    const { getLLMProvider } = await import("@/lib/ai/llm-provider");
+    const provider = getLLMProvider();
+
+    const contextLines: string[] = [];
+    if (session?.slots) {
+      try {
+        const slots = JSON.parse(session.slots);
+        if (slots.origin?.value) contextLines.push(`Origen: ${slots.origin.value}`);
+        if (slots.destination?.value) contextLines.push(`Destino: ${slots.destination.value}`);
+        if (slots.passengers?.value) contextLines.push(`Pasajeros: ${slots.passengers.value}`);
+        if (slots.scheduled_at?.value) contextLines.push(`Fecha/hora: ${slots.scheduled_at.value}`);
+      } catch { /* ignore */ }
+    }
+    const context = contextLines.length > 0
+      ? `Datos del viaje que ya tenemos:\n${contextLines.join("\n")}`
+      : "No tenemos datos del viaje todavía.";
+
+    const scoreInfo = `(score de comprensión: ${comprehensionScore.toFixed(2)}, donde 1.0 = perfecto, 0.0 = nula)`;
+    const prompt = [
+      `Sos Cris, asistente de TaxiGuazú.`,
+      `El usuario escribió un mensaje que no pudimos interpretar automáticamente ${scoreInfo}.`,
+      ``,
+      `Mensaje del usuario: "${userText}"`,
+      ``,
+      context,
+      ``,
+      `Tu tarea:`,
+      `1. Leé el mensaje del usuario con mente abierta. ¿Qué podría estar queriendo decir?`,
+      `2. Si entendés algo (un origen, un destino, una queja, una consulta), respondé`,
+      `   con una frase corta y amable que demuestre que lo escuchaste y pedí`,
+      `   una aclaración específica.`,
+      `3. Si NO entendés absolutamente nada, respondé SOLO: "NULL" (sin comillas).`,
+      ``,
+      `Ejemplo bueno: "¿Estás consultando por un traslado desde la aduana?`,
+      `Decime a dónde necesitás ir y te paso el precio."`,
+      `Ejemplo bueno: "Perdón, no me quedó claro. ¿Es un viaje de la aduana`,
+      `a las cataratas o de las cataratas al centro?"`,
+      `Ejemplo de NO entender: "NULL"`,
+      ``,
+      `Respondé EN EL MISMO IDIOMA que el usuario. Máximo 2-3 líneas.`,
+      `No inventes datos. No agregues opciones numeradas.`,
+      `No uses la palabra NULL dentro de una respuesta válida.`,
+    ].join("\n");
+
+    const raw = await provider.generateResponse(prompt, 150, 0.4);
+    const cleaned = raw?.trim() ?? "";
+    if (cleaned === "NULL") return null;
+    return cleaned;
+  } catch (e) {
+    log.warn("[REINTERPRET_LLM]", e instanceof Error ? e.message : String(e));
+    return null;
+  }
 }
 
 // P0.10.3: LLM para interpretar mensajes frustrados del usuario

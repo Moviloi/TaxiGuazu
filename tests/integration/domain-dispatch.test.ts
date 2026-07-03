@@ -24,6 +24,7 @@ function session(overrides?: Partial<ChatSessionRow>): ChatSessionRow {
     dispatch_state: null,
     trip_state: null,
     slot_states: null,
+    lang: null,
     ...overrides,
   };
 }

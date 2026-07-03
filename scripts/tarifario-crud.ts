@@ -102,7 +102,7 @@ const DESTINATION_MAP: Record<string, DestMapping> = {
   "aduana de foz":              { placeId: "aduana_br", crossesBorder: true },
   "hotel belmond":              { placeId: "br_belmond_hotel", crossesBorder: true },
   "zona de hotel recanto / mabu / rafain palace":
-                                { zoneId: "FOZ_HOTEIS", crossesBorder: true },
+                                { zoneId: "FOZ_CORREDOR_INICIAL", crossesBorder: true },
   "itaipú":                     { placeId: "br_itaipu_attraction", crossesBorder: true },
   "itaipú y alrededores":       { placeId: "br_itaipu_attraction", crossesBorder: true },
   "aeropuerto foz (igu)":       { placeId: "br_igu_airport", crossesBorder: true },

@@ -395,6 +395,41 @@ const ALIASES: Array<{ place_id: string; alias: string; language: string }> = [
   { place_id: "py_rio_bourbon", alias: "rio hotel cde", language: "es" },
   { place_id: "py_sax_shopping", alias: "sax", language: "en" },
   { place_id: "py_sax_shopping", alias: "sax paraguay", language: "en" },
+  // ═══ ADUANA / BORDER aliases (multi-idioma) ═══
+  // AR side — Aduana Tancredo Neves (ar_aduanatn_border)
+  { place_id: "ar_aduanatn_border", alias: "aduana argentina", language: "es" },
+  { place_id: "ar_aduanatn_border", alias: "aduana tancredo neves", language: "es" },
+  { place_id: "ar_aduanatn_border", alias: "argentine customs", language: "en" },
+  { place_id: "ar_aduanatn_border", alias: "customs argentina", language: "en" },
+  { place_id: "ar_aduanatn_border", alias: "alfândega argentina", language: "pt" },
+  { place_id: "ar_aduanatn_border", alias: "aduana lado argentino", language: "es" },
+  { place_id: "ar_aduanatn_border", alias: "argentine side", language: "en" },
+  { place_id: "ar_aduanatn_border", alias: "lado argentino aduana", language: "es" },
+  // BR side — Aduana Brasil (br_aduanatn_border)
+  { place_id: "br_aduanatn_border", alias: "aduana brasil", language: "es" },
+  { place_id: "br_aduanatn_border", alias: "aduana brasileña", language: "es" },
+  { place_id: "br_aduanatn_border", alias: "alfândega brasileira", language: "pt" },
+  { place_id: "br_aduanatn_border", alias: "aduana brasileira", language: "pt" },
+  { place_id: "br_aduanatn_border", alias: "brazilian customs", language: "en" },
+  { place_id: "br_aduanatn_border", alias: "brazil customs", language: "en" },
+  { place_id: "br_aduanatn_border", alias: "aduana lado brasileño", language: "es" },
+  { place_id: "br_aduanatn_border", alias: "brazilian side", language: "en" },
+  // Border crossing — generic
+  { place_id: "ar_br_border", alias: "border checkpoint", language: "en" },
+  { place_id: "ar_br_border", alias: "border crossing", language: "en" },
+  { place_id: "ar_br_border", alias: "paso fronterizo", language: "es" },
+  { place_id: "ar_br_border", alias: "frontera argentina brasil", language: "es" },
+  { place_id: "ar_br_border", alias: "fronteira argentina brasil", language: "pt" },
+  { place_id: "ar_br_border", alias: "puente tancredo neves", language: "es" },
+  { place_id: "ar_br_border", alias: "tancredo neves bridge", language: "en" },
+  { place_id: "ar_br_border", alias: "tancredo neves border", language: "en" },
+  { place_id: "ar_br_border", alias: "aduana argentina brasil", language: "es" },
+  { place_id: "ar_br_border", alias: "customs check", language: "en" },
+  { place_id: "ar_br_border", alias: "aduana", language: "es" },
+  { place_id: "ar_br_border", alias: "customs", language: "en" },
+  { place_id: "ar_br_border", alias: "alfândega", language: "pt" },
+  { place_id: "ar_br_border", alias: "checkpoint", language: "en" },
+  { place_id: "ar_br_border", alias: "aduan", language: "es" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -239,6 +239,7 @@ describe("Flow 1: Pasajeros antes de pricing (pipeline completo)", () => {
       trip_state: null,
       dispatch_state: null,
       slot_states: null,
+      lang: null,
       updated_at: Math.floor(Date.now() / 1000),
     });
 
@@ -271,6 +272,7 @@ describe("Flow 1: Pasajeros antes de pricing (pipeline completo)", () => {
       trip_state: null,
       dispatch_state: null,
       slot_states: null,
+      lang: null,
       updated_at: Math.floor(Date.now() / 1000),
     });
 

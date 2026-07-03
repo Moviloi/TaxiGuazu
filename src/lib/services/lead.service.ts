@@ -23,7 +23,7 @@ import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.serv
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { buildFieldSelector, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
 import { startAmbiguityResolution, handleAmbiguityResponse } from "@/lib/services/workflow/ambiguity-handler";
-import { detectLeadLang } from "@/lib/detect-lang";
+import { detectLangWithFallback } from "@/lib/detect-lang";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
@@ -158,6 +158,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
         workflowResult: undefined, confidenceResult: undefined,
         prevSlotsEarly: {}, parsedData: undefined,
         domain: mapIntentToDomain(leadCore.intent),
+        sessionLang: session?.lang,
         sessionUpdatedAt: session?.updated_at,
       });
       return;
@@ -168,7 +169,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     // (ej: "hola quiero ir del aeropuerto al centro").
     // Envía presentación corta de Cris y continúa al flujo normal para el mensaje de negocio.
     if (leadCore.facts.some(f => f.startsWith("greeting:"))) {
-      const lang = detectLeadLang(text);
+      const lang = detectLangWithFallback(text, session?.lang);
       const introMsg = buildGreetingIntro(lang, customerName ?? undefined);
       log.info("[COMBINED_GREETING]", { text, facts: leadCore.facts, introMsg });
       await sendWhatsAppMessage(phone, introMsg);
@@ -270,7 +271,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
           await insertMessage(conversation.id, "assistant", fallbackMsg);
           return;
         }
-        const confirm = buildSlotConfirmationMessage(updatedExtractionCtx, detectLeadLang(text));
+        const confirm = buildSlotConfirmationMessage(updatedExtractionCtx, detectLangWithFallback(text, session?.lang));
         await sendInteractiveButtons(phone, confirm.message!, confirm.buttons!);
         await insertMessage(conversation.id, "assistant", confirm.message!);
         return;
@@ -393,6 +394,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // Affirmative → confirm and execute
       if (isAffirmativeMessage(trimmed)) {
         const s = await getChatSession(phone);
+        const sessionLang = s?.lang;
         const rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
         const passengers = rawSlots?.passengers?.value ?? rawSlots?.passengers ?? 1;
 
@@ -426,7 +428,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
             passengers: Number(passengers),
             pricing: p.final_price > 0 ? p : undefined,
             customerName,
-            lang: detectLeadLang(trimmed),
+            lang: detectLangWithFallback(trimmed, sessionLang),
             text: trimmed,
           });
         } else {
@@ -531,6 +533,11 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     );
 
     const domain = mapIntentToDomain(leadCore.intent);
+    const pipelineLang = detectLangWithFallback(text, session?.lang);
+    if (session?.lang !== pipelineLang) {
+      const { updateChatSessionLang } = await import("@/lib/db/database");
+      await updateChatSessionLang(phone, pipelineLang);
+    }
 
     log.info("[TRACE_PRE_POLICY]", {
       domain,
@@ -545,6 +552,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       leadCore, extractionCtx, pricing, workflowResult,
       confidenceResult, prevSlotsEarly, parsedData, domain,
       multiRideBreakdown,
+      sessionLang: session?.lang,
       sessionUpdatedAt: session?.updated_at,
     });
     log.info("[TRACE_PIPELINE_END]", { phone: phone.slice(-4), intent: leadCore.intent });
@@ -579,7 +587,7 @@ export async function handleSlotConfirmationButton(
   _leadCore: ReturnType<typeof core>, // kept for interface compatibility
   session: Awaited<ReturnType<typeof getChatSession>>,
 ): Promise<void> {
-  const lang = detectLeadLang(buttonId);
+  const lang = detectLangWithFallback(buttonId, session?.lang);
   const buttonType = buttonId as string;
 
   log.info("[BUTTON_ROUTING]", {

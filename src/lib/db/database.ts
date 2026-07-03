@@ -605,6 +605,7 @@ export async function upsertChatSession(
   conversationalState?: string,
   clarifyField?: string,
   slotStates?: string | null,
+  lang?: string | null,
 ): Promise<void> {
   await ensureSchema();
 
@@ -634,14 +635,15 @@ export async function upsertChatSession(
       ? { ...baseConfidence, ...confidence }
       : existing.confidence;
     const mergedSlotStates = slotStates ?? existing.slot_states;
+    const mergedLang = lang ?? existing.lang;
     await getDb().execute({
-      sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, slot_states = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, conversational_state = ?, clarify_field = ?, updated_at = ? WHERE phone = ?`,
-      args: [JSON.stringify(merged), JSON.stringify(mergedConfidence), mergedSlotStates, now, conversationalState || existing.conversational_state || "idle", clarifyField || existing.clarify_field || null, now, phone],
+      sql: `UPDATE chat_sessions SET slots = ?, confidence = ?, slot_states = ?, extraction_count = extraction_count + 1, last_extracted_at = ?, conversational_state = ?, clarify_field = ?, lang = ?, updated_at = ? WHERE phone = ?`,
+      args: [JSON.stringify(merged), JSON.stringify(mergedConfidence), mergedSlotStates, now, conversationalState || existing.conversational_state || "idle", clarifyField || existing.clarify_field || null, mergedLang, now, phone],
     });
   } else {
     await getDb().execute({
-      sql: `INSERT INTO chat_sessions (phone, slots, confidence, slot_states, extraction_count, last_extracted_at, conversational_state, clarify_field, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
-      args: [phone, JSON.stringify(slots), JSON.stringify(confidence || {}), slotStates ?? null, now, conversationalState || "idle", clarifyField || null, now],
+      sql: `INSERT INTO chat_sessions (phone, slots, confidence, slot_states, extraction_count, last_extracted_at, conversational_state, clarify_field, lang, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+      args: [phone, JSON.stringify(slots), JSON.stringify(confidence || {}), slotStates ?? null, now, conversationalState || "idle", clarifyField || null, lang ?? null, now],
     });
   }
 }
@@ -656,6 +658,14 @@ export async function updateChatSessionConversation(phone: string, conversationa
 
 /** Update ONLY the slots JSON column (does not touch confidence, state, etc.).
  *  Used by ambiguity-handler to store resolved place selections. */
+export async function updateChatSessionLang(phone: string, lang: string): Promise<void> {
+  await ensureSchema();
+  await getDb().execute({
+    sql: "UPDATE chat_sessions SET lang = ?, updated_at = unixepoch() WHERE phone = ?",
+    args: [lang, phone],
+  });
+}
+
 export async function updateChatSessionSlots(phone: string, slots: Record<string, any>): Promise<void> {
   await ensureSchema();
   // ── TYPE GUARD: slots must be an object ──

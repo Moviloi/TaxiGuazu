@@ -85,6 +85,13 @@ Fase del pipeline: `LEARNING`
 
 ## Next Steps
 
+#### Patrón 4: LLM Mocking Pattern
+- **Evidencia:** Test `comprehension-runner.test.ts` fallaba porque P3 agregó un LLM re-prompt antes de escalación, y el test no mockeaba el LLM provider.
+- **Frecuencia:** 1 vez en 1 pipeline (2026-07-03)
+- **Impacto:** Tests ahora cubren ambos branches del LLM re-prompt (fallo → escalación, éxito → re-prompt) sin depender de una API externa.
+- **Recomendación:** Siempre que se agregue una llamada a LLM en medio de un pipeline de decisión, mockear el LLM provider en los tests y crear tests separados para cada branch (LLM retorna NULL vs LLM retorna mensaje). Usar `vi.mock("@/lib/ai/llm-provider")` con `mockResolvedValue` para controlar la respuesta.
+- **Regla:** Los tests nunca deben depender del LLM real. Siempre mockear `getLLMProvider` para evitar no-determinismo y dependencia de red.
+
 - [ ] Verificar OIDC tokens de Vercel (expiran automáticamente)
 - [ ] Integrar precommit como git hook
 - [ ] Documentar política de rotación de secretos

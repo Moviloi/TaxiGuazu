@@ -1,13 +1,13 @@
 // Entity Extractor — known location candidate detection without LLM.
 // Runs after regexExtractor, before LLM fallback.
-// Only DETECTS candidates (returns raw matched text) — does NOT resolve canonical names.
-// Resolution happens downstream via resolveAlias() → aliases/places DB tables.
+// Resolves raw text to canonical place names using DB aliases + fuzzy matching.
 //
 // ARCHITECTURE:
-//   Extractor: detects candidates (this file)
+//   Extractor: detects candidates (this file) — regex patterns + DB alias resolution
 //   Resolver: confirms entity from DB (confidence.ts → resolveAlias)
 
 import type { TripExtraction } from "@/lib/ai/extraction-schema";
+import { resolveLocation } from "@/lib/services/geo/location-resolver";
 
 // Known hotel detection patterns. Matched text is returned raw (not canonical).
 const KNOWN_HOTELS: RegExp[] = [
@@ -63,7 +63,7 @@ function isDirectEntityMention(text: string, match: string): boolean {
   return phraseRe.test(lowerText);
 }
 
-export function entityExtractSlots(text: string): TripExtraction | null {
+export async function entityExtractSlots(text: string): Promise<TripExtraction | null> {
   const lower = text.toLowerCase();
 
   // ── HOTEL/LANDMARK DETECTION ──
@@ -106,8 +106,42 @@ export function entityExtractSlots(text: string): TripExtraction | null {
     }
 
     return {
+      origin: poi,
+      destination: null,
+      passengers: null,
+      price: null,
+      scheduled_at: null,
+      flight: null,
+      urgency: null,
+      customer_name: null,
+    };
+  }
+
+  // ── DB ALIAS + FUZZY MATCHING ──
+  // Si regex no encontró nada, probar resolveLocation que usa DB aliases +
+  // Levenshtein distance ≤ 3 + auto-insert de nuevos aliases.
+  // Esto captura typos como "arrgentinian custom border" → Aduana Argentina.
+  const resolved = await resolveLocation(text);
+  if (resolved.confidence === "alias" || resolved.confidence === "fuzzy") {
+    const hasOriginMarker = /(?:desde|de|salgo|origen|estoy)\s+.{0,30}?/.test(lower);
+    const hasDestMarker = /(?:a|hacia|para|voy|llegada|destino)/.test(lower);
+
+    if (hasOriginMarker && !hasDestMarker) {
+      return {
+        origin: resolved.canonical_name,
+        destination: null,
+        passengers: null,
+        price: null,
+        scheduled_at: null,
+        flight: null,
+        urgency: null,
+        customer_name: null,
+      };
+    }
+
+    return {
       origin: null,
-      destination: poi,
+      destination: resolved.canonical_name,
       passengers: null,
       price: null,
       scheduled_at: null,

@@ -153,6 +153,7 @@ describe("FASE 23 — Persistent SlotState", () => {
         dispatch_state: null,
         trip_state: null,
         slot_states: null,
+        lang: null,
         updated_at: Math.floor(Date.now() / 1000),
       });
 
@@ -180,6 +181,7 @@ describe("FASE 23 — Persistent SlotState", () => {
         conversational_state: "idle",
         dispatch_state: null,
         trip_state: null,
+        lang: null,
         slot_states: JSON.stringify({
           origin: { value: "Aeropuerto IGR", source: "USER_CONFIRMED", status: "CONFIRMED" },
         }),
@@ -209,6 +211,7 @@ describe("FASE 23 — Persistent SlotState", () => {
         dispatch_state: null,
         trip_state: null,
         slot_states: null,
+        lang: null,
         updated_at: Math.floor(Date.now() / 1000),
       });
 
@@ -232,6 +235,7 @@ describe("FASE 23 — Persistent SlotState", () => {
         dispatch_state: null,
         trip_state: null,
         slot_states: null,
+        lang: null,
         updated_at: 100, // very old
       });
 

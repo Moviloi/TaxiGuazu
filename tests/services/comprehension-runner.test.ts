@@ -41,6 +41,10 @@ vi.mock("@/lib/services/admin/admin.service", () => ({
   notifyAdmin: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/ai/llm-provider", () => ({
+  getLLMProvider: vi.fn(),
+}));
+
 vi.mock("@/lib/ai/response-builder", () => ({
   buildEscalationMessage: vi.fn().mockReturnValue("Te transfiero con un operador"),
   buildGenericClarify: vi.fn().mockImplementation((field: string | null) => {
@@ -53,6 +57,7 @@ vi.mock("@/lib/ai/response-builder", () => ({
 
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { getComprehensionState } from "@/lib/services/extraction/comprehension";
+import { getLLMProvider } from "@/lib/ai/llm-provider";
 import type { CoreDecision } from "@/lib/ai/types";
 import type { PredictedContext } from "@/lib/services/memory/predictive-routing";
 
@@ -131,8 +136,11 @@ describe("runComprehensionCheck", () => {
     expect(insertMessage).toHaveBeenCalledWith(1, "assistant", "¿A dónde necesitás ir?");
   });
 
-  it("returns true and sends escalation message when state is ESCALATION", async () => {
+  it("returns true and escalates when ESCALATION and LLM re-prompt fails", async () => {
     vi.mocked(getComprehensionState).mockReturnValue("ESCALATION");
+    // Mock LLM provider to return "NULL" (simulating LLM doesn't understand)
+    const mockProvider = { generateResponse: vi.fn().mockResolvedValue("NULL") };
+    vi.mocked(getLLMProvider).mockReturnValue(mockProvider as any);
 
     const { sendWhatsAppMessage } = await import("@/lib/sender");
     const { insertMessage } = await import("@/lib/db/database");
@@ -151,6 +159,32 @@ describe("runComprehensionCheck", () => {
     expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", "Te transfiero con un operador");
     expect(insertMessage).toHaveBeenCalledWith(1, "assistant", "Te transfiero con un operador");
     expect(notifyAdmin).toHaveBeenCalled();
+  });
+
+  it("returns true and sends re-prompt when ESCALATION and LLM re-prompt succeeds", async () => {
+    vi.mocked(getComprehensionState).mockReturnValue("ESCALATION");
+    // Mock LLM provider to return a re-prompt message
+    const rePromptMsg = "¿Podrías aclarar qué necesitas?";
+    const mockProvider = { generateResponse: vi.fn().mockResolvedValue(rePromptMsg) };
+    vi.mocked(getLLMProvider).mockReturnValue(mockProvider as any);
+
+    const { sendWhatsAppMessage } = await import("@/lib/sender");
+    const { insertMessage } = await import("@/lib/db/database");
+    const { notifyAdmin } = await import("@/lib/services/admin/admin.service");
+
+    const result = await runComprehensionCheck({
+      phone: "+54911111111",
+      text: "asdfgh",
+      conversationId: 1,
+      leadCore: makeCoreDecision(),
+      predictedContext: makePredictedContext(),
+      session: null,
+    });
+
+    expect(result).toBe(true);
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", rePromptMsg);
+    expect(insertMessage).toHaveBeenCalledWith(1, "assistant", rePromptMsg);
+    expect(notifyAdmin).not.toHaveBeenCalled();
   });
 
   it("logs and persists comprehension data on every call", async () => {

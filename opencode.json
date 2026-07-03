@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencodego/qwen3.7 plus",
+  "model": "opencode/big-pickle",
   "small_model": "opencode/big-pickle",
   "agent": {
     "ael-explore": {

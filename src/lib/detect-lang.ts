@@ -55,3 +55,20 @@ export function resolveLang(
 
   return fast.lang;
 }
+
+// Resuelve idioma considerando el idioma persistido en sesión como fallback
+// cuando la detección rápida tiene baja confianza (< 0.5).
+// sessionLang: idioma guardado en chat_sessions del mensaje anterior.
+export function detectLangWithFallback(
+  text: string,
+  sessionLang?: string | null,
+): Lang {
+  const fast = detectExtendedLang(text);
+  if (fast.confidence >= 0.5) {
+    return fast.lang === "pt" ? "pt" : fast.lang === "en" ? "en" : "es";
+  }
+  if (sessionLang && (sessionLang === "en" || sessionLang === "pt")) {
+    return sessionLang;
+  }
+  return "es";
+}
