@@ -1,6 +1,7 @@
 import { GROQ_RESPONSE_MAX_TOKENS, GROQ_RESPONSE_TEMPERATURE } from "@/config/constants";
 import { getLLMProvider } from "./llm-provider";
-import type { PolicyOutput, HandlerContext } from "./types";
+import type { PolicyOutput, HandlerContext, Lang } from "./types";
+import { detectLeadLang } from "@/lib/detect-lang";
 import { log } from "@/lib/utils/logger";
 import { IGUAZU_KNOWLEDGE, getAttractionsDetailPrompt, getMigrationDetailPrompt, getBordersDetailPrompt } from "@/lib/ai/iguazu-knowledge";
 import { getOperationalInfoPrompt } from "@/lib/ai/taxiguazu-knowledge";
@@ -74,12 +75,22 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
     getOperationalInfoPrompt(),
   );
 
+  // ── Detectar idioma del usuario ──
+  const userLang: Lang = ctx?.lang ?? detectLeadLang(ctx?.userText ?? "");
+  const LANG_LABELS: Record<string, { name: string; instruction: string; mistake: string }> = {
+    es: { name: "español", instruction: "Respondé SOLO en español.", mistake: "No respondas en inglés ni portugués." },
+    en: { name: "inglés", instruction: "Respond in English ONLY. Do NOT respond in Spanish or Portuguese.", mistake: "Never reply in Spanish even if these instructions are in Spanish." },
+    pt: { name: "português", instruction: "Responda SOMENTE em português.", mistake: "Não responda em espanhol ou inglês." },
+  };
+  const langCfg = LANG_LABELS[userLang] ?? LANG_LABELS.es;
+
   // ── Reglas base (aplican siempre) ──
   const rules: string[] = [
+    `0. IDIOMA (OBLIGATORIO): El usuario escribe en ${langCfg.name}. ${langCfg.instruction} ${langCfg.mistake}`,
     `1. No inventes datos. Usá SOLO la información del CONTEXTO y la REFERENCIA.`,
     `2. Si hay precio, respetalo exactamente.`,
     `3. Tono natural y conversacional, como una persona real ayudando a un viajero en Iguazú. Sin jerga corporativa. ${policy.decision === "ANSWER" ? "Máx 5 oraciones (es una respuesta informativa)." : (isGreeting ? "Máx 1-2 líneas, muy breve." : "Máx 2-3 oraciones.")}`,
-    `4. Respondé en el MISMO IDIOMA que el pasajero. Si escribe en portugués, respondé en portugués.`,
+    `4. ${userLang === "en" ? "The passenger wrote in English. You MUST reply in English." : userLang === "pt" ? "O passageiro escreveu em português. Você DEVE responder em português." : "Respondé en el MISMO IDIOMA que el pasajero. Si escribe en portugués, respondé en portugués."}`,
     `5. Si necesitás un campo, preguntá solo por lo que falta de forma natural.`,
     `6. Si no entendiste, admitilo y pedí reformular.`,
     `7. No uses viñetas ni formato de lista. Escribí en párrafo natural.`,
@@ -119,6 +130,8 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
     ``,
     `REGLAS (obligatorias):`,
     ...rules,
+    ``,
+    `⚠️ RECORDATORIO FINAL — IDIOMA: El usuario escribe en ${langCfg.name}. ${langCfg.instruction}`,
     ``,
     `TEMPLATE DE REFERENCIA (mejoralo manteniendo los datos):`,
     policy.finalResponse,
