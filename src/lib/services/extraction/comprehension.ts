@@ -219,23 +219,41 @@ export async function getRecoveryMessage(
 // ── AI-FIRST: contextual recovery via LLM (ADR 005) ──────────────────────
 // P5: Ahora usa LLMProvider (Gemini por defecto, Groq fallback)
 
-async function generateContextualRecovery(userText: string, _lang: string): Promise<string | null> {
+async function generateContextualRecovery(userText: string, lang: string): Promise<string | null> {
   try {
     const { getLLMProvider } = await import("@/lib/ai/llm-provider");
     const provider = getLLMProvider();
 
+    const langName = lang === "en" ? "English" : lang === "pt" ? "Portuguese" : "Spanish";
+
+    const example = lang === "en"
+      ? `Good: "I understand you're going from downtown. What exact location are you leaving from?"
+Bad: "Where are you leaving from?" (too generic, ignores what the user said)`
+      : lang === "pt"
+        ? `Bom: "Entendi que sua viagem é do centro. De qual local exato você está saindo?"
+Ruim: "De onde você está saindo?" (muito genérico, ignora o que o usuário disse)`
+        : `Bueno: "Entendí que tu viaje es desde el centro. ¿De qué lugar exacto salís?"
+Malo: "¿Desde dónde salís?" (demasiado genérico, ignora lo que dijo el usuario)`;
+
+    const systemMsg = lang === "en"
+      ? `You are Cris, TaxiGuazú assistant. The system didn't fully understand the user's message and needs to ask for clarification.`
+      : lang === "pt"
+        ? `Você é a Cris, assistente da TaxiGuazú. O sistema não entendeu completamente a mensagem do usuário e precisa pedir esclarecimento.`
+        : `Sos Cris, asistente de TaxiGuazú. El sistema no entendió completamente el mensaje y necesita pedir aclaración.`;
+
     const prompt = [
-      `Sos Cris, asistente de TaxiGuazú.`,
+      `IDIOMA_DETECTADO: ${langName} — Respondé EXCLUSIVAMENTE en ${langName}.`,
+      ``,
+      systemMsg,
       `El usuario escribió: "${userText}"`,
       ``,
-      `El sistema no entendió completamente el mensaje y necesita pedir aclaración.`,
       `Redactá UNA SOLA PREGUNTA breve que demuestre que entendiste algo de lo que dijo el usuario.`,
       `No seas genérico — referenciá específicamente lo que mencionó.`,
       ``,
-      `Ejemplo bueno: "Entendí que tu viaje es desde el centro. ¿De qué lugar exacto salís?"`,
-      `Ejemplo malo: "¿Desde dónde salís?" (demasiado genérico, ignora lo que dijo el usuario)`,
+      `Ejemplo:`,
+      example,
       ``,
-      `Respondé EN EL MISMO IDIOMA que el usuario. Máximo 2 líneas.`,
+      `Máximo 2 líneas.`,
       `No inventes datos. No agregues opciones numeradas.`,
     ].join("\n");
 
