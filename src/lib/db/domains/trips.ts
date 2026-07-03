@@ -1,6 +1,6 @@
 import { query, queryOne } from "../core/helpers";
 import { getDb, ensureSchema } from "../core/connection";
-import type { TripRow, TripPhase, TripClosureReason, TariffRow } from "../types";
+import type { TripRow, TripPhase, TripClosureReason, TariffRow, TripGroupRow, TripLegRow } from "../types";
 import { log } from "@/lib/utils/logger";
 
 async function getDriverDiscountForTariff(driverPhone: string, tariffId: number): Promise<number | null> {
@@ -18,6 +18,59 @@ export async function createTrip(tripId: string, clientPhone: string, origin: st
   await ensureSchema();
   await getDb().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, tripStatus, scheduledAt || null, flightNumber || null] });
   await syncTripPhaseFromLegacyStatus(tripId, tripStatus);
+}
+
+// ── MULTI-RIDE: trip groups + legs ──
+
+export async function createTripGroup(groupId: string, clientPhone: string, totalPrice: number | null, passengers: number | null): Promise<void> {
+  await ensureSchema();
+  await getDb().execute({
+    sql: "INSERT INTO trip_groups (id, client_phone, total_price, passengers) VALUES (?, ?, ?, ?)",
+    args: [groupId, clientPhone, totalPrice, passengers],
+  });
+}
+
+export async function insertTripLeg(
+  groupId: string,
+  seq: number,
+  origin: string,
+  destination: string,
+  price: number | null,
+  scheduledAt: number | null,
+): Promise<number | bigint> {
+  await ensureSchema();
+  const rs = await queryOne<{ id: number | bigint }>(
+    `INSERT INTO trip_legs (group_id, seq, origin, destination, price, scheduled_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     RETURNING id`,
+    [groupId, seq, origin, destination, price, scheduledAt],
+  );
+  return rs?.id ?? 0;
+}
+
+export async function getTripGroup(groupId: string): Promise<TripGroupRow | null> {
+  return queryOne<TripGroupRow>("SELECT * FROM trip_groups WHERE id = ?", [groupId]);
+}
+
+export async function getTripLegsByGroup(groupId: string): Promise<TripLegRow[]> {
+  return query<TripLegRow>(
+    "SELECT * FROM trip_legs WHERE group_id = ? ORDER BY seq",
+    [groupId],
+  );
+}
+
+export async function updateTripGroupStatus(groupId: string, status: string): Promise<void> {
+  await getDb().execute({
+    sql: "UPDATE trip_groups SET status = ?, updated_at = unixepoch() WHERE id = ?",
+    args: [status, groupId],
+  });
+}
+
+export async function updateTripLegTripId(legId: number, tripId: string): Promise<void> {
+  await getDb().execute({
+    sql: "UPDATE trip_legs SET trip_id = ?, status = 'assigned' WHERE id = ?",
+    args: [tripId, legId],
+  });
 }
 
 export async function getTripById(tripId: string): Promise<TripRow | null> {

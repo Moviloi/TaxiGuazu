@@ -181,6 +181,54 @@ export interface TourRow {
   created_at: number | null;
 }
 
+export interface TripGroupRow {
+  id: string;
+  client_phone: string;
+  total_price: number | null;
+  passengers: number | null;
+  status: "pending" | "quoted" | "confirmed" | "executing" | "completed" | "cancelled";
+  created_at: number | null;
+  updated_at: number | null;
+}
+
+export interface TripLegRow {
+  id: number;
+  group_id: string;
+  seq: number;
+  origin: string;
+  destination: string;
+  scheduled_at: number | null;
+  price: number | null;
+  status: "pending" | "quoted" | "confirmed" | "assigned" | "completed" | "cancelled";
+  trip_id: string | null;
+  assigned_driver_phone: string | null;
+  created_at: number | null;
+}
+
+/** Leg de un viaje multi-ride (antes de persistir) */
+export interface TripLegInput {
+  origin: string;
+  destination: string;
+  time?: string;
+}
+
+export interface MultiRideBreakdown {
+  legs: Array<{
+    seq: number;
+    origin: string;
+    destination: string;
+    time: string | null;
+    oneWayPrice: number;
+    discountedPrice: number;
+    saving: number;
+    hub: string | null;
+  }>;
+  totalOneWay: number;
+  totalDiscounted: number;
+  totalSaving: number;
+  hubs: string[];
+}
+
 export interface WaitingRateRow {
   id: number;
   zone_id: string | null;

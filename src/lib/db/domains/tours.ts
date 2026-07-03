@@ -109,3 +109,57 @@ export async function updateTour(id: number, data: Partial<{
 export async function deleteTour(id: number): Promise<void> {
   await query("UPDATE tours SET active = 0 WHERE id = ?", [id]);
 }
+
+/**
+ * Busca un round_trip entre dos lugares (en cualquier dirección).
+ *
+ * Estrategia híbrida place/zone:
+ *   1. Busca por place_id exacto (A↔B o B↔A)
+ *   2. Si no encuentra, busca por zone_id (A.zone ↔ B.zone o B.zone ↔ A.zone)
+ *      así un tour creado para un hotel del Corredor Cataratas beneficia
+ *      a cualquier otro hotel en la misma zona.
+ *
+ * Útil para multi-ride: si existe A↔B round_trip, cada tramo A→B cuesta price/2.
+ */
+export async function findRoundTripBetween(
+  placeA: string,
+  placeB: string,
+): Promise<TourRow | null> {
+  // 1. Exact place_id match
+  const byPlace = await queryOne<TourRow>(
+    `SELECT * FROM tours
+     WHERE trip_type = 'round_trip' AND active = 1
+       AND (
+         (origin_place_id = ? AND destination_place_id = ?)
+         OR
+         (origin_place_id = ? AND destination_place_id = ?)
+       )
+     ORDER BY id LIMIT 1`,
+    [placeA, placeB, placeB, placeA],
+  );
+  if (byPlace) return byPlace;
+
+  // 2. Zone fallback: resolve zones and try zone-level match
+  const zones = await query<{ zone_id: string; place_id: string }>(
+    `SELECT place_id, zone_id FROM places WHERE place_id IN (?, ?) AND zone_id IS NOT NULL`,
+    [placeA, placeB],
+  );
+  const zoneA = zones.find((z) => z.place_id === placeA)?.zone_id;
+  const zoneB = zones.find((z) => z.place_id === placeB)?.zone_id;
+
+  if (zoneA && zoneB && zoneA !== zoneB) {
+    return queryOne<TourRow>(
+      `SELECT * FROM tours
+       WHERE trip_type = 'round_trip' AND active = 1
+         AND (
+           (origin_zone_id = ? AND destination_zone_id = ?)
+           OR
+           (origin_zone_id = ? AND destination_zone_id = ?)
+         )
+       ORDER BY id LIMIT 1`,
+      [zoneA, zoneB, zoneB, zoneA],
+    );
+  }
+
+  return null;
+}

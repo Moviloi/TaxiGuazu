@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+const TripLegSchema = z.object({
+  origin: z.string().min(1),
+  destination: z.string().min(1),
+  time: z.string().nullable().optional(),
+});
+
 export const TripExtractionSchema = z.object({
   origin: z.string().min(1).nullable().optional(),
   destination: z.string().min(1).nullable().optional(),
@@ -10,9 +16,12 @@ export const TripExtractionSchema = z.object({
   urgency: z.enum(["ahora", "pronto", "programado"]).nullable().optional(),
   customer_name: z.string().nullable().optional(),
   language: z.enum(["es", "en", "pt", "fr", "de", "it", "zh"]).nullable().optional(),
+  /** Multi-ride: array de tramos cuando el usuario describe múltiples viajes */
+  legs: z.array(TripLegSchema).nullable().optional(),
 });
 
 export type TripExtraction = z.infer<typeof TripExtractionSchema>;
+export type TripLeg = z.infer<typeof TripLegSchema>;
 
 export interface ExtractionResult {
   slots: Record<string, { value: string | number | null; score: number; reason: string; source?: string; status?: string }>;

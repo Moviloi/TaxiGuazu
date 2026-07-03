@@ -1,6 +1,7 @@
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
+import type { MultiRideBreakdown } from "@/lib/db/types";
 
 const DESCRIPTIVE_PREFIX: Record<string, string> = {
   "Puerto Iguazú": "Ciudad de Puerto Iguazú",
@@ -41,6 +42,7 @@ export function formatConfidenceNote(
   confidenceResult: ExtractionResult,
   workflowResult: SlotConversationalContext,
   pricing?: PricingResult,
+  multiRide?: MultiRideBreakdown,
 ): string {
   const parts: string[] = [];
 
@@ -91,6 +93,26 @@ export function formatConfidenceNote(
       }
     }
     parts.push(`No inventes un precio. Si el cliente no puede aclarar, derivá con un colega humano.`);
+  }
+
+  // Multi-ride breakdown
+  if (multiRide && multiRide.legs.length > 0 && multiRide.totalDiscounted > 0) {
+    parts.push("");
+    parts.push("── VIAJE MULTI-TRAMO ──");
+    for (const leg of multiRide.legs) {
+      const label = `${leg.origin} → ${leg.destination}`;
+      if (leg.saving > 0) {
+        parts.push(`  Tramo ${leg.seq}: ${label} — $${leg.discountedPrice} (ahorro $${leg.saving})`);
+      } else {
+        parts.push(`  Tramo ${leg.seq}: ${label} — $${leg.oneWayPrice}`);
+      }
+    }
+    parts.push(`Total: $${multiRide.totalDiscounted} ARS (ahorro total: $${multiRide.totalSaving})`);
+    if (multiRide.hubs.length > 0) {
+      parts.push(`Hubs detectados: ${multiRide.hubs.join(", ")} — descuento round_trip aplicado por segmento.`);
+    }
+    parts.push("NO calcules ni modifiques estos precios individuales. Usá SOLO los valores oficiales del backend.");
+    parts.push("");
   }
 
   const header = `Confianza general: ${confidenceResult.overall_confidence * 100}%. Estado: ${workflowResult.state}.` +

@@ -7,6 +7,8 @@ import type { TripExtraction, ExtractionResult as ExtractionSchemaResult } from 
 import type { SlotConversationalContext } from "@/lib/services/workflow/slot-workflow";
 import { evaluateWorkflowTransition } from "@/lib/services/workflow/slot-workflow";
 import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
+import { priceMultiRideLegs, type LegPricingInput } from "@/lib/services/pricing/hub-discount";
+import type { MultiRideBreakdown } from "@/lib/db/types";
 // assertCoreRouterPolicy removed in DEBT-03 (no more global state in guard.ts)
 import { isAffirmativeMessage, isNegativeMessage, isCorrectionMessage } from "@/lib/ai/patterns";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
@@ -119,6 +121,7 @@ export interface ExtractionResult {
   confidenceResult?: ExtractionSchemaResult;
   pricing?: PricingResult;
   prevSlotsEarly: Record<string, string>;
+  multiRideBreakdown?: MultiRideBreakdown;
 }
 
 export async function runExtractionPipeline(
@@ -130,6 +133,7 @@ export async function runExtractionPipeline(
   customerName: string | null,
 ): Promise<ExtractionResult | null> {
   let extractionNote: string | undefined;
+  let multiRideBreakdown: MultiRideBreakdown | undefined;
   let workflowResult: SlotConversationalContext | undefined;
   let parsed: { success: true; data: TripExtraction } | { success: false; error: any } | undefined;
   let confidenceResult: ExtractionSchemaResult | undefined;
@@ -271,34 +275,65 @@ export async function runExtractionPipeline(
         log.info("[EXTRACTION] Parse exitoso, calculando confidence...");
         confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
+        // Multi-ride breakdown (compartido entre pricing y extractionNote)
         if (parsed.data.origin && parsed.data.destination) {
           const pax = parsed.data.passengers || 1;
-          log.info(`[EXTRACTION] Calculando precio: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
-          const resolved = await resolvePricingForSlots({ origin: parsed.data.origin, destination: parsed.data.destination, passengers: pax });
-          pricing = resolved.pricingResult;
-          if (resolved.divergence) {
-            log.info(`[PRICING] Divergence: v3=${resolved.divergence.v3Price} v2=${resolved.divergence.v2Price} level=${resolved.divergence.level}`);
-          }
-          log.info(`[EXTRACTION] Pricing result: final_price=${pricing?.final_price} origin="${pricing?.origin.canonical_name}" dest="${pricing?.destination.canonical_name}"`);
-          if (pricing && pricing.final_price > 0) {
-            parsed.data.price = pricing.final_price;
-            confidenceResult.slots.price = { value: pricing.final_price, score: 1.0, reason: "backend_tariff_match" };
-          } else if (parsed.data.origin || parsed.data.destination) {
-            const route = parseRouteFromText(text);
-            const fbOrigin = route.origin;
-            const fbDest = route.destination;
-            if (fbOrigin && fbDest) {
-              const fbResolved = await resolvePricingForSlots({ origin: fbOrigin, destination: fbDest, passengers: parsed.data.passengers || 1 });
-              const fbPricing = fbResolved.pricingResult;
-              if (fbPricing.final_price > 0) {
-                log.info(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbPricing.final_price}`);
-                pricing = fbPricing;
-                parsed.data.origin = fbOrigin;
-                parsed.data.destination = fbDest;
-                parsed.data.price = fbPricing.final_price;
-                confidenceResult.slots.price = { value: fbPricing.final_price, score: 1.0, reason: "backend_tariff_match" };
-                confidenceResult.slots.origin = { value: fbOrigin, score: 1.0, reason: "regex_fallback" };
-                confidenceResult.slots.destination = { value: fbDest, score: 1.0, reason: "regex_fallback" };
+
+          // Multi-ride: legs descriptas por el usuario
+          if (parsed.data.legs && parsed.data.legs.length > 0) {
+            log.info(`[EXTRACTION] Multi-ride detectado: ${parsed.data.legs.length} legs`);
+            const legInputs: LegPricingInput[] = parsed.data.legs.map((leg, idx) => ({
+              seq: idx + 1,
+              origin: leg.origin,
+              destination: leg.destination,
+              time: leg.time ?? null,
+            }));
+            multiRideBreakdown = await priceMultiRideLegs(legInputs, pax);
+            log.info(`[EXTRACTION] Multi-ride pricing: ${multiRideBreakdown.totalDiscounted} (ahorro: ${multiRideBreakdown.totalSaving})`);
+
+            // Usar precio consolidado como pricing principal (backward compat)
+            pricing = {
+              final_price: multiRideBreakdown.totalDiscounted,
+              base_price: multiRideBreakdown.totalOneWay,
+              markup: 0,
+              adjustments: [],
+              tariff_id: null,
+              origin: { place_id: null, canonical_name: parsed.data.origin, zone_id: null },
+              destination: { place_id: null, canonical_name: parsed.data.destination ?? "", zone_id: null },
+              level: "multi_ride",
+              source: "package",
+              explanation: [],
+            };
+            parsed.data.price = multiRideBreakdown.totalDiscounted;
+            confidenceResult.slots.price = { value: multiRideBreakdown.totalDiscounted, score: 1.0, reason: "multi_ride_backend" };
+          } else {
+            log.info(`[EXTRACTION] Calculando precio: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
+            const resolved = await resolvePricingForSlots({ origin: parsed.data.origin, destination: parsed.data.destination, passengers: pax });
+            pricing = resolved.pricingResult;
+            if (resolved.divergence) {
+              log.info(`[PRICING] Divergence: v3=${resolved.divergence.v3Price} v2=${resolved.divergence.v2Price} level=${resolved.divergence.level}`);
+            }
+            log.info(`[EXTRACTION] Pricing result: final_price=${pricing?.final_price} origin="${pricing?.origin.canonical_name}" dest="${pricing?.destination.canonical_name}"`);
+            if (pricing && pricing.final_price > 0) {
+              parsed.data.price = pricing.final_price;
+              confidenceResult.slots.price = { value: pricing.final_price, score: 1.0, reason: "backend_tariff_match" };
+            } else if (parsed.data.origin || parsed.data.destination) {
+              const route = parseRouteFromText(text);
+              const fbOrigin = route.origin;
+              const fbDest = route.destination;
+              if (fbOrigin && fbDest) {
+                const fbResolved = await resolvePricingForSlots({ origin: fbOrigin, destination: fbDest, passengers: parsed.data.passengers || 1 });
+                const fbPricing = fbResolved.pricingResult;
+                if (fbPricing.final_price > 0) {
+                  log.info(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbPricing.final_price}`);
+                  pricing = fbPricing;
+                  parsed.data.origin = fbOrigin;
+                  parsed.data.destination = fbDest;
+                  parsed.data.price = fbPricing.final_price;
+                  confidenceResult.slots.price = { value: fbPricing.final_price, score: 1.0, reason: "backend_tariff_match" };
+                  confidenceResult.slots.origin = { value: fbOrigin, score: 1.0, reason: "regex_fallback" };
+                  confidenceResult.slots.destination = { value: fbDest, score: 1.0, reason: "regex_fallback" };
+                }
               }
             }
           }
@@ -432,7 +467,7 @@ export async function runExtractionPipeline(
 
         await upsertChatSession(phone, mergedWithMemory, mergedConfidence, workflowResult.state, workflowResult.clarifyField ?? undefined, JSON.stringify(slotStates));
 
-        extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing);
+        extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing, multiRideBreakdown);
         log.info("[EXTRACTION] extractionNote generado, len:", extractionNote.length);
       } else {
         log.info("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
@@ -462,5 +497,5 @@ export async function runExtractionPipeline(
     }
   }
 
-  return { extractionNote, workflowResult, parsed, confidenceResult, pricing, prevSlotsEarly };
+  return { extractionNote, workflowResult, parsed, confidenceResult, pricing, prevSlotsEarly, multiRideBreakdown };
 }

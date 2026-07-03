@@ -25,6 +25,7 @@ import { buildExtractionContext } from "@/lib/services/workflow/build-extraction
 import { buildConfirmationMessage, buildNoTariffConfirmation } from "@/lib/ai/policy-reserva";
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 import { core } from "@/lib/ai/core";
+import type { MultiRideBreakdown } from "@/lib/db/types";
 import { CONFIRMATION_TIMEOUT_S } from "@/config/constants";
 import { log } from "@/lib/utils/logger";
 type CoreResult = ReturnType<typeof core>;
@@ -36,13 +37,14 @@ export interface PolicyPipelineInput {
   history: any[];
   customerName: string | null;
   leadCore: CoreResult;
-  extractionCtx: ExtractionContext | undefined;
+  extractionCtx?: ExtractionContext;
   pricing: PricingResult | undefined;
   workflowResult: SlotConversationalContext | undefined;
   confidenceResult: ExtractionResult | undefined;
   prevSlotsEarly: Record<string, string>;
   parsedData: TripExtraction | undefined;
   domain: ConversationDomain;
+  multiRideBreakdown?: MultiRideBreakdown;
   sessionUpdatedAt?: number;
 }
 
@@ -52,6 +54,7 @@ export async function handlePolicyPipeline(
   const {
     phone, text, conversation, history, customerName, leadCore,
     pricing, confidenceResult, workflowResult, prevSlotsEarly, parsedData, domain,
+    multiRideBreakdown,
     sessionUpdatedAt,
   } = input;
 
@@ -222,21 +225,39 @@ export async function handlePolicyPipeline(
           price: shortcutPricing?.final_price ?? null,
           scheduled_at: rawSlots.scheduled_at ?? null,
           passengers: paxCount,
+          multiLeg: multiRideBreakdown?.legs?.length ?? 0,
         });
-        await executeTrip({
-          conversationId: conversation.id,
-          phone,
-          origin,
-          destination,
-          passengers: paxCount,
-          pricingResult: shortcutPricing,
-          rawSlots,
-          session,
-          lang,
-          text,
-          history,
-          customerName: customerName ?? null,
-        }, execDeps);
+        if (multiRideBreakdown && multiRideBreakdown.legs.length > 0) {
+          const { executeMultiLegTrip } = await import("@/lib/services/trip-execution/trip-execution.service");
+          await executeMultiLegTrip({
+            conversationId: conversation.id,
+            phone,
+            passengers: paxCount,
+            pricingResult: shortcutPricing,
+            multiRideBreakdown,
+            rawSlots,
+            session,
+            lang,
+            text,
+            history,
+            customerName: customerName ?? null,
+          }, execDeps);
+        } else {
+          await executeTrip({
+            conversationId: conversation.id,
+            phone,
+            origin,
+            destination,
+            passengers: paxCount,
+            pricingResult: shortcutPricing,
+            rawSlots,
+            session,
+            lang,
+            text,
+            history,
+            customerName: customerName ?? null,
+          }, execDeps);
+        }
         await setConversationalState(phone, "idle");
       } else {
         await resetChatSession(phone);

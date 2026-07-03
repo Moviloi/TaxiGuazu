@@ -31,7 +31,8 @@ Devuelve un objeto JSON con estos campos (todos opcionales — incluí solo los 
   "flight": string | null,
   "urgency": "ahora" | "pronto" | "programado" | null,
   "customer_name": string | null,
-  "language": "es" | "en" | "pt" | "fr" | "de" | "it" | "zh" | null
+  "language": "es" | "en" | "pt" | "fr" | "de" | "it" | "zh" | null,
+  "legs": Array<{ "origin": string, "destination": string, "time"?: string }> | null
 }
 
 Reglas:
@@ -48,6 +49,11 @@ Reglas:
 - urgency: "ahora" si hay urgencia explícita, "programado" si hay fecha futura, "pronto" si es "en unas horas", null si no hay indicación.
 - customer_name: si el usuario se presenta ("me llamo Juan", "soy María", "es Juan").
 - language: detectá el idioma del mensaje del usuario. Solo si estás seguro (es, en, pt, fr, de, it, zh). Si no estás seguro, null.
+- legs: SOLO si el usuario describe MÚLTIPLES viajes en el mismo mensaje
+  (ej: "Ride 1: A→B, Ride 2: B→C", "primero de A a B, luego de B a C",
+  "viaje 1: ..., viaje 2: ..., viaje 3: ...").
+  Cada leg tiene origin, destination, y time (solo si el usuario dio hora específica).
+  Cuando hay legs, origin y destination representan el primer origen y último destino.
 
 NO inventes datos que no estén explícitamente en el message del usuario ni en el historial reciente.
 Respuesta SOLO JSON, sin texto adicional.

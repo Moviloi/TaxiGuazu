@@ -516,7 +516,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       phone, text, conversation.id, leadCore, history, customerName,
     );
     if (!extractionResult) return;
-    const { workflowResult, parsed, confidenceResult, pricing, prevSlotsEarly } = extractionResult;
+    const { workflowResult, parsed, confidenceResult, pricing, prevSlotsEarly, multiRideBreakdown } = extractionResult;
 
     // ── ZONE: POLICY PIPELINE ──
     const parsedData = parsed && parsed.success ? parsed.data : undefined;
@@ -544,6 +544,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       phone, text, conversation, history, customerName,
       leadCore, extractionCtx, pricing, workflowResult,
       confidenceResult, prevSlotsEarly, parsedData, domain,
+      multiRideBreakdown,
       sessionUpdatedAt: session?.updated_at,
     });
     log.info("[TRACE_PIPELINE_END]", { phone: phone.slice(-4), intent: leadCore.intent });

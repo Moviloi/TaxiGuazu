@@ -379,6 +379,29 @@ async function initSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_tariffs_route ON tariffs(LOWER(origin), LOWER(destination)) WHERE origin IS NOT NULL AND destination IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(LOWER(alias))`,
     `CREATE INDEX IF NOT EXISTS idx_aliases_place ON aliases(place_id)`,
+    `CREATE TABLE IF NOT EXISTS trip_groups (
+      id TEXT PRIMARY KEY,
+      client_phone TEXT NOT NULL,
+      total_price REAL,
+      passengers INTEGER,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','quoted','confirmed','executing','completed','cancelled')),
+      created_at INTEGER DEFAULT (unixepoch()),
+      updated_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS trip_legs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id TEXT NOT NULL REFERENCES trip_groups(id),
+      seq INTEGER NOT NULL,
+      origin TEXT NOT NULL,
+      destination TEXT NOT NULL,
+      scheduled_at INTEGER,
+      price REAL,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','quoted','confirmed','assigned','completed','cancelled')),
+      trip_id TEXT,
+      assigned_driver_phone TEXT,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_trip_legs_group ON trip_legs(group_id, seq)`,
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);
 
@@ -408,6 +431,15 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE zones ADD COLUMN surcharge_pct REAL DEFAULT 0",
     "ALTER TABLE places ADD COLUMN display_name TEXT DEFAULT ''",
     "ALTER TABLE places ADD COLUMN zone_id TEXT REFERENCES zones(zone_id)",
+    // CATASTRO HOTELERO: nuevos campos geoespaciales (2026-07-03)
+    "ALTER TABLE places ADD COLUMN barrio TEXT DEFAULT ''",
+    "ALTER TABLE places ADD COLUMN corredor_vial TEXT DEFAULT ''",
+    "ALTER TABLE places ADD COLUMN estrellas INTEGER DEFAULT 0",
+    "ALTER TABLE places ADD COLUMN direccion TEXT DEFAULT ''",
+    "ALTER TABLE places ADD COLUMN zona_turistica TEXT DEFAULT ''",
+    "ALTER TABLE places ADD COLUMN avenida_principal TEXT DEFAULT ''",
+    "ALTER TABLE places ADD COLUMN acceso_principal TEXT DEFAULT ''",
+    "ALTER TABLE places ADD COLUMN referencias TEXT DEFAULT ''",
   ];
   for (const sql of migrations) {
     try { await db.execute({ sql }); } catch { /* column may already exist */ }

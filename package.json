@@ -17,6 +17,7 @@
     "ael:validate": "npm test && npm run build && bash ael/contracts/enforce.sh",
     "test:watch": "vitest --config src/config/vitest.config.ts",
     "seed": "npx tsx scripts/seed-data.ts",
+    "migrate:catastro": "npx tsx scripts/migrate-catastro.ts",
     "security-check": "node scripts/precommit-security-check.mjs",
     "prepare": "husky"
   },
