@@ -21,6 +21,18 @@ describe("patterns — S6a internacionalización", () => {
     expect(isAffirmativeMessage("yes")).toBe(true);
   });
 
+  it("yrs → affirmativo (EN typo)", () => {
+    expect(isAffirmativeMessage("yrs")).toBe(true);
+  });
+
+  it("yeah → affirmativo (EN casual)", () => {
+    expect(isAffirmativeMessage("yeah")).toBe(true);
+  });
+
+  it("yep → affirmativo (EN casual)", () => {
+    expect(isAffirmativeMessage("yep")).toBe(true);
+  });
+
   it("sim, confirmado → affirmativo", () => {
     expect(isAffirmativeMessage("sim, confirmado")).toBe(true);
   });

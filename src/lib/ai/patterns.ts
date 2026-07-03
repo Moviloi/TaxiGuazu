@@ -27,14 +27,14 @@ export const AMBIGUOUS_LOCATION_TERMS = [
  * Incluye tokens de afirmación en español, portugués (sim) e inglés (yes).
  * Usa negative lookahead `(?![a-záéíóúñ])` para no cortar palabras con acentos.
  */
-export const AFFIRMATION_RE = /^(s[ií] confirmo|s[ií] dale|s[ií] gracias|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|de acuerdo|confirmado|perfecto|adelante|mandale|correcto|todo bien|est[aá] bien|confirmo|listo|s[ií]|sim|yes|ok|okey|dale)(?![a-záéíóúñ])/i;
+export const AFFIRMATION_RE = /^(s[ií] confirmo|s[ií] dale|s[ií] gracias|as[ií] est[aá] bien|est[aá] bien as[ií]|todo correcto|de acuerdo|confirmado|perfecto|adelante|mandale|correcto|todo bien|est[aá] bien|confirmo|listo|s[ií]|sim|yes|yrs|yeah|yep|ok|okey|dale)(?![a-záéíóúñ])/i;
 
 export function isAffirmativeMessage(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (AFFIRMATION_RE.test(t)) return true;
   // Fallback: detectar tokens sueltos incluso con ruido (espacios extra, puntuación)
   const clean = t.replace(/[^a-záéíóúñ\s]/g, "").trim();
-  return /\b(ok\b|dale\b|confirmo\b|sim\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b)/.test(clean);
+  return /\b(ok\b|dale\b|confirmo\b|sim\b|adelante\b|acepto\b|de acuerdo\b|viajamos\b|bueno\b.*\bdale\b|yrs\b|yeah\b|yep\b)/.test(clean);
 }
 
 const NEGATIVE_RE = /^(no\b|n[ãa]o\b|no gracias|no, gracias|no me interesa|no quiero|nop|nah)/i;
