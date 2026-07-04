@@ -56,7 +56,7 @@
     "ael-implementer": {
       "description": "Implementador — aplica cambios aprobados al codigo",
       "mode": "subagent",
-      "model": "opencodego/DeepSeek V4 Pro",
+      "model": "opencode/DeepSeek V4 Free",
       "permission": {
         "read": "allow",
         "glob": "allow",
