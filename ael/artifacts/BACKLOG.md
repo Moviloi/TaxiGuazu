@@ -127,6 +127,7 @@ Seguimiento del backlog completo del sistema: diagramas, deuda técnica, feature
 | DEBT-06 | i18n inline en 30+ bloques if/else | ai/ | P2 | `IN_PROGRESS` | ~15 bloques migrados (Fase 1-5). ~15 restantes (timeouts.ts, lead.service.ts, handler.ts — Fase 6-7). |
 | DEBT-07 | Violación AI→Services: response-builder importa OpportunityResult | ai/response-builder.ts | P2 | `DEFERRED` |
 | DEBT-08 | policy-pipeline.ts: 312 líneas, 6 dependencias cross-service | workflow/policy-pipeline.ts | P2 | `DEFERRED` | ⚠️ Parcialmente abordado por AIT-024a-d (tools Geo/Pricing/Dispatch/Fleet en P1). No re-hacer ese trabajo en P2. |
+| DEBT-11 | policy-pipeline.ts convierte PricingToolOutput → PricingResult en 5 call sites | workflow/policy-pipeline.ts | P2 | `DEFERRED` | ⚠️ En AIT-024b se creó `pricingToolOutputToResult()` para convertir PricingToolOutput → PricingResult en los 5 puntos donde buildExtractionContext, evaluateOpportunities, executeTrip, executeMultiLegTrip y executeNowTrip aún esperan PricingResult. Consumir PricingToolOutput directo en esos consumidores queda diferido — la conversión es el puente explícito sin as any. Cuando esos consumidores legacy se actualicen a PricingToolOutput, los 5 call sites se simplifican. |
 | DEBT-09 | Varios services usan getDb()/queryOne() directo (bypasean facade) | services/ | P2 | `DEFERRED` |
 | DEBT-10 | seed-data.ts: solo 7 zonas, 12 places, 20 tarifas (vs 18, 30, 60+ reales) | scripts/ | P2 | `DEFERRED` |
 

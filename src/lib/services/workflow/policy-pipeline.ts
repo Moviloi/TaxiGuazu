@@ -4,7 +4,7 @@ import { insertMessage, getChatSession, resetChatSession } from "@/lib/db/databa
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/pipeline";
 import { processLead } from "@/lib/pipeline";
-import { resolveGeoRoute } from "@/lib/services/geo/tool-geo";
+import { resolveGeoRoute } from "@/lib/services/geo/geo-engine";
 import { evaluateOpportunities, isOpportunityQuery } from "@/lib/services/learning/opportunity-engine";
 import { buildOpportunityNoPricingMessage, formatOpportunityResponse, buildCancellationMessage, buildNowDispatchResponse } from "@/lib/ai/response-builder";
 import { handleMessage } from "@/lib/ai/handler";
@@ -15,7 +15,7 @@ import { getPlaceDisplayName } from "@/lib/ai/display-name";
 import { canDispatch as isDispatchReady, canQuote as isQuoteReady, canPrepareQuote as isPrepareQuoteReady } from "@/lib/ai/operational-readiness";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
-import { resolvePricingForSlots, type PricingResult } from "@/lib/services/pricing/resolve-pricing-for-slots";
+import { pricingTool, pricingToolOutputToResult, type PricingToolOutput } from "@/lib/services/pricing/tool-pricing";
 import type { ExtractionContext, ConversationDomain, Mode, TemporalMode, OperationalMode, Lang } from "@/lib/ai/types";
 import { temporalFromFacts, operationalModeFromIntent, operationalModeToMode } from "@/lib/ai/types";
 import type { TripExtraction, ExtractionResult } from "@/lib/ai/extraction-schema";
@@ -38,7 +38,7 @@ export interface PolicyPipelineInput {
   customerName: string | null;
   leadCore: CoreResult;
   extractionCtx?: ExtractionContext;
-  pricing: PricingResult | undefined;
+  pricing: PricingToolOutput | undefined;
   workflowResult: SlotConversationalContext | undefined;
   confidenceResult: ExtractionResult | undefined;
   prevSlotsEarly: Record<string, string>;
@@ -64,7 +64,7 @@ export async function handlePolicyPipeline(
     parsedData,
     confidenceResult,
     workflowResult,
-    pricing,
+    pricing ? pricingToolOutputToResult(pricing) : undefined,
     leadCore?.roleLock,
     leadCore?.slotStability,
     prevSlotsEarly,
@@ -134,13 +134,13 @@ export async function handlePolicyPipeline(
   };
 
   if (isOpportunityQuery(text)) {
-    if (pricing && pricing.final_price > 0 && isQuoteReady(extractionCtx).allowed) {
+    if (pricing && pricing.finalPrice > 0 && isQuoteReady(extractionCtx).allowed) {
       const oppResult = await evaluateOpportunities({
-        pricingResult: pricing,
+        pricingResult: pricingToolOutputToResult(pricing),
         tripContext: {
           origin: parsedData?.origin ?? "",
           destination: parsedData?.destination ?? "",
-          tariff_id: pricing.tariff_id,
+          tariff_id: pricing.tariffId,
           passengers: parsedData?.passengers ?? 1,
         },
         userIntent: text,
@@ -216,9 +216,9 @@ export async function handlePolicyPipeline(
       const effectiveTemporal = temporal === "UNKNOWN" ? "NOW" : temporal;
       const shortcutDispatchReady = isDispatchReady(extractionCtx, effectiveTemporal);
       if (origin && destination && shortcutDispatchReady.allowed) {
-        const shortcutPricing = pricing && pricing.final_price > 0
+        const shortcutPricing = pricing && pricing.finalPrice > 0
           ? pricing
-          : (await resolvePricingForSlots({ origin, destination, passengers: paxCount })).pricingResult;
+          : await pricingTool.calculatePrice({ origin, destination, passengers: paxCount });
         log.info("[EXECUTION]", {
           executeNowTrip: false,
           executeTrip: true,
@@ -235,7 +235,7 @@ export async function handlePolicyPipeline(
             conversationId: conversation.id,
             phone,
             passengers: paxCount,
-            pricingResult: shortcutPricing,
+            pricingResult: pricingToolOutputToResult(shortcutPricing),
             multiRideBreakdown,
             rawSlots,
             session,
@@ -251,7 +251,7 @@ export async function handlePolicyPipeline(
             origin,
             destination,
             passengers: paxCount,
-            pricingResult: shortcutPricing,
+            pricingResult: pricingToolOutputToResult(shortcutPricing),
             rawSlots,
             session,
             lang,
@@ -318,7 +318,7 @@ export async function handlePolicyPipeline(
     temporal,
     nowExplicito: leadCore.intent === "NOW",
     dispatchReadyBlockedBy: dispatchReady.blockedBy,
-    pricingMatched: pricing?.final_price != null && pricing.final_price > 0,
+    pricingMatched: pricing?.finalPrice != null && pricing.finalPrice > 0,
   });
 
   // FASE 22.2 — Conversation phase log
@@ -356,7 +356,7 @@ export async function handlePolicyPipeline(
       executeTrip: false,
       origin: originValue ?? null,
       destination: destValue ?? null,
-      price: pricing?.final_price ?? null,
+      price: pricing?.finalPrice ?? null,
       scheduled_at: null,
       passengers: extractionCtx?.slots?.passengers?.value ?? 1,
     });
@@ -366,7 +366,7 @@ export async function handlePolicyPipeline(
       origin: String(originValue),
       destination: String(destValue),
       passengers: Number(extractionCtx?.slots?.passengers?.value ?? 1),
-      pricing: pricing && pricing.final_price > 0 ? pricing : undefined,
+      pricing: pricing && pricing.finalPrice > 0 ? pricingToolOutputToResult(pricing) : undefined,
       customerName,
       lang,
       text,

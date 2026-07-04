@@ -1,14 +1,11 @@
 // Tool Geo — contrato estable para resolución de ubicaciones.
 // Parte de AIT-020 (P1-tools). Wrapper alrededor de location-resolver.ts.
-// Consumido por el orquestador vía interfaz tipada.
+// Exporta SOLO la interfaz con Zod (GeoToolInput/Output/geoTool).
+// Las funciones originales se usan puertas adentro, no se re-exportan.
 
 import { z } from "zod";
 import { resolveLocation } from "./location-resolver";
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
-
-// Re-export de geo-engine.ts para compatibilidad con ExecutionDeps
-// (resolveGeoRoute no es resolución de ubicación, es clasificación de ruta)
-export { resolveGeoRoute } from "./geo-engine";
 
 // ── Tipos de entrada ──
 

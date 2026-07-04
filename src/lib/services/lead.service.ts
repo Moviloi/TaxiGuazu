@@ -26,6 +26,7 @@ import { startAmbiguityResolution, handleAmbiguityResponse } from "@/lib/service
 import { detectLangWithFallback } from "@/lib/detect-lang";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
+import { pricingResultToToolOutput } from "@/lib/services/pricing/tool-pricing";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
 import type { ExtractionContext } from "@/lib/ai/extraction-prompt";
 import { parseSessionSlots, parseConfidenceJson } from "@/lib/services/shared/session-helpers";
@@ -549,7 +550,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     });
     await handlePolicyPipeline({
       phone, text, conversation, history, customerName,
-      leadCore, extractionCtx, pricing, workflowResult,
+      leadCore, extractionCtx, pricing: pricing ? pricingResultToToolOutput(pricing) : undefined, workflowResult,
       confidenceResult, prevSlotsEarly, parsedData, domain,
       multiRideBreakdown,
       sessionLang: session?.lang,
