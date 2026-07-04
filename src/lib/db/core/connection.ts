@@ -408,6 +408,7 @@ async function initSchema(): Promise<void> {
 
   // FASE 5.2.5: Add new workflow state columns for domain separation
   const migrations = [
+    "ALTER TABLE chat_sessions ADD COLUMN lang TEXT",
     "ALTER TABLE chat_sessions ADD COLUMN conversational_state TEXT DEFAULT 'idle'",
     "ALTER TABLE chat_sessions ADD COLUMN dispatch_state TEXT DEFAULT 'idle'",
     "ALTER TABLE chat_sessions ADD COLUMN trip_state TEXT DEFAULT NULL",

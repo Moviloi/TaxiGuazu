@@ -1,37 +1,115 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/big-pickle",
-  "small_model": "opencode/big-pickle",
+  "default_agent": "ael",
+  "instructions": ["ael/AGENTS.md"],
   "agent": {
+    "ael": {
+      "description": "ARNES Director — orquesta pipeline de 7 fases para cambios al sistema",
+      "mode": "primary",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "ask",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "ael-explore": "allow",
+          "ael-audit": "allow",
+          "ael-architect": "allow",
+          "ael-implementer": "allow",
+          "ael-memory": "allow",
+          "ael-learning": "allow"
+        }
+      }
+    },
     "ael-explore": {
       "description": "Explorador — descubre estado real del codigo, solo lectura",
       "mode": "subagent",
-      "model": "opencode/DeepSeek V4 Flash"
+      "model": "opencode/DeepSeek V4 Flash",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny"
+      }
     },
     "ael-architect": {
       "description": "Arquitecto — valida diseno contra ADRs y contratos",
       "mode": "subagent",
-      "model": "opencode/DeepSeek V4 Flash"
+      "model": "opencode/DeepSeek V4 Flash",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny"
+      }
     },
     "ael-implementer": {
       "description": "Implementador — aplica cambios aprobados al codigo",
       "mode": "subagent",
-      "model": "opencodego/DeepSeek V4 Pro"
+      "model": "opencodego/DeepSeek V4 Pro",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "ask",
+        "bash": "ask"
+      }
     },
     "ael-audit": {
       "description": "Auditor — valida calidad con tests, lint, build, enforce",
       "mode": "subagent",
-      "model": "opencode/Nemotron"
+      "model": "opencode/Nemotron",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "npm test": "allow",
+          "npm run build": "allow",
+          "npm run lint": "allow",
+          "bash ael/contracts/enforce.sh*": "allow"
+        }
+      }
     },
     "ael-memory": {
       "description": "Memoria — conserva conocimiento estructurado del equipo",
       "mode": "subagent",
-      "model": "opencode/North Mini Code Free"
+      "model": "opencode/North Mini Code Free",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "ask",
+        "bash": "deny"
+      }
     },
     "ael-learning": {
       "description": "Aprendizaje — detecta patrones de exito y fallo",
       "mode": "subagent",
-      "model": "opencode/North Mini Code Free"
+      "model": "opencode/North Mini Code Free",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "ask",
+        "bash": "deny"
+      }
     }
   }
 }

@@ -36,8 +36,8 @@ function getAppSecret(): string | null {
 function verifySignature(rawBody: string, signatureHeader: string | null): boolean {
   const secret = getAppSecret();
   if (!secret) {
-    log.warn("[WEBHOOK] WHATSAPP_APP_SECRET not set — skipping signature verification");
-    return true;
+    log.error("[WEBHOOK] WHATSAPP_APP_SECRET not configured — cannot verify webhook signatures");
+    return false;
   }
   if (!signatureHeader) {
     log.warn("[WEBHOOK] No signature header — rejecting");
@@ -59,6 +59,27 @@ function normalizePhone(raw: string): string {
 
 function hashPayload(rawBody: string): string {
   return crypto.createHash("sha256").update(rawBody, "utf-8").digest("hex").slice(0, 32);
+}
+
+// ── Rate Limiting (sliding window per phone, via connection_state) ──
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+async function checkRateLimit(phone: string): Promise<boolean> {
+  const now = Date.now();
+  const key = `rate_limit_${phone}`;
+  const { getConnectionValue, setConnectionValue } = await import("@/lib/db/database");
+  const raw = await getConnectionValue(key);
+  if (raw) {
+    const counts: number[] = JSON.parse(raw);
+    const valid = counts.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+    if (valid.length >= RATE_LIMIT_MAX) return false;
+    valid.push(now);
+    await setConnectionValue(key, JSON.stringify(valid));
+  } else {
+    await setConnectionValue(key, JSON.stringify([now]));
+  }
+  return true;
 }
 
 export async function GET(request: NextRequest) {
@@ -87,15 +108,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // === RATE LIMIT (before any processing) ===
     const body = JSON.parse(rawBody);
-    const entry = body.entry?.[0];
-    const change = entry?.changes?.[0];
-    const message = change?.value?.messages?.[0];
-
-    if (!message) {
+    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (message) {
+      const phone = normalizePhone(message.from);
+      if (!(await checkRateLimit(phone))) {
+        log.warn("[WEBHOOK] Rate limit exceeded", { phone: phone.slice(-4) });
+        return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
+      }
+    } else {
       return NextResponse.json({ status: "ok" }, { status: 200 });
     }
-
+    // Re-parse for the rest of the flow (phone already normalized above)
     const phone = normalizePhone(message.from);
     const messageId: string | undefined = message.id;
     const messageType: string = message.type || "unknown";

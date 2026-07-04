@@ -26,6 +26,9 @@ const KNOWN_HOTELS: RegExp[] = [
 // Known POI detection patterns.
 const KNOWN_POIS: RegExp[] = [
   /\baduana\b/i,
+  /\bcustoms?\b/i,        // EN: "customs", "custom"
+  /\bborder\b/i,          // EN: "border", "border checkpoint"
+  /\balfândega\b/i,       // PT: "alfândega"
   /centro\s+igua[zúu]/i,
   /puerto\s+igua[zúu]/i,
   /\bcataratas\b/i,

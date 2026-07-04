@@ -168,18 +168,4 @@ lead.service → housekeeping/timeouts → trip-execution/survey.service → lea
 
 ## Glosario del dominio
 
-| Término | Definición |
-|---------|-----------|
-| **Intent** | Clasificación primaria de la intención del mensaje (11 valores) |
-| **Slot** | Campo de datos que el sistema necesita para procesar un viaje |
-| **Workflow** | Máquina de estados de la conversación (idle → nivel_1 → nivel_2 → ...) |
-| **Dispatch** | Asignación de un viaje a un chofer (nivel_1 → nivel_2 → nivel_3 → broadcast) |
-| **FunnelState** | Estado derivado del proceso de servicio (7 valores, no máquina de estados) |
-| **Serviceability** | Probabilidad de que TaxiGuazú pueda cumplir el viaje al precio cotizado |
-| **LeadMaturity** | Probabilidad de cierre basada en completitud de datos + señales de comportamiento |
-| **CustomerValue** | Tier estratégico del cliente (NEW / RETURNING / VIP / AT_RISK) |
-| **Role Lock** | Bloqueo de campos confirmados por el usuario — el LLM no los modifica |
-| **CoreDecision** | Salida del CORE: intent + facts + slot stability |
-| **OutputType** | Modo de respuesta seleccionado por ROUTER |
-| **Policy** | Generador de respuesta basado en reglas (sin LLM) |
-| **Lateral** | Manejo de intenciones laterales (EMERGENCY, RESCHEDULE, POST_SERVICE) |
+> Ver glosario completo en [glossary.md](./glossary.md). Este glosario es la fuente canónica — un solo lugar, mantenido en un solo archivo.
