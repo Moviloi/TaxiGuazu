@@ -1,7 +1,13 @@
 // POLICY AHORA — ejecución inmediata, sin estado, mínima inferencia.
 // policy es la ÚNICA fuente de finalResponse. Sin LLM.
 // Prohibido: pricing logic, inferencia geográfica, generación libre.
+//
+// AIT-033: valores hardcodeados extraídos a data/knowledge/policies/ahora.json.
+//   - policyHints vienen del JSON.
+//   - decisionRules documenta el orden del switch (solo referencia — el
+//     switch/case en TypeScript mantiene el orden cableado).
 
+import ahoraPolicies from "../../../data/knowledge/policies/ahora.json";
 import { buildGreeting, buildNowDispatchResponse, buildPriceInfo, buildLocationConfirmationResponse, buildGenericClarify } from "./response-builder";
 import type { SlotConfirmationUI } from "./slot-confirmation";
 import {
@@ -19,26 +25,13 @@ export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): Poli
   const { finalResponse, confirmationUI } = buildAhoraFinalResponse(decision, ctx, lang);
   const requiresUserInput = decision.decision === "CLARIFY";
 
-  let policyHint: string;
+  const policyHint = ahoraPolicies.policyHints[decision.decision] ?? ahoraPolicies.policyHints.SAFE_FALLBACK;
   let requiresConfirmation = false;
   let nextExpectedFields: string[] = [];
 
-  switch (decision.decision) {
-    case "EXECUTE":
-      policyHint = "AHORA: ejecutar acción inmediata.";
-      break;
-    case "ANSWER":
-      policyHint = "AHORA: responder directo sin seguimiento conversacional.";
-      break;
-    case "CLARIFY": {
-      policyHint = "AHORA: pedir solo el dato mínimo necesario.";
-      const next = resolveNextRequiredField(ctx, decision.core.facts);
-      nextExpectedFields = next.field ? [next.field] : [];
-      break;
-    }
-    case "SAFE_FALLBACK":
-    default:
-      policyHint = "AHORA: respuesta segura genérica sin inferencias.";
+  if (decision.decision === "CLARIFY") {
+    const next = resolveNextRequiredField(ctx, decision.core.facts);
+    nextExpectedFields = next.field ? [next.field] : [];
   }
 
   const output: PolicyOutput = {

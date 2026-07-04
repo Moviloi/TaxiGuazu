@@ -1,3 +1,4 @@
+import escalationPolicies from "../../../../data/knowledge/policies/escalation.json";
 import { updateChatSessionComprehension, insertF4Log, setChatSessionEscalationReason } from "@/lib/db/database";
 import { buildEscalationMessage, buildGenericClarify, inferMissingFieldFromCore } from "@/lib/ai/response-builder";
 import { enrichComprehensionSignals } from "@/lib/services/memory/predictive-routing";
@@ -13,8 +14,8 @@ import type { ChatSessionRow } from "@/lib/db/types";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 import { detectLangWithFallback } from "@/lib/detect-lang";
 
-// P0.10.3: Detección de frustración del usuario
-const FRUSTRATION_RE = /\b(ya\s+(te\s+)?dije|ya\s+respond[ií]|no\s+entend[ée]s|ya\s+lo\s+dije|te\s+lo\s+dije|obvio|evidente|ya\s+contest[ée]|repito|otra\s+vez|no\s+me\s+escuch[áa]s|no\s+le[ée]s|le[ée]\s+bien|ya\s+esta\s+respondid[ao]|ya\s+te\s+lo\s+dije|ya\s+te\s+contest[ée])\b/i;
+// P0.10.3: Detección de frustración del usuario (pattern desde escalation.json)
+const FRUSTRATION_RE = new RegExp(escalationPolicies.frustrationPattern, escalationPolicies.frustrationPatternFlags);
 
 export interface ComprehensionRunnerParams {
   phone: string;
@@ -105,7 +106,10 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
     const reason = `comprehension_score=${comprehensionScore.toFixed(2)} state=${comprehensionState}`;
     await setChatSessionEscalationReason(phone, reason);
     logEscalation(String(conversationId), reason, comprehensionScore);
-    await notifyAdmin(`⚠️ *ESCALACIÓN — Bajo nivel de comprensión*\n\nTeléfono: ******${phone.slice(-4)}\nScore: ${comprehensionScore.toFixed(2)}`);
+    const escAdminMsg = escalationPolicies.adminEscalationTemplate
+      .replace("{phoneSuffix}", phone.slice(-4))
+      .replace("{score}", comprehensionScore.toFixed(2));
+    await notifyAdmin(escAdminMsg);
     const escMsg = buildEscalationMessage();
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_ESCALATION", text: escMsg });
     await sendAndPersist(phone, conversationId, escMsg);
@@ -167,34 +171,12 @@ async function generateReinterpretResponse(
     const lang = detectLangWithFallback(userText, session?.lang);
     const langName = lang === "en" ? "English" : lang === "pt" ? "Portuguese" : "Spanish";
 
-    const scoreInfo = `(comprehension score: ${comprehensionScore.toFixed(2)}, where 1.0 = perfect, 0.0 = none)`;
-    const prompt = [
-      `Sos Cris, asistente de TaxiGuazú.`,
-      `El usuario escribió un mensaje que no pudimos interpretar automáticamente ${scoreInfo}.`,
-      ``,
-      `Mensaje del usuario: "${userText}"`,
-      ``,
-      context,
-      ``,
-      `IDIOMA_DETECTADO: ${langName} — Respondé EXCLUSIVAMENTE en ${langName}.`,
-      ``,
-      `Tu tarea:`,
-      `1. Leé el mensaje del usuario con mente abierta. ¿Qué podría estar queriendo decir?`,
-      `2. Si entendés algo (un origen, un destino, una queja, una consulta), respondé`,
-      `   con una frase corta y amable que demuestre que lo escuchaste y pedí`,
-      `   una aclaración específica.`,
-      `3. Si NO entendés absolutamente nada, respondé SOLO: "NULL" (sin comillas).`,
-      ``,
-      `Ejemplo: "Are you asking about a transfer from the border?`,
-      `Tell me where you need to go and I'll give you the price."`,
-      `Ejemplo: "Sorry, I didn't get that. Is it a trip from the border`,
-      `to the falls or from the falls to downtown?"`,
-      `Ejemplo de NO entender: "NULL"`,
-      ``,
-      `Máximo 2-3 líneas.`,
-      `No inventes datos. No agregues opciones numeradas.`,
-      `No uses la palabra NULL dentro de una respuesta válida.`,
-    ].join("\n");
+    const scoreStr = `(comprehension score: ${comprehensionScore.toFixed(2)}, where 1.0 = perfect, 0.0 = none)`;
+    const prompt = escalationPolicies.llmPrompts.reinterpretPrompt
+      .replace("{score}", scoreStr)
+      .replace("{userText}", userText)
+      .replace("{context}", context)
+      .replace("{langName}", langName);
 
     const raw = await provider.generateResponse(prompt, 150, 0.4);
     const cleaned = raw?.trim() ?? "";
@@ -231,28 +213,10 @@ async function generateFrustrationResponse(userText: string, session: ChatSessio
     const lang = detectLangWithFallback(userText, session?.lang);
     const langName = lang === "en" ? "English" : lang === "pt" ? "Portuguese" : "Spanish";
 
-    const prompt = [
-      `Sos Cris, asistente de TaxiGuazú.`,
-      `El usuario está frustrado porque siente que no lo estás escuchando.`,
-      ``,
-      `Mensaje del usuario: "${userText}"`,
-      ``,
-      context,
-      ``,
-      `IDIOMA_DETECTADO: ${langName} — Respondé EXCLUSIVAMENTE en ${langName}.`,
-      ``,
-      `Tu tarea:`,
-      `1. Reconocé brevemente la frustración del usuario (una frase corta, empática).`,
-      `2. Intentá entender qué está tratando de decirte.`,
-      `3. Respondé de forma que demuestres que lo escuchaste.`,
-      ``,
-      `Ejemplo: "Sorry, you're right. I understand you said you're leaving from the airport. Where do you need to go?"`,
-      `Malo: "Where are you leaving from?" (ignores what they said, repeats question)`,
-      ``,
-      `Máximo 2-3 líneas.`,
-      `No inventes datos. No agregues opciones numeradas.`,
-      `Si el usuario mencionó un dato específico (origen, destino, pasajeros), reconocelo.`,
-    ].join("\n");
+    const prompt = escalationPolicies.llmPrompts.frustrationPrompt
+      .replace("{userText}", userText)
+      .replace("{context}", context)
+      .replace("{langName}", langName);
 
     return await provider.generateResponse(prompt, 120, 0.3);
   } catch (e) {

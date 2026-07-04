@@ -7,7 +7,13 @@
 // Cualquier ambigüedad → CLARIFY explícito. La detección de hoteles/landmarks
 // ambiguos (amerian, meliá, etc.) genera preguntas específicas sin asumir
 // estructura de ruta turística.
+//
+// AIT-033: valores hardcodeados extraídos a data/knowledge/policies/reserva.json.
+//   - policyHints, thresholds, adminNotifyTemplates vienen del JSON.
+//   - decisionPriority documenta el orden de la cascada (solo referencia — el
+//     if/else en TypeScript mantiene el orden cableado).
 
+import reservaPolicies from "../../../data/knowledge/policies/reserva.json";
 import { buildGenericClarify, buildGenericSafeFallback, buildPriceInfo, buildLocationConfirmationResponse } from "./response-builder";
 import type { SlotConfirmationUI } from "./slot-confirmation";
 import { resolveNextRequiredField } from "./field-resolver";
@@ -75,21 +81,7 @@ export function policyReserva(decision: FinalDecision, ctx?: HandlerContext): Po
   const finalResponse = built.finalResponse;
   const confirmationUI = built.confirmationUI;
 
-  let policyHint: string;
-  switch (decision.decision) {
-    case "EXECUTE":
-      policyHint = "RESERVA: ejecutar acción con confirmación obligatoria.";
-      break;
-    case "ANSWER":
-      policyHint = "RESERVA: responder con contexto si existe.";
-      break;
-    case "CLARIFY":
-      policyHint = "RESERVA: pedir clarificación estructurada.";
-      break;
-    case "SAFE_FALLBACK":
-    default:
-      policyHint = "RESERVA: requerir confirmación antes de actuar.";
-  }
+  const policyHint = reservaPolicies.policyHints[decision.decision] ?? reservaPolicies.policyHints.SAFE_FALLBACK;
 
   // EXECUTION METADATA: cuando la reserva está completa (confirmación con tarifa),
   // el pipeline ejecuta geo + saveContext como efectos secundarios.
@@ -288,7 +280,8 @@ export function buildConfirmationMessage(extraction: ExtractionContext, lang: La
       `Passengers: ${pax}`,
     ];
     if (date) parts.push(`When: ${date}`);
-    parts.push(`Price: $${price} ARS (up to ${pax > 4 ? 6 : 4} passengers).`);
+    const maxCap = pax > reservaPolicies.thresholds.maxPassengersNormal ? reservaPolicies.thresholds.maxPassengersHigh : reservaPolicies.thresholds.maxPassengersNormal;
+    parts.push(`Price: $${price} ARS (up to ${maxCap} passengers).`);
     parts.push(`Do you confirm?`);
     return parts.join("\n");
   }
@@ -300,12 +293,14 @@ export function buildConfirmationMessage(extraction: ExtractionContext, lang: La
       `Passageiros: ${pax}`,
     ];
     if (date) parts.push(`Data/hora: ${date}`);
-    parts.push(`Valor: R$ ${price} ARS (até ${pax > 4 ? 6 : 4} passageiros).`);
+    const maxCap = pax > reservaPolicies.thresholds.maxPassengersNormal ? reservaPolicies.thresholds.maxPassengersHigh : reservaPolicies.thresholds.maxPassengersNormal;
+    parts.push(`Valor: R$ ${price} ARS (até ${maxCap} passageiros).`);
     parts.push(`Confirma?`);
     return parts.join("\n");
   }
 
-  const paxLabel = pax > 4 ? "hasta 6 pasajeros" : "hasta 4 pasajeros";
+  const maxCap = pax > reservaPolicies.thresholds.maxPassengersNormal ? reservaPolicies.thresholds.maxPassengersHigh : reservaPolicies.thresholds.maxPassengersNormal;
+  const paxLabel = `hasta ${maxCap} pasajeros`;
   const parts = [
     `Resumen del viaje:`,
     `Origen: ${origin}`,
@@ -406,7 +401,7 @@ function buildStableAcknowledge(extraction: ExtractionContext, lang: Lang): { re
 
   // FASE 18.1: preguntar pasajeros antes que horario
   const paxScore = extraction.slots.passengers?.score ?? 0;
-  if (paxScore < 0.7) {
+  if (paxScore < reservaPolicies.thresholds.paxScoreMin) {
     return { response: t("booking.acknowledgePax", lang, { origin: originStr, dest: destStr }), nextField: "passengers" };
   }
 
@@ -471,12 +466,10 @@ function buildLateralPostServiceResponse(lang: Lang): string {
 
 export function buildAdminNotifyBody(intent: string, phone: string | undefined, userText: string | undefined): string {
   const msg = userText ?? "";
-  const truncated = msg.substring(0, 200);
-  if (intent === "EMERGENCY") {
-    return `🚨 *EMERGENCIA — Cliente pide ayuda urgente*\n\nTeléfono: ${phone ?? "unknown"}\nMensaje: "${truncated}"`;
-  }
-  if (intent === "RESCHEDULE") {
-    return `🔄 *REPROGRAMACIÓN — Cliente quiere modificar su viaje*\n\nTeléfono: ${phone ?? "unknown"}\nMensaje: "${truncated}"`;
-  }
-  return "";
+  const truncated = msg.substring(0, reservaPolicies.thresholds.adminNotifyTruncation);
+  const template = intent === "EMERGENCY" ? reservaPolicies.adminNotifyTemplates.EMERGENCY
+    : intent === "RESCHEDULE" ? reservaPolicies.adminNotifyTemplates.RESCHEDULE
+    : null;
+  if (!template) return "";
+  return template.replace("{phone}", phone ?? "unknown").replace("{msg}", truncated);
 }

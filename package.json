@@ -16,6 +16,8 @@
     "ael:enforce": "bash ael/contracts/enforce.sh",
     "ael:validate": "npm test && npm run build && bash ael/contracts/enforce.sh",
     "test:watch": "vitest --config src/config/vitest.config.ts",
+    "validate-knowledge": "npx tsx scripts/validate-knowledge.ts",
+"validate-schema-parity": "npx tsx scripts/validate-schema-parity.ts",
     "seed": "npx tsx scripts/seed-data.ts",
     "migrate:catastro": "npx tsx scripts/migrate-catastro.ts",
     "security-check": "node scripts/precommit-security-check.mjs",

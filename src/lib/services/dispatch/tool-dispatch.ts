@@ -34,6 +34,40 @@ export const DispatchToolOutputSchema = z.object({
 });
 export type DispatchToolOutput = z.infer<typeof DispatchToolOutputSchema>;
 
+// ── Mapper explícito: DispatchToolInput → TripRow (sin casts) ──
+
+function toTripRow(trip: DispatchToolInput["trip"]): TripRow {
+  return {
+    trip_id: trip.trip_id,
+    client_phone: trip.client_phone,
+    origin: trip.origin,
+    destination: trip.destination,
+    price_base: trip.price_base,
+    passengers: trip.passengers,
+    scheduled_at: trip.scheduled_at,
+    // defaults seguros — el dispatch.service.ts completa según el flujo
+    status: null,
+    assigned_driver_phone: null,
+    created_at: null,
+    updated_at: null,
+    confirmed_at: null,
+    contact_shared_at: null,
+    commission_amount: null,
+    commission_paid: null,
+    comision_declarada: null,
+    driver_payout: null,
+    flight_number: null,
+    hotel_destination: null,
+    survey_sent: null,
+    post_trip_response: null,
+    tariff_id: null,
+    piso_base: null,
+    garantizado_base: null,
+    trip_phase: null,
+    closure_reason: null,
+  };
+}
+
 // ── Interfaz del tool ──
 
 export interface DispatchTool {
@@ -48,7 +82,7 @@ export const dispatchTool: DispatchTool = {
     const result = await executeDispatch({
       conversationId: parsed.conversationId,
       phone: parsed.phone,
-      trip: parsed.trip as unknown as TripRow,
+      trip: toTripRow(parsed.trip),
       urgency: parsed.urgency,
       passengers: parsed.passengers,
     });

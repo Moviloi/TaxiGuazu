@@ -17,7 +17,10 @@
 // - Cualquier output final al usuario debe pasar assertOutputSource("POLICY").
 // - El pipeline completo debe estar armado antes de emitir (assertPipelineComplete).
 // - LEADING PRINCIPLE: toda validación usa parámetros explícitos, no estado global.
+//
+// AIT-033: mensajes de error extraídos a data/knowledge/policies/escalation.json.
 
+import escalationPolicies from "../../../data/knowledge/policies/escalation.json";
 import type { CoreDecision, OutputSource, PolicyOutput, FinalDecision } from "./types";
 import { log } from "@/lib/utils/logger";
 
@@ -54,7 +57,7 @@ export function assertCoreRouterPolicy(): true | BlockResult {
 export function assertOutputSource(source: OutputSource | string): true {
   if (source !== "POLICY") {
     const err = new Error(
-      `OUTPUT_VIOLATION: NON_POLICY_RESPONSE_BLOCKED (source=${source ?? "undefined"})`,
+      escalationPolicies.guardMessages.outputViolation.replace("{source}", source ?? "undefined"),
     );
     log.error("[OUTPUT_VIOLATION]", err.message);
     throw err;
@@ -76,7 +79,10 @@ export function assertPipelineComplete(
     const block: BlockResult = {
       status: "BLOCKED_LEGACY_FLOW",
       reason: "PIPELINE_INCOMPLETE",
-      context: `core=${!!core} router=${!!decision} policy=${!!policy}`,
+      context: escalationPolicies.guardMessages.pipelineIncompleteTemplate
+        .replace("{core}", String(!!core))
+        .replace("{router}", String(!!decision))
+        .replace("{policy}", String(!!policy)),
     };
     log.info("[BLOCKED]", block);
     return block;

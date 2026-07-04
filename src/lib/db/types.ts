@@ -72,6 +72,37 @@ export interface TripRow {
   closure_reason: TripClosureReason | null;
 }
 
+// Tipos para event sourcing de Trip (append-only audit log)
+export type TripEventType =
+  | "TripCreated" | "TripDriverAssigned" | "TripReconfirmed"
+  | "TripCompleted" | "TripCancelled";
+
+export interface TripEventRow {
+  id: number;
+  trip_id: string;
+  event_type: TripEventType;
+  payload: string | null;
+  occurred_at: number;
+  actor: string;
+}
+
+// Tipos para event sourcing de Dispatch (append-only audit log de asignación)
+export type DispatchEventType =
+  | "DispatchInitiated" | "DispatchOffered" | "DispatchBroadcasted"
+  | "DispatchAccepted" | "DispatchAbandoned" | "DispatchContingency";
+
+export type DispatchEventLevel = "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver";
+
+export interface DispatchEventRow {
+  id: number;
+  trip_id: string;
+  event_type: DispatchEventType;
+  level: DispatchEventLevel | null;
+  actor_phone: string | null;
+  metadata: string | null;
+  occurred_at: number;
+}
+
 export type DriverStatus = "pending" | "active" | "inactive" | "blocked";
 
 export interface DriverRow {
