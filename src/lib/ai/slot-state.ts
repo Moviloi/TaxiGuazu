@@ -61,6 +61,25 @@ export function buildSlotStates(
       }
     }
 
+    // AIT-062: destination/origin inferido como cruce de frontera
+    // cuando el usuario menciona "aduana" sin especificar lado.
+    // El motor border-inference.ts determina el lado según país del
+    // otro slot o airport_code. Requiere confirmación.
+    // Se ejecuta ANTES del bloque "preserve prev" (misma lógica que AIT-061).
+    if (
+      (k === "destination" || k === "origin") &&
+      slot.reason === "inferred_border_crossing" &&
+      slot.value != null
+    ) {
+      if (hasAffirmation) {
+        source = "USER_CONFIRMED";
+        status = "CONFIRMED";
+      } else {
+        source = "SYSTEM_INFERRED";
+        status = "CONFIRMATION_PENDING";
+      }
+    }
+
     // Preserve previous CONFIRMED status if value unchanged (not a correction/affirmation event)
     const prev = prevStates[k];
     if (prev && prev.status === "CONFIRMED" && !hasCorrection && !hasAffirmation) {

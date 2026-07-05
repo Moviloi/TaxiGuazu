@@ -449,6 +449,38 @@ export const CATALOG: CatalogMap = {
     "A que horas você precisa do traslado?",
     "What time do you need the transfer?",
   ),
+
+  // ─── 22. BORDER INFERENCE (AIT-062) ────────────────────────────────────
+  "border.ar": _(
+    "Aduana Argentina (Puente Tancredo Neves)",
+    "Alfândega Argentina (Ponte Tancredo Neves)",
+    "Argentine Customs (Tancredo Neves Bridge)",
+  ),
+  "border.br": _(
+    "Aduana Brasileña (Puente Tancredo Neves)",
+    "Alfândega Brasileira (Ponte Tancredo Neves)",
+    "Brazilian Customs (Tancredo Neves Bridge)",
+  ),
+  "border.br_py": _(
+    "Aduana Brasileña (Puente de la Amistad)",
+    "Alfândega Brasileira (Ponte da Amizade)",
+    "Brazilian Customs (Friendship Bridge)",
+  ),
+  "border.py": _(
+    "Aduana Paraguay (Puente de la Amistad)",
+    "Alfândega Paraguai (Ponte da Amizade)",
+    "Paraguay Customs (Friendship Bridge)",
+  ),
+  "border.suggest": fn(
+    (p) => `¿Te recojo en ${p.border}?`,
+    (p) => `Busco você na ${p.border}?`,
+    (p) => `Shall I pick you up at ${p.border}?`,
+  ),
+  "border.ask": _(
+    "¿Del lado argentino o brasileño?",
+    "Do lado argentino ou brasileiro?",
+    "Argentine or Brazilian side?",
+  ),
 };
 
 // Tipo helper para type safety — no es un enum real, solo para documentación

@@ -16,6 +16,7 @@ import type { CoreDecision, ConfidenceMap } from "@/lib/ai/types";
 import { mapIntentToDomain } from "@/lib/ai/domain";
 import { calculateSlotConfidence } from "@/lib/services/extraction/confidence";
 import { inferPickupTime } from "@/lib/services/extraction/time-inference";
+import { inferBorderSide } from "@/lib/services/extraction/border-inference";
 import { buildConfidenceMap } from "@/lib/services/extraction/confidence-map";
 import { loadContext, mergeContext } from "@/lib/services/memory/context-memory";
 import { detectLeadLang } from "@/lib/detect-lang";
@@ -371,6 +372,61 @@ export async function runExtractionPipeline(
               combinedDatetime,
               reason: timeInference.displayReason,
             });
+          }
+        }
+
+        // AIT-062: Inferencia de frontera post-extracción
+        // Si destination u origin es término de aduana ("aduana"/"customs"/"border"/"alfândega")
+        // con reason "unknown_location", inferir el lado de frontera según el país
+        // del otro slot resuelto o del airport_code.
+        // Se ejecuta ANTES del bloque prevSlotsEarly para que preserve prev pueda
+        // restaurar CONFIRMED si el valor ya fue confirmado y no cambió.
+        {
+          const destSlotInfer = confidenceResult.slots.destination;
+          const originSlotInfer = confidenceResult.slots.origin;
+          const airportCodeSlot = confidenceResult.slots.airport_code;
+          const airportCodeVal = airportCodeSlot?.value != null ? String(airportCodeSlot.value) : null;
+
+          const borderInference = await inferBorderSide(
+            destSlotInfer?.value != null ? String(destSlotInfer.value) : null,
+            destSlotInfer?.score ?? 0,
+            destSlotInfer?.reason ?? "",
+            originSlotInfer?.value != null ? String(originSlotInfer.value) : null,
+            originSlotInfer?.score ?? 0,
+            originSlotInfer?.reason ?? "",
+            airportCodeVal,
+          );
+
+          if (borderInference.confidence === "inferred" && borderInference.borderName != null) {
+            // Determinar si el slot a reemplazar es destination u origin
+            const destIsBorder = destSlotInfer?.value != null &&
+              /\b(aduana|customs?|border|alfândega)\b/i.test(String(destSlotInfer.value)) &&
+              destSlotInfer.reason === "unknown_location";
+
+            if (destIsBorder) {
+              confidenceResult.slots.destination = {
+                value: borderInference.borderName,
+                score: 0.8,
+                reason: "inferred_border_crossing",
+              };
+              log.info("[BORDER_INFERENCE] destination inferido como cruce:", {
+                borderName: borderInference.borderName,
+                country: borderInference.inferredCountry,
+                crossing: borderInference.crossing,
+              });
+            } else {
+              // Si no es destination, reemplazar origin
+              confidenceResult.slots.origin = {
+                value: borderInference.borderName,
+                score: 0.8,
+                reason: "inferred_border_crossing",
+              };
+              log.info("[BORDER_INFERENCE] origin inferido como cruce:", {
+                borderName: borderInference.borderName,
+                country: borderInference.inferredCountry,
+                crossing: borderInference.crossing,
+              });
+            }
           }
         }
 
