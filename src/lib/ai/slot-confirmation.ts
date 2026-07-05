@@ -17,13 +17,18 @@ export function shouldRequestConfirmation(extractionCtx?: ExtractionContext): bo
   if (!extractionCtx?.slots) return false;
   const origin = extractionCtx.slots.origin;
   const dest = extractionCtx.slots.destination;
+  const airportCode = extractionCtx.slots.airport_code;
   const originNeedsConfirm = origin?.value != null && (
     origin.status === "CONFIRMATION_PENDING" || origin.status === "INFERRED"
   );
   const destNeedsConfirm = dest?.value != null && (
     dest.status === "CONFIRMATION_PENDING" || dest.status === "INFERRED"
   );
-  return originNeedsConfirm || destNeedsConfirm;
+  // AIT-060: airport_code inferido necesita confirmación
+  const airportNeedsConfirm = airportCode?.value != null && (
+    airportCode.status === "CONFIRMATION_PENDING" || airportCode.status === "INFERRED"
+  );
+  return originNeedsConfirm || destNeedsConfirm || airportNeedsConfirm;
 }
 
 export function buildSlotConfirmationMessage(
@@ -33,6 +38,7 @@ export function buildSlotConfirmationMessage(
   const origin = extractionCtx.slots.origin;
   const dest = extractionCtx.slots.destination;
   const passengers = extractionCtx.slots.passengers;
+  const airportCode = extractionCtx.slots.airport_code;
 
   const originDisplay = extractionCtx.tariff?.displayOrigin
     ?? (origin?.value != null ? String(origin.value) : "?");
@@ -60,6 +66,18 @@ export function buildSlotConfirmationMessage(
     );
   }
 
+  // AIT-060: Incluir airport_code si está presente (inferido por OI layer)
+  if (airportCode?.value != null) {
+    const display = `🛩️ ${airportCode.value}`;
+    lines.push(
+      "",
+      t("confirm.airport", lang),
+      airportCode.status === "CONFIRMATION_PENDING" || airportCode.status === "INFERRED"
+        ? `⚠️ ${display}`
+        : display,
+    );
+  }
+
   lines.push("", t("confirm.ask", lang));
 
   log.info("[SLOT_CONFIRMATION_UI]", {
@@ -67,6 +85,7 @@ export function buildSlotConfirmationMessage(
       ...(origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? ["origin"] : []),
       ...(dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? ["destination"] : []),
       ...(passengers?.status === "CONFIRMATION_PENDING" || passengers?.status === "INFERRED" ? ["passengers"] : []),
+      ...(airportCode?.status === "CONFIRMATION_PENDING" || airportCode?.status === "INFERRED" ? ["airport_code"] : []),
     ],
     confidence: extractionCtx.overallConfidence,
     availableActions: ["confirm", "change"],
@@ -74,6 +93,7 @@ export function buildSlotConfirmationMessage(
     originDisplay,
     destDisplay,
     passengersDisplay: passengers?.value ?? null,
+    airportCodeDisplay: airportCode?.value ?? null,
   });
 
   return {
@@ -82,6 +102,7 @@ export function buildSlotConfirmationMessage(
       ...(origin?.status === "CONFIRMATION_PENDING" || origin?.status === "INFERRED" ? ["origin"] : []),
       ...(dest?.status === "CONFIRMATION_PENDING" || dest?.status === "INFERRED" ? ["destination"] : []),
       ...(passengers?.status === "CONFIRMATION_PENDING" || passengers?.status === "INFERRED" ? ["passengers"] : []),
+      ...(airportCode?.status === "CONFIRMATION_PENDING" || airportCode?.status === "INFERRED" ? ["airport_code"] : []),
     ],
     message: lines.join("\n"),
     buttons: [

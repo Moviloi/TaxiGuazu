@@ -5,7 +5,7 @@ import { AMBIGUOUS_LOCATION_TERMS } from "@/lib/ai/patterns";
 
 const CONFIDENCE_AMBIGUOUS = 0.6;
 
-type SlotKey = "origin" | "destination" | "passengers" | "price" | "scheduled_at" | "flight" | "urgency" | "customer_name";
+type SlotKey = "origin" | "destination" | "passengers" | "price" | "scheduled_at" | "flight" | "urgency" | "customer_name" | "airport_code";
 
 const RELATIVE_DAY_RE = /\b(hoy|mañana|pasado\s*mañana|esta\s*semana|próximos?\s*días)\b/i;
 const AMBIGUOUS_PAX_RE = /\b(varios?|unas?|familia|grupo|compañía|tripulación|gente|personas?)\b/i;
@@ -114,6 +114,13 @@ export async function calculateSlotConfidence(
     slots.customer_name = { value: extractedData.customer_name, score: 1.0, reason: "direct_extraction" };
   } else {
     slots.customer_name = { value: null, score: 0.0, reason: "missing" };
+  }
+
+  // ── Airport Code (AIT-060) ──
+  // Solo se setea cuando el usuario menciona explícitamente IGR/IGU/AGT.
+  // Las inferencias del OI layer (airport-inference.ts) se agregan en pipeline con score < 1.0.
+  if (extractedData.airport_code) {
+    slots.airport_code = { value: extractedData.airport_code, score: 1.0, reason: "explicit" };
   }
 
   // ── Determine urgency mode ──

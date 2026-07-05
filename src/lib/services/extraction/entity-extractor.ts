@@ -57,6 +57,10 @@ function findPOIMatch(text: string): string | null {
 
 // Check if the entity appears as a primary noun phrase (not inside a larger
 // ambiguous phrase like "en el centro" where "centro" is a generic descriptor).
+// Explicit IATA airport code detection (IGR, IGU, AGT)
+// Captura código explícito como destino/origen y lo resuelve vía DB.
+const AIRPORT_CODE_RE = /\b(IGR|IGU|AGT)\b/i;
+
 function isDirectEntityMention(text: string, match: string): boolean {
   if (GENERIC_TERMS_RE.test(match)) return false;
   const lowerText = text.toLowerCase();
@@ -68,6 +72,46 @@ function isDirectEntityMention(text: string, match: string): boolean {
 
 export async function entityExtractSlots(text: string): Promise<TripExtraction | null> {
   const lower = text.toLowerCase();
+
+  // ── EXPLICIT AIRPORT CODE DETECTION ──
+  // Si el usuario escribe IGR, IGU o AGT, resolver a nombre canónico del aeropuerto.
+  // Esto corre ANTES de hotel/POI porque un código IATA es la señal más fuerte
+  // de intención de ubicación.
+  const airportCodeMatch = lower.match(AIRPORT_CODE_RE);
+  if (airportCodeMatch) {
+    const resolved = await resolveLocation(airportCodeMatch[0]);
+    if (resolved?.canonical_name) {
+      const code = airportCodeMatch[0].toUpperCase() as "IGR" | "IGU" | "AGT";
+      const hasOriginMarker = /(?:desde|de|salgo|origen|estoy)\s+.{0,30}?/.test(lower);
+      const hasDestMarker = /(?:a|hacia|para|voy|llegada|destino)/.test(lower);
+
+      if (hasOriginMarker && !hasDestMarker) {
+        return {
+          origin: resolved.canonical_name,
+          destination: null,
+          passengers: null,
+          price: null,
+          scheduled_at: null,
+          flight: null,
+          urgency: null,
+          customer_name: null,
+          airport_code: code,
+        };
+      }
+
+      return {
+        origin: null,
+        destination: resolved.canonical_name,
+        passengers: null,
+        price: null,
+        scheduled_at: null,
+        flight: null,
+        urgency: null,
+        customer_name: null,
+        airport_code: code,
+      };
+    }
+  }
 
   // ── HOTEL/LANDMARK DETECTION ──
   // Hotels are assigned to destination by default since users mention

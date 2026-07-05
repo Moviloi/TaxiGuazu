@@ -54,6 +54,31 @@ export function buildSlotStates(
       }
     }
 
+    // AIT-060: airport_code — distingue entre código explícito del usuario
+    // (CONFIRMED, no requiere confirmación) e inferencia del sistema
+    // (CONFIRMATION_PENDING, requiere confirmación).
+    if (k === "airport_code" && slot.value != null) {
+      if (hasAffirmation) {
+        source = "USER_CONFIRMED";
+        status = "CONFIRMED";
+      } else if (slot.reason === "user_confirmed") {
+        source = "USER_CONFIRMED";
+        status = "CONFIRMED";
+      } else if (slot.reason === "explicit" || slot.score >= 1.0) {
+        // Usuario escribió el código explícitamente (entity-extractor / regex)
+        source = "USER_PROVIDED";
+        status = "CONFIRMED";
+      } else if (slot.score > 0) {
+        // Sistema infirió basado en ciudad/contexto (airport-inference)
+        source = "SYSTEM_INFERRED";
+        status = "CONFIRMATION_PENDING";
+      } else {
+        // Sin puntaje ni razón — seguridad: requiere confirmación
+        source = "SYSTEM_INFERRED";
+        status = "CONFIRMATION_PENDING";
+      }
+    }
+
     // Apply correction override (value changed from previous)
     if (hasCorrection && (k === "origin" || k === "destination")) {
       const prevVal = prevSlotValues[k];
