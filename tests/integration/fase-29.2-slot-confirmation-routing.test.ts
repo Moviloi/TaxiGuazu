@@ -13,6 +13,7 @@ vi.mock("@/lib/db/database", () => ({
   findPlaceByName: vi.fn().mockResolvedValue(null),
   findTariffByPriority: vi.fn().mockResolvedValue(null),
   queryOne: vi.fn().mockResolvedValue(null),
+  isSuggestionEnabled: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/lib/db/core/helpers", () => ({
   queryOne: vi.fn().mockResolvedValue(null),

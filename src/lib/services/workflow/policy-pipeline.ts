@@ -1,6 +1,6 @@
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
 import { shouldRequestConfirmation, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
-import { insertMessage, getChatSession, resetChatSession } from "@/lib/db/database";
+import { insertMessage, getChatSession, resetChatSession, isSuggestionEnabled } from "@/lib/db/database";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/pipeline";
 import { processLead } from "@/lib/pipeline";
@@ -285,7 +285,12 @@ export async function handlePolicyPipeline(
         confirmCtx = { ...confirmCtx!, tariff: { matched: false, ...confirmCtx?.tariff, displayDestination: dn.displayName } };
       } catch { /* fallback: canonical name */ }
     }
-    const confirm = buildSlotConfirmationMessage(confirmCtx!, lang);
+    // AIT-064: cargar tipos de sugerencia habilitados por learning loop
+    const enabledSuggestionTypes = new Set<string>();
+    for (const st of ["airport", "time", "border"] as const) {
+      if (await isSuggestionEnabled(st)) enabledSuggestionTypes.add(st);
+    }
+    const confirm = buildSlotConfirmationMessage(confirmCtx!, lang, enabledSuggestionTypes);
     log.info("[SLOT_CONFIRMATION_UI]", {
       pendingSlots: confirm.pendingSlots,
       message: confirm.message?.substring(0, 80),

@@ -8,6 +8,7 @@ vi.mock("@/lib/db/database", () => ({
   findPlaceByAlias: vi.fn().mockResolvedValue(null),
   findPlaceByName: vi.fn().mockResolvedValue(null),
   queryOne: vi.fn().mockResolvedValue(null),
+  isSuggestionEnabled: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/lib/db/core/helpers", () => ({
   queryOne: vi.fn().mockResolvedValue(null),

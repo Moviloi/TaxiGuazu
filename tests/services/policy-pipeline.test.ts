@@ -7,6 +7,7 @@ vi.mock("@/lib/db/database", () => ({
   getChatSession: vi.fn(),
   insertMessage: vi.fn().mockResolvedValue(1),
   resetChatSession: vi.fn().mockResolvedValue(undefined),
+  isSuggestionEnabled: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/lib/db/state-accessors", () => ({
   getConversationalState: vi.fn(),

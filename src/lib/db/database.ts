@@ -860,6 +860,9 @@ export {
   insertOrIgnorePolicy,
   countActiveConversations,
   cleanupOldLearningRecords,
+  isSuggestionEnabled,
+  setSuggestionEnabled,
+  getSuggestionAcceptanceRates,
 } from "./domains/learning";
 export {
   findPlaceByAlias,

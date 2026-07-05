@@ -295,6 +295,63 @@ export async function countActiveConversations(sinceTimestamp: number): Promise<
   return Number(row?.c ?? 0);
 }
 
+// ========== AIT-064: suggestion learning loop ==========
+// Consultas para habilitar/deshabilitar sugerencias según tasa de aceptación real.
+// Sin registro en learning_weights → habilitado por defecto (comportamiento pre-AIT-064).
+
+export async function isSuggestionEnabled(type: string): Promise<boolean> {
+  try {
+    const rs = await getDb().execute({
+      sql: "SELECT value FROM learning_weights WHERE key = ?",
+      args: [`suggestion_enabled:${type}`],
+    });
+    const row = rs.rows[0] as unknown as { value: number } | undefined;
+    if (!row) return true; // No entry = enabled by default
+    return row.value !== 0;
+  } catch {
+    return true; // On error, default to enabled (safe fallback)
+  }
+}
+
+export async function setSuggestionEnabled(type: string, enabled: boolean): Promise<void> {
+  await getDb().execute({
+    sql: "INSERT OR REPLACE INTO learning_weights (key, value, updated_at) VALUES (?, ?, unixepoch())",
+    args: [`suggestion_enabled:${type}`, enabled ? 1 : 0],
+  });
+}
+
+export interface SuggestionAcceptanceRate {
+  type: string;
+  total: number;
+  accepted: number;
+  acceptanceRate: number | null;
+}
+
+export async function getSuggestionAcceptanceRates(): Promise<SuggestionAcceptanceRate[]> {
+  try {
+    const rs = await getDb().execute({
+      sql: `SELECT
+        JSON_EXTRACT(metadata, '$.type') as suggestion_type,
+        COUNT(*) as total,
+        SUM(CASE WHEN JSON_EXTRACT(metadata, '$.accepted') = 'true' THEN 1 ELSE 0 END) as accepted
+      FROM conversation_events
+      WHERE event_type = 'oi_suggestion'
+        AND JSON_EXTRACT(metadata, '$.type') IS NOT NULL
+      GROUP BY suggestion_type`,
+      args: [],
+    });
+    const rows = rs.rows as unknown as { suggestion_type: string; total: number; accepted: number }[];
+    return rows.map(r => ({
+      type: r.suggestion_type,
+      total: Number(r.total),
+      accepted: Number(r.accepted),
+      acceptanceRate: Number(r.total) > 0 ? Math.round((Number(r.accepted) / Number(r.total)) * 100 * 10) / 10 : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // ========== CLEANUP ==========
 
 interface CleanupResult {

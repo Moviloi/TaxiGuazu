@@ -67,6 +67,7 @@ export function shouldRequestConfirmation(extractionCtx?: ExtractionContext): bo
 export function buildSlotConfirmationMessage(
   extractionCtx: ExtractionContext,
   lang: Lang,
+  enabledSuggestionTypes?: Set<string>,
 ): SlotConfirmationUI {
   const origin = extractionCtx.slots.origin;
   const dest = extractionCtx.slots.destination;
@@ -154,11 +155,14 @@ export function buildSlotConfirmationMessage(
   });
 
   // AIT-063: detectar sugerencias del sistema usando función compartida
+  // AIT-064: filtrar por tipos habilitados (si no se pasa el set, todas habilitadas)
   const suggestions: { slotKey: string; type: SuggestionType }[] = [];
   for (const [key, slot] of Object.entries(extractionCtx.slots)) {
     if (slot?.value != null && (slot.status === "CONFIRMATION_PENDING" || slot.status === "INFERRED")) {
       const st = getSuggestionType(key, slot);
-      if (st) suggestions.push({ slotKey: key, type: st });
+      if (st && (!enabledSuggestionTypes || enabledSuggestionTypes.has(st))) {
+        suggestions.push({ slotKey: key, type: st });
+      }
     }
   }
 

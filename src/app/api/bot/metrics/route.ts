@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminAuth } from "@/lib/auth";
-import { getDb } from "@/lib/db/database";
+import { getDb, getSuggestionAcceptanceRates, isSuggestionEnabled } from "@/lib/db/database";
 import { log } from "@/lib/utils/logger";
 
 export const dynamic = "force-dynamic";
@@ -144,6 +144,28 @@ export async function GET(request: NextRequest) {
       log.warn("[Metrics] Q6 (escalation_reason) failed, column may not exist yet:", e);
     }
 
+    // ── 6. AIT-064: suggestion health ──
+    let suggestionHealth: Record<string, unknown> = {};
+    try {
+      const rates = await getSuggestionAcceptanceRates();
+      for (const st of ["airport", "time", "border"] as const) {
+        const rate = rates.find(r => r.type === st);
+        const enabled = await isSuggestionEnabled(st);
+        suggestionHealth[st] = {
+          enabled,
+          total_events: rate?.total ?? 0,
+          accepted: rate?.accepted ?? 0,
+          acceptance_rate: rate?.acceptanceRate ?? null,
+          status:
+            (rate?.total ?? 0) >= 30 ? "active"
+            : (rate?.total ?? 0) > 0 ? "insufficient_data"
+            : "no_data",
+        };
+      }
+    } catch (e) {
+      log.warn("[Metrics] suggestion_health failed:", e);
+    }
+
     return NextResponse.json({
       active_conversations_24h: {
         value: activeConversations ?? 0,
@@ -169,6 +191,7 @@ export async function GET(request: NextRequest) {
         value: escalationReasonCount ?? 0,
         unit: "conversaciones",
       },
+      suggestion_health: suggestionHealth,
     });
   } catch (error) {
     log.error("[Metrics] Error fetching metrics:", error);
