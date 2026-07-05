@@ -108,3 +108,15 @@ Esto inicia el ciclo completo desde DIRECTOR.
 | Auditor falla | `FAILED` | Rollback + informar |
 | Rollback falla | `FAILED` | Alerta manual |
 | Timeout | `ABORTED` | Rollback + informar |
+
+## Closing checklist
+
+Antes de declarar una tarea como `COMPLETE` y pasar a la siguiente, el Director debe verificar **cada uno** de estos puntos con evidencia concreta (no "confiar en que funciona"):
+
+1. **Tests**: `npm test` pasa sin regresiones (reportar count: "N files, M tests, 0 failures")
+2. **Build**: `npm run build` compila sin errores (0 warnings blocking)
+3. **Contratos**: `bash ael/contracts/enforce.sh` pasa
+4. **Git commit**: el código está commiteado en git (verificar con `git log --oneline -1` o `git status --short`). No es suficiente con que "funciona en disco" — si no hay commit, el pipeline no está cerrado. El commit es el sello de que la tarea se completó realmente.
+5. **Backlog**: si la tarea tiene una entrada en `ael/artifacts/BACKLOG.md`, actualizarla con el estado real, archivos modificados y commit SHA.
+
+Cualquier ítem de esta lista en `PENDING` o `IN_PROGRESS` impide que el pipeline pase a `COMPLETE`.

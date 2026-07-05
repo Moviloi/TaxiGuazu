@@ -1,17 +1,16 @@
 ﻿# Anchored Summary
 
 ## Goal
-- Fix bot's slot assignment confusion: "desde el aeropuerto hasta el centro" was interpreted as "vas a aeropuerto" (rawOrigin/rawDest bug at line 207)
-- Remove numbered options from slot confirmation — natural language only
-- Establish bot persona ("Soy Cris, de TaxiGuazú") from first turn to guide user tacitly
-- Fix session row not created after .limpiar: UPDATE-only functions silently fail when row is DELETED
-- Real chat patterns show Cristian gives prices directly without clarification — match this behavior
+- Crear sistema de evals (AIT-052) para medir calidad de respuestas del bot: dataset de 25 casos + runner que ejecuta `core()` + `router()` + FRUSTRATION_RE y reporta precisión
+- Integrar Sentry (AIT-050) para captura de errores en producción sin DSN requerido para build
 
 ## Constraints & Preferences
-- No numbered options or buttons — natural language questions only
-- Bot should guide tacitly with persona, not rigid rules
-- Code acts as "resource of information, conditions, and certainty" — not handcuffs
-- All 592 tests must pass; build and AEL contracts green
+- Dataset de evals sin IDs de planificación en exports de producción (solo en comentarios y BACKLOG.md)
+- Sin `as any` en código de evals
+- Dataset y runner en scripts/ (no mezclados con código de producción)
+- Runner usa `npx tsx` (mismo patrón que validate-knowledge, validate-schema-parity)
+- Si un caso de eval falla, NO arreglar el pipeline de producción — reportar primero (puede ser dataset mal diseñado o bug real)
+- Todos los tests (771) y build deben pasar; AEL contracts green
 
 ## Progress
 ### Done (archived — see git log for full detail)
@@ -118,6 +117,14 @@
   - `disamb.contextualHigh` cambiado a usar `{slotKey, place}` (más genérico que anterior `{slotLabel, place}`)
   - PT actualizado en `disamb.contextualGeneric`, `disamb.noRawTerm`, `disamb.contextualHigh` para alinear con código en producción
 - **Validación**: 680/680 tests PASS, build PASS, enforce PASS (R1-R4).
+
+### Done (AIT-050 — 2026-07-05)
+- **AIT-050 — Sentry integration**: `@sentry/nextjs@10.63.0` instalado con `--legacy-peer-deps`. `instrumentation.ts` con Sentry.init condicional (DSN opcional — modo silencioso si no hay DSN). `instrumentation-client.ts` creado (cliente, con `onRouterTransitionStart`). `next.config.ts` envuelto con `withSentryConfig` (silent sin DSN). Webhook envuelto con `wrapRouteHandlerWithSentry`. Endpoint `/api/sentry-test` de verificación. `sentry.server.config.ts` y `sentry.edge.config.ts` eliminados (App Router migration). Build clean sin DSN. Servidor arranca sin DSN. 771 tests, 0 regresiones. **Requiere `SENTRY_DSN` provisto por Cristian desde Sentry.io para activar captura en producción.**
+
+### Done (AIT-052 — 2026-07-05)
+- **AIT-052 — Sistema de evals**: Dataset de 25 casos en `scripts/eval-cases/dataset.ts` con 5 grupos obligatorios (CUSTOMS_EN, FRONTERA_PT, FRUST_TRUE/FP, AMBIGUOUS) + 15 regulares (booking ES/EN/PT, NOW, greeting, commercial, consulta, emergency, reschedule, post-service). Runner `scripts/run-evals.ts` que ejecuta `core()` + `router()` + FRUSTRATION_RE contra cada caso. Reporta tabla detallada por caso, resumen agregado (precisión intent 100%, output_type 100%, slot recall 90%, frustration 96%), y breakdown por tag. `npm run evals` script en package.json.
+- **Resultado: 24/25 PASS (96%)** — único fallo: falso positivo conocido de FRUSTRATION_RE con "leé bien" en contexto de dirección. Gaps documentados: core() sin NLU EN/PT, POST_SERVICE no detectado, parsing "del X al Y" fusiona slots, frustración + extracción sin origin/destination.
+- **Validación**: 771 tests PASS, build PASS, enforce PASS.
 
 ### Open
 - **FUT-01 F5: Migrar policy-reserva.ts + policy-ahora.ts (~20 strings).**
