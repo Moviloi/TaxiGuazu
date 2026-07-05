@@ -16,12 +16,12 @@ import { handleOpportunityResponse } from "@/lib/services/workflow/opportunity-r
 import { handlePolicyPipeline } from "@/lib/services/workflow/policy-pipeline";
 import { buildMemory } from "@/lib/services/memory/memory";
 import { buildPredictedContext } from "@/lib/services/memory/predictive-routing";
-import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/event-tracking";
+import { logIntentDetected, logEntityDetected, logEvent } from "@/lib/services/learning/event-tracking";
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
-import { buildFieldSelector, buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
+import { buildFieldSelector, buildSlotConfirmationMessage, getSuggestionType } from "@/lib/ai/slot-confirmation";
 import { startAmbiguityResolution, handleAmbiguityResponse } from "@/lib/services/workflow/ambiguity-handler";
 import { detectLangWithFallback } from "@/lib/detect-lang";
 import type { ExtractionResult } from "@/lib/ai/extraction-schema";
@@ -603,10 +603,20 @@ export async function handleSlotConfirmationButton(
   if (buttonType === "slot_confirm") {
     let rawSlots: Record<string, any> = {};
     let rawConfidence: Record<string, number> = {};
+    let sessionId: string | null = null;
     try {
       const s = await getChatSession(phone);
       rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
       rawConfidence = parseConfidenceJson(s?.confidence ?? null);
+      sessionId = s?.phone ?? phone;
+
+      // AIT-063: loggear sugerencias aceptadas (usando función compartida)
+      for (const [key, slot] of Object.entries(rawSlots)) {
+        const st = getSuggestionType(key, slot);
+        if (st) {
+          await logEvent(sessionId, "oi_suggestion", { type: st, accepted: true, slotKey: key });
+        }
+      }
     } catch { /* ignore */ }
 
     // Promote all CONFIRMATION_PENDING slots to CONFIRMED
@@ -695,6 +705,19 @@ export async function handleSlotConfirmationButton(
   }
 
   if (buttonType === "slot_change") {
+    // AIT-063: loggear sugerencias rechazadas (usando función compartida)
+    try {
+      const s = await getChatSession(phone);
+      const rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
+      const sid = s?.phone ?? phone;
+      for (const [key, slot] of Object.entries(rawSlots)) {
+        const st = getSuggestionType(key, slot);
+        if (st) {
+          await logEvent(sid, "oi_suggestion", { type: st, accepted: false, slotKey: key });
+        }
+      }
+    } catch { /* ignore */ }
+
     const selector = buildFieldSelector(lang);
     await sendWhatsAppMessage(phone, selector.text);
     await insertMessage(conversation.id, "assistant", selector.text);

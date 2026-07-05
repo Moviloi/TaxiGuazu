@@ -112,6 +112,8 @@ export const CATALOG: CatalogMap = {
   "confirm.passengers": _("👥 *Pasajeros:*", "👥 *Passageiros:*", "👥 *Passengers:*"),
   // AIT-060: Aeropuerto inferido por OI layer
   "confirm.airport": _("🛩️ *Aeropuerto:*", "🛩️ *Aeroporto:*", "🛩️ *Airport:*"),
+  // AIT-063: Horario inferido por OI layer
+  "confirm.time": _("🕐 *Horario:*", "🕐 *Horário:*", "🕐 *Time:*"),
   "confirm.ask": _("¿Está correcto?", "Está correto?", "Is this correct?"),
   "confirm.buttonConfirm": _("✅ Confirmar", "✅ Confirmar", "✅ Confirm"),
   "confirm.buttonChange": _("✏️ Cambiar", "✏️ Alterar", "✏️ Change"),
@@ -438,7 +440,13 @@ export const CATALOG: CatalogMap = {
   "driver.closureConfirm": _("✅ Confirmar", "✅ Confirmar"),
   "driver.closureReview": _("📝 Revisar", "📝 Revisar"),
 
-  // ─── 21. TIME INFERENCE (AIT-061) ─────────────────────────────────────
+  // ─── 21. TIME INFERENCE (AIT-061/AIT-063) ────────────────────────────
+  // AIT-063: razón para sugerencia de horario por atracción turística
+  "time.reasonOpeningHours": _(
+    "horario de atracción turística",
+    "horário de atração turística",
+    "attraction opening hours",
+  ),
   "time.suggest": fn(
     (p) => `¿Salimos a las ${p.time}? (${p.reason})`,
     (p) => `Saímos às ${p.time}? (${p.reason})`,

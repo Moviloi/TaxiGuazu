@@ -9,7 +9,8 @@ export type LearningEventType =
   | "user_declined"
   | "user_ignored"
   | "escalated_to_human"
-  | "trip_completed";
+  | "trip_completed"
+  | "oi_suggestion";
 
 export async function logEvent(
   sessionId: string,
