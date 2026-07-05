@@ -1,0 +1,280 @@
+[
+  {
+    "name": "Aeropuerto Internacional Cataratas del Iguazú",
+    "type": "airport",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["aeropuerto iguazu", "aeropuerto puerto iguazu", "igr", "cataratas airport", "iguazu airport"],
+    "tips": "A 25 km del centro de Puerto Iguazú (~25 min en auto)"
+  },
+  {
+    "name": "Aeropuerto Internacional Foz do Iguaçu",
+    "type": "airport",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["iguacu airport", "aeroporto foz", "igu", "foz airport", "aeroporto internacional foz"],
+    "tips": "A 13 km del centro de Foz (~15 min en auto)"
+  },
+  {
+    "name": "Aeropuerto Internacional Guaraní",
+    "type": "airport",
+    "city": "Ciudad del Este",
+    "country": "Paraguay",
+    "aliases": ["agt", "guarani airport", "aeropuerto guarani", "aeropuerto ciudad del este"],
+    "tips": "A 25 km de Ciudad del Este (~40 min en auto)"
+  },
+  {
+    "name": "Puente Tancredo Neves",
+    "type": "customs",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["tancredo neves", "puente iguazu", "puente argentina brasil", "frontera arg br", "paso iguazu"],
+    "tips": "Conecta Puerto Iguazú (AR) con Foz do Iguaçu (BR)"
+  },
+  {
+    "name": "Puente de la Amistad",
+    "type": "customs",
+    "city": "Ciudad del Este",
+    "country": "Paraguay",
+    "aliases": ["puente amistad", "puente brasil paraguay", "frontera br py", "ponte da amizade"],
+    "tips": "Conecta Foz do Iguaçu (BR) con Ciudad del Este (PY)"
+  },
+  {
+    "name": "Parque Nacional do Iguaçu",
+    "type": "park",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["parque nacional iguacu", "cataratas brasil", "parque nacional foz", "iguacu national park"],
+    "price": "BRL 100 (brasileños) / BRL 116 (extranjeros)",
+    "hours": "Diario 8:00-17:00"
+  },
+  {
+    "name": "Parque Nacional Iguazú",
+    "type": "park",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["parque nacional iguazu", "cataratas argentina", "iguazu national park", "cataratas del iguazu"],
+    "price": "ARS 50,000 (argentinos) / ARS 80,000 (extranjeros)",
+    "hours": "Diario 8:00-18:00"
+  },
+  {
+    "name": "Parque das Aves",
+    "type": "park",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["parque das aves", "bird park", "parque de los pajaros"],
+    "price": "BRL 80",
+    "hours": "Diario 8:30-17:00"
+  },
+  {
+    "name": "Macuco Safari",
+    "type": "attraction",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["macuco", "safari", "paseo en bote cataratas", "bote cataratas"],
+    "price": "BRL 350"
+  },
+  {
+    "name": "Itaipú Binacional",
+    "type": "landmark",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["itaipu", "represa itaipu", "itaipu dam", "hidroelectrica itaipu"],
+    "price": "BRL 70 (panorámica) / BRL 120 (circuito especial)"
+  },
+  {
+    "name": "Marco das Três Fronteiras",
+    "type": "landmark",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["marco tres fronteiras", "marco das fronteiras", "hito brasil", "tres fronteras br"],
+    "price": "BRL 50"
+  },
+  {
+    "name": "Hito Tres Fronteras",
+    "type": "landmark",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["hito argentina", "tres fronteras ar", "mirador tres fronteras"],
+    "price": "Gratuito"
+  },
+  {
+    "name": "Minas de Wanda",
+    "type": "attraction",
+    "city": "Wanda",
+    "country": "Argentina",
+    "aliases": ["minas wanda", "wanda", "piedras wanda"],
+    "price": "ARS 10,000",
+    "tips": "A 40 km de Puerto Iguazú"
+  },
+  {
+    "name": "San Ignacio Miní",
+    "type": "landmark",
+    "city": "San Ignacio",
+    "country": "Argentina",
+    "aliases": ["san ignacio", "ruinas jesuiticas", "misiones jesuiticas"],
+    "price": "ARS 25,000 (extranjeros)",
+    "tips": "A 250 km de Puerto Iguazú"
+  },
+  {
+    "name": "Saltos del Moconá",
+    "type": "attraction",
+    "city": "El Soberbio",
+    "country": "Argentina",
+    "aliases": ["mocona", "saltos moconá", "mocona falls"],
+    "price": "ARS 15,000 entrada + ARS 30,000 náutica",
+    "tips": "A 300 km de Puerto Iguazú"
+  },
+  {
+    "name": "Güirá Oga",
+    "type": "park",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["guira oga", "centro de aves", "bird rescue", "guirá oga"],
+    "price": "ARS 15,000 (extranjeros) / ARS 10,000 (nacionales)"
+  },
+  {
+    "name": "Shopping Catuaí Palladium",
+    "type": "shopping",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["catuaí palladium", "shopping catuai", "palladium foz", "catuai shopping"],
+    "tips": "Principal centro comercial de Foz, en Av. das Cataratas"
+  },
+  {
+    "name": "Cataratas JL Shopping",
+    "type": "shopping",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["jl shopping", "cataratas jl", "jl foz"],
+    "tips": "Centro comercial en el centro de Foz"
+  },
+  {
+    "name": "Paseo Luna Llena",
+    "type": "attraction",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["luna llena", "paseo nocturno cataratas", "full moon"],
+    "price": "ARS 60,000"
+  },
+  {
+    "name": "Terminal de Ómnibus de Puerto Iguazú",
+    "type": "landmark",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["terminal puerto iguazu", "omnibus puerto iguazu", "terminal de buses pi"]
+  },
+  {
+    "name": "Terminal de Transporte Urbano (TTU) Foz",
+    "type": "landmark",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["ttu foz", "terminal foz", "terminal urbano foz"]
+  },
+  {
+    "name": "Aduana Argentina Puerto Iguazú",
+    "type": "customs",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["aduana argentina", "migraciones argentina", "aduana iguazu"]
+  },
+  {
+    "name": "Aduana Brasileña Foz do Iguaçu",
+    "type": "customs",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["aduana brasil", "migraciones brasil", "aduana foz", "receita federal"]
+  },
+  {
+    "name": "Aduana Paraguaya Ciudad del Este",
+    "type": "customs",
+    "city": "Ciudad del Este",
+    "country": "Paraguay",
+    "aliases": ["aduana paraguay", "migraciones paraguay", "aduana cde"]
+  },
+  {
+    "name": "Microcentro Ciudad del Este",
+    "type": "shopping",
+    "city": "Ciudad del Este",
+    "country": "Paraguay",
+    "aliases": ["microcentro cde", "cde centro", "ciudad del este centro", "compras cde"],
+    "tips": "Zona comercial libre de impuestos. Operar en horario diurno 07:00-16:00"
+  },
+  {
+    "name": "Hotel Belmond Cataratas",
+    "type": "hotel",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["belmond", "belmond cataratas", "hotel das cataratas", "belmond iguacu"]
+  },
+  {
+    "name": "Gran Meliá Iguazú",
+    "type": "hotel",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["meliá iguazu", "gran melia", "sheraton iguazu", "melia cataratas"]
+  },
+  {
+    "name": "Bourbon Cataratas Eco Resort",
+    "type": "hotel",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["bourbon cataratas", "bourbon thermas", "bourbon eco resort"]
+  },
+  {
+    "name": "DoubleTree by Hilton Foz",
+    "type": "hotel",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["double tree foz", "hilton foz", "doubletree iguacu"]
+  },
+  {
+    "name": "Amérian Portal del Iguazú Hotel",
+    "type": "hotel",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["amerian portal", "portal del iguazu", "amerian"]
+  },
+  {
+    "name": "Mabu Thermas Grand Resort",
+    "type": "hotel",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["mabu", "mabu thermas", "mabu grand resort"]
+  },
+  {
+    "name": "Wish Foz do Iguaçu Resort",
+    "type": "hotel",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["wish foz", "wish resort", "gjp wish"]
+  },
+  {
+    "name": "Loi Suites Iguazú Hotel",
+    "type": "hotel",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["loi suites", "loi iguazu", "loi de la selva"]
+  },
+  {
+    "name": "Iguazú Grand Resort",
+    "type": "hotel",
+    "city": "Puerto Iguazú",
+    "country": "Argentina",
+    "aliases": ["iguazu grand", "grand resort", "iguazu grand resort"]
+  },
+  {
+    "name": "Recanto Cataratas Resort",
+    "type": "hotel",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["recanto cataratas", "recanto thermas", "recanto resort"]
+  },
+  {
+    "name": "Vivaz Cataratas Resort",
+    "type": "hotel",
+    "city": "Foz do Iguaçu",
+    "country": "Brasil",
+    "aliases": ["vivaz cataratas", "vivaz resort", "hotel vivaz"]
+  }
+]

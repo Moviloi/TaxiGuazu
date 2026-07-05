@@ -1,0 +1,4 @@
+{
+  "_note": "NO existen reglas de surge pricing definidas en el código ni en docs/architecture/domains/pricing.md (AIT-012). El documento de dominio (línea 226) marca explícitamente 'Festivos/surges: Datos en iguazu-knowledge.ts pero no conectados a pricing (FUT-07)'. No hay constantes de markup por festivo, temporada, hora del día ni demanda. La sección calendar.json contiene los datos de feriados AR/BR/PY, lunas llenas y temporadas, pero ningún componente de pricing los consume hoy. Si en el futuro se definen reglas de surge, deben documentarse aquí con estructura: { holidayKey, country, multiplier, description, active, validFrom, validUntil }. Sin decisión explícita de Cristian/Claude sobre qué feriados aplican y con qué multiplicador, NO se activan reglas.",
+  "surgeRules": []
+}

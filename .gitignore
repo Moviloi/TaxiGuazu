@@ -24,7 +24,10 @@ auth/
 auth_backup/
 
 # Database
-data/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db.backup
 *.db
 *.db-wal
 *.db-shm

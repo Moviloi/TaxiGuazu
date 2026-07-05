@@ -1,0 +1,25 @@
+{
+  "_note": "AIT-033: Valores hardcodeados extraídos de policy-ahora.ts. Los policyHints son strings de diagnóstico. decisionRules documenta el orden del switch/case (solo referencia — el código TypeScript mantiene el orden cableado).",
+
+  "policyHints": {
+    "EXECUTE": "AHORA: ejecutar acción inmediata.",
+    "ANSWER": "AHORA: responder directo sin seguimiento conversacional.",
+    "CLARIFY": "AHORA: pedir solo el dato mínimo necesario.",
+    "SAFE_FALLBACK": "AHORA: respuesta segura genérica sin inferencias."
+  },
+
+  "decisionRules": [
+    { "name": "EMERGENCY",           "branch": "EXECUTE",     "action": "buildLateralEmergencyResponse",     "description": "Emergencia → respuesta inmediata" },
+    { "name": "RESCHEDULE",          "branch": "EXECUTE",     "action": "buildLateralRescheduleResponse",    "description": "Reprogramación → notificar admin" },
+    { "name": "BOOKING_AMBIGUOUS_EXTRACTION", "branch": "EXECUTE", "action": "buildLocationConfirmationResponse", "description": "BOOKING + field + ambiguous + extraction → confirmación ubicación" },
+    { "name": "BOOKING_AMBIGUOUS_NO_EXTRACTION", "branch": "EXECUTE", "action": "buildGenericClarify(origin)", "description": "BOOKING + field + ambiguous − extraction → preguntar origen" },
+    { "name": "BOOKING_CLARIFY",     "branch": "EXECUTE",     "action": "buildGenericClarify(mapped)",       "description": "BOOKING + field + not ambiguous → preguntar campo" },
+    { "name": "BOOKING_DISPATCH",    "branch": "EXECUTE",     "action": "buildNowDispatchResponse",          "description": "BOOKING − field → dispatch ahora" },
+    { "name": "ANSWER_PRICE",        "branch": "ANSWER",      "action": "buildPriceInfo",                    "description": "ANSWER + tariff → informar precio" },
+    { "name": "ANSWER_GENERIC",      "branch": "ANSWER",      "action": "greet + policy.ahoraAnswer",        "description": "ANSWER − tariff → respuesta genérica" },
+    { "name": "CLARIFY_AMBIGUOUS_EXTRACTION", "branch": "CLARIFY", "action": "buildLocationConfirmationResponse", "description": "CLARIFY + ambiguous + extraction → confirmar ubicación" },
+    { "name": "CLARIFY_AMBIGUOUS_NO_EXTRACTION", "branch": "CLARIFY", "action": "buildGenericClarify(origin)", "description": "CLARIFY + ambiguous − extraction → preguntar origen" },
+    { "name": "CLARIFY_GENERIC",     "branch": "CLARIFY",     "action": "buildGenericClarify(mapped)",       "description": "CLARIFY + not ambiguous → preguntar campo" },
+    { "name": "SAFE_FALLBACK",       "branch": "SAFE_FALLBACK", "action": "greet + policy.ahoraSafeFallback", "description": "Ninguna condición → safe fallback" }
+  ]
+}

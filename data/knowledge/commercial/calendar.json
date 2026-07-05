@@ -1,0 +1,52 @@
+{
+  "lunaLlena": [
+    "Paseo Luna Llena en Parque Nacional Iguazú (AR): entradas limitadas, reserva anticipada requerida.",
+    "Fechas típicas: cada plenilunio (consultar calendario oficial).",
+    "Salidas nocturnas con guía especializado, pasarela habilitada hasta Garganta del Diablo.",
+    "Precio: ~ARS 60,000 por persona (2026).",
+    "Recomendación: reservar con al menos 2 semanas de anticipación."
+  ],
+  "holidaysArgentina": [
+    "Enero: Año Nuevo (1).",
+    "Febrero/Marzo: Carnaval (fechas variables), Día de la Memoria (24 de marzo).",
+    "Abril: Malvinas (2), Jueves Santo, Viernes Santo.",
+    "Mayo: Día del Trabajador (1), Revolución de Mayo (25).",
+    "Junio: Paso a la Inmortalidad de Güemes (17), Día de la Bandera (20).",
+    "Julio: Día de la Independencia (9).",
+    "Agosto: San Martín (17, feriado trasladable).",
+    "Octubre: Día del Respeto a la Diversidad Cultural (12).",
+    "Noviembre: Soberanía Nacional (20, feriado trasladable).",
+    "Diciembre: Inmaculada Concepción (8), Navidad (25)."
+  ],
+  "holidaysBrasil": [
+    "Enero: Confraternização Universal (1).",
+    "Febrero/Marzo: Carnaval (fechas variables, 2 días + miércoles de ceniza hasta 14h).",
+    "Abril: Tiradentes (21).",
+    "Mayo: Dia do Trabalhador (1).",
+    "Junio: Corpus Christi (fecha variable).",
+    "Julio: Revolução Constitucionalista (9, feriado estadual SP).",
+    "Agosto: Independencia (7).",
+    "Setembro: Independência (7).",
+    "Octubre: Nossa Sra. Aparecida (12), Dia do Servidor Público (28).",
+    "Noviembre: Finados (2), Proclamação da República (15).",
+    "Diciembre: Natal (25)."
+  ],
+  "holidaysParaguay": [
+    "Enero: Año Nuevo (1).",
+    "Marzo: Día de los Héroes (1).",
+    "Abril: Jueves Santo, Viernes Santo.",
+    "Mayo: Día del Trabajador (1), Independencia Nacional (14-15).",
+    "Junio: Chaco Armisticio (12).",
+    "Agosto: Fundación de Asunción (15).",
+    "Septiembre: Victoria de Boquerón (29).",
+    "Diciembre: Inmaculada Concepción (8), Navidad (25)."
+  ],
+  "seasons": [
+    "Alta temporada (dic-feb): verano, lluvias frecuentes, alta demanda de traslados aeropuerto.",
+    "Temporada media (mar-may, sep-nov): clima templado, buena época para visitar.",
+    "Baja temporada (jun-ago): invierno, menor afluencia turística, mejores precios hoteleros.",
+    "Carnaval (feb/mar): máxima ocupación hotelera en Foz, reservar con 2-3 meses de anticipación.",
+    "Semana Santa (mar/abr): alta demanda en los 3 países.",
+    "Feriados largos en AR (ej. Semana Santa, 25 de Mayo, 9 de Julio): aumento significativo de pasajeros."
+  ]
+}

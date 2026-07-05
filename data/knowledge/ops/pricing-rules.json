@@ -1,0 +1,4 @@
+{
+  "_note": "No existen reglas de pricing hardcodeadas fuera de la DB. El commercial-pricing-engine.ts (src/lib/services/pricing/) consulta las tablas 'promotions', 'provider_adjustments' y 'packages' de la DB para aplicar descuentos, ajustes y paquetes. La sección 'pricing' en operations.json es informativa para el LLM (describe política comercial), no contiene reglas computacionales. Si en el futuro se agregan reglas de pricing en código (no DB), deben documentarse aquí.",
+  "pricingRules": []
+}

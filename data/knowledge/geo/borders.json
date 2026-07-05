@@ -1,0 +1,47 @@
+{
+  "tancredoNeves": [
+    "Conecta Puerto Iguazú (AR) con Foz do Iguaçu (BR). Longitud: ~500 m.",
+    "Tránsito bidirectional fluido. Demora promedio en migraciones: 10-30 min.",
+    "Los pasajeros NO necesitan bajar del vehículo en migración AR.",
+    "En migración BR el chofer gestiona el trámite, los pasajeros pueden permanecer en el vehículo en la mayoría de los casos.",
+    "Horario migraciones AR: 24h. Horario migraciones BR: 06:00-22:00 (fuera de ese horario el cruce es con sellado manual).",
+    "Recomendación: entre semana (lun-vie) 07:00-10:00 y 14:00-17:00 son horarios de menor congestión.",
+    "Findes y feriados largos: la espera puede superar 1 hora en hora punta (10:00-14:00)."
+  ],
+  "puenteAmistad": [
+    "Conecta Foz do Iguaçu (BR) con Ciudad del Este (PY). Longitud: ~550 m.",
+    "Tránsito de alta densidad en ambos sentidos, especialmente camiones de carga.",
+    "Demora promedio en migraciones: 15-45 min. En hora punta puede superar 1 hora.",
+    "Migración BR: los pasajeros NO necesitan bajar del vehículo para el control de salida.",
+    "Migración PY: el chofer gestiona el trámite, los pasajeros pueden permanecer en el vehículo.",
+    "Recomendación: cruzar antes de las 10:00 AM para evitar congestión.",
+    "No cruzar después de las 16:00 — calles del microcentro de CDE se vuelven solitarias.",
+    "Findes y feriados: congestión severa. Evitar cruce entre 10:00-15:00."
+  ],
+  "corredorTuristico": [
+    "Ruta recomendada para turistas: IGR (AR) → Tancredo Neves → Foz (BR) → Amistad → CDE (PY).",
+    "El chofer de TaxiGuazú conoce todos los puestos migratorios y agiliza los trámites.",
+    "Circuito Trinacional: permite visitar los 3 países en un mismo día con chofer privado.",
+    "Frontera AR↔BR (Tancredo Neves): sellado migratorio para ambos lados.",
+    "Frontera BR↔PY (Amistad): sellado migratorio para ambos lados.",
+    "Importante: siempre sellar SALIDA de un país antes de ingresar al siguiente.",
+    "No hay control migratorio directo AR↔PY — todo cruce es vía BR."
+  ],
+  "manifiesto": [
+    "Obligatorio para cruce AR↔BR. Lo completa el chofer electrónicamente antes del cruce.",
+    "Contiene: datos del vehículo (patente, marca, modelo), datos del chofer, datos de TODOS los pasajeros (nombre, apellido, documento, nacionalidad).",
+    "Se presenta digitalmente ante migraciones de AR y BR.",
+    "El chofer de TaxiGuazú gestiona el manifiesto automaticamente como parte del servicio.",
+    "Tiempo de procesamiento: ~5 min."
+  ],
+  "customsDuty": [
+    "ARGENTINA — Franquicia: USD 500 por persona por vía terrestre (USD 300 vía aérea). Menores: 50%. Exceso: 50% del valor excedente.",
+    "BRASIL — Franquicia: USD 1,000 por persona vía terrestre (USD 1,000 vía aérea). Exceso: 50% sobre el valor excedente.",
+    "PARAGUAY — Franquicia: USD 500 por persona. Compras en CDE libres de impuestos (zona franca).",
+    "Productos restringidos: armas, municiones, drogas, especies protegidas (CITES), productos falsificados.",
+    "Medicamentos: con receta médica y en cantidad para uso personal (máx 90 días).",
+    "Electronicos: nuevo en caja sellada puede requerir factura de compra. Usado personal: sin restricción (1 unidad por categoría).",
+    "Alimentos: carnes, lácteos, frutas y verduras frescas NO permitidas entre países Mercosur.",
+    "El chofer de TaxiGuazú asesora en tiempo real sobre franquicias y evita excesos."
+  ]
+}

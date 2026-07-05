@@ -1,0 +1,74 @@
+{
+  "$schema": "manifest.schema.ts",
+  "version": "1.0.0",
+  "description": "Knowledge layer de TaxiGuazú — datos estructurados de geo, ops, commercial y policies.",
+  "created": "2026-07-04T11:17:00-03:00",
+  "files": {
+    "data/knowledge/geo/places.json": {
+      "hash": "b1fc742aed9826793bd1db5dc1bb4e0735c7edfaadff7dfb02ecd56ad7d9d36b",
+      "lastModified": "2026-07-04T05:05:18Z",
+      "entries": 36,
+      "details": "36 places, ~125 aliases. AIT-030. Duplicado intencional 'cataratas argentinas' en Parque Nacional Iguazú (documentado con _note). Tipos: airport, hotel, park, landmark, neighborhood, shopping, customs, restaurant."
+    },
+    "data/knowledge/geo/borders.json": {
+      "hash": "403b3f9aad1833a3256321e099514e16b6ac85ac84d750c18f1c3535e609ed7d",
+      "lastModified": "2026-07-04T05:05:28Z",
+      "entries": 25,
+      "details": "5 secciones (tancredoNeves, puenteAmistad, corredorTuristico, manifiesto, customsDuty), 25 items total. AIT-030."
+    },
+    "data/knowledge/geo/attractions.json": {
+      "hash": "70f13d01a05e1b8b553415ea10451853571dee59d90e5f6a9b1e2247b0b1af4a",
+      "lastModified": "2026-07-04T05:05:44Z",
+      "entries": 12,
+      "details": "12 atracciones turísticas con precios, horarios y tips. AIT-030."
+    },
+    "data/knowledge/ops/operations.json": {
+      "hash": "bc61b6475b8c45d48292137444fff17f9ce2c9ba73dbd27674413320716f6a90",
+      "lastModified": "2026-07-04T05:16:20Z",
+      "entries": 49,
+      "details": "8 secciones (coordination, borderCrossing, pricing, tripTypes, communication, tips, driverAssistance, airportProtocol), 49 items total. AIT-031."
+    },
+    "data/knowledge/ops/migration.json": {
+      "hash": "199f6df057f6d00769c0b7b24103a9fde73b8186677f2145d9ef53007b64456e",
+      "lastModified": "2026-07-04T05:16:30Z",
+      "entries": 12,
+      "details": "7 secciones (requiredDocs, qrInfo, minorsInfo, taxFreeInfo, insuranceInfo, eVisaInfo, byNationality), ~12 items total. AIT-031."
+    },
+    "data/knowledge/ops/pricing-rules.json": {
+      "hash": "5c15c3ab6356aa6fb822ff39e61bfd9ffca58d45edadbdf9e5fc63cbfa151922",
+      "lastModified": "2026-07-04T05:16:38Z",
+      "entries": 0,
+      "details": "0 reglas activas. Array vacío — pricing se maneja desde DB (tablas promotions, provider_adjustments, packages). AIT-031."
+    },
+    "data/knowledge/commercial/calendar.json": {
+      "hash": "22971a20870514f8be58c1645afe88327dde3d68267a1766280339ccbeb0a3de",
+      "lastModified": "2026-07-04T05:23:17Z",
+      "entries": 21,
+      "details": "5 secciones (lunaLlena, holidaysArgentina, holidaysBrasil, holidaysParaguay, seasons), 21 items total. 13 lunas llenas 2026. AIT-032 Fase A."
+    },
+    "data/knowledge/commercial/surge-rules.json": {
+      "hash": "146f5537e7f6775945c864dcdf051400ef2d4835c4c4062767918258331dc905",
+      "lastModified": "2026-07-04T05:23:25Z",
+      "entries": 0,
+      "details": "0 reglas activas. Ninguna definición de negocio. AIT-032 Fase A (Fase B diferida a FUT-07)."
+    },
+    "data/knowledge/policies/reserva.json": {
+      "hash": "c83e483369723ecc02163e5b837763d2569c862f668115050b1f74f842977d64",
+      "lastModified": "2026-07-04T11:11:17Z",
+      "entries": 22,
+      "details": "4 policyHints, 4 thresholds, 12 decisionPriority levels, 2 adminNotifyTemplates. AIT-033."
+    },
+    "data/knowledge/policies/ahora.json": {
+      "hash": "0d5f1b5f2621ecc6f0d2b1afa5d3f811e0aeae7b38f3aba42940fdb8d40d774a",
+      "lastModified": "2026-07-04T11:11:22Z",
+      "entries": 16,
+      "details": "4 policyHints, 12 decisionRules. AIT-033."
+    },
+    "data/knowledge/policies/escalation.json": {
+      "hash": "52fb3dce62cb675ff78c020be167e3c7b7955ffb10a097bec180e5d227cfe56f",
+      "lastModified": "2026-07-04T11:11:29Z",
+      "entries": 11,
+      "details": "1 frustrationPattern, 1 adminEscalationTemplate, 2 llmPrompts, 2 guardMessages, 1 externalRefs (CONFIRMATION_TIMEOUT_S). AIT-033."
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "frustrationPattern": "\\b(?:no(?: entend(?:í|es)?| sirve| funcio?n?a?| puedo| quiero| me gusta| sirv(?:e|ió))|(?:esto|eso) (?:no|es una porquería|es horrible|es malo)|(?:que|qué) (?:mal servicio|horrible|bronca|molestia)|(?:no me (?:gusta|interesa|sirve))|(?:ya (?:dije|digo|pedí|pregunté))|(?:me (?:cansé|harté|aburrí))|(?:esto es (?:un robo|una estafa|imposible))|(?:sos (?:un inútil|un (?:desastre|burro)))|(?:hablo con (?:un humano|alguien|operador)))\\b",
+  "frustrationPatternFlags": "gi",
+  "adminEscalationTemplate": "🚨 Usuario {phoneSuffix} escalado por comprensión baja (score: {score}). Un operador debe contactar.",
+  "llmPrompts": {
+    "reinterpretPrompt": "Eres un asistente de soporte de TaxiGuazú (traslados triple frontera). {score}\n\nContexto:\n{context}\n\nMensaje confuso del usuario: \"{userText}\"\n\nObjetivo: reinterpretar el mensaje y generar UNA pregunta aclaratoria corta y amigable en {langName}. Si el mensaje no tiene sentido, responde exactamente: NULL",
+    "frustrationPrompt": "Eres un asistente de soporte de TaxiGuazú (traslados triple frontera).\n\nContexto:\n{context}\n\nMensaje del usuario frustrado: \"{userText}\"\n\nObjetivo: responder con empatía en {langName}, ofreciendo soluciones concretas. Mantené un tono calmado y servicial. Si no podés ayudar coordiná un operador humano. Máximo 2 oraciones."
+  },
+  "guardMessages": {
+    "outputViolation": "OUTPUT_VIOLATION: pipeline intentó emitir output con source={source}. Solo POLICY puede emitir output al usuario.",
+    "pipelineIncompleteTemplate": "Pipeline incompleto: core={core}, router={router}, policy={policy}"
+  }
+}

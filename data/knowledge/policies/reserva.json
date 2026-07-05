@@ -1,0 +1,37 @@
+{
+  "_note": "AIT-033: Valores hardcodeados extraídos de policy-reserva.ts. Los policyHints son strings de diagnóstico. Los thresholds son umbrales numéricos de decisión. decisionPriority documenta el orden de la cascada if/else (solo referencia — el código TypeScript mantiene el orden cableado). adminNotifyTemplates son las plantillas de notificación al admin para lateral intents.",
+
+  "policyHints": {
+    "EXECUTE": "RESERVA: ejecutar acción con confirmación obligatoria.",
+    "ANSWER": "RESERVA: responder con contexto si existe.",
+    "CLARIFY": "RESERVA: pedir clarificación estructurada.",
+    "SAFE_FALLBACK": "RESERVA: requerir confirmación antes de actuar."
+  },
+
+  "thresholds": {
+    "paxScoreMin": 0.7,
+    "maxPassengersNormal": 4,
+    "maxPassengersHigh": 6,
+    "adminNotifyTruncation": 200
+  },
+
+  "decisionPriority": [
+    { "level": 1,  "name": "EMERGENCY",           "action": "buildLateralEmergencyResponse",    "description": "Lateral intent — emergencia del usuario" },
+    { "level": 2,  "name": "RESCHEDULE",          "action": "buildLateralRescheduleResponse",   "description": "Lateral intent — reprogramación de viaje" },
+    { "level": 3,  "name": "POST_SERVICE",        "action": "buildLateralPostServiceResponse",  "description": "Lateral intent — post-servicio" },
+    { "level": 4,  "name": "AFFIRMATION_BOOKING", "action": "buildBookingAcceptedResponse",      "description": "Afirmación en awaiting → booking aceptado" },
+    { "level": 5,  "name": "STABLE_ACKNOWLEDGE",  "action": "buildStableAcknowledge",            "description": "Role lock ambos, sin hora → acknowledge" },
+    { "level": 6,  "name": "CONFIRMATION_PRICE",  "action": "buildConfirmationMessage",          "description": "askForConfirmation + tariff → confirmación con precio" },
+    { "level": 7,  "name": "CLARIFY_SLOT",        "action": "buildClarifyMessage",               "description": "collecting_slots + clarifyField → pedir slot" },
+    { "level": 8,  "name": "AWAITING_NO_TARIFF",  "action": "buildNoTariffConfirmation",         "description": "awaiting sin tariff → confirmación sin precio" },
+    { "level": 9,  "name": "ANSWER_PRICE_INFO",   "action": "buildPriceInfo",                    "description": "ANSWER + tariff → precio informativo" },
+    { "level": 10, "name": "CLARIFY_DECISION",    "action": "resolveNextRequiredField",          "description": "CLARIFY → pedir campo faltante" },
+    { "level": 11, "name": "EXECUTE_DECISION",    "action": "resolveNextRequiredField",          "description": "EXECUTE sin ready → pedir campo faltante" },
+    { "level": 12, "name": "SAFE_FALLBACK",       "action": "buildGenericSafeFallback",          "description": "Ninguna condición anterior → safe fallback" }
+  ],
+
+  "adminNotifyTemplates": {
+    "EMERGENCY":  "🚨 *EMERGENCIA — Cliente pide ayuda urgente*\n\nTeléfono: {phone}\nMensaje: \"{msg}\"",
+    "RESCHEDULE": "🔄 *REPROGRAMACIÓN — Cliente quiere modificar su viaje*\n\nTeléfono: {phone}\nMensaje: \"{msg}\""
+  }
+}

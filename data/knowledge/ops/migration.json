@@ -1,0 +1,21 @@
+{
+  "requiredDocs": [
+    "ARG↔BR: DNI (argentinos) o Pasaporte (extranjeros).",
+    "BR↔PY: DNI (argentinos) o Pasaporte (extranjeros).",
+    "PY→AR: DNI (argentinos) o Pasaporte (extranjeros). Solo control migratorio AR.",
+    "Menores: autorización de viaje si viajan con un solo padre o con terceros.",
+    "Mascotas: certificado veterinario, vacunación antirrábica vigente, chip obligatorio para BR."
+  ],
+  "qrInfo": "Pre-Cadastro BR: obligatorio para ingresar a Brasil por vía terrestre. Se completa online (https://precadastro.sistema.gov.br). El chofer asiste a los pasajeros con el trámite. Validez: 30 días.",
+  "minorsInfo": "Menores argentinos: DNI vigente. Si viajan con un solo progenitor: autorización de viaje firmada por el otro padre con firma certificada por juez de paz o escribano. Si viajan con terceros: autorización de AMBOS padres. Menores extranjeros: pasaporte más autoración migratoria del país de origen.",
+  "taxFreeInfo": "Franquicia terrestre AR: USD 500 por persona cada 24h (vigente 2026). BR: USD 1,000 por persona. PY: USD 500 por persona. Productos electrónicos nuevos en caja: pueden requerir factura de compra al reingresar.",
+  "insuranceInfo": "Seguro de salud obligatorio para ingresar a Brasil (cobertura mínima USD 30,000). Recomendado para Argentina (no obligatorio pero altamente recomendado). Paraguay: no exige seguro de salud obligatorio. El chofer puede recomendar aseguradoras disponibles en frontera.",
+  "eVisaInfo": "Desde abril 2025: ciudadanos de USA, Canadá y Australia requieren eVisa para ingresar a Brasil (USD 80.90, procesamiento 5-10 días hábiles). No aplica para ingreso a Argentina ni Paraguay. Verificar requisitos actualizados antes del viaje.",
+  "byNationality": [
+    "Argentina: DNI o Pasaporte para BR y PY. Pasaporte para viajes fuera de Mercosur.",
+    "Brasil: RG (Cédula de Identidad) o Pasaporte para AR y PY.",
+    "Paraguay: Cédula de Identidad o Pasaporte para AR y BR.",
+    "Mercosur ampliado (Chile, Perú, Colombia, Ecuador, Uruguay, Bolivia): DNI o Pasaporte.",
+    "Resto del mundo: Pasaporte obligatorio. Visa para BR según nacionalidad (ver eVisaInfo)."
+  ]
+}

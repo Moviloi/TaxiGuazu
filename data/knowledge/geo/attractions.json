@@ -1,0 +1,89 @@
+{
+  "parqueNacionalAR": {
+    "name": "Parque Nacional Iguazú (Argentina)",
+    "prices": {
+      "argentinos": "ARS 50,000",
+      "mercosur": "ARS 65,000",
+      "extranjero": "ARS 80,000",
+      "residentes": "ARS 15,000"
+    },
+    "hours": "Diario 8:00-18:00 (acceso hasta 16:30)"
+  },
+  "parqueNacionalBR": {
+    "name": "Parque Nacional do Iguaçu (Brasil)",
+    "prices": {
+      "brasileiros": "BRL 100",
+      "extranjeros": "BRL 116"
+    },
+    "hours": "Diario 8:00-17:00"
+  },
+  "macucoSafari": {
+    "name": "Macuco Safari",
+    "prices": {
+      "general": "BRL 350"
+    },
+    "hours": "Diario 9:00-16:00"
+  },
+  "parqueDasAves": {
+    "name": "Parque das Aves",
+    "prices": {
+      "general": "BRL 80"
+    },
+    "hours": "Diario 8:30-17:00"
+  },
+  "itaipu": {
+    "name": "Itaipú Binacional",
+    "prices": {
+      "panoramica": "BRL 70",
+      "circuitoEspecial": "BRL 120"
+    },
+    "hours": "Visitas guiadas 8:00-16:00"
+  },
+  "marcoTresFronteiras": {
+    "name": "Marco das Três Fronteiras",
+    "prices": {
+      "general": "BRL 50"
+    },
+    "hours": "Diario 9:00-21:00"
+  },
+  "paseoLunaLlena": {
+    "name": "Paseo Luna Llena",
+    "prices": {
+      "general": "ARS 60,000"
+    },
+    "hours": "Noches de luna llena (consultar calendario)"
+  },
+  "wanda": {
+    "name": "Minas de Wanda",
+    "prices": {
+      "general": "ARS 10,000"
+    },
+    "distance": "40 km de Puerto Iguazú",
+    "hours": "Diario 8:00-18:00"
+  },
+  "sanIgnacio": {
+    "name": "San Ignacio Miní",
+    "prices": {
+      "extranjero": "ARS 25,000"
+    },
+    "distance": "250 km de Puerto Iguazú",
+    "hours": "Diario 7:30-18:00"
+  },
+  "mocona": {
+    "name": "Saltos del Moconá",
+    "prices": {
+      "extranjeroEntrada": "ARS 15,000",
+      "extranjeroNautica": "ARS 30,000"
+    },
+    "distance": "300 km de Puerto Iguazú",
+    "hours": "Diario 8:00-17:00 (según caudal del río)"
+  },
+  "guiraOga": {
+    "name": "Güirá Oga",
+    "prices": {
+      "extranjero": "ARS 15,000",
+      "nacional": "ARS 10,000"
+    },
+    "hours": "Diario 8:30-17:00"
+  }
+}
