@@ -643,59 +643,10 @@ END`,
     try { await db.execute({ sql }); } catch { /* trigger may already exist */ }
   }
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // MIGRACIONES LEGACY — se conservan para DBs existentes que aún tengan
-  // columnas/tablas del schema anterior. Son no-op en DBs nuevas.
-  // ADR-006: todas las columnas de abajo ya están en los CREATE TABLE de
-  // arriba. Estas ALTER TABLE quedan como upgrade path para DBs con schema
-  // previo. Limpieza planificada cuando exista migration runner.
-  // ═════════════════════════════════════════════════════════════════════════
-
-  // FASE 5.2.5: Add new workflow state columns for domain separation
-  // → CUBIERTO: chat_sessions tiene conversational_state, dispatch_state, trip_state, slot_states, lang en DDL
-  const migrations = [
-    "ALTER TABLE chat_sessions ADD COLUMN lang TEXT",
-    "ALTER TABLE chat_sessions ADD COLUMN conversational_state TEXT DEFAULT 'idle'",
-    "ALTER TABLE chat_sessions ADD COLUMN dispatch_state TEXT DEFAULT 'idle'",
-    "ALTER TABLE chat_sessions ADD COLUMN trip_state TEXT DEFAULT NULL",
-    "ALTER TABLE chat_sessions ADD COLUMN slot_states TEXT DEFAULT NULL",
-    // GRAFO ZONAS: Columnas nuevas + DROP legacy (2026-06-29)
-    // → CUBIERTO: tariffs tiene public_price_4p/6p, driver_price_4p/6p, active, origin_place_id, dest_place_id, origin_zone_id, dest_zone_id, resolution_priority en DDL
-    "ALTER TABLE tariffs ADD COLUMN public_price_4p REAL",
-    "ALTER TABLE tariffs ADD COLUMN public_price_6p REAL",
-    "ALTER TABLE tariffs ADD COLUMN driver_price_4p REAL",
-    "ALTER TABLE tariffs ADD COLUMN driver_price_6p REAL",
-    "ALTER TABLE tariffs ADD COLUMN active INTEGER DEFAULT 1",
-    "ALTER TABLE tariffs ADD COLUMN origin_place_id TEXT",
-    "ALTER TABLE tariffs ADD COLUMN destination_place_id TEXT",
-    "ALTER TABLE tariffs ADD COLUMN origin_zone_id TEXT",
-    "ALTER TABLE tariffs ADD COLUMN destination_zone_id TEXT",
-    "ALTER TABLE tariffs ADD COLUMN resolution_priority INTEGER DEFAULT 4",
-    // GRAFO ZONAS: DROP columnas legacy (reemplazadas por public_price_4p/6p y driver_price_4p/6p)
-    "ALTER TABLE tariffs DROP COLUMN price_4p",
-    "ALTER TABLE tariffs DROP COLUMN price_6p",
-    "ALTER TABLE tariffs DROP COLUMN base_price_4p",
-    "ALTER TABLE tariffs DROP COLUMN base_price_6p",
-    // → CUBIERTO: zones tiene surcharge_description, surcharge_pct en DDL
-    "ALTER TABLE zones ADD COLUMN surcharge_description TEXT",
-    "ALTER TABLE zones ADD COLUMN surcharge_pct REAL DEFAULT 0",
-    // → CUBIERTO: places tiene display_name, zone_id, barrio, etc. en DDL
-    "ALTER TABLE places ADD COLUMN display_name TEXT DEFAULT ''",
-    "ALTER TABLE places ADD COLUMN zone_id TEXT REFERENCES zones(zone_id)",
-    // CATASTRO HOTELERO: nuevos campos geoespaciales (2026-07-03)
-    // → CUBIERTO: places tiene barrio, corredor_vial, estrellas, direccion, etc. en DDL
-    "ALTER TABLE places ADD COLUMN barrio TEXT DEFAULT ''",
-    "ALTER TABLE places ADD COLUMN corredor_vial TEXT DEFAULT ''",
-    "ALTER TABLE places ADD COLUMN estrellas INTEGER DEFAULT 0",
-    "ALTER TABLE places ADD COLUMN direccion TEXT DEFAULT ''",
-    "ALTER TABLE places ADD COLUMN zona_turistica TEXT DEFAULT ''",
-    "ALTER TABLE places ADD COLUMN avenida_principal TEXT DEFAULT ''",
-    "ALTER TABLE places ADD COLUMN acceso_principal TEXT DEFAULT ''",
-    "ALTER TABLE places ADD COLUMN referencias TEXT DEFAULT ''",
-  ];
-  for (const sql of migrations) {
-    try { await db.execute({ sql }); } catch { /* column may already exist */ }
-  }
+  // NOTA: Los bloques ALTER TABLE legacy (FASE 5.2.5, GRAFO ZONAS, CATASTRO HOTELERO,
+  // FASE 5.2.7) fueron eliminados en DEBT-12 Fase C3. Todas las columnas que
+  // agregaban ya están cubiertas por los CREATE TABLE completos de initSchema()
+  // desde la Fase C1. Ver ADR-006 Addendum: C3.
 
   // Data migration: populate new columns from legacy workflow_state
   try {
@@ -716,20 +667,10 @@ END`,
     });
   } catch { /* data migration best-effort */ }
 
-  // FASE 5.2.7: Drop legacy workflow_state, rename f4_state, drop dead columns
-  // → CUBIERTO: chat_sessions ya NO tiene workflow_state, confirmed_fields, source_message_ids en DDL
-  // → CUBIERTO: conversations ya NO tiene trip_status en DDL
-  const cleanupDDL: string[] = [
-    // RENAME must happen before DROP (no deadlock)
-    "ALTER TABLE chat_sessions RENAME COLUMN f4_state TO comprehension_state",
-    "ALTER TABLE chat_sessions DROP COLUMN workflow_state",
-    "ALTER TABLE chat_sessions DROP COLUMN confirmed_fields",
-    "ALTER TABLE chat_sessions DROP COLUMN source_message_ids",
-    "ALTER TABLE conversations DROP COLUMN trip_status",
-  ];
-  for (const ddl of cleanupDDL) {
-    try { await db.execute({ sql: ddl }); } catch { /* column may not exist or already renamed/dropped */ }
-  }
+  // NOTA: El bloque FASE 5.2.7 (RENAME f4_state→comprehension_state, DROP workflow_state,
+  // confirmed_fields, source_message_ids, trip_status) fue eliminado en DEBT-12 Fase C3.
+  // Todas esas columnas ya están en su estado final en los CREATE TABLE de initSchema()
+  // desde la Fase C1. Ver ADR-006 Addendum: C3.
 
   // FASE 6: Migrar alias_lookup → aliases, eliminar tabla legacy
   // → alias_lookup ya NO se crea en DDL. Solo DBs existentes lo tienen.
