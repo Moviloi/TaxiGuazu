@@ -46,6 +46,10 @@ const RESCHEDULE_RE = /\b(reprogramar|cambiar\s+(\w+\s+)?(fecha|hora|reserva|via
 const POST_SERVICE_RE = /\b(gracias\s+por\s+(el\s+)?viaje|excelente\s+servicio|muy\s+bue[nt][ao]|queja|reclamo|devoluci[óo]n|factura|comprobante)\b/i;
 const EMERGENCY_RE = /\b(emergencia|ayuda\b|me\s+pas[óo]\s+algo|no\s+(llega|aparece|viene|encuentro)|chofer\s+no\s+(llega|aparece|viene)|perd[ií]\s+el\s+viaje|estoy\s+varad[ao])\b/i;
 const CONSULTA_RE = /\b(consultar|consulta|informaci[oó]n|info)\b/i;
+// AIT-060: Mención de vuelo/avión sin código de vuelo específico.
+// "llego en avión", "vuelo mañana", "flight from" → airport_mention fact.
+// NO captura códigos de vuelo (FLIGHT_RE los maneja).
+const AIRPORT_MENTION_RE = /\b(vuelo|avión|avion|a[eé]reo|llegad[ao]\s+(en|por)\s+(avi[óo]n|vuelo|a[eé]reo)|flight|plane|arriv(e|ing)\s+(by|on|via)\s+(plane|flight|air)|fly\s+(to|into|in|from)|airport)\b/i;
 
 // P0.6: Señales de intención de compra
 // HIGH: pasajero da datos específicos que indican compromiso real (vuelo, hora, pax, hotel)
@@ -241,6 +245,12 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
 
   const cs = trimmed.match(CONSULTA_RE);
   if (cs) facts.push(`consulta:${cs[1].toLowerCase()}`);
+
+  // AIT-060: Mención de vuelo/avión sin código explícito
+  const am = trimmed.match(AIRPORT_MENTION_RE);
+  if (am && !facts.some(f => f.startsWith("flight:"))) {
+    facts.push("airport_mention:true");
+  }
 
   // detectar estructura sintáctica para role lock y confianza de asignación.
   const { roleLock, slotStability, slotAssignmentConfidence } = detectStructure(trimmed);

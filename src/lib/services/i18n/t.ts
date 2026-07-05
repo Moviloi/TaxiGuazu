@@ -6,13 +6,14 @@
 
 import type { Lang } from "@/lib/ai/types";
 import { CATALOG, type CatalogEntry } from "./catalog";
+import { log } from "@/lib/utils/logger";
 
 export function t(key: string, lang: Lang, params?: Record<string, string>): string {
   const entry: CatalogEntry | undefined = (CATALOG as Record<string, CatalogEntry>)[key];
   if (!entry) {
     // En desarrollo, el key faltante es visible; en producción se cae a español
     if (process.env.NODE_ENV === "development") {
-      console.warn(`[i18n] MISSING KEY: ${key}`);
+      log.warn(`[i18n] MISSING KEY: ${key}`);
     }
     return `[${key}]`;
   }
