@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { wrapRouteHandlerWithSentry } from "@sentry/nextjs";
 import { handleLeadMessage } from "@/lib/services/lead.service";
 import {
   isAdminBotGroup,
@@ -99,32 +100,31 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const rawBody = await request.text();
-    const sig = request.headers.get("x-hub-signature-256");
-    if (!verifySignature(rawBody, sig)) {
-      log.warn("[WEBHOOK] Signature verification failed");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+async function postHandler(request: NextRequest) {
+  const rawBody = await request.text();
+  const sig = request.headers.get("x-hub-signature-256");
+  if (!verifySignature(rawBody, sig)) {
+    log.warn("[WEBHOOK] Signature verification failed");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-    // === RATE LIMIT (before any processing) ===
-    const body = JSON.parse(rawBody);
-    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (message) {
-      const phone = normalizePhone(message.from);
-      if (!(await checkRateLimit(phone))) {
-        log.warn("[WEBHOOK] Rate limit exceeded", { phone: phone.slice(-4) });
-        return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
-      }
-    } else {
-      return NextResponse.json({ status: "ok" }, { status: 200 });
-    }
-    // Re-parse for the rest of the flow (phone already normalized above)
+  // === RATE LIMIT (before any processing) ===
+  const body = JSON.parse(rawBody);
+  const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  if (message) {
     const phone = normalizePhone(message.from);
-    const messageId: string | undefined = message.id;
-    const messageType: string = message.type || "unknown";
-    const payloadHash = hashPayload(rawBody);
+    if (!(await checkRateLimit(phone))) {
+      log.warn("[WEBHOOK] Rate limit exceeded", { phone: phone.slice(-4) });
+      return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
+    }
+  } else {
+    return NextResponse.json({ status: "ok" }, { status: 200 });
+  }
+  // Re-parse for the rest of the flow (phone already normalized above)
+  const phone = normalizePhone(message.from);
+  const messageId: string | undefined = message.id;
+  const messageType: string = message.type || "unknown";
+  const payloadHash = hashPayload(rawBody);
 
     // === IDEMPOTENCY (atomic UNIQUE-based) ===
     // La unicidad es el mecanismo de sincronización. Si Meta reintenta o dos
@@ -347,10 +347,11 @@ export async function POST(request: NextRequest) {
     await handleLeadMessage(phone, text);
 
     return NextResponse.json({ status: "ok" }, { status: 200 });
-  } catch (error) {
-    log.error("[WEBHOOK] Error procesando mensaje:", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
-  }
 }
+
+export const POST = wrapRouteHandlerWithSentry(postHandler, {
+  method: "POST",
+  parameterizedRoute: "/api/whatsapp/webhook",
+});
 
 export const dynamic = "force-dynamic";
