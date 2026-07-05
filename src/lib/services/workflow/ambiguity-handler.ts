@@ -15,7 +15,7 @@ import { searchPlaces, findPlaceByName } from "@/lib/db/domains/geo";
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
 import { getChatSession, upsertChatSession } from "@/lib/db/database";
 import { interpretAmbiguity } from "@/lib/ai/ambiguity-interpreter";
-import { detectLeadLang } from "@/lib/detect-lang";
+import { detectLangWithFallback } from "@/lib/detect-lang";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 import type { ChatSessionRow } from "@/lib/db/types";
 import type { CoreDecision } from "@/lib/ai/types";
@@ -233,7 +233,7 @@ export async function startAmbiguityResolution(
       method: "contextual_inference_pending_confirmation"
     });
     
-    const lang = detectLeadLang(text) as Language;
+    const lang = detectLangWithFallback(text, session?.lang) as Language;
     
     // Wait for user confirmation before finalizing
     // We store both slots as resolved BUT with a confirmation flag
@@ -315,7 +315,7 @@ export async function startAmbiguityResolution(
   await setConversationalState(phone, "ambiguity_pending", firstSlot);
 
   const options = firstSlot === "origin" ? ambiguityMeta.originOptions : ambiguityMeta.destOptions;
-  const lang = detectLeadLang(text);
+  const lang = detectLangWithFallback(text, session?.lang);
 
   // Build contextual message using slot confidence
   const isOrigin = firstSlot === "origin";
@@ -382,7 +382,7 @@ export async function handleAmbiguityResponse(
   const options = clarifyField === "origin" ? ambState.originOptions : ambState.destOptions;
   if (options.length === 0) return false;
 
-  const lang = detectLeadLang(text);
+  const lang = detectLangWithFallback(text, freshSession?.lang);
 
   // Country filter: si el usuario dice un país (ej: "Argentina" o "Argentino"), filtrar
   // opciones a ese país y auto-seleccionar si solo queda una.
@@ -561,7 +561,7 @@ async function finalizeAmbiguity(
   const destPlace = ambState.resolvedDest ? await findPlaceByName(ambState.resolvedDest.toLowerCase()) : null;
   const originDisplay = originPlace?.display_name ?? ambState.resolvedOrigin;
   const destDisplay = destPlace?.display_name ?? ambState.resolvedDest;
-  const lang = detectLeadLang(text) as Lang;
+  const lang = detectLangWithFallback(text, freshSession?.lang) as Lang;
   const updatedSlots = {
     ...currentSlots,
     origin: {

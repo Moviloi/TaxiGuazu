@@ -5,7 +5,7 @@ import { getAllDomainPatterns } from "@/lib/config/entity-catalog";
 import { buildGenericClarify } from "@/lib/ai/response-builder";
 import { t } from "@/lib/services/i18n/t";
 import { parseSessionSlots, parseConfidenceJson } from "@/lib/services/shared/session-helpers";
-import { detectLeadLang } from "@/lib/detect-lang";
+import { detectLangWithFallback } from "@/lib/detect-lang";
 import { log } from "@/lib/utils/logger";
 
 export type ComprehensionState = "FULL_CONTROL" | "CLARIFICATION" | "RECOVERY" | "ESCALATION";
@@ -175,7 +175,7 @@ export async function getRecoveryMessage(
   text?: string,
   facts?: string[],
 ): Promise<string> {
-  const lang = text ? detectLeadLang(text) : "es";
+  const lang = text ? detectLangWithFallback(text, session?.lang) : "es";
 
   // ADR 005: If there's ambiguity, try LLM for contextual recovery first
   if (facts?.includes("location_ambiguous:true") && text) {

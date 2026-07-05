@@ -11,12 +11,8 @@ const LANG_GROUPS: Array<{ lang: ExtendedLang; words: string[] }> = [
   { lang: "zh", words: ["你好", "谢谢", "机场", "价格", "酒店", "帮助", "哪里", "多少", "接送"] },
 ];
 
-export function detectLeadLang(text: string): Lang {
-  const { lang, confidence } = detectExtendedLang(text);
-  if (confidence < 0.4) return "es";
-  if (lang === "pt") return "pt";
-  if (lang === "en") return "en";
-  return "es";
+export function detectLeadLang(text: string, sessionLang?: string | null): Lang {
+  return detectLangWithFallback(text, sessionLang ?? undefined);
 }
 
 export function detectExtendedLang(text: string): { lang: ExtendedLang; confidence: number } {
