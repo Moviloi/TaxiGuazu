@@ -1,28 +1,31 @@
-# Decision Record
+# DECISION RECORD — Language & Slot Context Fixes
 
-## 2026-07-03 — Test: Mockear LLM en tests de ESCALATION para cubrir P3 re-prompt
+## Context
+Usuario reportó que el idioma no persiste en el chat, las confirmaciones se pierden y el contexto se reinicia entre turnos. Auditoría identificó 3 causas raíz que fueron corregidas.
 
-**Contexto**: El test `comprehension-runner.test.ts` simulaba ESCALATION con `getComprehensionState` mockeado a `"ESCALATION"`, pero no mockeaba el LLM provider. Con el cambio P3 (LLM re-prompt antes de escalar), el test fallaba porque el LLM real retornaba un mensaje de re-prompt en vez de escalar.
+## Decisiones
 
-**Decisión**: Agregar `vi.mock("@/lib/ai/llm-provider")` y dividir el test en dos:
-1. **LLM retorna "NULL"** → prueba el path de escalación (admin notificado)
-2. **LLM retorna mensaje** → prueba el path de re-prompt (sin admin)
+### D1: Threshold de sessionLang > 0.5 en vez de >= 0.5
+**Archivo:** `detect-lang.ts:67,49`
+**Problema:** "hotel" en texto español da confidence exacta 0.5 (1 keyword × 0.2 + 0.3 base) → detecta inglés sin consultar sessionLang.
+**Decisión:** Cambiar threshold a `> 0.5` para que confianza borderline (0.5) caiga al fallback de sessionLang.
+**Alternativa descartada:** Sacar "hotel" de listas EN. Riesgo: no detectar usuarios que solo dicen "hotel" en inglés sin otras keywords.
+**Fundamento:** El contexto de sesión debe prevalecer en casos borderline. Usuarios ingleses que escriben "hotel" + otra palabra (ej: "hotel booking") dan confidence > 0.5.
 
-**Alternativas consideradas**:
-1. Actualizar el test existente para esperar re-prompt — rechazado porque perdería cobertura del caso de escalación real.
-2. No mockear el LLM — rechazado porque el test dependía de una API externa, haciéndolo no-determinístico.
+### D2: Merge de slots previos restaura valor si LLM alucina
+**Archivo:** `extraction-runner.ts:433-444`
+**Problema:** Cuando LLM devuelve un slot con valor diferente al previo, el merge no distinguía entre alucinación y cambio legítimo del usuario.
+**Decisión:** Si el slot previo y el nuevo difieren, verificar si el valor nuevo aparece en el texto del usuario. Si no aparece, es alucinación → restaurar slot previo.
+**Alternativa descartada:** Siempre dar prioridad al slot previo. Riesgo: usuario cambia de opinión pero el sistema ignora el nuevo valor.
+**Alternativa descartada:** Siempre dar prioridad al LLM. Riesgo: alucinaciones en cada turno pierden el contexto.
 
-**Impacto**: Cobertura completa de ambos branches del P3. Tests aislados de la red.
+### D3: DESDE_RE incluye "de" y "del"
+**Archivo:** `core.ts:70`
+**Problema:** Usuarios dicen "del aeropuerto" (sin "desde") y el patrón no captura origen.
+**Decisión:** Agregar `de(?:l)?` al alternation de DESDE_RE.
+**Riesgo:** Falsos positivos mínimos — "de" es común en español pero el lookahead restringe a contextos de destino/verbo.
 
-## 2026-07-02 — FUT-01 F3: i18n como servicio transversal
-
-**Contexto**: `src/lib/ai/slot-confirmation.ts` y `src/lib/ai/response-builder.ts` importan `t()` de `src/lib/services/i18n/t.ts`. El contrato R1 prohibía imports de AI → Services (excepto `types`).
-
-**Decisión**: i18n es un servicio transversal (cross-cutting concern) como `types`, necesario en todas las capas. Se actualizó la regla R1 en `ael/contracts/enforce.sh` para excluir imports de `services/i18n/`.
-
-**Alternativas consideradas**:
-1. Mover `t.ts` a `@/lib/utils/` — rechazado porque Utils no puede importar del proyecto (ADR-001).
-2. Duplicar `t()` en AI layer — rechazado por violar DRY.
-3. Mantener R1 estricto y no migrar — rechazado porque dejaría `_lang` ignorado permanentemente.
-
-**Impacto**: Enforce R1 ahora permite AI → services/i18n. Otros servicios de negocio (pricing, extraction, etc.) siguen restringidos.
+## Estado Post-Fix
+- Idioma: sessionLang overridea detección borderline
+- Slots: merge preserva valores previos cuando LLM alucina
+- Origen: "del aeropuerto" ahora se captura como origen

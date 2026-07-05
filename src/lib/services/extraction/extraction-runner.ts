@@ -434,6 +434,11 @@ export async function runExtractionPipeline(
           if (v != null && String(v).trim() !== "") {
             if (!confidenceResult.slots[k]) {
               confidenceResult.slots[k] = { value: String(v), score: 0.8, reason: "previous_turn" };
+            } else if (String(confidenceResult.slots[k].value) !== String(v)) {
+              const currentValue = String(confidenceResult.slots[k].value).toLowerCase();
+              if (!text.toLowerCase().includes(currentValue)) {
+                confidenceResult.slots[k] = { value: String(v), score: 0.8, reason: "previous_turn" };
+              }
             }
           }
         }

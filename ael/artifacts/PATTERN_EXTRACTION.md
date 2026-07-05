@@ -1,98 +1,66 @@
-# PATTERN_EXTRACTION — Environment Boundary Pattern
+# PATTERN EXTRACTION — Language & Slot Context Fixes
 
-Generado por: **Learning**
-Fase del pipeline: `LEARNING`
+## 1. Patrón: Falsos positivos en detección de idioma por palabras multilingües
 
----
+**Observación:** `detectExtendedLang()` asigna score +1 por cada keyword encontrada en el texto. Palabras que existen en múltiples idiomas (hotel EN/ES/FR/DE/IT/PT, aeroporto PT/IT, airport EN/FR/DE) pueden causar detección incorrecta.
 
-## Patrones detectados
+**Términos comunes en múltiples idiomas en `detect-lang.ts:6-11`:**
 
-### Patrones de éxito
+| Término | EN | ES | PT | FR | DE | IT |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|
+| hotel | ✅ | (implícito) | (implícito) | ✅ | ✅ | ✅ |
+| airport | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| aéroport | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| aeroporto | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ |
 
-#### Patrón 1: Environment Boundary Pattern (completo)
-- **Evidencia:** 2 pipelines ARNÉS de hardening de secretos
-- **Frecuencia:** 2 veces en 2 pipelines
-- **Impacto:** Secretos completamente separados del repositorio
-- **Recomendación:** Mantener 3 capas:
-  1. `.env.example` (sin valores) — versionado, documentado
-  2. `.env` (con valores) — local, gitignored, nunca versionado
-  3. Dashboard Vercel (producción) — configurado manualmente
-- **Regla:** Los secretos nunca pertenecen al Product System ni al Control Plane versionado.
+**Patrón identificado:** Cuando `score = 1`, confidence = 0.5 exacto. Cualquier palabra que exista en otra lista puede dar falso positivo si el usuario solo usa esa palabra como keyword detectada.
 
-#### Patrón 2: Pre-commit Security Gate
-- **Evidencia:** `precommit-security-check.mjs` escanea staged files + source + docs
-- **Frecuencia:** 2 veces en 2 pipelines
-- **Impacto:** Previene que secretos entren al repo
-- **Recomendación:** Ejecutar `npm run security-check` antes de cada commit. Futuro: git hook automático.
+**Acción futura:** Para cualquier palabra borderline, considerar: (a) umbral > 0.5 para sessionLang override, (b) verificar si la palabra aparece en listas de otros idiomas y descontar.
 
-#### Patrón 3: Historical Secret Audit
-- **Evidencia:** `git log --diff-filter=A -- "*.env*"` reveló OIDC tokens en commits antiguos
-- **Frecuencia:** 1 vez en 1 pipeline
-- **Impacto:** Identificó OIDC tokens en historial (expiran automáticamente)
-- **Recomendación:** Siempre auditar historial git antes de declarar "limpio". Los .gitignore actuales no borran el pasado.
+## 2. Patrón: Merge de slots previos sin verificar alucinación
 
-### Patrones de fallo
+**Observación:** El patrón `if (!confidenceResult.slots[k])` se usaba en 1 lugar del código (`extraction-runner.ts:435`). Ahora corregido con verificación de texto.
 
-#### Patrón 1: Hardcoded Fallback Pattern
-- **Evidencia:** `route.ts:68` tenía `"redcolaborativa-bot-2025"` como fallback
-- **Frecuencia:** 1 vez en 1 pipeline
-- **Impacto:** Token real visible en código fuente
-- **Recomendación:** Nunca usar fallbacks con valores reales. Retornar error si falta configuración crítica.
+**Patrón similar en roleLock (líneas 446-464):**
+```typescript
+if (!confidenceResult.slots.origin || confidenceResult.slots.origin.score === 0 || ...)
+```
+Este bloque YA maneja correctamente el caso: solo sobreescribe si el slot no existe, tiene score 0, o valor null. No necesita fix porque roleLock solo se aplica cuando CORE detectó estructura sintáctica explícita (mayor confianza que LLM para ese slot).
 
-#### Patrón 2: Secret Documentation Anti-pattern
-- **Evidencia:** `SECRET_MIGRATION.md` incluyó API key real en documentación
-- **Frecuencia:** 1 vez en 1 pipeline
-- **Impacto:** Security check detectó el patrón en docs
-- **Recomendación:** Nunca incluir valores reales en documentación, ni siquiera como ejemplo. Usar `[REDACTED]` o `[VER SECRET_AUDIT.md]`.
+**Lección:** La condición `!confidenceResult.slots[k]` es demasiado débil cuando el LLM puede alucinar valores. Cualquier merge futuro debe verificar: (a) el slot existe en el LLM, (b) el valor es consistente con el input del usuario, (c) el slot previo no tiene un valor más confiable.
 
-### Patrones de eficiencia
+## 3. Patrón: Regex que no cubren lenguaje natural rioplatense
 
-#### Patrón 1: Staged Files Scanning
-- **Evidencia:** Precommit escanea archivos staged para commit
-- **Frecuencia:** 1 vez en 1 pipeline
-- **Impacto:** Detecta secretos antes de que entren al repo
-- **Recomendación:** Siempre escanear staged files, no solo source code.
+**Observación:** Los patrones de CORE (`core.ts:68-74`) fueron diseñados para español formal pero no cubren variantes coloquiales:
 
-## Métricas acumuladas
+| Expresión coloquial | Intención | ¿Capturada? |
+|---------------------|-----------|:-----------:|
+| "del aeropuerto" | origen | ❌ (ahora ✅ con P2) |
+| "de capital" | origen | ❌ (ahora ✅ con P2) |
+| "para el centro" | destino | ❌ |
+| "me dejás en..." | destino | ❌ |
+| "necesito ir a..." | destino | ✅ (IR_A_RE con "necesito") |
+| "te busco en..." | origen | ❌ |
 
-| Métrica | Valor |
-|---------|-------|
-| Pipelines ejecutados | 3 |
-| Tasa de éxito | 100% |
-| Secretos eliminados de código | 1 (hardcoded fallback) |
-| Secretos detectados en historial | 1 (OIDC tokens, expiran automáticamente) |
-| Archivos creados | 5 (.env.example, secrets.md, precommit, SECRET_AUDIT, SECRET_MIGRATION) |
+**Acción futura:**
+- `PARA_RE = /para\s+(?:el\s+|la\s+)?([a-záéíóúñ\s]{1,40}?)(?=\s*(?:desde|por|gracias|$))/i` — cubrir "para el centro"
+- `DEJAR_RE = /(?:me\s+dej[áa]s\s+(?:en|sobre)\s+|dej[áa]me\s+(?:en|sobre)\s+|te\s+busco\s+(?:en|sobre)\s+)([a-záéíóúñ\s]{1,40}?)(?=\s*(?:por|gracias|$))/i` — cubrir "me dejás en X"
 
-## Mejoras propuestas
+## 4. Patrón: Slots no persistidos en rutas alternas
 
-### Mejora 1: Git Hook Pre-commit Automático
-- **Basado en:** Pre-commit Security Gate
-- **Propuesta:** Integrar `precommit-security-check.mjs` como git hook pre-commit
-- **Evidencia:** Actualmente requiere ejecución manual
-- **Violación de contratos:** NO
+**Observación:** `upsertChatSession` se llama en:
+- `extraction-runner.ts:559` ✅ (dentro de `parsed.success`)
+- `tryFallbackExtraction()`: ❌ NO llama a `upsertChatSession`
 
-### Mejora 2: Secret Rotation Policy
-- **Basado en:** Historical Secret Audit
-- **Propuesta:** Documentar política de rotación de secretos (90 días)
-- **Evidencia:** No hay política actual, secretos en historial no rotados
-- **Violación de contratos:** NO
+**Impacto:** Si la extracción LLM falla (JSON inválido, timeout) y el fallback regex encuentra origen+destino, esos slots no se persisten en DB. En el siguiente turno, `loadPreviousSlots()` retorna {} y el contexto se pierde.
 
-### Mejora 3: Git History Cleaning
-- **Basado en:** Historical Secret Audit
-- **Propuesta:** Usar BFG Repo Cleaner para limpiar historial
-- **Evidencia:** OIDC tokens visibles en commits antiguos (expiran automáticamente)
-- **Violación de contratos:** NO (requiere aprobación)
+**Solución pendiente:** Agregar `upsertChatSession` en `tryFallbackExtraction()` o en la línea 574-589 después del fallback exitoso. Actualmente fuera de scope de este pipeline.
 
-## Next Steps
+## Resumen
 
-#### Patrón 4: LLM Mocking Pattern
-- **Evidencia:** Test `comprehension-runner.test.ts` fallaba porque P3 agregó un LLM re-prompt antes de escalación, y el test no mockeaba el LLM provider.
-- **Frecuencia:** 1 vez en 1 pipeline (2026-07-03)
-- **Impacto:** Tests ahora cubren ambos branches del LLM re-prompt (fallo → escalación, éxito → re-prompt) sin depender de una API externa.
-- **Recomendación:** Siempre que se agregue una llamada a LLM en medio de un pipeline de decisión, mockear el LLM provider en los tests y crear tests separados para cada branch (LLM retorna NULL vs LLM retorna mensaje). Usar `vi.mock("@/lib/ai/llm-provider")` con `mockResolvedValue` para controlar la respuesta.
-- **Regla:** Los tests nunca deben depender del LLM real. Siempre mockear `getLLMProvider` para evitar no-determinismo y dependencia de red.
-
-- [ ] Verificar OIDC tokens de Vercel (expiran automáticamente)
-- [ ] Integrar precommit como git hook
-- [ ] Documentar política de rotación de secretos
-- [ ] Evaluar limpieza de historial git con BFG
+| # | Patrón | Archivos | Severidad |
+|---|--------|----------|-----------|
+| 1 | Palabras multilingües en detección de idioma | `detect-lang.ts` | Media (mitigado por P1) |
+| 2 | Merge de slots sin verificar alucinación | `extraction-runner.ts` | Alta (corregido por P0) |
+| 3 | Regex incompletas para español coloquial | `core.ts` | Media (parcial corregido por P2) |
+| 4 | Slots no persistidos en fallback | `extraction-runner.ts` | Alta (pendiente) |

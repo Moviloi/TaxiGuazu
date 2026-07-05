@@ -67,7 +67,7 @@ const HIGH_INTENT_SIGNALS = ["flight:", "passengers:", "time:", "urgency:"];
 // contienen espacio. El lookahead usa `\s*` para tolerar fin de string.
 const ESTOY_EN_RE = /(?:estoy\s+en(?:\s+(?:el|la|los|las|al|del))?|estoy\s+ac[áa]\s+en(?:\s+(?:el|la|al))?|me\s+encuentro\s+en(?:\s+(?:el|la|al))?)\s+([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:desde|hasta|\bir\b|\bvoy\b|\bquiero\b|\bvamos\b|\bnecesito\b|pero|\by\b|[,;.!?]|$))/i;
 const IR_A_RE = /\b(?:voy|ir|quiero\s+ir|vamos)\s+(?:a\s+(?:el|la|los|las)\s+|a\s+|al\s+|del\s+)?([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:desde|hasta|\ba\b\s+[a-záéíóúñ]{3,}|\bestoy\b|pero|\by\b|ahora\b|hoy\b|mañana\b|luego\b|después\b|esta\s+noche|[,;.!?]|$))/i;
-const DESDE_RE = /(?:desde|partiendo\s+de|saliendo\s+de)\s+(?:el\s+|la\s+|los\s+|las\s+|al\s+|del\s+)?([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:hasta|\ba\b\s+(?:el|la|los|las)|\ba\b\s+[a-záéíóúñ]{3,}|\bvoy\b|\bir\b|\bquiero\b|\bvamos\b|\bnecesito\b|pero|\by\b|[,;.!?]|$))/i;
+const DESDE_RE = /(?:desde|partiendo\s+de|saliendo\s+de|de(?:l)?)\s+(?:el\s+|la\s+|los\s+|las\s+|al\s+|del\s+)?([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:hasta|\ba\b\s+(?:el|la|los|las)|\ba\b\s+[a-záéíóúñ]{3,}|\bvoy\b|\bir\b|\bquiero\b|\bvamos\b|\bnecesito\b|pero|\by\b|[,;.!?]|$))/i;
 const HASTA_RE = /(?:hasta|hacia)\s+(?:el\s+|la\s+|los\s+|las\s+|al\s+|del\s+)?([a-záéíóúñ][a-záéíóúñ\s]{1,40}?)(?=\s*(?:desde|estoy|por|para|gracias|con|\ba\b\s+[a-záéíóúñ]{3,}|[,;.!?]|$))/i;
 
 // v5.x: patrón "origen X y|, destino Y" / "origen: X destino: Y"

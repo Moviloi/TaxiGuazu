@@ -46,7 +46,7 @@ export function resolveLang(
 ): ExtendedLang {
   const fast = detectExtendedLang(text);
 
-  if (fast.confidence >= 0.5) return fast.lang;
+  if (fast.confidence > 0.5) return fast.lang;
 
   const llmLang = extractionResult?.language;
   if (typeof llmLang === "string" && LANG_GROUPS.some((g) => g.lang === llmLang)) {
@@ -64,7 +64,7 @@ export function detectLangWithFallback(
   sessionLang?: string | null,
 ): Lang {
   const fast = detectExtendedLang(text);
-  if (fast.confidence >= 0.5) {
+  if (fast.confidence > 0.5) {
     return fast.lang === "pt" ? "pt" : fast.lang === "en" ? "en" : "es";
   }
   if (sessionLang && (sessionLang === "en" || sessionLang === "pt")) {
