@@ -171,6 +171,16 @@ export async function runExtractionPipeline(
       raw: raw ? JSON.stringify(raw).substring(0, 200) : null,
     });
 
+    // [OBSERVABILITY] Remove after diagnosis — raw LLM output for this turn
+    log.info("[OBSERVABILITY] RAW_LLM", {
+      textLength: text.length,
+      textPreview: text.substring(0, 300),
+      rawExists: raw != null,
+      rawFull: raw ? JSON.stringify(raw).substring(0, 3000) : null,
+      roleLock: coreDecisionEarly?.roleLock,
+      prevSlots: prevSlotsEarly,
+    });
+
     const domain = mapIntentToDomain(leadCore.intent);
     const convState = await getConversationalState(phone);
 
@@ -276,6 +286,20 @@ export async function runExtractionPipeline(
       if (parsed.success) {
         log.info("[EXTRACTION] Parse exitoso, calculando confidence...");
         confidenceResult = await calculateSlotConfidence(parsed.data, text);
+
+        // [OBSERVABILITY] Remove after diagnosis — slot state BEFORE prevSlots merge
+        log.info("[OBSERVABILITY] SLOTS_BEFORE_MERGE", {
+          textPreview: text.substring(0, 300),
+          slots: Object.fromEntries(
+            Object.entries(confidenceResult.slots).map(([k, v]) => [
+              k,
+              { value: v.value, score: v.score, reason: v.reason }
+            ])
+          ),
+          overallConfidence: confidenceResult.overall_confidence,
+          action: confidenceResult.action,
+          convState: convState,
+        });
 
         // Multi-ride breakdown (compartido entre pricing y extractionNote)
         if (parsed.data.origin && parsed.data.destination) {
@@ -515,6 +539,20 @@ export async function runExtractionPipeline(
           ),
         });
 
+        // [OBSERVABILITY] Remove after diagnosis — slot state AFTER all merges (prevSlots + roleLock + affirmation + slotStates)
+        log.info("[OBSERVABILITY] SLOTS_AFTER_MERGE", {
+          textPreview: text.substring(0, 300),
+          prevSlots: prevSlotsEarly,
+          currentSlots: Object.fromEntries(
+            Object.entries(confidenceResult.slots).map(([k, v]) => [
+              k,
+              { value: v.value, score: v.score, reason: v.reason, source: (v as any).source ?? null, status: (v as any).status ?? null }
+            ])
+          ),
+          hasAffirmation,
+          hasCorrection,
+        });
+
         log.info("[EXTRACTION_RESULT]", {
           rawSlots: Object.fromEntries(
             Object.entries(confidenceResult.slots).map(([k, v]) => [k, { value: v.value, score: v.score }])
@@ -532,6 +570,20 @@ export async function runExtractionPipeline(
         });
 
         workflowResult = await evaluateWorkflowTransition(phone, confidenceResult);
+
+        // [OBSERVABILITY] Remove after diagnosis — pipeline branching decision
+        log.info("[OBSERVABILITY] PIPELINE_DECISION", {
+          textPreview: text.substring(0, 300),
+          action: workflowResult.action,
+          clarifyField: workflowResult.clarifyField,
+          workflowState: workflowResult.state,
+          askForConfirmation: workflowResult.askForConfirmation,
+          isComplete: workflowResult.action !== "clarify",
+          slotValues: Object.fromEntries(
+            Object.entries(confidenceResult.slots).map(([k, v]) => [k, v.value])
+          ),
+          prevSlots: prevSlotsEarly,
+        });
 
         log.info("[CONFIDENCE_RESULT]", {
           originConfidence: confidenceResult.slots.origin?.score ?? null,
