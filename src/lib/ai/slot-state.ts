@@ -45,6 +45,22 @@ export function buildSlotStates(
       status = "RAW";
     }
 
+    // AIT-061: scheduled_at inferido por horario de atracción → requiere confirmación.
+    // Se ejecuta ANTES del bloque "preserve prev" para que el preserve pueda restaurar
+    // CONFIRMED si el valor ya fue confirmado en una iteración anterior y no cambió.
+    // Esto NO toca el caso existing "relative_date_computed" (score 0.8, reason distinto)
+    // que sigue cayendo en score > 0 → INFERRED (base). Es quirúrgico: solo intercepta
+    // cuando el reason específico es "inferred_opening_hours".
+    if (k === "scheduled_at" && slot.reason === "inferred_opening_hours" && slot.value != null) {
+      if (hasAffirmation) {
+        source = "USER_CONFIRMED";
+        status = "CONFIRMED";
+      } else {
+        source = "SYSTEM_INFERRED";
+        status = "CONFIRMATION_PENDING";
+      }
+    }
+
     // Preserve previous CONFIRMED status if value unchanged (not a correction/affirmation event)
     const prev = prevStates[k];
     if (prev && prev.status === "CONFIRMED" && !hasCorrection && !hasAffirmation) {

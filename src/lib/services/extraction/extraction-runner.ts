@@ -15,6 +15,7 @@ import { getConversationalState, setConversationalState } from "@/lib/db/state-a
 import type { CoreDecision, ConfidenceMap } from "@/lib/ai/types";
 import { mapIntentToDomain } from "@/lib/ai/domain";
 import { calculateSlotConfidence } from "@/lib/services/extraction/confidence";
+import { inferPickupTime } from "@/lib/services/extraction/time-inference";
 import { buildConfidenceMap } from "@/lib/services/extraction/confidence-map";
 import { loadContext, mergeContext } from "@/lib/services/memory/context-memory";
 import { detectLeadLang } from "@/lib/detect-lang";
@@ -336,6 +337,40 @@ export async function runExtractionPipeline(
                 }
               }
             }
+          }
+        }
+
+        // AIT-061: Inferencia de horario post-extracción
+        // Si scheduled_at tiene fecha (date-only, ej: "2026-07-06" de relative_date_computed)
+        // y el destino tiene horario de apertura conocido, el sistema sugiere un pickup.
+        // La hora inferida se combina con la fecha existente y el reason cambia a
+        // "inferred_opening_hours" para que buildSlotStates produzca CONFIRMATION_PENDING.
+        if (confidenceResult.slots.scheduled_at?.value != null) {
+          const destSlot = confidenceResult.slots.destination;
+          const destinationName = destSlot?.value != null ? String(destSlot.value) : null;
+          const currentScheduledAt = String(confidenceResult.slots.scheduled_at.value);
+          const facts = leadCore.facts ?? [];
+
+          const timeInference = inferPickupTime(destinationName, facts, currentScheduledAt);
+
+          if (timeInference.confidence === "inferred" && timeInference.inferredTime != null) {
+            const datePart = currentScheduledAt.includes("T")
+              ? currentScheduledAt.split("T")[0]
+              : currentScheduledAt;
+            const combinedDatetime = `${datePart}T${timeInference.inferredTime}:00`;
+
+            confidenceResult.slots.scheduled_at = {
+              value: combinedDatetime,
+              score: 0.8,
+              reason: "inferred_opening_hours",
+            };
+
+            log.info("[TIME_INFERENCE] Hora inferida para pickup:", {
+              destination: destinationName,
+              inferredTime: timeInference.inferredTime,
+              combinedDatetime,
+              reason: timeInference.displayReason,
+            });
           }
         }
 

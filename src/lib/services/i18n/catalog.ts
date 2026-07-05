@@ -110,6 +110,8 @@ export const CATALOG: CatalogMap = {
   "confirm.origin": _("📍 *Origen:*", "📍 *Origem:*", "📍 *Origin:*"),
   "confirm.destination": _("📍 *Destino:*", "📍 *Destino:*", "📍 *Destination:*"),
   "confirm.passengers": _("👥 *Pasajeros:*", "👥 *Passageiros:*", "👥 *Passengers:*"),
+  // AIT-060: Aeropuerto inferido por OI layer
+  "confirm.airport": _("🛩️ *Aeropuerto:*", "🛩️ *Aeroporto:*", "🛩️ *Airport:*"),
   "confirm.ask": _("¿Está correcto?", "Está correto?", "Is this correct?"),
   "confirm.buttonConfirm": _("✅ Confirmar", "✅ Confirmar", "✅ Confirm"),
   "confirm.buttonChange": _("✏️ Cambiar", "✏️ Alterar", "✏️ Change"),
@@ -435,6 +437,18 @@ export const CATALOG: CatalogMap = {
   ),
   "driver.closureConfirm": _("✅ Confirmar", "✅ Confirmar"),
   "driver.closureReview": _("📝 Revisar", "📝 Revisar"),
+
+  // ─── 21. TIME INFERENCE (AIT-061) ─────────────────────────────────────
+  "time.suggest": fn(
+    (p) => `¿Salimos a las ${p.time}? (${p.reason})`,
+    (p) => `Saímos às ${p.time}? (${p.reason})`,
+    (p) => `Shall we leave at ${p.time}? (${p.reason})`,
+  ),
+  "time.ask": _(
+    "¿A qué hora necesitás el traslado?",
+    "A que horas você precisa do traslado?",
+    "What time do you need the transfer?",
+  ),
 };
 
 // Tipo helper para type safety — no es un enum real, solo para documentación
