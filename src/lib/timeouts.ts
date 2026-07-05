@@ -257,7 +257,7 @@ async function checkSessionCleanup(): Promise<void> {
   const stale = await getStaleWorkflows(staleCutoff);
   for (const w of stale) {
     log.info(`[CLEANUP] Cerrando workflow huérfano conv ${w.conversation_id}`);
-    await closeWorkflow(w.conversation_id);
+    await closeWorkflow(w.conversation_id, "DispatchAbandoned");
   }
 
   await setConnectionValue("last_session_cleanup_date", today);

@@ -4,11 +4,19 @@ const mockGetConversationById = vi.fn();
 const mockGetDispatchState = vi.fn();
 const mockSetDispatchState = vi.fn();
 
+vi.mock("@/lib/db/core/connection", () => ({
+  getDb: vi.fn(() => ({ execute: vi.fn() })),
+  ensureSchema: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/db/database", () => ({
   getConversationById: mockGetConversationById,
+  getActiveTripByPhone: vi.fn().mockResolvedValue(null),
   getExpiredByState: vi.fn().mockResolvedValue([]),
   getStaleWorkflowsFromDb: vi.fn().mockResolvedValue([]),
   assignWorkflowAtomic: vi.fn().mockResolvedValue(true),
+  getDb: vi.fn(() => ({ execute: vi.fn() })),
+  ensureSchema: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/db/state-accessors", () => ({
@@ -56,7 +64,7 @@ describe("dispatch-workflow transitions", () => {
 
   it("nivel_3 → closed (válido)", async () => {
     mockGetDispatchState.mockResolvedValue("nivel_3");
-    await closeWorkflow(1);
+    await closeWorkflow(1, "DispatchAbandoned");
     expect(mockSetDispatchState).toHaveBeenCalledWith("+549111", "closed");
   });
 
@@ -68,7 +76,7 @@ describe("dispatch-workflow transitions", () => {
 
   it("waiting_driver → closed (válido)", async () => {
     mockGetDispatchState.mockResolvedValue("waiting_driver");
-    await closeWorkflow(1);
+    await closeWorkflow(1, "DispatchAbandoned");
     expect(mockSetDispatchState).toHaveBeenCalledWith("+549111", "closed");
   });
 
@@ -99,7 +107,7 @@ describe("dispatch-workflow transitions", () => {
 
   it("closeWorkflow sin conversación no lanza error", async () => {
     mockGetConversationById.mockResolvedValue(null);
-    await expect(closeWorkflow(1)).resolves.not.toThrow();
+    await expect(closeWorkflow(1, "DispatchAbandoned")).resolves.not.toThrow();
   });
 
   it("resetToIdle sin conversación no lanza error", async () => {

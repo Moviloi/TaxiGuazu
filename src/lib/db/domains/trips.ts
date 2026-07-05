@@ -1,7 +1,8 @@
 import { query, queryOne } from "../core/helpers";
-import { getDb, ensureSchema } from "../core/connection";
-import type { TripRow, TripPhase, TripClosureReason, TariffRow, TripGroupRow, TripLegRow } from "../types";
+import { getDb, ensureSchema, type DbExecutor } from "../core/connection";
+import type { TripRow, TripPhase, TripClosureReason, TariffRow, TripGroupRow, TripLegRow, TripEventType, DispatchEventLevel } from "../types";
 import { log } from "@/lib/utils/logger";
+import { insertDispatchEvent } from "./dispatch-events";
 
 async function getDriverDiscountForTariff(driverPhone: string, tariffId: number): Promise<number | null> {
   const row = await queryOne<{ discount_pct: number }>(
@@ -11,12 +12,80 @@ async function getDriverDiscountForTariff(driverPhone: string, tariffId: number)
   return row?.discount_pct ?? null;
 }
 
+// ========== TRIP EVENTS (audit log) ==========
+// Contrato de insertTripEvent:
+// - payload: string JSON pre-serializado por el caller (no se valida aquí).
+//   Si no es JSON válido, se almacena igual — es responsabilidad del caller
+//   garantizar el formato. No hay parsing interno porque el audit log
+//   no debe rechazar escrituras por formato de datos.
+// - actor: defaults a "system" si no se especifica.
+// - executor: opcional. Si se pasa una transacción (DbExecutor), escribe
+//   dentro de esa transacción. Si no, usa getDb() (auto-commit).
+
+/**
+ * insertTripEvent — escribe un evento de auditoría en trip_events.
+ *
+ * Contrato:
+ * - payload: string JSON pre-serializado por el caller. NO se valida con
+ *   JSON.parse() antes de insertar. Si el caller pasa basura, se almacena
+ *   igual — el audit log no debe rechazar escrituras por formato inválido.
+ *   Es responsabilidad del caller garantizar JSON.stringify() antes de llamar.
+ * - actor: defaults a "system" si no se especifica.
+ * - executor: opcional. Si se pasa un DbExecutor (ej: transacción), escribe
+ *   dentro de ese contexto. Si no, usa getDb() en auto-commit.
+ */
+export async function insertTripEvent(
+  tripId: string,
+  eventType: TripEventType,
+  payload?: string | null,
+  actor?: string,
+  executor?: DbExecutor,
+): Promise<void> {
+  await ensureSchema();
+  const db = executor ?? getDb();
+  await db.execute({
+    sql: "INSERT INTO trip_events (trip_id, event_type, payload, occurred_at, actor) VALUES (?, ?, ?, unixepoch(), ?)",
+    args: [tripId, eventType, payload ?? null, actor ?? "system"],
+  });
+}
+
 // ========== TRIPS ==========
 
-export async function createTrip(tripId: string, clientPhone: string, origin: string, destination: string, priceBase?: number, passengers?: number, scheduledAt?: number, flightNumber?: string, status?: string): Promise<void> {
+/**
+ * createTrip — crea un trip y registra TripCreated en trip_events.
+ *
+ * GAP-05 (atomicidad parcial): ver cobertura global en la definición de
+ * STATUS_TO_TRIP_EVENT. Aquí específicamente: el INSERT de trips y el
+ * INSERT de trip_events se hacen secuencialmente sobre el mismo db handle.
+ * Con getDb() (default), cada execute() es auto-commit independiente.
+ * El executor opcional permite atomicidad REAL — hoy ningún caller lo usa.
+ *
+ * syncTripPhaseFromLegacyStatus queda fuera — siempre usa getDb()
+ * separado (legacy, no se toca).
+ */
+export async function createTrip(
+  tripId: string,
+  clientPhone: string,
+  origin: string,
+  destination: string,
+  priceBase?: number,
+  passengers?: number,
+  scheduledAt?: number,
+  flightNumber?: string,
+  status?: string,
+  executor?: DbExecutor,
+): Promise<void> {
   const tripStatus = status || "consulta";
+  const db = executor ?? getDb();
   await ensureSchema();
-  await getDb().execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, tripStatus, scheduledAt || null, flightNumber || null] });
+  await db.execute({ sql: "INSERT INTO trips (trip_id, client_phone, origin, destination, price_base, passengers, status, scheduled_at, flight_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", args: [tripId, clientPhone, origin, destination, priceBase || null, passengers || null, tripStatus, scheduledAt || null, flightNumber || null] });
+  await insertTripEvent(
+    tripId,
+    "TripCreated",
+    JSON.stringify({ origin, destination, price: priceBase ?? null, passengers: passengers ?? null, scheduled: scheduledAt ?? null }),
+    "system",
+    db,
+  );
   await syncTripPhaseFromLegacyStatus(tripId, tripStatus);
 }
 
@@ -107,13 +176,68 @@ export async function getTripByAssignedDriver(driverPhone: string): Promise<Trip
   return trip;
 }
 
+/**
+ * GAP-05 (atomicidad parcial) — cobertura global:
+ *
+ * Hoy hay 5 tipos de eventos de trip, inyectados en 5 puntos:
+ *
+ *   TripCreated       → createTrip()       (payload rico, executor opcional)
+ *   TripDriverAssigned → assignDriverToTrip() (payload rico, executor opcional)
+ *   TripReconfirmed   → updateTripState()   (payload null)  ← mapa abajo
+ *   TripCompleted     → updateTripState()   (payload null)  ← mapa abajo
+ *                      → completeTrip()     (payload rico, executor opcional)
+ *   TripCancelled     → updateTripState()   (payload null)  ← mapa abajo
+ *
+ * En todos los casos, el UPDATE/INSERT del dato y el INSERT del evento
+ * son auto-commit independientes (best-effort). Si el evento falla, el
+ * dato ya fue escrito sin auditoría. El executor opcional en createTrip(),
+ * assignDriverToTrip() y completeTrip() es la válvula estructural para
+ * atomicidad REAL cuando un caller futuro pase una transacción — hoy ningún
+ * caller lo usa.
+ *
+ * updateTripState() es la excepción: inyecta el evento DESPUÉS de la sync
+ * de fase, con payload null, y SIN executor (el UPDATE del status y el
+ * INSERT del evento siempre son auto-commit separados). Esto es deliberado:
+ * el mapa centralizado (STATUS_TO_TRIP_EVENT) cubre 3 eventos de un solo
+ * punto de código, minimizando la superficie de cambio. Si se necesita
+ * atomicidad en estos, se debe refactorizar updateTripState() para aceptar
+ * executor.
+ *
+ * Mapa legacy status → TripEventType. Los statuses que NO están en el mapa
+ * (ej: "consulta", "asignado_chofer") no generan evento — cada uno tiene
+ * su propio punto de inyección con payload rico.
+ */
+const STATUS_TO_TRIP_EVENT: Partial<Record<string, TripEventType>> = {
+  reconfirmado_24hs: "TripReconfirmed",
+  cancelado: "TripCancelled",
+  completado: "TripCompleted",
+};
+
 export async function updateTripState(tripId: string, newState: string): Promise<void> {
   await ensureSchema();
   await getDb().execute({ sql: "UPDATE trips SET status = ?, updated_at = unixepoch() WHERE trip_id = ?", args: [newState, tripId] });
   await syncTripPhaseFromLegacyStatus(tripId, newState);
+
+  // Event logger best-effort (ver GAP-05). Statuses sin entrada en el mapa
+  // (ej: "asignado_chofer") se omiten silenciosamente.
+  const eventType = STATUS_TO_TRIP_EVENT[newState];
+  if (eventType) {
+    await insertTripEvent(tripId, eventType, null, "system");
+  }
 }
 
-export async function assignDriverToTrip(tripId: string, driverPhone: string): Promise<{ commission: number; payout: number } | null> {
+/**
+ * assignDriverToTrip — asigna un driver a un trip y registra
+ * TripDriverAssigned en trip_events (best-effort, ver GAP-05).
+ *
+ * @param executor - Opcional. Si se pasa una transacción, tanto el UPDATE
+ *   como el INSERT del evento se ejecutan dentro de ella.
+ */
+export async function assignDriverToTrip(
+  tripId: string,
+  driverPhone: string,
+  executor?: DbExecutor,
+): Promise<{ commission: number; payout: number } | null> {
   await ensureSchema();
   const trip = await getTripById(tripId);
   if (!trip) return null;
@@ -129,21 +253,52 @@ export async function assignDriverToTrip(tripId: string, driverPhone: string): P
   }
 
   const commission = price - payout;
+  const db = executor ?? getDb();
 
-  await getDb().execute({
+  await db.execute({
     sql: "UPDATE trips SET assigned_driver_phone = ?, status = 'asignado_chofer', commission_amount = ?, driver_payout = ?, updated_at = unixepoch() WHERE trip_id = ?",
     args: [driverPhone, commission, payout, tripId],
   });
+  await insertTripEvent(
+    tripId,
+    "TripDriverAssigned",
+    JSON.stringify({ driver_phone: driverPhone, commission, payout, price }),
+    "system",
+    db,
+  );
   await syncTripPhaseFromLegacyStatus(tripId, "asignado_chofer");
   return { commission, payout };
 }
 
-export async function completeTrip(tripId: string): Promise<void> {
+export async function completeTrip(
+  tripId: string,
+  executor?: DbExecutor,
+): Promise<void> {
   await ensureSchema();
-  await getDb().execute({
+  const db = executor ?? getDb();
+
+  await db.execute({
     sql: "UPDATE trips SET status = 'completado', confirmed_at = unixepoch(), updated_at = unixepoch() WHERE trip_id = ?",
     args: [tripId],
   });
+
+  // Event logger best-effort con payload de cierre (ver GAP-05).
+  // Lee commission_amount/driver_payout seteados por assignDriverToTrip.
+  const trip = await getTripById(tripId);
+  if (trip) {
+    await insertTripEvent(
+      tripId,
+      "TripCompleted",
+      JSON.stringify({
+        commission: trip.commission_amount ?? 0,
+        payout: trip.driver_payout ?? 0,
+        price: trip.price_base ?? 0,
+      }),
+      "system",
+      db,
+    );
+  }
+
   await syncTripPhaseFromLegacyStatus(tripId, "completado");
 }
 
@@ -409,7 +564,17 @@ export async function getStaleWorkflowsFromDb(
   }));
 }
 
-export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
+export async function assignWorkflowAtomic(phone: string, driverPhone: string): Promise<boolean> {
+  // Leer estado actual antes del UPDATE (para registrar el level del evento)
+  const currentState = await queryOne<{ dispatch_state: string }>(
+    "SELECT dispatch_state FROM chat_sessions WHERE phone = ?",
+    [phone],
+  );
+  const validStates: string[] = ["nivel_1", "nivel_2", "nivel_3", "waiting_driver"];
+  if (!currentState || !validStates.includes(currentState.dispatch_state)) {
+    return false;
+  }
+
   const rs = await getDb().execute({
     sql: `UPDATE chat_sessions
           SET dispatch_state = 'closed', updated_at = unixepoch()
@@ -417,7 +582,19 @@ export async function assignWorkflowAtomic(phone: string): Promise<boolean> {
             AND dispatch_state IN ('nivel_1','nivel_2','nivel_3','waiting_driver')`,
     args: [phone],
   });
-  return rs.rowsAffected > 0;
+  const ok = rs.rowsAffected > 0;
+  if (ok) {
+    const trip = await getActiveTripByPhone(phone);
+    if (trip) {
+      await insertDispatchEvent(
+        trip.trip_id,
+        "DispatchAccepted",
+        currentState.dispatch_state as DispatchEventLevel,
+        driverPhone,
+      );
+    }
+  }
+  return ok;
 }
 
 // ========== TARIFF QUERIES ==========

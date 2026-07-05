@@ -541,6 +541,15 @@ export async function searchTariffs(text: string): Promise<TariffRow[]> {
   return query<TariffRow>("SELECT * FROM tariffs WHERE LOWER(origin) LIKE ? OR LOWER(destination) LIKE ?", [q, q]);
 }
 
+export async function getPlaceCountry(placeName: string): Promise<string | null> {
+  if (!placeName || placeName.trim() === "") return null;
+  const row = await queryOne<{ country: string }>(
+    "SELECT country FROM places WHERE LOWER(canonical_name) = ? AND active_status = 'active' LIMIT 1",
+    [placeName.toLowerCase().trim()],
+  );
+  return row?.country ?? null;
+}
+
 export async function resolveAlias(text: string): Promise<{ resolved: boolean; names: string[] }> {
   if (!text) return { resolved: false, names: [] };
   const lower = text.toLowerCase().trim();
@@ -786,7 +795,7 @@ export async function createTransaction() {
   return getDb().transaction();
 }
 
-export { getDb } from "./core/connection";
+export { getDb, ensureSchema } from "./core/connection";
 export { queryOne } from "./core/helpers";
 export type { DbExecutor } from "./core/connection";
 
@@ -822,6 +831,9 @@ export {
   findTariffRow,
   findTariffByPriority,
 } from "./domains/trips";
+export {
+  insertDispatchEvent,
+} from "./domains/dispatch-events";
 export {
   getLearningWeight,
   setLearningWeight,

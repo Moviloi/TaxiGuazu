@@ -198,7 +198,7 @@ async function assignDriver(workflow: { conversationId: number; phone: string; s
 
   const trip = await getActiveTripByPhone(workflow.phone);
 
-  const assigned = await assignWorkflowAtomic(workflow.phone);
+  const assigned = await assignWorkflowAtomic(workflow.phone, driverPhone);
   if (!assigned) {
     if (trip?.assigned_driver_phone === driverPhone) {
       log.info(`[ASSIGN] Driver ya estaba asignado a conv ${convId}`);

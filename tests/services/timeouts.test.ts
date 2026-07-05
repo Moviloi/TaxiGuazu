@@ -52,7 +52,7 @@ vi.mock("@/lib/services/trip-execution/survey.service", () => ({
 import { checkTimeouts } from "@/lib/timeouts";
 import { sendPendingSurveys } from "@/lib/services/trip-execution/survey.service";
 import { executeEscalation } from "@/lib/services/dispatch/dispatch.service";
-import { getExpiredByState } from "@/lib/services/dispatch/dispatch-workflow";
+import { getExpiredByState, closeWorkflow } from "@/lib/services/dispatch/dispatch-workflow";
 import {
   getTripsByScheduledAtWindow, getDriverByPhone, setConnectionFlag,
   getConnectionValueFlag, getTripsPendingCloseOut, getTripsWithMissingCommission,
@@ -247,6 +247,7 @@ describe("checkTimeouts", () => {
 
       await checkTimeouts();
 
+      expect(closeWorkflow).toHaveBeenCalledWith(101, "DispatchAbandoned");
       expect(setConnectionValue).toHaveBeenCalledWith("last_session_cleanup_date", expect.any(String));
     });
   });

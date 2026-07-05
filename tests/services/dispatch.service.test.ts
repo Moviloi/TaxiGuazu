@@ -203,7 +203,7 @@ describe("executeEscalation", () => {
     await executeEscalation({ conversationId: 1, phone: "+54911", currentState: "nivel_3" });
 
     expect(notifyAdmin).toHaveBeenCalled();
-    expect(closeWorkflow).toHaveBeenCalledWith(1);
+    expect(closeWorkflow).toHaveBeenCalledWith(1, "DispatchAbandoned");
   });
 
   it("no active trip → returns early", async () => {
@@ -237,7 +237,7 @@ describe("executeEscalation — waiting_driver contingency", () => {
 
     expect(setConnectionValue).toHaveBeenCalled();
     expect(setConnectionFlag).toHaveBeenCalledWith("contingency_offered_1");
-    expect(closeWorkflow).toHaveBeenCalledWith(1);
+    expect(closeWorkflow).toHaveBeenCalledWith(1, "DispatchContingency");
     expect(sendInteractiveButtons).toHaveBeenCalled();
   });
 
@@ -263,7 +263,7 @@ describe("executeEscalation — waiting_driver contingency", () => {
     expect(sendWhatsAppMessage).toHaveBeenCalled();
     expect(notifyAdmin).toHaveBeenCalled();
     expect(deleteConnectionKey).toHaveBeenCalledWith("contingency_dual_1");
-    expect(closeWorkflow).toHaveBeenCalledWith(1);
+    expect(closeWorkflow).toHaveBeenCalledWith(1, "DispatchAbandoned");
   });
 
   it("no dual, no contingency → generic failure", async () => {
@@ -274,7 +274,7 @@ describe("executeEscalation — waiting_driver contingency", () => {
 
     expect(sendWhatsAppMessage).toHaveBeenCalled();
     expect(notifyAdmin).toHaveBeenCalled();
-    expect(closeWorkflow).toHaveBeenCalledWith(1);
+    expect(closeWorkflow).toHaveBeenCalledWith(1, "DispatchAbandoned");
   });
 });
 

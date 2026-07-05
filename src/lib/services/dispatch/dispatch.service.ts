@@ -139,7 +139,7 @@ Cliente: ${input.phone}
 Destino: ${destino}
 
 Los 3 niveles de despacho agotados. Reasigná manualmente.`);
-    await closeWorkflow(input.conversationId);
+    await closeWorkflow(input.conversationId, "DispatchAbandoned");
     return;
   }
 
@@ -162,7 +162,7 @@ Los 3 niveles de despacho agotados. Reasigná manualmente.`);
       const match4p = await resolveTariff(trip.origin || "", trip.destination || "", 4);
       const price4p = match4p.matched ? match4p.price : (trip.price_base || 0);
 
-      await closeWorkflow(input.conversationId);
+      await closeWorkflow(input.conversationId, "DispatchContingency");
 
       await sendInteractiveButtons(input.phone,
         `Mirá, en este microsegundo no encuentro una minivan de hasta 6 plazas disponible. Pero para no hacerte esperar, te puedo buscar dos autos de hasta 4 pasajeros ya mismo. Te saldría [$${price4p.toLocaleString("es-AR")}] × 2 en total (es decir, $${price4p.toLocaleString("es-AR")} cada uno). ¿Te sirve que intente buscártelos?`, [
@@ -187,7 +187,7 @@ Cliente: ${input.phone}
 Auto A: ${dual.driverA_name} (${dual.driverA_phone}) — cancelado
 Ambos viajes cancelados. Contactar manualmente.`);
       await deleteConnectionKey(`contingency_dual_${input.conversationId}`);
-      await closeWorkflow(input.conversationId);
+      await closeWorkflow(input.conversationId, "DispatchAbandoned");
       return;
     }
 
@@ -198,7 +198,7 @@ Cliente: ${input.phone}
 Destino: ${destino}
 
 Ningún chofer tomó el servicio AHORA. Reasigná manualmente.`);
-    await closeWorkflow(input.conversationId);
+    await closeWorkflow(input.conversationId, "DispatchAbandoned");
   }
 }
 
