@@ -1,7 +1,8 @@
-# Glosario Unificado — TaxiGuazú
+# Glosario Unificado — AITOS
 
-> Fuente canónica de terminología. Reemplaza `architecture.md` L169-185.
-> Fecha: 2026-07-04 · AIT-015
+> Fuente canónica de terminología para el AI Transportation Operating System.
+> Todos los documentos deben usar estos términos de forma consistente.
+> Fecha: 2026-07-06
 
 ---
 
@@ -114,6 +115,21 @@
 | **Rate Limit** | Máximo 10 mensajes por teléfono en ventana de 60s | `route.ts` (checkRateLimit, AIT-005) |
 | **Cron** | Jobs programados vía endpoint `/api/cron/check-timeouts` | `timeouts.ts` |
 | **Housekeeping** | Limpieza de sesiones viejas, workflows estancados, trips expirados | `timeouts.ts` |
+
+---
+
+## Arquitectura y Contexto para IA
+
+| Término | Definición | Origen |
+|---------|-----------|--------|
+| **AITOS** | AI Transportation Operating System — el sistema que convierte lenguaje humano en operaciones logísticas ejecutables | `docs/architecture/` |
+| **Bounded Context** | Dominio delimitado emergente del código (Conversation, Extraction, Pricing, Geo, Trip, Dispatch, Learning, Memory) | `docs/architecture/bounded-contexts.md` |
+| **Engine** | Motor especializado del sistema (Intent, Extraction, Pricing, Geo, Policy, Dispatch, etc.) | `docs/architecture/engines.md` |
+| **Triple Fallback** | Patrón de degradación en 3 capas: rápido determinista → heurística/DB → LLM → fallback seguro | `docs/ai/ARCHITECTURE_BIBLE.md` |
+| **Deterministic Core** | Núcleo del sistema que no usa LLM ni DB para decisiones primarias | `src/lib/ai/core.ts`, `docs/ai/ARCHITECTURE_BIBLE.md` |
+| **Operational Model** | Representación canónica de un viaje mediante slots (origin, destination, passengers, etc.) | `docs/ai/INVARIANTS.md` |
+| **Architecture Drift** | Desviación entre la arquitectura documentada y el código real | `docs/architecture/drift-report.md` |
+| **Quality Gate** | Checklist que toda modificación debe cumplir | `docs/ai/QUALITY_GATE.md` |
 
 ---
 

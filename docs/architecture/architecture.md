@@ -1,171 +1,100 @@
-# Architecture — TaxGuazú
+# Architecture — AI Transportation Operating System (AITOS)
 
-## Visión general
-
-Bot de WhatsApp que procesa mensajes entrantes a través de un pipeline conversacional determinístico, extrae datos con LLM, gestiona estados de conversación, y coordina dispatch a choferes. El sistema sigue una arquitectura en capas con dirección de dependencia estricta.
-
-## Autoridad
-
-Las decisiones arquitectónicas están documentadas en:
-
-- `docs/adr/001-layered-architecture.md` — Arquitectura en capas
-- `docs/adr/002-database-facade.md` — Patrón de fachada de base de datos
-- `docs/adr/003-learning-domain.md` — Consolidación del dominio de aprendizaje
-- `docs/adr/004-service-boundaries.md` — Reglas de límites de servicios
-
-Este documento describe el estado actual del sistema. Cuando exista contradicción entre este documento y los ADRs, los ADRs tienen prioridad.
+> Executive index. This file is the entry point to all architectural documentation.
+> For the AI agent minimum context, start at `docs/ai/ARCHITECTURE_BIBLE.md`.
 
 ---
 
-## Arquitectura de comportamiento del sistema
+## What this system is
 
-El sistema procesa mensajes a través de un pipeline funcional de 4 fases.
-Esto describe flujo conversacional, NO capas de código ni arquitectura de desarrollo.
+The **AI Transportation Operating System (AITOS)** converts ambiguous human language — received primarily via WhatsApp — into executable transportation logistics operations.
 
-### Flujo
-
-```
-Detección → Clasificación → Decisión → Respuesta
-   (CORE)      (CORE)       (POLICY)    (OUTPUT)
-```
-
-| Fase | Qué hace | Entrada | Salida |
-|------|----------|---------|--------|
-| **CORE** | Detecta intención, extrae hechos, evalúa confianza | Texto del usuario | CoreDecision (intent, facts, slot stability) |
-| **ROUTER** | Determina flujo de respuesta según modo | CoreDecision | OutputType |
-| **POLICY** | Toma decisión de respuesta basada en reglas, sin LLM | CoreDecision + slots + contexto | Decisión de respuesta + outputSource |
-| **OUTPUT** | Comunica resultado al usuario vía WhatsApp | Decisión de respuesta | Mensaje enviado |
-
-### Transiciones de estado
-
-- CORE puede retornar AMBIGUOUS si la confianza es baja
-- ROUTER puede redirigir a laterales (EMERGENCY, RESCHEDULE, POST_SERVICE)
-- POLICY puede requerir extracción adicional (collecting_slots)
-- OUTPUT puede incluir confirmación de campos (awaiting_confirmation)
-
-> Este flujo es funcional/conversacional. Las carpetas del código (`ai/`, `services/`, `workflow/`) NO mapean 1:1 a estas fases.
+It is **not** a chatbot. It is **not** a WhatsApp bot. It is an operating system whose current primary channel is WhatsApp.
 
 ---
 
-## Arquitectura técnica
+## Quick navigation
 
-### Capas
+| Document | Purpose |
+|----------|---------|
+| [`docs/ai/ARCHITECTURE_BIBLE.md`](../ai/ARCHITECTURE_BIBLE.md) | **Read first.** Canonical truth for AI agents. |
+| [`docs/ai/ARCHITECTURE_RULES.md`](../ai/ARCHITECTURE_RULES.md) | Strict architectural rules. |
+| [`docs/ai/CONTRACTS.md`](../ai/CONTRACTS.md) | Engine contracts. |
+| [`docs/ai/INVARIANTS.md`](../ai/INVARIANTS.md) | Architectural invariants. |
+| [`docs/ai/DECISION_TREE.md`](../ai/DECISION_TREE.md) | Runtime decision tree. |
+| [`system-overview.md`](./system-overview.md) | Conversation → Operational Model → Execution → Learning. |
+| [`bounded-contexts.md`](./bounded-contexts.md) | Real bounded contexts derived from code. |
+| [`engines.md`](./engines.md) | Detailed engine documentation. |
+| [`system-map.md`](./system-map.md) | Operational map: "If I need to modify X, look at Y." |
+| [`glossary.md`](./glossary.md) | Canonical terminology. |
+| [`reverse-engineering/architecture-graphs.md`](./reverse-engineering/architecture-graphs.md) | Auto-generated dependency graphs. |
+| [`../adr/`](../adr/) | Architecture Decision Records. |
 
-```
-Config → Auth → Utils
-   ↓
-DB (core → types → domains → facade)
-   ↓
-WhatsApp · AI
-   ↓
-Services (i18n → Geo → Memory → Pricing → Learning → Extraction → Workflow → Dispatch → Trip-execution → Admin → Housekeeping)
-   ↓
-Lead (orchestrator)
-   ↓
-API routes
-```
+---
 
-### Responsabilidades por capa
+## Authority
 
-| Capa | Responsabilidad | Archivos clave |
-|------|-----------------|----------------|
-| **Config** | Variables de entorno, constants, configuración estática | `config/constants.ts`, `config/env.ts` |
-| **Utils** | Funciones puras sin dependencias del proyecto | `utils/clamp.ts`, `utils/logger.ts` |
-| **DB Core** | Conexión, helpers de query | `db/core/connection.ts`, `db/core/helpers.ts` |
-| **DB Types** | Definiciones de tipos de filas | `db/types.ts` |
-| **DB Domains** | Queries específicas por dominio | `db/domains/*.ts` |
-| **DB Facade** | Superficie única de acceso a datos (63+ funciones exportadas) | `db/database.ts` |
-| **WhatsApp** | Cliente de mensajería Cloud API | `whatsapp/sender.ts` |
-| **AI** | LLM, clasificación de intención, políticas, respuesta | `ai/*.ts` |
-| **Services** | Lógica de negocio por dominio | `services/*/` |
-| **Lead** | Orquestador de alto nivel | `lead.service.ts` |
-| **API Routes** | HTTP handlers, delgados, sin lógica de negocio | `app/api/*/` |
+1. **Code is the ultimate source of truth.**
+2. **AI Context Pack** (`docs/ai/`) is the canonical guide for agents.
+3. **ADRs** (`docs/adr/`) record permanent decisions.
+4. **This index** points to the above; it does not duplicate them.
 
-### Contratos entre capas
+---
 
-| Contrato | Descripción |
-|----------|------------|
-| DB Facade → Services | Services importan SOLO de `database.ts`, nunca de `db/core/` o `db/domains/` directamente |
-| AI → Services | AI NO importa de Services |
-| Services → Lead | Lead es el único orquestador de alto nivel; Services NO importan de Lead |
-| Services internos | Sigue el orden de dependencia de ADR 004 |
+## Core pipeline
 
-### Orden de dependencia de servicios (ADR 004)
-
-```
-i18n  (leaf — no service imports)
-  ↓
-Geo
-  ↓
-Memory / Pricing
-  ↓
-Learning
-  ↓
-Extraction
-  ↓
-Workflow
-  ↓
-Dispatch
-  ↓
-Trip-execution
-  ↓
-Admin / Housekeeping
-  ↓
-Lead (top-level orchestrator)
+```mermaid
+flowchart LR
+    User["Usuario WhatsApp"] --> Webhook["WhatsApp Webhook"]
+    Webhook --> Lead["lead.service.ts"]
+    Lead --> CORE["ai/core.ts<br/>Intent + Facts"]
+    Lead --> Extraction["extraction-runner.ts<br/>Slots + Pricing"]
+    Lead --> Policy["policy-pipeline.ts<br/>Decide"]
+    Policy --> Output["response-builder.ts<br/>Render"]
+    Output --> Sender["sender.ts<br/>WhatsApp API"]
+    Sender --> User
+    Policy --> Trip["trip-execution"]
+    Trip --> Dispatch["dispatch engine"]
+    Dispatch --> Driver["Driver WhatsApp"]
 ```
 
 ---
 
-## Gaps y problemas de diseño conocidos
+## Layers
 
-### Violaciones de contratos
-
-| Gap | Archivos afectados | Severidad |
-|-----|-------------------|-----------|
-| learning/ importa de `db/domains/learning.ts` directamente, bypaseando facade | `services/learning/*.ts` | MEDIA |
-| 4 archivos de servicio usan `getDb()` o `queryOne()` directamente | Varios en services/ | MEDIA |
-| `response-builder.ts` importa `OpportunityResult` de learning (viola AI→Services) | `ai/response-builder.ts` | MEDIA |
-| `guard.ts` tiene state a nivel de módulo, no request-scoped | `ai/guard.ts` | ALTA |
-
-### Problemas de diseño
-
-| Problema | Archivo | Impacto |
-|----------|---------|---------|
-| `database.ts` demasiado grande (694 líneas, 63 funciones) | `db/database.ts` | Difícil de razonar, testear y dividir |
-| `lead.service` alto acoplamiento (27 imports, 11 cross-service) | `lead.service.ts` | Cualquier cambio en un dominio puede romper orquestación |
-| Cadena circular `survey.service → lead.service` | `trip-execution/survey.service.ts` | Riesgo de dependencia circular en runtime |
-| `policy-pipeline` con demasiadas responsabilidades (policy + dispatch + learning + memory + pricing + trip-execution) | `workflow/policy-pipeline.ts` | 312 líneas, 6 dependencias cross-service |
-
-### Archivos que superan 300 líneas
-
-| Archivo | Líneas | Responsabilidad |
-|---------|--------|-----------------|
-| `db/database.ts` | 694 | Facade de acceso a datos (63 funciones) |
-| `ai/policy-reserva.ts` | 486 | Policy de reservas |
-| `db/core/connection.ts` | 482 | Conexión SQLite/Turso |
-| `services/dispatch/driver.service.ts` | 473 | Servicio de choferes |
-| `services/admin/admin-commands.ts` | 463 | Comandos administrativos |
-| `services/extraction/extraction-runner.ts` | 443 | Runner de extracción |
-| `services/dispatch/dispatch.service.ts` | 383 | Servicio de dispatch |
-| `db/domains/trips.ts` | 341 | Queries de viajes |
-| `services/workflow/policy-pipeline.ts` | 312 | Pipeline de políticas |
-
-### Cadena circular identificada
-
+```mermaid
+flowchart TD
+    Config["Config / Env"] --> Utils
+    Utils --> DB["DB Facade"]
+    DB --> AI["AI Layer"]
+    AI --> Services["Services"]
+    Services --> Lead["Lead Orchestrator"]
+    Lead --> Routes["API Routes"]
 ```
-lead.service → workflow/policy-pipeline → trip-execution/trip-execution.service → ...
-lead.service → housekeeping/timeouts → trip-execution/survey.service → lead.service ⚠️
-```
-
-### Deuda técnica menor
-
-| Gap | Archivos | Severidad |
-|-----|----------|-----------|
-| i18n inline en 30+ bloques if/else | `policy-ahora.ts`, `policy-reserva.ts`, `response-builder.ts` | BAJA |
-| `AFFIRMATION_RE` duplicado con implementaciones diferentes | `ai/core.ts`, `ai/patterns.ts` | BAJA |
 
 ---
 
-## Glosario del dominio
+## Architecture decisions
 
-> Ver glosario completo en [glossary.md](./glossary.md). Este glosario es la fuente canónica — un solo lugar, mantenido en un solo archivo.
+- `docs/adr/001-layered-architecture.md` — Layered architecture
+- `docs/adr/002-database-facade.md` — Database facade pattern
+- `docs/adr/003-learning-domain.md` — Learning as first-class domain
+- `docs/adr/004-service-boundaries.md` — Service boundaries and dependency order
+- `docs/adr/005-ai-first-interpretation.md` — AI-first interpretation with deterministic core
+- `docs/adr/006-schema-parity.md` — Schema parity between code and database
+
+---
+
+## Status legend for architecture documents
+
+| Tag | Meaning |
+|-----|---------|
+| ✅ Implemented | Exists in code and documented |
+| ⚠️ Partial | Implemented with known limitations or violations |
+| 🚧 In Progress | Being implemented |
+| 📋 Planned | In backlog, not yet implemented |
+| ❌ Not Implemented | Explicitly not implemented |
+
+---
+
+*Last updated: 2026-07-06*

@@ -1,10 +1,10 @@
-# Architecture Diagrams — TaxGuazú
+# Architecture Diagrams — AITOS
 
-Bienvenido al mapa visual de la arquitectura de TaxGuazú.
+Visual map of the AI Transportation Operating System architecture.
 
-Este directorio contiene **16 diagramas** que explican, de afuera hacia adentro, cómo funciona el bot de WhatsApp: desde el webhook de entrada hasta el despacho de viajes, pasando por detección de intención, extracción de slots, políticas de respuesta y aprendizaje.
+This directory contains behavioral diagrams derived from the code. They explain how the system turns ambiguous human language into executable transportation operations.
 
-> **Cómo usar este índice:** los diagramas están numerados por orden de lectura recomendado. Empezá por el [01 — System Overview](#índice) para ver el bosque completo, y luego metete en el diagrama que te interese.
+> **How to use this index:** diagrams are grouped by type. Start with [System Overview](#system-overview) and [Runtime Flow](./runtime-flow.md) for the big picture, then drill into specific areas.
 
 ---
 
@@ -28,6 +28,17 @@ Este directorio contiene **16 diagramas** que explican, de afuera hacia adentro,
 | 14 | Dispatch Flow | Ejecución de viaje y asignación a chofer | [`14-dispatch-flow.md`](14-dispatch-flow.md) |
 | 15 | Data Flow | Flujo completo de datos | [`15-data-flow.md`](15-data-flow.md) |
 | 16 | Policy Pipeline | Orquestador real del flujo conversacional | [`16-policy-pipeline.md`](16-policy-pipeline.md) |
+
+## Behavioral diagrams (new)
+
+| Diagrama | Propósito | Archivo |
+|----------|-----------|---------|
+| DFD Levels 0-3 | Data flow from user to persistence | [`dfd-levels.md`](dfd-levels.md) |
+| State Machines | Conversation, slot, trip, dispatch states | [`state-machines.md`](state-machines.md) |
+| Sequence Diagrams | Key scenarios step-by-step | [`sequence-diagrams.md`](sequence-diagrams.md) |
+| Runtime Flow | End-to-end message processing | [`runtime-flow.md`](runtime-flow.md) |
+| Event Flow | Learning and audit event flow | [`event-flow.md`](event-flow.md) |
+| Architecture Graphs | Auto-generated dependency graphs | [`../reverse-engineering/architecture-graphs.md`](../reverse-engineering/architecture-graphs.md) |
 
 ---
 

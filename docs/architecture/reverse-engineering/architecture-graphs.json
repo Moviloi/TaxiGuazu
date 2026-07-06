@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-07-06T03:24:24.675Z",
+  "totalModules": 145,
+  "totalPackages": 21,
+  "totalImportEdges": 533,
+  "circularDependencies": [
+    [
+      "lib/ai/llm-provider",
+      "lib/ai/providers/fallback-provider",
+      "lib/ai/llm-provider"
+    ],
+    [
+      "lib/ai/llm-provider",
+      "lib/ai/providers/fallback-provider",
+      "lib/ai/providers/gemini-provider",
+      "lib/ai/llm-provider"
+    ],
+    [
+      "lib/ai/llm-provider",
+      "lib/ai/providers/fallback-provider",
+      "lib/ai/providers/groq-provider",
+      "lib/ai/llm-provider"
+    ]
+  ],
+  "orphanFiles": [
+    "config/vitest.config",
+    "lib/ai/laterals/handlers",
+    "lib/db/domains/waitingRates",
+    "lib/services/dispatch/tool-dispatch",
+    "lib/services/dispatch/tool-fleet",
+    "lib/services/geo/tool-geo",
+    "lib/services/learning/learning-pipeline.service",
+    "lib/services/pricing/tour-resolver"
+  ],
+  "layerViolations": [
+    "lib/ai/policy-ahora → lib/services/i18n/t (AI imports Services)",
+    "lib/ai/policy-reserva → lib/services/i18n/t (AI imports Services)",
+    "lib/ai/response-builder → lib/services/i18n/t (AI imports Services)",
+    "lib/ai/slot-confirmation → lib/services/i18n/t (AI imports Services)"
+  ]
+}
