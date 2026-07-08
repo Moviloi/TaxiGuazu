@@ -284,7 +284,7 @@ describe("Flow 1: Pasajeros antes de pricing (pipeline completo)", () => {
   });
 
   it("T3: slot_confirm CON pasajeros → llama upsertChatSession (persiste)", async () => {
-    const { handleSlotConfirmationButton } = await import("@/lib/services/lead.service");
+    const { handleSlotConfirmationButton } = await import("@/lib/services/workflow/slot-confirmation-handler");
     const { upsertChatSession } = await import("@/lib/db/database");
 
     const baseLeadCore = {

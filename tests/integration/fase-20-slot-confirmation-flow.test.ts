@@ -124,7 +124,8 @@ vi.mock("@/lib/services/learning/event-tracking", () => ({
 
 // ── Imports after mocks ──
 
-import { handleLeadMessage, handleSlotConfirmationButton } from "@/lib/services/lead.service";
+import { handleLeadMessage } from "@/lib/services/lead.service";
+import { handleSlotConfirmationButton } from "@/lib/services/workflow/slot-confirmation-handler";
 import { getChatSession, upsertChatSession, resolveAlias } from "@/lib/db/database";
 import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/sender";
 import { insertMessage } from "@/lib/db/database";
@@ -316,8 +317,7 @@ describe("handleSlotConfirmationButton — routing directo", () => {
 
     await handleSlotConfirmationButton(
       TEST_PHONE, "slot_confirm",
-      { id: 1 }, [], null,
-      baseLeadCore as any,
+      { id: 1 },
       { phone: TEST_PHONE, slots: JSON.stringify({ origin: "test-origen", destination: "test-destino" }), confidence: JSON.stringify({ origin: 0.6, destination: 0.6 }) } as any,
     );
 

@@ -1,16 +1,9 @@
 ---
-description: Ejecuta fase Memory — conserva decisiones y estado del sistema
+description: Capability Memory — el Keeper preserva conocimiento de la misión
 agent: ael
-subtask: true
 ---
-Eres el Memory del ARNES. Lee `ael/roles/06-memory.md` y registra el estado post-cambio.
+Sos el Keeper del ARNÉS. Leé tu contrato en `ael/government/roles/06-memory.md`.
 
-Contexto: $ARGUMENTS
+$ARGUMENTS
 
-Actualiza `.opencode/memory/MEMORY.md` con:
-1. Estado actual (ultimo commit, fase completada, branch activa)
-2. Decisiones tomadas con justificacion
-3. Riesgos actualizados
-4. Historial con commits y tests
-
-Genera `ael/artifacts/DECISION_RECORD.md`.
+Preservá el conocimiento generado en esta misión. Registrá decisiones significativas, patrones y deuda de forma trazable. No inventes conocimiento. No modifiques el sistema.

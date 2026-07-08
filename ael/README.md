@@ -1,94 +1,53 @@
-# Agent Execution Layer (AEL)
+# ARNÉS — Agent Execution Layer
 
-Sistema operativo de ingenieria de software basado en agentes para TaxGuazu.
+Sistema operativo basado en restricciones para ingeniería de software asistida por IA. Gobierna la evolución de TaxiGuazú (AITOS).
 
-## Que es la AEL
+---
 
-La AEL es una capa intermedia entre:
-
-```
-USER REQUEST → AEL (ARNES) → CODEBASE MODIFICATION
-```
-
-Convierte el arnes agéntico conceptual (Director, Architect, Explorer, Implementer, Auditor, Memory, Learning) en un **pipeline de ejecucion formal** capaz de producir cambios consistentes en el sistema.
-
-## Estructura
+## Arquitectura
 
 ```
 ael/
-├── AGENTS.md                ← Entry point, organigrama, comandos
-├── PIPELINE.md              ← Flujo de ejecucion formal
-├── HANDOFF.md               ← Protocolo de transferencia entre roles
-├── FAILURE.md               ← Modos de fallo y rollback
-├── roles/                   ← Definicion de cada rol
-│   ├── 01-director.md
-│   ├── 02-explorer.md
-│   ├── 03-architect.md
-│   ├── 04-implementer.md
-│   ├── 05-auditor.md
-│   ├── 06-memory.md
-│   └── 07-learning.md
-├── artifacts/               ← Artefactos por fase del pipeline
-│   ├── TASK_PLAN.md
-│   ├── SYSTEM_STATE.md
-│   ├── DESIGN_SPEC.md
-│   ├── CODE_DIFF.md
-│   ├── VALIDATION_REPORT.md
-│   ├── DECISION_RECORD.md
-│   ├── PATTERN_EXTRACTION.md
-│   └── archive/             ← Artefactos de pipelines anteriores
-├── contracts/               ← Enforcement de contratos
-│   ├── CONTRACTS.md
-│   └── enforce.sh
-└── archive/                 ← Documentacion de diseno anterior
-    └── INTEGRATION.md
+├── constitution/           ← PERMANENTE. Cambia muy raramente.
+│   ├── SPEC.md             ← invariants, principles, lifecycle constraints
+│   └── CONTRACTS.md        ← R1-R4 enforcement rules
+│
+├── government/             ← EVOLUTIVO. Cambia cuando la organización evoluciona.
+│   ├── ORGANIZATION.md     ← capabilities, roles, authority
+│   └── roles/              ← capability contracts
+│
+├── contracts/              ← ADMINISTRACIÓN. Implementación concreta.
+│   ├── enforce.sh          ← contract enforcement
+│   └── diagnose.sh         ← self-diagnostic
+│
+├── artifacts/              ← ADMINISTRACIÓN. Templates para outputs de capabilities.
+│   └── *.md
+│
+└── archive/                ← HISTÓRICO. Documentos del modelo anterior.
+    └── *.md
 ```
 
-## Pipeline de ejecucion
+La memoria operativa vive en `.opencode/memory/MEMORY.md`.
+Los prompts de los agentes viven en `.opencode/agents/`.
+Los comandos viven en `.opencode/commands/`.
 
-```
-DIRECTOR → EXPLORER → ARCHITECT → IMPLEMENTER → AUDITOR → MEMORY → LEARNING
-    │          │           │            │            │          │          │
-    ▼          ▼           ▼            ▼            ▼          ▼          ▼
-TASK_PLAN  SYSTEM_     DESIGN_      CODE_DIFF   VALIDATION  DECISION   PATTERN_
-    .md      STATE.md    SPEC.md                  _REPORT.md  _RECORD.md EXTRACTION.md
-```
+---
 
-## Como se ejecuta
+## Modelo operacional
 
-1. El usuario describe el cambio al Director (agente `ael`)
-2. El Director ejecuta el pipeline de 7 fases automaticamente
-3. Cada fase delega al subagente correspondiente
-4. Al finalizar, se ejecuta `bash ael/contracts/enforce.sh`
+El Director es un **Mission Planner soberano**. Para cada misión:
 
-## Contract enforcement
+1. **Entiende** qué se pide (Discovery, Memory o razonamiento interno).
+2. **Planifica** la estrategia (elige qué capabilities usar, en qué orden, cuáles omitir).
+3. **Ejecuta** delegando en subagentes o internamente.
+4. **Cierra** verificando invariantes y preservando conocimiento.
 
-```bash
-# Ejecutar todos los checks
-bash ael/contracts/enforce.sh
+No hay pipeline fijo. No hay fases obligatorias. No hay secuencias predefinidas.
 
-# Ejecutar un check especifico
-bash ael/contracts/enforce.sh --rule R1
-bash ael/contracts/enforce.sh --rule R2
-bash ael/contracts/enforce.sh --rule R3
-```
+---
 
-## Integracion con npm
+## Filosofía
 
-```bash
-npm run ael:enforce   # bash ael/contracts/enforce.sh
-npm run ael:validate  # npm test && npm run build && bash ael/contracts/enforce.sh
-```
+> Maximizar la calidad de la ingeniería minimizando costo, tiempo, contexto y riesgo.
 
-## Estado
-
-| Componente | Estado |
-|-----------|--------|
-| Pipeline definition | COMPLETO |
-| Role specs (7 roles) | COMPLETO |
-| Handoff protocol | COMPLETO |
-| Contract enforcement | COMPLETO |
-| Failure modes | COMPLETO |
-| OpenCode integration (7 subagentes, 8 comandos) | COMPLETO |
-| Self-diagnosis (`/ael:diagnose`) | COMPLETO |
-| CI/CD integration | PENDIENTE (requiere GitHub Actions) |
+Todo lo demás es opcional.

@@ -4,7 +4,7 @@ import { insertMessage, getChatSession, resetChatSession, isSuggestionEnabled } 
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/pipeline";
 import { processLead } from "@/lib/pipeline";
-import { resolveGeoRoute } from "@/lib/services/geo/geo-engine";
+import { resolveGeoRoute } from "@/lib/services/geo/location-resolver";
 import { evaluateOpportunities, isOpportunityQuery } from "@/lib/services/learning/opportunity-engine";
 import { buildOpportunityNoPricingMessage, formatOpportunityResponse, buildCancellationMessage, buildNowDispatchResponse } from "@/lib/ai/response-builder";
 import { handleMessage } from "@/lib/ai/handler";

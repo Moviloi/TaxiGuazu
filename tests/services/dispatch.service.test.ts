@@ -25,6 +25,9 @@ vi.mock("@/lib/db/database", () => ({
   findPlaceByAlias: vi.fn().mockResolvedValue(null),
   findPlaceByName: vi.fn().mockResolvedValue(null),
   queryOne: vi.fn().mockResolvedValue({ country: "BR" }),
+}));
+
+vi.mock("@/lib/services/pricing/tariff-repository", () => ({
   findTariffByPriority: vi.fn().mockResolvedValue(null),
 }));
 

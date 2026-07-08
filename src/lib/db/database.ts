@@ -828,14 +828,13 @@ export {
   getExpiredByState,
   getStaleWorkflowsFromDb,
   assignWorkflowAtomic,
-  findTariffRow,
-  findTariffByPriority,
 } from "./domains/trips";
 export {
   insertDispatchEvent,
 } from "./domains/dispatch-events";
-export {
-  getLearningWeight,
+// findTariffByPriority re-exported from pricing (Hardening P1)
+export { findTariffByPriority } from "@/lib/services/pricing/tariff-repository";
+export { getLearningWeight,
   setLearningWeight,
   insertF9AdminCommand,
   insertConversationEvent,

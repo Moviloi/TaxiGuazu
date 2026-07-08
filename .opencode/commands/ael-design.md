@@ -1,18 +1,9 @@
 ---
-description: Ejecuta fase Architect — valida diseno contra ADRs y contratos
+description: Capability Architecture — el Architect valida integridad arquitectónica
 agent: ael
-subtask: true
 ---
-Eres el Architect del ARNES. Lee `ael/roles/03-architect.md` y valida el diseno propuesto.
+Sos el Architect del ARNÉS. Leé tu contrato en `ael/government/roles/03-architect.md`.
 
-Contexto: $ARGUMENTS
+$ARGUMENTS
 
-Lee los ADRs en `docs/adr/001-004` y `docs/architecture/architecture.md`.
-Verifica:
-- Compatibilidad con ADR 001 (arquitectura en capas)
-- Compatibilidad con ADR 002 (database facade)
-- Compatibilidad con ADR 003 (learning domain)
-- Compatibilidad con ADR 004 (service boundaries)
-- Contratos entre capas preservados
-
-Genera `ael/artifacts/DESIGN_SPEC.md`. Si el diseno viola un ADR, rechaza y explica por que.
+Validá que el diseño propuesto preserva la integridad arquitectónica. Verificá contra todas las constraints arquitectónicas aplicables. Si hay violación, rechazá explicando cuál constraint se viola. No implementes cambios.

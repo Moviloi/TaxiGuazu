@@ -9,18 +9,15 @@ import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import type { ConversationalState } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 
-// Re-export for backward compatibility
-export type SlotConversationalState = ConversationalState;
-
 export interface SlotConversationalContext {
-  state: SlotConversationalState;
+  state: ConversationalState;
   clarifyField: string | null;
   overallConfidence: number;
   action: ExtractionResult["action"];
   askForConfirmation: boolean;
 }
 
-const VALID_SLOT_TRANSITIONS: Record<SlotConversationalState, SlotConversationalState[]> = {
+const VALID_SLOT_TRANSITIONS: Record<ConversationalState, ConversationalState[]> = {
   idle: ["collecting_slots", "awaiting_confirmation"],
   collecting_slots: ["collecting_slots", "slot_confirmation", "awaiting_confirmation"],
   slot_confirmation: ["collecting_slots", "awaiting_passenger", "awaiting_confirmation", "pending_human_review"],
@@ -75,7 +72,7 @@ export async function evaluateWorkflowTransition(
   const currentState = await getConversationalState(phone);
 
   // Step 3: Determine new state based on confidence
-  let newState: SlotConversationalState;
+  let newState: ConversationalState;
   let clarifyField: string | null = null;
   let askForConfirmation = false;
 

@@ -38,10 +38,9 @@ fail() {
 
 # ── Check 1: Roles (7 fases) ──
 check_roles() {
-  echo "── Check 1: Roles (7 fases) ──"
+  echo "── Check 1: Roles (6 capability roles) ──"
 
   local expected_roles=(
-    "01-director.md"
     "02-explorer.md"
     "03-architect.md"
     "04-implementer.md"
@@ -54,7 +53,7 @@ check_roles() {
   local invalid=0
 
   for role in "${expected_roles[@]}"; do
-    local path="ael/roles/$role"
+    local path="ael/government/roles/$role"
     if [ ! -f "$path" ]; then
       fail "Rol faltante: $path"
       missing=$((missing + 1))
@@ -66,10 +65,10 @@ check_roles() {
         invalid=$((invalid + 1))
       else
         # Verificar campos requeridos
-        if grep -qi "responsabilidad\|responsibility" "$path" 2>/dev/null; then
+        if grep -qi "responsabilidad\|purpose\|responsibility" "$path" 2>/dev/null; then
           pass "Rol válido: $role"
         else
-          warn "Rol sin campo 'Responsabilidad': $role"
+          warn "Rol sin campo de propósito: $role"
           invalid=$((invalid + 1))
         fi
       fi
@@ -77,7 +76,7 @@ check_roles() {
   done
 
   if [ $missing -eq 0 ]; then
-    pass "Todos los 7 roles presentes"
+    pass "Todos los 6 roles presentes"
   fi
 
   echo ""
@@ -174,15 +173,14 @@ check_agent() {
   echo ""
 }
 
-# ── Check 4: Pipeline docs ──
-check_pipeline_docs() {
-  echo "── Check 4: Pipeline docs ──"
+# ── Check 4: Constitution & Government docs ──
+check_constitution_docs() {
+  echo "── Check 4: Constitution & Government ──"
 
   local docs=(
-    "ael/PIPELINE.md"
-    "ael/HANDOFF.md"
-    "ael/FAILURE.md"
-    "ael/AGENTS.md"
+    "ael/constitution/SPEC.md"
+    "ael/constitution/CONTRACTS.md"
+    "ael/government/ORGANIZATION.md"
   )
 
   local missing=0
@@ -200,13 +198,12 @@ check_pipeline_docs() {
     fi
   done
 
-  # Verificar referencias cruzadas en PIPELINE.md
-  if [ -f "ael/PIPELINE.md" ]; then
-    if grep -q "ael/roles/01-director.md" "ael/PIPELINE.md" 2>/dev/null; then
-      pass "PIPELINE.md referencia a roles"
-    else
-      warn "PIPELINE.md no referencia a roles"
-    fi
+  # Verificar roles de gobierno
+  local role_count=$(ls -1 ael/government/roles/*.md 2>/dev/null | wc -l || echo "0")
+  if [ "$role_count" -ge 6 ]; then
+    pass "Roles presentes: $role_count"
+  else
+    warn "Roles insuficientes: $role_count (esperados 6)"
   fi
 
   echo ""
@@ -317,14 +314,14 @@ check_crossrefs_commands() {
 
   local mismatches=0
 
-  # Mapeo comando → rol esperado
+  # Mapeo comando → rol esperado (en ael/government/roles/)
   local -A cmd_to_role
-  cmd_to_role["ael-plan.md"]="01-director.md"
+  cmd_to_role["ael-plan.md"]=""
   cmd_to_role["ael-explore.md"]="02-explorer.md"
   cmd_to_role["ael-design.md"]="03-architect.md"
   cmd_to_role["ael-implement.md"]="04-implementer.md"
   cmd_to_role["ael-validate.md"]="05-auditor.md"
-  cmd_to_role["ael-enforce.md"]="05-auditor.md"
+  cmd_to_role["ael-enforce.md"]=""
   cmd_to_role["ael-remember.md"]="06-memory.md"
   cmd_to_role["ael-learn.md"]="07-learning.md"
   cmd_to_role["ael-diagnose.md"]=""
@@ -339,10 +336,10 @@ check_crossrefs_commands() {
 
     if [ -n "$expected_role" ]; then
       # Verificar que el comando referencia al rol correcto
-      if grep -q "ael/roles/$expected_role" "$path" 2>/dev/null; then
+      if grep -q "ael/government/roles/$expected_role" "$path" 2>/dev/null; then
         pass "$cmd → $expected_role ✓"
       else
-        warn "$cmd no referencia ael/roles/$expected_role"
+        warn "$cmd no referencia ael/government/roles/$expected_role"
         mismatches=$((mismatches + 1))
       fi
     fi
@@ -423,7 +420,7 @@ echo ""
 check_roles
 check_commands
 check_agent
-check_pipeline_docs
+check_constitution_docs
 check_contracts
 check_artifacts
 check_no_duplicates

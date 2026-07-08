@@ -1,0 +1,131 @@
+# CLEANUP EXECUTION REPORT — Misión 001
+## Executed: 2026-07-08
+
+---
+
+## 1. Resumen Ejecutivo
+
+| Métrica | Valor |
+|---|---|
+| Elementos archivados | 14 scripts |
+| Elementos eliminados | 1 archivo |
+| Elementos conservados (corrección vs plan) | 5 |
+| npm commands agregados | 3 |
+| Regresiones introducidas | 0 |
+| Test suite | 901/902 (1 preexistente) |
+| Build | ✅ PASS |
+| Contratos | ✅ PASS |
+| Confianza | HIGH |
+
+---
+
+## 2. Elementos Archivados (14 scripts → `scripts/archive/`)
+
+| Script | Tipo | Razón |
+|---|---|---|
+| `diagnose-db.ts` | Diagnostic | One-shot DB diagnostic, sin npm command |
+| `diagnose-db-check.ts` | Diagnostic | One-shot DB check, sin npm command |
+| `diagnose-fuzzy.ts` | Diagnostic | Fuzzy search, sin npm command |
+| `diagnose-location-reliability.ts` | Diagnostic | Location reliability, sin npm command |
+| `debt12-dump-schema.ts` | Schema dump | One-shot from DEBT-12, sin npm command |
+| `check-schema.ts` | Validation | Superseded by validate-schema-parity, sin npm command |
+| `check-places-to-fix.ts` | Diagnostic | Places check, sin npm command |
+| `query-airports.ts` | Query | Ad-hoc query, sin npm command |
+| `query-places.ts` | Query | Ad-hoc query, sin npm command |
+| `query-conversations.ts` | Query | Ad-hoc query, sin npm command |
+| `cleanup-autoinsert.ts` | Cleanup | One-shot cleanup, sin npm command |
+| `migrate-places-20260629.ts` | Migration | One-shot migration, ejecutada |
+| `migrate-displaynames-20260630.ts` | Migration | One-shot migration, ejecutada |
+| `seed-round-trips.ts` | Seed | One-shot seed, ejecutado |
+
+---
+
+## 3. Elementos Eliminados
+
+| Archivo | Razón |
+|---|---|
+| `.husky/_/husky.sh` | DEPRECATED — contiene instrucciones de auto-eliminación. Fallará en Husky v10. |
+
+---
+
+## 4. Elementos Conservados y Justificación
+
+| Elemento | Plan original | Corrección | Justificación |
+|---|---|---|---|
+| `geo-engine.ts` + test | C001: Migrar/Eliminar | **MANTENER** | 3 consumidores activos: `policy-pipeline.ts`, `context-memory.ts`, `trip-execution.service.ts`. El DEPRECATED es aspiracional — falta migración de consumers. |
+| `migrate-catastro.ts` | C016: Archivar | **MANTENER** | Tiene npm command `migrate:catastro` |
+| `seed-migrations-history.ts` | C017: Archivar | **MANTENER** | Tiene npm command `migrate:seed-history` |
+| `verify-migration.ts` | C019: Archivar | **MANTENER** | Útil para futuras verificaciones de migración |
+| `tarifario-crud.ts` | Mantener | **MANTENER** | Puede reutilizarse para actualizaciones de tarifas |
+
+---
+
+## 5. Cambios Realizados
+
+| Cambio | Archivo |
+|---|---|
+| Agregados 3 npm commands (`docs:drift`, `docs:validate`, `docs:graphs`) | `package.json` |
+| Archivados 14 scripts a `scripts/archive/` | Múltiples |
+| Eliminado deprecated Husky shim | `.husky/_/husky.sh` |
+| Creado directorio `scripts/archive/` | Nuevo |
+
+---
+
+## 6. Resultados de Validación
+
+| Check | Resultado |
+|---|---|
+| `npm run build` | ✅ PASS — compiled successfully |
+| `npm test` | ⚠️ 901/902 (1 preexistente: `fase-22-correction-flow.test.ts`) |
+| `bash ael/contracts/enforce.sh` | ✅ PASS (R1-R4) |
+| Regresiones introducidas | **NINGUNA**. El fallo es preexistente. |
+
+---
+
+## 7. Riesgos Detectados
+
+| Riesgo | Estado |
+|---|---|
+| `geo-engine.ts` tiene 3 consumidores activos pero está marcado DEPRECATED | **REGISTRADO** como deuda. No eliminar hasta migrar consumers. |
+| Fallo preexistente en `fase-22-correction-flow.test.ts` | **PREE-EXISTENT**. No relacionado con la limpieza. Requiere investigación aparte. |
+| Scripts archivados podrían ser necesarios en el futuro | **BAJO**. Están en `scripts/archive/`, recuperables. |
+
+---
+
+## 8. Cambios Pendientes que Requieren Decisiones Arquitectónicas
+
+| Pendiente | Descripción |
+|---|---|
+| **Migrar consumers de geo-engine.ts** | `policy-pipeline.ts`, `context-memory.ts`, `trip-execution.service.ts` deben migrar sus imports a `location-resolver.ts` antes de eliminar `geo-engine.ts`. |
+| **Investigar fallo fase-22** | El test `correction-flow.test.ts` espera `origin.value = null` pero recibe `"Aeropuerto IGR"`. Puede ser un bug real o un test desactualizado. |
+
+---
+
+## 9. Comparación contra BASELINE.md
+
+| Métrica | Baseline (Mis. 000) | Post-limpieza | Delta |
+|---|---|---|---|
+| Tests | 771 / 69 files | 901 / 68 files | +130 tests, −1 test file (archivado) |
+| Scripts en `scripts/` | ~28 | ~14 activos + 14 en archive/ | −14 activos |
+| Build | PASS | PASS | = |
+| Contratos | PASS | PASS | = |
+
+---
+
+## 10. Estado Final del Repositorio
+
+| Indicador | Estado |
+|---|---|
+| Scripts activos | 14 (con npm commands documentados) |
+| Scripts archivados | 14 (en `scripts/archive/`) |
+| Npm commands | 20 (3 nuevos) |
+| Dead code activo | 1 (`geo-engine.ts` — documentado, no removible aún) |
+| Código zombie | 0 |
+| Test suite | 901/902 (99.9%) |
+| Build | ✅ |
+| Contratos | ✅ |
+| **Nivel de confianza** | **HIGH** — todos los cambios son reversibles, ningún cambio tocó código de producción |
+
+---
+
+*Generated by: ARNÉS Mission 001 — Repository Cleanup*

@@ -1,24 +1,9 @@
 // GUARD — Hard enforcement del flujo CORE → ROUTER → POLICY → OUTPUT.
 // Cualquier intento de emitir output fuera de POLICY se BLOQUEA.
 //
-// Historia: Este módulo tenía estado global (coreState, finalState, policyState)
-// que causaba riesgos de contaminación cross-request en Node.js single-threaded
-// con awaits entre resetRequestState() (lead.service.ts:115) y
-// runExtractionPipeline() (lead.service.ts:511).
-//
-// Solución (DEBT-03): Eliminado el estado global. assertPipelineComplete y
-// assertOutputSource ya estaban correctamente parametrizadas.
-// assertCoreRouterPolicy() retorna true siempre — su función de detectar estado
-// mixto era un safety net redundante con assertPipelineComplete().
-// setRequestState() y resetRequestState() se mantienen como no-ops documentados
-// para señalizar intención en el flujo sin riesgo de concurrencia.
-//
-// Reglas vigentes:
-// - Cualquier output final al usuario debe pasar assertOutputSource("POLICY").
-// - El pipeline completo debe estar armado antes de emitir (assertPipelineComplete).
-// - LEADING PRINCIPLE: toda validación usa parámetros explícitos, no estado global.
-//
-// AIT-033: mensajes de error extraídos a data/knowledge/policies/escalation.json.
+// DEBT-03: Estado global eliminado. assertPipelineComplete y assertOutputSource 
+// usan parámetros explícitos. setRequestState, resetRequestState y assertCoreRouterPolicy 
+// fueron eliminados como no-ops en Hardening P0.
 
 import escalationPolicies from "../../../data/knowledge/policies/escalation.json";
 import type { CoreDecision, OutputSource, PolicyOutput, FinalDecision } from "./types";
@@ -28,26 +13,6 @@ export interface BlockResult {
   status: "BLOCKED_LEGACY_FLOW";
   reason: "CORE_ROUTER_REQUIRED" | "OUTPUT_SOURCE_NOT_POLICY" | "PIPELINE_INCOMPLETE";
   context: string;
-}
-
-/**
- * No-op documentado. Antes escribía en vars globales (coreState, finalState, policyState).
- * Ahora el estado se pasa por parámetro donde sea necesario.
- * Se conserva para señalizar intención en handler.ts sin riesgo de concurrencia.
- */
-export function setRequestState(_core: CoreDecision, _final: FinalDecision, _policy: PolicyOutput): void {
-  // No-op intencional. El estado se valida vía assertPipelineComplete con params explícitos.
-}
-
-/**
- * Siempre retorna true. Antes verificaba estado mixto en vars globales.
- * Su función es redundante con assertPipelineComplete (que usa parámetros explícitos).
- * Se conserva la firma para compatibilidad con extraction-runner.ts.
- */
-export function assertCoreRouterPolicy(): true | BlockResult {
-  // No-op intencional. Sin estado global, no hay estado mixto que verificar.
-  // La validación real del pipeline ocurre en assertPipelineComplete().
-  return true;
 }
 
 /**
@@ -68,7 +33,6 @@ export function assertOutputSource(source: OutputSource | string): true {
 /**
  * Assert runtime que el pipeline CORE+ROUTER+POLICY está armado.
  * Uso: assertPipelineComplete(decision.core, decision, policy).
- * ÚNICO guardrail real del pipeline (usa parámetros explícitos).
  */
 export function assertPipelineComplete(
   core: CoreDecision | null | undefined,
@@ -88,12 +52,4 @@ export function assertPipelineComplete(
     return block;
   }
   return true;
-}
-
-/**
- * No-op documentado. Antes limpiaba vars globales (coreState, finalState, policyState).
- * Se conserva para señalizar intención en lead.service.ts.
- */
-export function resetRequestState(): void {
-  // No-op intencional. Sin estado global, no hay estado que resetear.
 }

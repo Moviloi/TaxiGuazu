@@ -303,14 +303,17 @@
 - Coincide con: Comportamiento de Cristian en chats reales (nunca pregunta por "centro" cuando ya sabe que el origen es aeropuerto IGR).
 - Archivos: `ambiguity-interpreter.ts`, `ambiguity-handler.ts`
 
-### Decision: Modo de operación del ARNES (2026-06-30)
-- **Acordado:** A partir de ahora, el Director ejecuta el pipeline completo de 7 fases para TODO cambio que no sea trivial (typo, texto, config).
-- **Identidad visible:** Cada mensaje muestra el tag del rol activo: `[ael]` Director, `[ael-explore]` Explorer, `[ael-architect]` Architect, `[ael-implementer]` Implementer, `[ael-audit]` Auditor, `[ael-memory]` Memory, `[ael-learning]` Learning.
-- **Subagentes delegados:** Cada fase se delega al subagente correspondiente via `@ael-{rol}`. El Director ya no ejecuta fases que no le corresponden.
-- **Artefactos formales:** Cada fase genera su artefacto `.md` en `ael/artifacts/` antes del handoff.
-- **Velocidad vs formalidad:** Se acepta que el pipeline completo es más lento. La compensación (calidad, trazabilidad, veto independiente) se considera prioritaria.
-- **Trigger:** El usuario ve en tiempo real qué subagente está actuando y puede intervenir si detecta desvío.
-- **Cambio trivials:** Siguen exceptuados (typos, textos, config sin impacto funcional). Usar criterio del Director, documentar en MEMORY si se omitió pipeline.
+### Decision: Modo de operación del ARNES (2026-06-30) — SUPERSEDED
+- ~~**Acordado:** A partir de ahora, el Director ejecuta el pipeline completo de 7 fases para TODO cambio que no sea trivial.~~
+
+### Decision: Refactorización constitucional del ARNÉS (2026-07-07)
+- **Acordado:** El pipeline de 7 fases fue reemplazado por la Constitución del ARNÉS (`ael/constitution/SPEC.md`).
+- **Nuevo modelo:** El Director es un Mission Planner soberano. Decide qué capabilities usar, en qué orden, cuáles omitir. No hay fases fijas. No hay pipeline predefinido.
+- **Estructura:** El ARNÉS se organiza en tres niveles: Constitución (`ael/constitution/`), Gobierno (`ael/government/`), Administración (scripts, templates, memoria).
+- **Capabilities:** Discovery, Architecture, Implementation, Validation, Memory, Learning, Governance. Son herramientas, no pasos.
+- **Fuentes de verdad:** Constitución (`ael/constitution/SPEC.md`, `CONTRACTS.md`) y Gobierno (`ael/government/ORGANIZATION.md`, `roles/`).
+- **Documentos archivados:** PIPELINE.md, HANDOFF.md, FAILURE.md, AGENTS.md, 01-director.md → `ael/archive/`.
+- **Cambios triviales:** Siguen exceptuados. El Director decide.
 
 ## Key Decisions (Issue 6+7 — 2026-06-30)
 - **Issue 7: convState !== "idle" removido — slots previos como guard principal**: Se removió `convState !== "idle"` de dos guards en extraction-runner.ts (línea 186 y 255-258). La razón: si el usuario ya tiene slots previos con origen+destino y dice "sí" o "dale" estando en idle, la afirmación es válida — no necesita re-colección. La condición `hasPrevSlotsLocation` (requiere origin AND destination) sigue siendo el guard principal. Si no hay slots previos, la afirmación cae al flujo normal de extracción. Esto resuelve el bug donde afirmaciones implícitas se ignoraban después de un pricing exitoso.

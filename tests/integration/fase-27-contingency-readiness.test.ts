@@ -28,6 +28,9 @@ vi.mock("@/lib/db/database", () => ({
   getCustomerName: vi.fn().mockResolvedValue(null),
   findPlaceByAlias: vi.fn().mockResolvedValue(null),
   findPlaceByName: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@/lib/services/pricing/tariff-repository", () => ({
   findTariffByPriority: vi.fn().mockResolvedValue(null),
 }));
 
@@ -59,8 +62,9 @@ vi.mock("@/lib/services/dispatch/fleet-validation", () => ({
   ensureFleetCanHandle: vi.fn().mockResolvedValue({ ok: true, maxCapacity: 6, rejected: false }),
 }));
 
-vi.mock("@/lib/services/geo/geo-engine", () => ({
+vi.mock("@/lib/services/geo/location-resolver", () => ({
   resolveGeoRoute: vi.fn().mockResolvedValue({}),
+  resolveLocation: vi.fn().mockResolvedValue({ place_id: "p1", canonical_name: "IGR", zone_id: "Z1", confidence: "alias" }),
 }));
 
 vi.mock("@/lib/ai/patterns", () => ({

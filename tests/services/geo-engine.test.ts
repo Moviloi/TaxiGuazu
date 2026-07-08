@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveGeoRoute } from "@/lib/services/geo/geo-engine";
+import { resolveGeoRoute } from "@/lib/services/geo/location-resolver";
 
 describe("geoEngine", () => {
   // Zone resolution removed from geo-engine (superseded by location-resolver.ts → DB places/aliases).

@@ -3,7 +3,7 @@
 // across turns, enabling multi-turn natural conversation.
 
 import { getChatSession, upsertChatSession } from "@/lib/db/database";
-import { type ZoneResolution, type ZoneExpansionResult, type ProximityScore } from "@/lib/services/geo/geo-engine";
+import { type ZoneResolution, type ZoneExpansionResult, type ProximityScore } from "@/lib/services/geo/location-resolver";
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 
 type FareCategory = "LOW" | "MEDIUM" | "MEDIUM+" | "HIGH" | "VARIABLE";

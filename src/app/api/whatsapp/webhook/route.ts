@@ -5,7 +5,6 @@ import { handleLeadMessage } from "@/lib/services/lead.service";
 import {
   isAdminBotGroup,
   handleDriverResponse,
-  handleDriverAccept,
   handleDriverButtonAccept,
   handleDriverArrived,
   handleDriverEnViaje,
@@ -331,12 +330,6 @@ async function postHandler(request: NextRequest) {
 
     const driver = await getDriverByPhone(phone);
     log.info(`[WEBHOOK_DEBUG] driverLookup=${!!driver}`);
-    if (driver && ["acepto", "yo estoy", "yo voy", "lo tomo"].some((k) => text.toLowerCase().includes(k))) {
-      log.info(`[WEBHOOK_DEBUG] matched accept keyword, routing to handleDriverAccept`);
-      await handleDriverAccept(phone, text);
-      return NextResponse.json({ status: "ok" }, { status: 200 });
-    }
-
     if (driver && text.toLowerCase().trim() === "llegué") {
       log.info(`[WEBHOOK_DEBUG] matched llegue, routing to handleDriverArrived`);
       await handleDriverArrived(phone);

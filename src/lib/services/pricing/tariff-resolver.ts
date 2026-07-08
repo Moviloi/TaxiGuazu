@@ -4,7 +4,8 @@
 // que evalúa los 4 niveles y retorna el de mayor prioridad.
 
 import type { TariffRow, TariffV2Match } from "@/lib/db/types";
-import { findTariffByPriority, getPlaceZone } from "@/lib/db/database";
+import { getPlaceZone } from "@/lib/db/database";
+import { findTariffByPriority } from "./tariff-repository";
 import { resolveLocation } from "../geo/location-resolver";
 
 const PRIORITY_TO_LEVEL: Record<number, TariffV2Match["level"]> = {

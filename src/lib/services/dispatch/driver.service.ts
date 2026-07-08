@@ -89,13 +89,6 @@ export async function handleDriverResponse(
   await assignDriver(workflow, driverPhone);
 }
 
-export async function handleDriverAccept(_driverPhone: string, text: string): Promise<void> {
-  if (!isAccepting(text)) return;
-
-  log.info(`[LEGACY-ACCEPT] Chofer intentó aceptar por texto — flujo deshabilitado`);
-  return;
-}
-
 export async function handleDriverArrived(driverPhone: string): Promise<void> {
   const trip = await getTripByAssignedDriver(driverPhone);
   if (!trip) return;

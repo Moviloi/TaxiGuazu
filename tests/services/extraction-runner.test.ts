@@ -25,7 +25,8 @@ vi.mock("@/lib/ai/response-builder", () => ({
 }));
 
 vi.mock("@/lib/ai/guard", () => ({
-  assertCoreRouterPolicy: vi.fn().mockReturnValue(true),
+  assertOutputSource: vi.fn().mockReturnValue(true),
+  assertPipelineComplete: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("@/lib/ai/patterns", () => ({
@@ -116,8 +117,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("performs full extraction with origin+dest, pricing, workflow, and persistence", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue({
@@ -172,8 +172,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("triggers regex fallback when extractionNote is not generated", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue(null as any);
@@ -212,8 +211,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("returns partial result when extraction succeeds but pricing has no tariff", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue({
@@ -264,8 +262,7 @@ describe("runExtractionPipeline", () => {
   // ── FASE 8.2: awaiting_confirmation + affirmation ──
 
   it("Caso 1: awaiting_confirmation + 'sí' — salta completeness, no bloquea", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { getConversationalState } = await import("@/lib/db/state-accessors");
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
@@ -289,8 +286,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("Caso 2: awaiting_confirmation + 'no' (raw vacío) — cancela confirmación", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { getConversationalState } = await import("@/lib/db/state-accessors");
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
@@ -323,8 +319,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("S5a: awaiting_confirmation + 'no, a las 10' — NO cancela (corrección de scheduled_at)", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { getConversationalState } = await import("@/lib/db/state-accessors");
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
@@ -355,8 +350,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("S5a: awaiting_confirmation + 'no, desde el hotel' — NO cancela (corrección de origin)", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { getConversationalState } = await import("@/lib/db/state-accessors");
     vi.mocked(getConversationalState).mockResolvedValue("awaiting_confirmation");
@@ -387,8 +381,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("F3: collecting_slots + 'no' — NO cancela (solo awaiting_confirmation)", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { getConversationalState } = await import("@/lib/db/state-accessors");
     vi.mocked(getConversationalState).mockResolvedValue("collecting_slots");
@@ -409,8 +402,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("Caso 3: collecting_slots + 'sí' — completeness evalúa (no salta)", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { getConversationalState } = await import("@/lib/db/state-accessors");
     vi.mocked(getConversationalState).mockResolvedValue("collecting_slots");
@@ -431,8 +423,7 @@ describe("runExtractionPipeline", () => {
   });
 
   it("Caso 4: idle + 'sí' — completeness evalúa (no salta)", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { getConversationalState } = await import("@/lib/db/state-accessors");
     vi.mocked(getConversationalState).mockResolvedValue("idle");
@@ -455,8 +446,7 @@ describe("runExtractionPipeline", () => {
   // ── FASE 26 — SlotState Consistency: fallback extraction ──
 
   it("F26-C: fallback extraction → slots tienen status/source", async () => {
-    const { assertCoreRouterPolicy } = await import("@/lib/ai/guard");
-    vi.mocked(assertCoreRouterPolicy).mockReturnValue(true);
+
 
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue(null);

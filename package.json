@@ -24,6 +24,11 @@
     "seed": "npx tsx scripts/seed-data.ts",
     "migrate:catastro": "npx tsx scripts/migrate-catastro.ts",
     "security-check": "node scripts/precommit-security-check.mjs",
+    "docs:report": "npx tsx scripts/architecture/report.ts",
+    "docs:baseline": "npx tsx scripts/architecture/report.ts --save-baseline",
+    "docs:drift": "npx tsx scripts/architecture/detect-drift.ts",
+    "docs:validate": "npx tsx scripts/architecture/validate-docs.ts",
+    "docs:graphs": "npx tsx scripts/architecture/generate-graphs.ts",
     "prepare": "husky"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 import { getConversationByPhone, insertMessage, getChatSession, upsertChatSession } from "@/lib/db/database";
+import { getActiveTripByPhone } from "@/lib/db/domains/trips";
 import { buildGlobalErrorMessage, buildGreetingIntro } from "@/lib/ai/response-builder";
-import { resetRequestState } from "@/lib/ai/guard";
 import { core } from "@/lib/ai/core";
 import type { Intent } from "@/lib/ai/types";
 import { mapIntentToDomain } from "@/lib/ai/domain";
@@ -16,94 +16,19 @@ import { handleOpportunityResponse } from "@/lib/services/workflow/opportunity-r
 import { handlePolicyPipeline } from "@/lib/services/workflow/policy-pipeline";
 import { buildMemory } from "@/lib/services/memory/memory";
 import { buildPredictedContext } from "@/lib/services/memory/predictive-routing";
-import { logIntentDetected, logEntityDetected, logEvent } from "@/lib/services/learning/event-tracking";
+import { logIntentDetected, logEntityDetected } from "@/lib/services/learning/event-tracking";
 import { runComprehensionCheck } from "@/lib/services/extraction/comprehension-runner";
 import { runExtractionPipeline } from "@/lib/services/extraction/extraction-runner";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";
-import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
-import { buildFieldSelector, buildSlotConfirmationMessage, getSuggestionType } from "@/lib/ai/slot-confirmation";
+import { handleSlotConfirmationButton } from "@/lib/services/workflow/slot-confirmation-handler";
+import { buildSlotConfirmationMessage } from "@/lib/ai/slot-confirmation";
 import { startAmbiguityResolution, handleAmbiguityResponse } from "@/lib/services/workflow/ambiguity-handler";
 import { detectLangWithFallback } from "@/lib/detect-lang";
-import type { ExtractionResult } from "@/lib/ai/extraction-schema";
 import { resolvePricingForSlots } from "@/lib/services/pricing/resolve-pricing-for-slots";
 import { pricingResultToToolOutput } from "@/lib/services/pricing/tool-pricing";
-import { extractSlots } from "@/lib/services/extraction/extract-slots";
-import type { ExtractionContext } from "@/lib/ai/extraction-prompt";
+import { handleAwaitingPassenger } from "@/lib/services/workflow/awaiting-passenger-handler";
 import { parseSessionSlots, parseConfidenceJson } from "@/lib/services/shared/session-helpers";
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-/** Mapa de números en español a dígitos. */
-const WORD_TO_NUM: Record<string, number> = {
-  un: 1, uno: 1, una: 1,
-  dos: 2,
-  tres: 3,
-  cuatro: 4,
-  cinco: 5,
-  seis: 6,
-  siete: 7,
-  ocho: 8,
-  nueve: 9,
-  diez: 10,
-  once: 11,
-  doce: 12,
-  trece: 13,
-  catorce: 14,
-  quince: 15,
-  veinte: 20,
-  treinta: 30,
-  cincuenta: 50,
-  cien: 100,
-};
-
-/**
- * Intenta extraer un número de pasajeros del texto del usuario.
- * Capa determinista (0ms, sin LLM) del híbrido regex+LLM.
- * Retorna null si no puede determinarlo → invocar fallback LLM.
- */
-function parsePassengerCount(text: string): number | null {
-  const trimmed = text.trim().toLowerCase();
-  if (!trimmed) return null;
-
-  // Expresión regular: resuelve palabra N a dígito
-  const resolveNum = (raw: string): number | null => {
-    if (/^\d+$/.test(raw)) {
-      const n = parseInt(raw, 10);
-      return n >= 1 && n <= 99 ? n : null;
-    }
-    return WORD_TO_NUM[raw] ?? null;
-  };
-
-  // Patrones en orden de especificidad:
-  const patterns = [
-    // 1. "un grupo/familia/equipo de/con N":  "grupo de 4", "familia con 5", "un grupo de tres"
-    /\b(?:un\s+)?(?:grupo|familia|compañ[íi]a|equipo)\s+(?:de|con)\s+(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/i,
-
-    // 2. Colectivo + número: "somos 5", "somo 5", "viajamos 3", "hay 3", "son 4", "tenemos 2", "somos cinco"
-    /\b(?:somos?|viajamos?|vamos?|hay|son|tenemos?|ser[éa]mos?|andamos?)\s+(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/i,
-
-    // 3. Número + palabra clave: "5 personas", "3 pax", "2 pasajeros", "cinco personas"
-    /\b(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:personas?|pax|pasajeros?|adultos?|nenes?|chicos?|ni[ñn]os?|amigos?|familiares?|bebés?|mayor(?:es)?)\b/i,
-
-    // 4. Palabra clave + número: "pasajeros 3", "personas 5"
-    /\b(?:pasajeros?|personas?|pax)\s+(son\s+)?(\d+|un[oa]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/i,
-
-    // 5. "N" suelto (solo dígito): "3", "5"
-    /^\s*(\d{1,2})\s*$/,
-  ];
-
-  for (const re of patterns) {
-    const m = trimmed.match(re);
-    if (m) {
-      const group = m.length >= 3 ? (m[2] || m[1]) : m[1];
-      const n = resolveNum(group);
-      if (n != null && n >= 1 && n <= 99) return n;
-    }
-  }
-
-  return null;
-}
-
+import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { log } from "@/lib/utils/logger";
 
 // ── COORDINATOR ──
@@ -113,7 +38,6 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   try {
     log.info("[TRACE WEBHOOK MESSAGE]", { event: "message_received", phoneLen: phone.length, textLen: text.length });
     log.info(`[DEBUG_LEAD] phone=******${phone.slice(-4)} textLen=${text.length}`);
-    resetRequestState();
     const trimmed = text.trim();
     const lower = trimmed.toLowerCase();
 
@@ -182,7 +106,7 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const SLOT_BUTTON_RE = /^(slot_confirm|slot_change|change_origin|change_destination|change_passengers|change_scheduled_at|change_back)$/;
     const slotButtonMatch = trimmed.match(SLOT_BUTTON_RE);
     if (slotButtonMatch) {
-      await handleSlotConfirmationButton(phone, trimmed, conversation, history, customerName, leadCore, session);
+      await handleSlotConfirmationButton(phone, trimmed, conversation, session);
       return;
     }
 
@@ -198,14 +122,14 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       // 1) Affirmative → treat as slot_confirm
       if (isAffirmativeMessage(trimmed)) {
         log.info("[SLOT_TEXT] affirmative in slot_confirmation → slot_confirm");
-        await handleSlotConfirmationButton(phone, "slot_confirm", conversation, history, customerName, leadCore, session);
+        await handleSlotConfirmationButton(phone, "slot_confirm", conversation, session);
         return;
       }
 
       // 2) Negative or correction → treat as slot_change (show field selector)
       if (isNegativeMessage(trimmed) || isCorrectionMessage(trimmed)) {
         log.info("[SLOT_TEXT] negative/correction in slot_confirmation → slot_change");
-        await handleSlotConfirmationButton(phone, "slot_change", conversation, history, customerName, leadCore, session);
+        await handleSlotConfirmationButton(phone, "slot_change", conversation, session);
         return;
       }
 
@@ -285,95 +209,8 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     }
 
     // ── ZONE: AWAITING_PASSENGER STATE ──
-    // User was shown both prices, waiting for passenger count
     if (slotState === "awaiting_passenger") {
-      log.info("[AWAITING_PASSENGER]", { text });
-
-      // ── Capa 1: Regex determinista ──
-      let paxCount = parsePassengerCount(trimmed);
-
-      // ── Capa 2: Fallback LLM si regex no pudo resolver ──
-      if (paxCount == null) {
-        log.info("[AWAITING_PASSENGER] regex falló → probando LLM fallback");
-        // Construir context mínimo con prevSlots para que el LLM tenga
-        // contexto de que se le preguntó por pasajeros
-        const prevSlots = session?.slots
-          ? (parseSessionSlots(session.slots) as Record<string, string | number>)
-          : undefined;
-        const llmCtx: ExtractionContext = prevSlots ? { prevSlots } : {};
-        const extracted = await extractSlots(trimmed, history, customerName || undefined, llmCtx)
-          .catch(() => null);
-        const llmPax = extracted?.passengers ?? null;
-        if (llmPax != null && llmPax > 0 && llmPax <= 99) {
-          paxCount = llmPax;
-          log.info("[AWAITING_PASSENGER] LLM resolvió pax:", { paxCount });
-        } else {
-          log.info("[AWAITING_PASSENGER] LLM tampoco resolvió");
-        }
-      }
-
-      if (paxCount != null) {
-        if (paxCount > 6) {
-          const msg = `Máximo 6 pasajeros por vehículo. Para ${paxCount} pasajeros necesitarían 2 vehículos. Contactanos para coordinar.`;
-          await sendWhatsAppMessage(phone, msg);
-          await insertMessage(conversation.id, "assistant", msg);
-          return;
-        }
-
-        // P1: Resolve pricing UNA SOLA vez con el count real de pasajeros
-        let rawSlots: Record<string, any> = {};
-        rawSlots = parseSessionSlots(session?.slots ?? null) as Record<string, any>;
-
-        const recalculated = await resolvePricingForSlots({
-          origin: rawSlots.origin?.value ?? rawSlots.origin ?? "",
-          destination: rawSlots.destination?.value ?? rawSlots.destination ?? "",
-          passengers: paxCount,
-        });
-
-        if (recalculated.pricingResult.final_price > 0) {
-          const vehicleType = paxCount <= 4 ? "🚗 Auto" : "🚐 Camioneta";
-          const price = recalculated.pricingResult.final_price;
-          rawSlots.passengers = paxCount;
-          const slotsJson = JSON.stringify(rawSlots);
-          // Update session with passenger count
-          const { upsertChatSession } = await import("@/lib/db/database");
-          await upsertChatSession(phone, JSON.parse(slotsJson), undefined, "awaiting_confirmation", undefined);
-
-          const msg = `Perfecto, ${vehicleType} para ${paxCount}. El traslado cuesta $${price} ARS.\n\n¿Confirmamos el viaje?`;
-          await sendWhatsAppMessage(phone, msg);
-          await insertMessage(conversation.id, "assistant", msg);
-          await setConversationalState(phone, "awaiting_confirmation");
-          return;
-        } else {
-          // Pricing falló sin precio — caer a re-pregunta
-          log.warn("[AWAITING_PASSENGER] pricing no devolvió precio para", { paxCount });
-        }
-      }
-
-      // ── Si llegamos acá: ni regex ni LLM resolvieron ──
-      const { isAffirmativeMessage, isNegativeMessage } = await import("@/lib/ai/patterns");
-
-      // Affirmative without passenger count
-      if (isAffirmativeMessage(trimmed)) {
-        const msg = "¿Cuántos pasajeros son así busco el vehículo correcto?";
-        await sendWhatsAppMessage(phone, msg);
-        await insertMessage(conversation.id, "assistant", msg);
-        return;
-      }
-
-      // Negative / cancel
-      if (isNegativeMessage(trimmed)) {
-        const msg = "¿Qué querés cambiar?";
-        await sendWhatsAppMessage(phone, msg);
-        await insertMessage(conversation.id, "assistant", msg);
-        await setConversationalState(phone, "collecting_slots");
-        return;
-      }
-
-      // Unrecognized — re-ask
-      const msg = "¿Cuántos pasajeros son? (ej: 'somos 3')";
-      await sendWhatsAppMessage(phone, msg);
-      await insertMessage(conversation.id, "assistant", msg);
+      await handleAwaitingPassenger(phone, text, trimmed, conversation, session, history, customerName);
       return;
     }
 
@@ -472,12 +309,38 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       await setConversationalState(phone, "collecting_slots", undefined);
     }
     if (leadCore.facts?.some(f => f.startsWith("location_ambiguous:")) && currentConvState !== "ambiguity_pending") {
-      // P0.8.5: Re-leer session fresca para incluir slots extraídos en este turno
-      // (passengers, origin, destination). La session original fue leída antes de
-      // extraction-runner, por lo que no tiene los datos del mensaje actual.
       const freshSessionForAmbiguity = await getChatSession(phone);
       const ambStarted = await startAmbiguityResolution(phone, conversation.id, trimmed, leadCore, freshSessionForAmbiguity);
       if (ambStarted) return;
+    }
+
+    // ── ZONE: POST-BOOKING — user has an active trip, treat as follow-up inquiry ──
+    // B2 fix: after executeNowTrip resets state to idle, subsequent messages
+    // should be treated as post-booking follow-ups, not new bookings.
+    if (slotState === "idle") {
+      const activeTrip = await getActiveTripByPhone(phone);
+      if (activeTrip) {
+        log.info("[POST_BOOKING] active trip detected, routing as follow-up", {
+          tripId: activeTrip.trip_id,
+          intent: leadCore.intent,
+        });
+        const domain = mapIntentToDomain(leadCore.intent);
+        await handlePolicyPipeline({
+          phone, text, conversation, history, customerName,
+          leadCore,
+          extractionCtx: undefined,
+          pricing: undefined,
+          workflowResult: undefined,
+          confidenceResult: undefined,
+          prevSlotsEarly: {},
+          parsedData: undefined,
+          domain,
+          multiRideBreakdown: undefined,
+          sessionLang: detectLangWithFallback(text, session?.lang),
+          sessionUpdatedAt: session?.updated_at,
+        });
+        return;
+      }
     }
 
     log.info("[CORE_RESULT]", {
@@ -578,177 +441,3 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
   }
 }
 
-// ── ZONE: SLOT CONFIRMATION BUTTON HANDLER ──
-export async function handleSlotConfirmationButton(
-  phone: string,
-  buttonId: string,
-  conversation: { id: number },
-  _history: any[], // kept for interface compatibility
-  _customerName: string | null, // kept for interface compatibility
-  _leadCore: ReturnType<typeof core>, // kept for interface compatibility
-  session: Awaited<ReturnType<typeof getChatSession>>,
-): Promise<void> {
-  const lang = detectLangWithFallback(buttonId, session?.lang);
-  const buttonType = buttonId as string;
-
-  log.info("[BUTTON_ROUTING]", {
-    buttonId,
-    currentState: session?.conversational_state ?? "unknown",
-    action: buttonType === "slot_confirm" ? "confirm"
-      : buttonType === "slot_change" ? "show_field_selector"
-      : buttonType.startsWith("change_") ? `change_field:${buttonType.replace("change_", "")}`
-      : "unknown",
-  });
-
-  if (buttonType === "slot_confirm") {
-    let rawSlots: Record<string, any> = {};
-    let rawConfidence: Record<string, number> = {};
-    let sessionId: string | null = null;
-    try {
-      const s = await getChatSession(phone);
-      rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
-      rawConfidence = parseConfidenceJson(s?.confidence ?? null);
-      sessionId = s?.phone ?? phone;
-
-      // AIT-063: loggear sugerencias aceptadas (usando función compartida)
-      for (const [key, slot] of Object.entries(rawSlots)) {
-        const st = getSuggestionType(key, slot);
-        if (st) {
-          await logEvent(sessionId, "oi_suggestion", { type: st, accepted: true, slotKey: key });
-        }
-      }
-    } catch { /* ignore */ }
-
-    // Promote all CONFIRMATION_PENDING slots to CONFIRMED
-    if (rawSlots.origin) rawConfidence.origin = 1.0;
-    if (rawSlots.destination) rawConfidence.destination = 1.0;
-
-    // Save to session
-    const { upsertChatSession } = await import("@/lib/db/database");
-    const { evaluateWorkflowTransition } = await import("@/lib/services/workflow/slot-workflow");
-
-    const syntheticSlots: ExtractionResult["slots"] = {};
-    if (rawSlots.origin != null) syntheticSlots.origin = { value: rawSlots.origin?.value ?? rawSlots.origin, score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
-    if (rawSlots.destination != null) syntheticSlots.destination = { value: rawSlots.destination?.value ?? rawSlots.destination, score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
-    if (rawSlots.passengers != null) syntheticSlots.passengers = { value: String(rawSlots.passengers), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
-    if (rawSlots.scheduled_at != null) syntheticSlots.scheduled_at = { value: String(rawSlots.scheduled_at), score: 1.0, reason: "user_confirmed", source: "USER_CONFIRMED", status: "CONFIRMED" };
-
-    const syntheticConfidence: ExtractionResult = {
-      slots: syntheticSlots,
-      overall_confidence: 1.0,
-      action: "proceed",
-    };
-
-    const workflowResult = await evaluateWorkflowTransition(phone, syntheticConfidence);
-    await upsertChatSession(phone, rawSlots, rawConfidence, workflowResult.state, workflowResult.clarifyField ?? undefined);
-
-    log.info("[USER_SLOT_CONFIRM]", {
-      action: "confirm",
-      confirmedSlots: Object.keys(rawSlots).filter(k => k === "origin" || k === "destination" || k === "passengers"),
-      correctedSlots: [],
-    });
-
-    // P1: Ask passengers BEFORE resolving pricing
-    // So pricing is resolved ONCE with the actual passenger count
-    let priceMsg: string | null = null;
-    if (rawSlots.origin && rawSlots.destination) {
-      // Check if passengers already known
-      const existingPax = rawSlots.passengers?.value ?? rawSlots.passengers;
-      if (existingPax) {
-        // Passengers known → resolve pricing directly
-        try {
-          const resolved = await resolvePricingForSlots({
-            origin: rawSlots.origin?.value ?? rawSlots.origin,
-            destination: rawSlots.destination?.value ?? rawSlots.destination,
-            passengers: Number(existingPax),
-          });
-          if (resolved.pricingResult.final_price > 0) {
-            const p = resolved.pricingResult;
-            const originRaw = rawSlots.origin?.value ?? rawSlots.origin;
-            const destRaw = rawSlots.destination?.value ?? rawSlots.destination;
-            const originDisplay = rawSlots.origin?.display ?? originRaw;
-            const destDisplay = rawSlots.destination?.display ?? destRaw;
-            const originName = p.origin.canonical_name ?? originDisplay;
-            const destName = p.destination.canonical_name ?? destDisplay;
-            priceMsg = `El traslado de ${originName} a ${destName} cuesta $${p.final_price} ARS.\n\n¿Confirmamos el viaje?`;
-            // Set awaiting_confirmation for final confirmation
-            await setConversationalState(phone, "awaiting_confirmation");
-          }
-        } catch (e) {
-          log.error("[SLOT_CONFIRM] pricing error:", e);
-        }
-      } else {
-        // Passengers missing → just ask, no pricing yet
-        priceMsg = lang === "en"
-          ? "How many passengers will there be?"
-          : lang === "pt"
-            ? "Quantos passageiros serão?"
-            : "¿Cuántos pasajeros son?";
-        await setConversationalState(phone, "awaiting_passenger");
-      }
-    }
-
-    if (priceMsg) {
-      await sendWhatsAppMessage(phone, priceMsg);
-      await insertMessage(conversation.id, "assistant", priceMsg);
-    } else {
-      const originDisplay = rawSlots.origin?.display ?? rawSlots.origin?.value ?? rawSlots.origin;
-      const destDisplay = rawSlots.destination?.display ?? rawSlots.destination?.value ?? rawSlots.destination;
-      const originDn = originDisplay != null ? String(originDisplay) : "?";
-      const destDn = destDisplay != null ? String(destDisplay) : "?";
-      const msg = `Gracias por confirmar los datos de tu viaje 🚖\n\n📍 De: ${originDn}\n📍 A: ${destDn}\n\nEstamos verificando la tarifa y te la confirmamos en breve por este chat.`;
-      await sendWhatsAppMessage(phone, msg);
-      await insertMessage(conversation.id, "assistant", msg);
-      await setConversationalState(phone, "pending_human_review");
-    }
-    return;
-  }
-
-  if (buttonType === "slot_change") {
-    // AIT-063: loggear sugerencias rechazadas (usando función compartida)
-    try {
-      const s = await getChatSession(phone);
-      const rawSlots = parseSessionSlots(s?.slots ?? null) as Record<string, any>;
-      const sid = s?.phone ?? phone;
-      for (const [key, slot] of Object.entries(rawSlots)) {
-        const st = getSuggestionType(key, slot);
-        if (st) {
-          await logEvent(sid, "oi_suggestion", { type: st, accepted: false, slotKey: key });
-        }
-      }
-    } catch { /* ignore */ }
-
-    const selector = buildFieldSelector(lang);
-    await sendWhatsAppMessage(phone, selector.text);
-    await insertMessage(conversation.id, "assistant", selector.text);
-    return;
-  }
-
-  if (buttonType === "change_origin" || buttonType === "change_destination") {
-    const label = buttonType === "change_origin" ? "origen" : "destino";
-    const msg = `Escribí el ${label} exacto.`;
-    await sendWhatsAppMessage(phone, msg);
-    await insertMessage(conversation.id, "assistant", msg);
-    return;
-  }
-
-  if (buttonType === "change_passengers") {
-    const msg = "¿Cuántos pasajeros son?";
-    await sendWhatsAppMessage(phone, msg);
-    await insertMessage(conversation.id, "assistant", msg);
-    return;
-  }
-
-  if (buttonType === "change_scheduled_at") {
-    const msg = "¿Para qué día y horario necesitás el viaje?";
-    await sendWhatsAppMessage(phone, msg);
-    await insertMessage(conversation.id, "assistant", msg);
-    return;
-  }
-
-  if (buttonType === "change_back") {
-    await sendWhatsAppMessage(phone, "Escribí los datos de tu viaje.");
-    await insertMessage(conversation.id, "assistant", "Escribí los datos de tu viaje.");
-    return;
-  }
-}

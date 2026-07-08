@@ -1,0 +1,57 @@
+# TECHNICAL DEBT BASELINE v1.0 — AITOS
+## Generated: 2026-07-08 | Baseline for Stabilization Phase
+
+---
+
+## Deuda resuelta (desde auditorías 000-005 + Hardening P0/P1)
+
+| ID | Descripción | Resuelto en |
+|---|---|---|
+| DEBT-01 | AFFIRMATION_RE duplicado | v2 |
+| DEBT-03 | guard.ts global state | v2 |
+| DEBT-12 | connection.ts initSchema() drift | v3.4 |
+| Z3.1-3 | guard.ts no-ops (setRequestState, assertCoreRouterPolicy, resetRequestState) | P0 |
+| Z3.4-6 | tool wrappers sin consumers (tool-geo, tool-dispatch, tool-fleet) | P0 |
+| L2.3 | handleDriverAccept legacy stub | P0 |
+| L2.6 | SlotConversationalState type alias | P0 |
+| L2.1 | geo-engine.ts DEPRECATED | P1 (eliminado) |
+| C001 | findTariffByPriority ownership → pricing | P1 |
+| CODE_DIFF.md | Template vacío | P0 |
+
+---
+
+## Deuda P1 (alta prioridad — corregir en Stabilization)
+
+| ID | Descripción | Archivos | Impacto |
+|---|---|---|---|
+| P1-01 | Fix 17 test failures | 6 test files | Estabiliza CI/CD |
+| P1-02 | `updateTripTariff` ownership (Trip vs Pricing) | `trips.ts` | Claridad de dominio |
+| P1-03 | DEBT-02: survey→lead dependency documentada pero no resuelta | `lead-event-helpers.ts` | Eliminar acoplamiento vertical |
+| P1-04 | DEBT-13: nombres de tabla con tags de fase | `connection.ts` | Higiene de schema |
+| P1-05 | ai/display-name.ts importa de db/ | `display-name.ts` | Violación de capa AI→DB |
+
+## Deuda P2 (media — planificar en próximos sprints)
+
+| ID | Descripción | Archivos |
+|---|---|---|
+| P2-01 | DEBT-04: Fragmentar database.ts (870L) | `database.ts` |
+| P2-02 | DEBT-05: Reducir acoplamiento lead.service (750L) | `lead.service.ts` |
+| P2-03 | DEBT-06: i18n inline restante (~15 bloques) | `ai/`, `timeouts.ts` |
+| P2-04 | DEBT-07: AI→Services: response-builder OpportunityResult | `response-builder.ts` |
+| P2-05 | DEBT-08: policy-pipeline.ts acoplamiento (367L) | `policy-pipeline.ts` |
+| P2-06 | DEBT-09: Auditar consumo DB (single facade) | Todos los servicios |
+| P2-07 | DEBT-10: seed-data.ts cobertura incompleta | `scripts/seed-data.ts` |
+| P2-08 | DEBT-11: policy-pipeline PricingToolOutput conversion | `policy-pipeline.ts` |
+| P2-09 | GAP-01 a GAP-12: gaps documentados | Varios |
+| P2-10 | Pricing dual engine (v2/v3) — eliminar v2 | `resolve-pricing-for-slots.ts` |
+
+## Deuda P3 (baja — futuras mejoras)
+
+| ID | Descripción |
+|---|---|
+| P3-01 | Hotspots >400L (7 archivos) |
+| P3-02 | Cobertura en Survey y Admin |
+| P3-03 | Zombie DB columns (trip_status, workflows table) |
+| P3-04 | Dead params (_history, _customerName, etc.) |
+| P3-05 | Zombie comments en connection.ts |
+| P3-06 | FUT-01 a FUT-10 (features futuras) |

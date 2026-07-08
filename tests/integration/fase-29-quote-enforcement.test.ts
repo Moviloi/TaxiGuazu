@@ -19,6 +19,7 @@ vi.mock("@/lib/ai/display-name", () => ({
 vi.mock("@/lib/services/geo/location-resolver", () => ({
   resolveLocation: vi.fn().mockResolvedValue({ place_id: null, canonical_name: null, zone_id: null, confidence: "not_found" }),
   resolveLocationToPlaceId: vi.fn().mockResolvedValue(null),
+  resolveGeoRoute: vi.fn().mockResolvedValue({ originNode: "", destinationNode: "", originZone: null, destinationZone: null, routeType: "MEDIUM", proximityScore: 0.3 }),
 }));
 vi.mock("@/lib/db/state-accessors", () => ({
   getConversationalState: vi.fn(),
@@ -33,7 +34,6 @@ vi.mock("@/lib/ai/handler", () => ({ handleMessage: vi.fn().mockReturnValue({ de
 vi.mock("@/lib/services/i18n/detect-lang", () => ({ detectLeadLang: vi.fn().mockReturnValue("es"), resolveLang: vi.fn().mockReturnValue("es") }));
 vi.mock("@/lib/ai/core", () => ({ core: vi.fn() }));
 vi.mock("@/lib/services/memory/context-memory", () => ({ saveContext: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("@/lib/services/geo/geo-engine", () => ({ resolveGeoRoute: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/ai/patterns", () => ({ isAffirmativeMessage: vi.fn(), isNegativeMessage: vi.fn(), AMBIGUOUS_LOCATION_RE: /aeropuerto|aero|terminal/i, AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i }));
 vi.mock("@/lib/services/learning/opportunity-engine", () => ({
   evaluateOpportunities: vi.fn().mockResolvedValue([]),

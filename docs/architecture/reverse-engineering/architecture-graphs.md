@@ -1,6 +1,6 @@
 # Reverse Engineering — Architecture Graphs
 
-> Generated at 2026-07-06T03:24:24.675Z from real source code.
+> Generated at 2026-07-06T19:22:42.270Z from real source code.
 > Do not edit manually — regenerate with `npx tsx scripts/architecture/generate-graphs.ts`.
 
 ## Summary

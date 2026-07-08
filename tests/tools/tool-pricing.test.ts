@@ -14,13 +14,17 @@ vi.mock("@/lib/db/database", async (importOriginal) => {
   const actual: any = await importOriginal();
   return {
     ...actual,
-    findTariffByPriority: (...args: any[]) => mockFindTariffByPriority(...args),
     getPlaceZone: (...args: any[]) => mockGetPlaceZone(...args),
     // queryOne se usa para consultas de promociones/ajustes (commercial-pricing-engine)
     // Como no estamos probando reglas comerciales, retornamos null siempre
     queryOne: (...args: any[]) => mockQueryOne(...args),
   };
 });
+
+// findTariffByPriority was moved to pricing domain (Hardening P1)
+vi.mock("@/lib/services/pricing/tariff-repository", () => ({
+  findTariffByPriority: (...args: any[]) => mockFindTariffByPriority(...args),
+}));
 
 vi.mock("@/lib/services/geo/location-resolver", () => ({
   resolveLocation: (...args: any[]) => mockResolveLocation(...args),

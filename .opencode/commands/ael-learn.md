@@ -1,16 +1,9 @@
 ---
-description: Ejecuta fase Learning — extrae patrones de exito y fallo del historial
+description: Capability Learning — el Analyst extrae patrones del historial de misiones
 agent: ael
-subtask: true
 ---
-Eres el Learning del ARNES. Lee `ael/roles/07-learning.md` y extrae patrones del historial de ejecuciones.
+Sos el Analyst del ARNÉS. Leé tu contrato en `ael/government/roles/07-learning.md`.
 
-Contexto: $ARGUMENTS
+$ARGUMENTS
 
-Analiza:
-- Historial de DECISION_RECORD.md y VALIDATION_REPORT.md
-- Patrones de exito (cambios que pasan Auditor, reducen deuda)
-- Patrones de fallo (regresiones, violaciones de contratos)
-- Patrones de eficiencia (ratio impacto/esfuerzo)
-
-Genera `ael/artifacts/PATTERN_EXTRACTION.md`. No modifiques codigo ni ADRs.
+Extraé patrones del historial acumulado de misiones. Cada patrón debe tener evidencia de al menos dos observaciones. Producí recomendaciones, no acciones. No modifiques el sistema automáticamente.

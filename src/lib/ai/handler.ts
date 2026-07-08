@@ -16,7 +16,7 @@ import { core } from "./core";
 import { router } from "./router";
 import { policyAhora } from "./policy-ahora";
 import { policyReserva } from "./policy-reserva";
-import { assertOutputSource, assertPipelineComplete, setRequestState } from "./guard";
+import { assertOutputSource, assertPipelineComplete } from "./guard";
 import { generateLLMResponse } from "./llm-response";
 import { buildInformationalResponse, buildCommercialResponse } from "./response-builder";
 import type { HandleMessageResult, HandlerContext, Mode, PolicyOutput, ConversationDomain, OperationalMode } from "./types";
@@ -84,10 +84,7 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
 
   // Hard enforcement: policy debe ser la fuente del output.
   assertOutputSource(policy.outputSource);
-  // Pipeline debe estar armado (defensa en profundidad; setea state justo después).
   assertPipelineComplete(decision.core, decision, policy);
-
-  setRequestState(decision.core, decision, policy);
 
   log.info(
     `[CORE] intent=${decision.core.intent} confidence=${decision.core.confidence.toFixed(2)} facts=[${decision.core.facts.join(",")}]`,

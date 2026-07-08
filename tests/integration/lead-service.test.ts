@@ -41,8 +41,8 @@ vi.mock("@/lib/ai/core", () => ({
 }));
 
 vi.mock("@/lib/ai/guard", () => ({
-  resetRequestState: vi.fn(),
-  assertCoreRouterPolicy: vi.fn().mockReturnValue(true),
+  assertOutputSource: vi.fn().mockReturnValue(true),
+  assertPipelineComplete: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("@/lib/services/extraction/extract-slots", () => ({

@@ -1,0 +1,91 @@
+flowchart TB
+    subgraph Channel["Channel Layer"]
+        WA["WhatsApp User"]
+        Driver["Driver WhatsApp"]
+        Admin["Admin Dashboard"]
+    end
+
+    subgraph Entry["Entry Layer"]
+        Webhook["/api/whatsapp/webhook<br/>HMAC · Rate limit · Idempotency"]
+        Simulate["/api/bot/simulate<br/>Test channel"]
+        Cron["/api/cron/*<br/>Scheduled jobs"]
+    end
+
+    subgraph Orchestration["Orchestration Layer"]
+        Lead["lead.service.ts<br/>Single request lifecycle"]
+    end
+
+    subgraph AI["AI Layer — Deterministic Core"]
+        Core["core.ts<br/>Intent + Facts"]
+        Router["router.ts<br/>OutputType"]
+        Policy["policy-pipeline.ts<br/>Decide + Gate"]
+        ResponseBuilder["response-builder.ts<br/>Render"]
+        LLM["llm-provider.ts<br/>Gemini → Groq → null"]
+    end
+
+    subgraph Services["Services Layer — Domain Engines"]
+        Extraction["extraction-runner.ts<br/>Slots"]
+        Geo["Geo Engine<br/>location-resolver.ts"]
+        Pricing["Pricing Engine<br/>tariff-resolver.ts"]
+        Memory["Memory Engine<br/>context-memory.ts"]
+        Workflow["Workflow Engine<br/>slot-workflow.ts"]
+        Ambiguity["Ambiguity Handler<br/>ambiguity-handler.ts"]
+        Dispatch["Dispatch Engine<br/>dispatch.service.ts"]
+        Trip["Trip Execution<br/>trip-execution.service.ts"]
+        Learning["Learning Engine<br/>event-tracking.ts"]
+    end
+
+    subgraph Persistence["Persistence Layer"]
+        DB["database.ts facade"]
+        ChatSessions[(chat_sessions)]
+        Trips[(trips)]
+        Tariffs[(tariffs)]
+        Places[(places + aliases)]
+        Drivers[(drivers)]
+        Events[(trip_events +<br/>dispatch_events)]
+    end
+
+    WA --> Webhook
+    Admin --> Simulate
+    Webhook --> Lead
+    Simulate --> Lead
+    Cron --> Lead
+
+    Lead --> Core
+    Lead --> Extraction
+    Lead --> Memory
+    Lead --> Policy
+
+    Core --> Router
+    Router --> Policy
+
+    Extraction --> Geo
+    Extraction --> Pricing
+    Extraction --> Workflow
+    Extraction --> Ambiguity
+    Extraction -.-> LLM
+
+    Policy --> ResponseBuilder
+    Policy --> Trip
+    Policy --> Learning
+    Policy -.-> LLM
+
+    Trip --> Dispatch
+    Dispatch --> Driver
+
+    ResponseBuilder -.-> LLM
+    ResponseBuilder --> WA
+
+    Geo --> DB
+    Pricing --> DB
+    Memory --> DB
+    Dispatch --> DB
+    Trip --> DB
+    Learning --> DB
+
+    DB --> ChatSessions
+    DB --> Trips
+    DB --> Tariffs
+    DB --> Places
+    DB --> Drivers
+    DB --> Events

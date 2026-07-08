@@ -11,9 +11,12 @@ vi.mock("@/lib/db/database", () => ({
   upsertChatSession: vi.fn().mockResolvedValue(undefined),
   findPlaceByAlias: vi.fn().mockResolvedValue(null),
   findPlaceByName: vi.fn().mockResolvedValue(null),
-  findTariffByPriority: vi.fn().mockResolvedValue(null),
   queryOne: vi.fn().mockResolvedValue(null),
   isSuggestionEnabled: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("@/lib/services/pricing/tariff-repository", () => ({
+  findTariffByPriority: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("@/lib/db/core/helpers", () => ({
   queryOne: vi.fn().mockResolvedValue(null),
@@ -24,6 +27,7 @@ vi.mock("@/lib/ai/display-name", () => ({
 vi.mock("@/lib/services/geo/location-resolver", () => ({
   resolveLocation: vi.fn().mockResolvedValue({ place_id: null, canonical_name: null, zone_id: null, confidence: "not_found" }),
   resolveLocationToPlaceId: vi.fn().mockResolvedValue(null),
+  resolveGeoRoute: vi.fn().mockResolvedValue({ originNode: "", destinationNode: "", originZone: null, destinationZone: null, routeType: "MEDIUM", proximityScore: 0.3 }),
 }));
 vi.mock("@/lib/db/state-accessors", () => ({
   getConversationalState: vi.fn(),
@@ -38,7 +42,6 @@ vi.mock("@/lib/ai/handler", () => ({ handleMessage: vi.fn().mockReturnValue({ de
 vi.mock("@/lib/services/i18n/detect-lang", () => ({ detectLeadLang: vi.fn().mockReturnValue("es"), resolveLang: vi.fn().mockReturnValue("es") }));
 vi.mock("@/lib/ai/core", () => ({ core: vi.fn() }));
 vi.mock("@/lib/services/memory/context-memory", () => ({ saveContext: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("@/lib/services/geo/geo-engine", () => ({ resolveGeoRoute: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/ai/patterns", () => ({ isAffirmativeMessage: vi.fn(), isNegativeMessage: vi.fn(), AMBIGUOUS_LOCATION_RE: /aeropuerto|aero|terminal/i, AFFIRMATION_RE: /^(sí|si|sim|yes|ok|dale)$/i }));
 vi.mock("@/lib/services/learning/opportunity-engine", () => ({ evaluateOpportunities: vi.fn().mockResolvedValue([]), isOpportunityQuery: vi.fn().mockReturnValue(false) }));
 vi.mock("@/lib/ai/response-builder", () => ({ buildOpportunityNoPricingMessage: vi.fn().mockReturnValue(""), formatOpportunityResponse: vi.fn().mockReturnValue(""), buildCancellationMessage: vi.fn().mockReturnValue("No hay problema."), buildNowDispatchResponse: vi.fn().mockReturnValue("Buscando chofer disponible para tu viaje.") }));
@@ -46,7 +49,7 @@ vi.mock("@/lib/ai/policy-reserva", () => ({ policyReserva: vi.fn(), buildConfirm
 vi.mock("@/lib/services/workflow/slot-workflow", () => ({ evaluateWorkflowTransition: vi.fn().mockResolvedValue({ state: "awaiting_confirmation", clarifyField: null }) }));
 
 import { handlePolicyPipeline, type PolicyPipelineInput } from "@/lib/services/workflow/policy-pipeline";
-import { handleSlotConfirmationButton } from "@/lib/services/lead.service";
+import { handleSlotConfirmationButton } from "@/lib/services/workflow/slot-confirmation-handler";
 import { getConversationalState } from "@/lib/db/state-accessors";
 import { processLead } from "@/lib/pipeline";
 

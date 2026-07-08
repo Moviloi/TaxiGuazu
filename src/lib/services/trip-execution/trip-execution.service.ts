@@ -13,7 +13,7 @@ import { createTripGroup, insertTripLeg, updateTripLegTripId } from "@/lib/db/do
 import type { OpportunityContext } from "@/lib/services/learning/opportunity-types";
 import { ensureFleetCanHandle } from "@/lib/services/dispatch/fleet-validation";
 import { buildRouteKey, observe as observeLearning } from "@/lib/services/learning/fare-learning-engine";
-import { classifyTripLeg } from "@/lib/services/geo/geo-engine";
+import { classifyTripLeg } from "@/lib/services/geo/location-resolver";
 import { opportunityEngine } from "@/lib/services/learning/opportunity-engine";
 import { logOpportunityShown } from "@/lib/services/learning/event-tracking";
 import { buildOpportunityOfferMessage } from "@/lib/ai/response-builder";
