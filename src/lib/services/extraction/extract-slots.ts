@@ -11,6 +11,7 @@ import { regexExtractSlots } from "./regex-extractor";
 import { entityExtractSlots } from "./entity-extractor";
 import { generateGroqExtraction } from "@/lib/ai/groq";
 import type { ExtractionContext } from "@/lib/ai/extraction-prompt";
+import type { MessageClassification } from "@/lib/ai/conversation-interpreter";
 import { log } from "@/lib/utils/logger";
 
 interface Message {
@@ -40,6 +41,7 @@ export async function extractSlots(
   history: Message[],
   customerName?: string,
   extractionContext?: ExtractionContext,
+  classification?: MessageClassification,
 ): Promise<Record<string, any> | null> {
   if (hasMultiRideIndicators(text)) {
     log.info("[EXTRACT] multi-ride indicators detected — skipping regex/entity, calling LLM directly");
@@ -59,7 +61,7 @@ export async function extractSlots(
 
   // 2. Try entity extractor (known locations + DB aliases + fuzzy matching)
   // Only return early if entity found BOTH mandatory slots
-  const entityResult = await entityExtractSlots(text);
+  const entityResult = await entityExtractSlots(text, classification);
   const entityFull = entityResult && entityResult.origin && entityResult.destination;
   if (entityFull) {
     log.info("[EXTRACT] entity full match — both origin and destination found, returning early");

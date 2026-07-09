@@ -303,5 +303,4 @@ Fase 5 (futuro)   ░░░░░░░░░░░░░░░░░░░░�
 
 ---
 
-*Roadmap derivado del Baseline certificado de AITOS (2026-07-08).*
-*Cada fase se ejecuta secuencialmente. Fase 5 es condicional.*
+## Estado: Architecture & Stabilization → CERRADA. Human Experience & Pilot Optimization → ACTIVA.

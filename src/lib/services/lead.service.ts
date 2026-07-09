@@ -28,6 +28,7 @@ import { handleSlotConfirmationText } from "@/lib/services/workflow/slot-confirm
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { log } from "@/lib/utils/logger";
+import { interpretMessage } from "@/lib/ai/conversation-interpreter";
 
 // ── COORDINATOR ──
 // Routes the webhook message through sub-handlers. Each handler returns true
@@ -71,6 +72,19 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const session = await getChatSession(phone);
     const memory = buildMemory(session, history);
     const leadCore = core(text, (memory.sessionMemory.lastIntent ?? undefined) as Intent | undefined);
+
+    // ── CONVERSATION INTERPRETER (ADR-007) — classify message role ──
+    const prevSlotsForInterpreter = session?.slots
+      ? parseSessionSlots(session.slots) as Record<string, any>
+      : {};
+    const classification = interpretMessage({
+      text,
+      intent: leadCore.intent,
+      slotState: session?.conversational_state,
+      prevSlots: prevSlotsForInterpreter,
+      lastClarifyField: session?.clarify_field ?? null,
+    });
+    log.info("[INTERPRETER]", { classification: classification.type, confidence: classification.confidence, reason: classification.reason });
 
     // ── ZONE: GREETING SHORTCUT — bypass extraction y comprehension ──
     if (leadCore.intent === "GREETING") {

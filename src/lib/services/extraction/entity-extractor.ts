@@ -8,6 +8,7 @@
 
 import type { TripExtraction } from "@/lib/ai/extraction-schema";
 import { resolveLocation } from "@/lib/services/geo/location-resolver";
+import type { MessageClassification } from "@/lib/ai/conversation-interpreter";
 
 // Known hotel detection patterns. Matched text is returned raw (not canonical).
 const KNOWN_HOTELS: RegExp[] = [
@@ -70,8 +71,12 @@ function isDirectEntityMention(text: string, match: string): boolean {
   return phraseRe.test(lowerText);
 }
 
-export async function entityExtractSlots(text: string): Promise<TripExtraction | null> {
+export async function entityExtractSlots(text: string, classification?: MessageClassification): Promise<TripExtraction | null> {
   const lower = text.toLowerCase();
+
+  // ── B3 FIX: If classification is clarification/correction with active conversation,
+  //     do NOT assign destination by default. Return locations found without role assignment. ──
+  const isClarification = classification?.isClarification || classification?.type === "clarification";
 
   // ── EXPLICIT AIRPORT CODE DETECTION ──
   // Si el usuario escribe IGR, IGU o AGT, resolver a nombre canónico del aeropuerto.
@@ -188,7 +193,7 @@ export async function entityExtractSlots(text: string): Promise<TripExtraction |
 
     return {
       origin: null,
-      destination: resolved.canonical_name,
+      destination: isClarification ? null : resolved.canonical_name,
       passengers: null,
       price: null,
       scheduled_at: null,
