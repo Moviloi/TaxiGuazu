@@ -3,7 +3,7 @@
 //
 // DEBT-03: Estado global eliminado. assertPipelineComplete y assertOutputSource 
 // usan parámetros explícitos. setRequestState, resetRequestState y assertCoreRouterPolicy 
-// fueron eliminados como no-ops en Hardening P0.
+// fueron eliminados como no-ops.
 
 import escalationPolicies from "../../../data/knowledge/policies/escalation.json";
 import type { CoreDecision, OutputSource, PolicyOutput, FinalDecision } from "./types";

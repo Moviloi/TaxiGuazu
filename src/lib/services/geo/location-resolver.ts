@@ -1,6 +1,6 @@
 // ARCHITECTURE NOTE (Phase D): Geo domain — semi-frozen.
 // Location resolution, trip classification, and route logic unified.
-// DEPRECATED geo-engine.ts — merged into this file (Hardening P1).
+// DEPRECATED geo-engine.ts — merged into this file.
 
 import { findPlaceByAlias, findPlaceByName } from "@/lib/db/database";
 

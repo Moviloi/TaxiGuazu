@@ -832,7 +832,7 @@ export {
 export {
   insertDispatchEvent,
 } from "./domains/dispatch-events";
-// findTariffByPriority re-exported from pricing (Hardening P1)
+// findTariffByPriority re-exported from pricing
 export { findTariffByPriority } from "@/lib/services/pricing/tariff-repository";
 export { getLearningWeight,
   setLearningWeight,
