@@ -1,10 +1,10 @@
-// POLICY AHORA — ejecución inmediata, sin estado, mínima inferencia.
-// policy es la ÚNICA fuente de finalResponse. Sin LLM.
-// Prohibido: pricing logic, inferencia geográfica, generación libre.
+﻿// POLICY AHORA â€” ejecuciÃ³n inmediata, sin estado, mÃ­nima inferencia.
+// policy es la ÃšNICA fuente de finalResponse. Sin LLM.
+// Prohibido: pricing logic, inferencia geogrÃ¡fica, generaciÃ³n libre.
 //
-// AIT-033: valores hardcodeados extraídos a data/knowledge/policies/ahora.json.
+// AIT-033: valores hardcodeados extraÃ­dos a data/knowledge/policies/ahora.json.
 //   - policyHints vienen del JSON.
-//   - decisionRules documenta el orden del switch (solo referencia — el
+//   - decisionRules documenta el orden del switch (solo referencia â€” el
 //     switch/case en TypeScript mantiene el orden cableado).
 
 import ahoraPolicies from "../../../data/knowledge/policies/ahora.json";
@@ -61,6 +61,10 @@ export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): Poli
     requiresUserInput: output.requiresUserInput,
     nextExpectedFields: output.nextExpectedFields,
     needsAdminNotify: output.needsAdminNotify ?? false,
+    purchaseIntent: ctx?.purchaseIntent ?? "unknown",
+    urgency: ctx?.urgency ?? null,
+    messageType: ctx?.messageType ?? "unknown",
+    clientObjective: ctx?.clientObjective ?? "none",
   });
 
   return output;
@@ -69,11 +73,28 @@ export function policyAhora(decision: FinalDecision, ctx?: HandlerContext): Poli
 function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | undefined, lang: Lang): { finalResponse: string; confirmationUI?: SlotConfirmationUI } {
   const greet = buildGreeting(lang, ctx?.customerName);
 
+  // R5: StrategyDecision es la Ãºnica fuente para inhibitNewBooking
+  const inhibitNewBooking = ctx?.strategyDecision?.behaviorFlags.inhibitNewBooking;
+  if (inhibitNewBooking) {
+    return { finalResponse: t("cancel.confirmed", lang) };
+  }
+
   switch (decision.decision) {
     case "EXECUTE": {
       if (decision.core.intent === "EMERGENCY") return { finalResponse: buildLateralEmergencyResponse(lang) };
       if (decision.core.intent === "RESCHEDULE") return { finalResponse: buildLateralRescheduleResponse(lang) };
       if (decision.core.intent === "BOOKING") {
+        // R5: StrategyDecision es la Ãºnica fuente para skipFieldResolution
+        const skipFieldRes = ctx?.strategyDecision?.behaviorFlags.skipFieldResolution;
+        if (skipFieldRes) {
+          log.info("[POLICY_DECISION]", {
+            branch: "EXECUTE",
+            intent: "BOOKING",
+            clientObjective: ctx?.clientObjective ?? "booking_urgent",
+            action: "skip_field_resolution â€” urgencia detectada",
+          });
+          return { finalResponse: buildNowDispatchResponse(lang) };
+        }
         const next = resolveNextRequiredField(ctx, decision.core.facts);
         log.info("[POLICY_DECISION]", {
           branch: "EXECUTE",
@@ -93,6 +114,7 @@ function buildAhoraFinalResponse(decision: FinalDecision, ctx: HandlerContext | 
           return { finalResponse: buildGenericClarify(mapped, lang) };
         }
       }
+      // E11-B: urgency disponible en ctx.urgency para futura adaptaciÃ³n de tono
       return { finalResponse: buildNowDispatchResponse(lang) };
     }
     case "ANSWER": {

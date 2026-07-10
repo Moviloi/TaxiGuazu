@@ -1,5 +1,6 @@
-# ADR — Conversation Interpreter
-## ADR-007 | 2026-07-08
+# ADR-007 — Conversation Interpreter
+## Status: Accepted
+## Fecha: 2026-07-08 (implementado: 2026-07-08, commit 3080686)
 
 ---
 
@@ -36,4 +37,4 @@ Su responsabilidad es clasificar el rol conversacional de cada mensaje basándos
 
 ## Estado
 
-Propuesto. Pendiente de implementación.
+ACCEPTED. Implementado en `conversation-interpreter.ts` (commit 3080686).

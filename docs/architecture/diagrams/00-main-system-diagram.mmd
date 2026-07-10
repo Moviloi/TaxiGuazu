@@ -12,15 +12,19 @@ flowchart TB
     end
 
     subgraph Orchestration["Orchestration Layer"]
-        Lead["lead.service.ts<br/>Single request lifecycle"]
+        Lead["lead.service.ts<br/>Request lifecycle"]
+        PPolicy["policy-pipeline.ts<br/>Temporality · Readiness · Dispatch"]
     end
 
-    subgraph AI["AI Layer — Deterministic Core"]
+    subgraph Conversation["Conversational Pipeline (ADR-008)<br/>handler.ts"]
         Core["core.ts<br/>Intent + Facts"]
+        CI["conversation-interpreter.ts<br/>MessageType"]
+        CO["client-objective.ts<br/>ClientObjective"]
+        SD["conversation-strategy.ts<br/>StrategyDecision"]
         Router["router.ts<br/>OutputType"]
-        Policy["policy-pipeline.ts<br/>Decide + Gate"]
-        ResponseBuilder["response-builder.ts<br/>Render"]
-        LLM["llm-provider.ts<br/>Gemini → Groq → null"]
+        Policy["policy-*.ts<br/>Execute"]
+        LLM["llm-response.ts<br/>Express"]
+        Guard["guard.ts<br/>assertOutputSource"]
     end
 
     subgraph Services["Services Layer — Domain Engines"]
@@ -29,7 +33,6 @@ flowchart TB
         Pricing["Pricing Engine<br/>tariff-resolver.ts"]
         Memory["Memory Engine<br/>context-memory.ts"]
         Workflow["Workflow Engine<br/>slot-workflow.ts"]
-        Ambiguity["Ambiguity Handler<br/>ambiguity-handler.ts"]
         Dispatch["Dispatch Engine<br/>dispatch.service.ts"]
         Trip["Trip Execution<br/>trip-execution.service.ts"]
         Learning["Learning Engine<br/>event-tracking.ts"]
@@ -51,30 +54,34 @@ flowchart TB
     Simulate --> Lead
     Cron --> Lead
 
-    Lead --> Core
     Lead --> Extraction
     Lead --> Memory
-    Lead --> Policy
+    Lead --> PPolicy
 
-    Core --> Router
+    PPolicy --> Core
+
+    Core --> CI
+    CI --> CO
+    CO --> SD
+    SD --> Router
     Router --> Policy
+    Policy --> Guard
+    Guard -.->|skipLLM=false| LLM
+    Guard -->|skipLLM=true| Template["Template directo"]
 
     Extraction --> Geo
     Extraction --> Pricing
     Extraction --> Workflow
-    Extraction --> Ambiguity
-    Extraction -.-> LLM
+    Extraction -.->|fallback| LLM
 
-    Policy --> ResponseBuilder
-    Policy --> Trip
-    Policy --> Learning
-    Policy -.-> LLM
+    PPolicy --> Dispatch
+    PPolicy --> Trip
 
     Trip --> Dispatch
     Dispatch --> Driver
 
-    ResponseBuilder -.-> LLM
-    ResponseBuilder --> WA
+    Policy --> WA
+    LLM --> WA
 
     Geo --> DB
     Pricing --> DB
@@ -89,3 +96,6 @@ flowchart TB
     DB --> Places
     DB --> Drivers
     DB --> Events
+
+    style SD fill:#ff9800,stroke:#e65100,color:#000
+    style Conversation stroke:#1565c0,stroke-width:2px,fill:#e3f2fd

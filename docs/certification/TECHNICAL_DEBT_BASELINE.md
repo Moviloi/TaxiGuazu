@@ -17,6 +17,7 @@
 | L2.1 | geo-engine.ts DEPRECATED | P1 (eliminado) |
 | C001 | findTariffByPriority ownership → pricing | P1 |
 | CODE_DIFF.md | Template vacío | P0 |
+| R5 | Híbrido StrategyDecision + señales originales (`??` fallbacks en policies) | R5 Phase 2 |
 
 ---
 

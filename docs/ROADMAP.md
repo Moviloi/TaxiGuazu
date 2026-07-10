@@ -14,8 +14,30 @@
 | Tests | 875/876 (99.9%) |
 | Deuda resuelta | 19 items (P0+P1) |
 | Deuda pendiente | 21 items (5 P1 + 10 P2 + 6 P3) |
+| R2 Phase 1 | ✅ Conversation Speed — greetingLength, skipConfirmation, minimizeQuestions en StrategyDecision |
+| R3 Phase 1 | ✅ Conversation Tone — responseLength, reassuranceNeeded, callToAction en StrategyDecision |
+| R4 Phase 1 | ✅ Field Priority — fieldAcquisitionMode, fieldPriority en StrategyDecision |
+| R5 Phase 2 | ✅ StrategyDecision Activation — 5 fallbacks eliminados, LLM prompt inyectado con SD context, Architecture Freeze activado |
 | Cobertura crítica alta | CORE, Router, Dispatch (>80%) |
 | Cobertura crítica baja | Survey, Admin, Sender (<40%) |
+
+---
+
+## ⚠️ Architecture Freeze (activado en R5)
+
+A partir de R5, la arquitectura está congelada. No se permite:
+
+- Agregar **nuevos tipos, interfaces o campos** a los contratos entre capas sin ADR
+- Crear **nuevos puntos de lectura de señales originales** (messageType, clientObjective, etc.) sin pasar por `StrategyDecision`
+- Introducir **nuevos patrones de fallback híbrido** (StrategyDecision + señal original con `??`)
+- Modificar **firmas de funciones públicas** en `types.ts` sin ADR
+
+**Excepciones**: cambios estrictamente localizados en implementación, bug fixes que no alteran contratos, y refactors que eliminan código sin cambiar comportamiento.
+
+Cualquier cambio arquitectónico requiere:
+1. ADR con evidencia de por qué el cambio es necesario
+2. Revisión del impacto en los 4 contratos R1-R4
+3. Aprobación explícita antes de implementar
 
 ---
 

@@ -10,7 +10,7 @@
 
 | Término | Definición | Origen |
 |---------|-----------|--------|
-| **Intent** | Clasificación primaria de la intención del mensaje (12 valores: GREETING, BOOKING, NOW, EMERGENCY, CONSULTA, COMMERCIAL, PRE_BOOKING, POST_SERVICE, RESCHEDULE, INFORMATIONAL, AMBIGUOUS, UNKNOWN) | `ai/types.ts`, `ai/core.ts` |
+| **Intent** | Clasificación primaria de la intención del mensaje (11 valores: GREETING, BOOKING, NOW, EMERGENCY, CONSULTA, COMMERCIAL, PRE_BOOKING, POST_SERVICE, RESCHEDULE, INFORMATIONAL, AMBIGUOUS) | `ai/types.ts`, `ai/core.ts` |
 | **CoreDecision** | Salida del CORE: intent + facts + confidence + roleLock + slotStability + purchaseIntent | `ai/types.ts` |
 | **FinalDecision** | Salida del ROUTER: outputType + reason + core + mode | `ai/types.ts` |
 | **OutputType** | Modo de respuesta: EXECUTE / ANSWER / CLARIFY / SAFE_FALLBACK | `ai/types.ts` |

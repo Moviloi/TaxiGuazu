@@ -12,14 +12,20 @@ Decisions in AITOS are layered. Each layer narrows the space of possible
 actions.
 
 ```
-Layer 1: Intent        (What does the user want?)
-Layer 2: Output type   (What kind of response?)
-Layer 3: Policy        (What exactly should happen?)
-Layer 4: Execution     (Which side effects?)
+Layer 1: Intent              (What does the user want?)
+Layer 2: Output type         (What kind of response?)
+Layer 2.5: StrategyDecision  (How should we behave? — ADR-008)
+Layer 3: Policy              (What exactly should happen?)
+Layer 4: Execution           (Which side effects?)
 ```
 
-A message must pass through all four layers before any action is taken.
+A message must pass through all five layers before any action is taken.
 Skipping a layer is an architectural violation.
+
+> **Note:** StrategyDecision (Layer 2.5) was introduced in ADR-008 after the
+> Serie R refactors (R1–R5). It centralizes all strategic conversation decisions
+> (tone, speed, field acquisition, behavior flags) that were previously
+> distributed across Policies, Handler, and LLM. See `strategy-decision.md`.
 
 ---
 
@@ -42,7 +48,8 @@ Skipping a layer is an architectural violation.
 | `POST_SERVICE` | After-trip lateral | "ya llegué" |
 | `PRE_BOOKING` | Before booking exploration | "cuánto sale" |
 | `AMBIGUOUS` | Low confidence | Mixed or unclear signals |
-| `UNKNOWN` | No intent detected | Nonsense or empty |
+
+> **Note:** There is no `UNKNOWN` intent. When no facts are extracted, CORE returns `AMBIGUOUS` with confidence 0.
 
 ### Facts
 
@@ -87,10 +94,50 @@ Source: `src/lib/ai/router.ts`.
 
 ---
 
+## 3.5 Layer 2.5 — StrategyDecision (ADR-008)
+
+Before Policy executes, `computeStrategyDecision()` in `conversation-strategy.ts`
+synthesizes all available signals (purchaseIntent, urgency, messageType,
+clientObjective, intent, decision) into a single `StrategyDecision` object.
+
+This object becomes the **sole source of truth for strategic conversation
+decisions**:
+
+- **mode**: execute_immediate, execute_confirm, clarify, answer, safe_fallback
+- **tone**: urgent, warm, direct, gentle
+- **speed**: fast, normal, slow
+- **responseLength**: short, normal, detailed
+- **behaviorFlags**: skipLLM, skipFieldResolution, inhibitNewBooking,
+  inhibitBookingAccept, preserveContext, needsAdminNotify, skipConfirmation,
+  minimizeQuestions
+- **fieldAcquisitionMode**: skip, minimal, normal
+- **fieldPriority**: ordered list of fields to acquire
+
+StrategyDecision is propagated via `HandlerContext.strategyDecision` and
+consumed by:
+- **Policies** — consume behavior flags instead of reading original signals
+- **LLM prompt builder** — tone, responseLength, reassuranceNeeded, callToAction
+- **Handler LLM gate** — skipLLM flag controls whether LLM is invoked
+
+### Key principle (ADR-008 §2)
+
+> **Toda decisión estratégica conversacional deberá originarse exclusivamente
+> en `computeStrategyDecision()`.**
+
+Ningún otro componente decide estrategia. Policies ejecutan. LLM expresa.
+CORE observa.
+
+Source: `src/lib/ai/conversation-strategy.ts`, `docs/adr/008-conversational-decision-architecture.md`,
+`docs/architecture/strategy-decision.md`.
+
+---
+
 ## 4. Layer 3 — Policy
 
-`policy-pipeline.ts` is the gate. It receives the routed decision and the
-operational context, then produces a `PolicyOutput`.
+`policy-pipeline.ts` is the outer orchestrator. Inside it, `handler.ts`
+(which calls `buildDomainPolicy`) is the gate that receives the routed
+decision, the enriched context (with StrategyDecision), and produces a
+`PolicyOutput`.
 
 ### Inputs
 
@@ -116,11 +163,13 @@ operational context, then produces a `PolicyOutput`.
 |------|---------|
 | `AHORA` | Immediate dispatch: execute fast, minimize back-and-forth |
 | `RESERVA` | Future reservation: confirm details before committing |
-| `CONSULTA` | Answer question using operational knowledge |
-| `INFO` | General response without operational side effects |
+
+Mode is derived from `OperationalMode` (DISPATCH, RESERVATION, CLARIFY, INFO)
+which is computed from `temporalFromFacts()` + `operationalModeFromIntent()`.
 
 Source: `src/lib/services/workflow/policy-pipeline.ts`,
-`src/lib/ai/policy-ahora.ts`, `src/lib/ai/policy-reserva.ts`.
+`src/lib/ai/handler.ts`, `src/lib/ai/policy-ahora.ts`,
+`src/lib/ai/policy-reserva.ts`.
 
 ---
 
@@ -325,11 +374,14 @@ Source: `docs/ai/INVARIANTS.md`.
 | Document | Relationship |
 |----------|--------------|
 | `docs/architecture/operational-model.md` | The model that decisions operate on |
+| `docs/architecture/strategy-decision.md` | Deep dive into StrategyDecision lifecycle |
+| `docs/architecture/handler-context.md` | HandlerContext enrichment and propagation |
+| `docs/architecture/conversation-pipeline.md` | Full ADR-008 pipeline with all stages |
 | `docs/ai/DECISION_TREE.md` | Runtime decision tree for agents |
 | `docs/ai/ARCHITECTURE_BIBLE.md` | Canonical rules and invariants |
 | `docs/architecture/engines.md` | Engine-level decision responsibilities |
 
 ---
 
-*Last updated: 2026-07-06*
+*Last updated: 2026-07-10*
 *Authority: source code, ADRs, and tests*

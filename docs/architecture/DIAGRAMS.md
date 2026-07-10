@@ -136,6 +136,9 @@ These files are generated. Do not edit them manually.
 | Dispatch flow | `diagrams/14-dispatch-flow.md` | — | Driver escalation |
 | Data flow | `diagrams/15-data-flow.md` | — | Data movement |
 | Policy pipeline | `diagrams/16-policy-pipeline.md` | — | Policy gate |
+| StrategyDecision flow | `diagrams/17-strategy-decision-flow.md` | — | SD lifecycle: create → propagate → consume → LLM |
+| HandlerContext flow | `diagrams/18-handler-context-flow.md` | — | HC enrichment and propagation |
+| Module dependency map | `diagrams/19-module-dependency-map.md` | — | Real module dependencies |
 | Reverse-engineering graphs | `reverse-engineering/architecture-graphs.md` | — | Auto-generated from code |
 
 ---

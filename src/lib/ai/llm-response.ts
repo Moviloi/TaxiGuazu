@@ -35,6 +35,11 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
   const undefined_ = userLang === "en" ? "undefined" : userLang === "pt" ? "não definido" : "no definido";
   const unavailable_ = userLang === "en" ? "unavailable" : userLang === "pt" ? "indisponível" : "no disponible";
   const passNameLabel = userLang === "en" ? "Passenger name" : userLang === "pt" ? "Nome do passageiro" : "Nombre del pasajero";
+  const clientObjLabel = userLang === "en" ? "Client objective" : userLang === "pt" ? "Objetivo do cliente" : "Objetivo del cliente";
+  const toneLabel = userLang === "en" ? "Tone" : userLang === "pt" ? "Tom" : "Tono";
+  const ctaLabel = userLang === "en" ? "Call to action" : userLang === "pt" ? "Chamada para ação" : "Llamado a la acción";
+  const trustLabel = userLang === "en" ? "Reassurance needed" : userLang === "pt" ? "Precisa de segurança" : "Necesita seguridad";
+  const verbLabel = userLang === "en" ? "Response verbosity" : userLang === "pt" ? "Verbosidade da resposta" : "Verbosidad de respuesta";
 
   const lines = [
     systemIntro,
@@ -51,6 +56,15 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
     `- ${nextFieldLabel}: ${policy.nextExpectedFields.join(", ") || (userLang === "en" ? "none" : userLang === "pt" ? "nenhum" : "ninguno")}`,
   ];
   if (ctx?.customerName) lines.push(`- ${passNameLabel}: ${ctx.customerName}`);
+  if (ctx?.clientObjective) lines.push(`- ${clientObjLabel}: ${ctx.clientObjective}`);
+  // R5: StrategyDecision context for LLM prompt
+  if (ctx?.strategyDecision) {
+    const sd = ctx.strategyDecision;
+    lines.push(`- ${toneLabel}: ${sd.tone}`);
+    if (sd.reassuranceNeeded) lines.push(`- ${trustLabel}: yes`);
+    if (sd.callToAction !== "none") lines.push(`- ${ctaLabel}: ${sd.callToAction}`);
+    lines.push(`- ${verbLabel}: ${sd.responseLength}`);
+  }
 
   const isInformational = policy.policyHint?.includes("(info)") || policy.policyHint?.includes("INFORMATION");
   const isGreeting = policy.policyHint?.includes("GREETING");
@@ -197,6 +211,48 @@ function buildResponsePrompt(policy: PolicyOutput, ctx?: HandlerContext): string
   const modeKey = policy.mode === "RESERVA" ? "RESERVA" : "AHORA";
   const modeRules = MODE_RULES[userLang]?.[modeKey]?.[policy.decision];
   if (modeRules) rules.push(`9. ${modeRules}`);
+
+  // E12: Client Objective rules
+  const clientObj = ctx?.clientObjective;
+  const CLIENT_OBJ_RULES: Record<string, Record<string, string[]>> = {
+    en: {
+      booking_urgent: [`The passenger wants to travel NOW. Be very direct. Do NOT ask additional questions. Confirm and explain the driver will contact them.`],
+      booking_future: [`The passenger wants to book a FUTURE trip. Confirm the data. If any field is missing, ask gently.`],
+      booking_generic: [`The passenger wants to book but didn't specify when. Ask for the time/date naturally.`],
+      inquiry_price: [`The passenger is asking about PRICE only. Do NOT try to close a booking. Give the price directly, do NOT ask for trip data.`],
+      comparing_options: [`The passenger is COMPARING options. Offer information without pressuring. Do NOT try to close a booking.`],
+      trust_check: [`The passenger needs TRUST/SAFETY reassurance. Respond with confidence in the service. Mention that TaxiGuazú has been operating since 2019, all drivers are registered, and the service is reliable.`],
+      info_request: [`The passenger is asking for INFORMATION. Use the reference knowledge. Do NOT redirect to booking.`],
+      cancelling: [`The passenger wants to CANCEL. Confirm the cancellation politely. Do NOT try to upsell or retain.`],
+      none: [],
+    },
+    pt: {
+      booking_urgent: [`O passageiro quer viajar AGORA. Seja muito direto. NÃO faça perguntas adicionais. Confirme e explique que o motorista entrará em contato.`],
+      booking_future: [`O passageiro quer reservar uma viagem FUTURA. Confirme os dados. Se faltar algum campo, pergunte gentilmente.`],
+      booking_generic: [`O passageiro quer reservar mas não especificou quando. Pergunte pelo horário/data naturalmente.`],
+      inquiry_price: [`O passageiro está perguntando apenas sobre PREÇO. Não tente fechar uma reserva. Dê o preço diretamente, NÃO peça dados de viagem.`],
+      comparing_options: [`O passageiro está COMPARANDO opções. Ofereça informações sem pressionar. Não tente fechar uma reserva.`],
+      trust_check: [`O passageiro precisa de garantia de CONFIANÇA/SEGURANÇA. Responda com confiança no serviço. Mencione que a TaxiGuazú opera desde 2019, todos os motoristas são registrados e o serviço é confiável.`],
+      info_request: [`O passageiro está pedindo INFORMAÇÕES. Use o conhecimento de referência. Não redirecione para reserva.`],
+      cancelling: [`O passageiro quer CANCELAR. Confirme o cancelamento educadamente. Não tente upsell ou retenção.`],
+      none: [],
+    },
+    es: {
+      booking_urgent: [`El pasajero quiere viajar AHORA. Sé muy directo. NO hagas preguntas adicionales. Confirmá y explicá que el chofer se contactará.`],
+      booking_future: [`El pasajero quiere reservar un viaje FUTURO. Confirmá los datos. Si falta algún campo, preguntá con amabilidad.`],
+      booking_generic: [`El pasajero quiere reservar pero no especificó cuándo. Preguntá por el horario/fecha de forma natural.`],
+      inquiry_price: [`El pasajero pregunta solo por el PRECIO. No intentes cerrar un booking. Dá el precio directamente, NO pidas datos de viaje.`],
+      comparing_options: [`El pasajero está COMPARANDO opciones. Ofrecé información sin presionar. No intentes cerrar un booking.`],
+      trust_check: [`El pasajero necesita CONFIANZA/SEGURIDAD. Respondé con confianza en el servicio. Mencioná que TaxiGuazú opera desde 2019, todos los choferes están registrados y el servicio es confiable.`],
+      info_request: [`El pasajero pide INFORMACIÓN. Usá el conocimiento de referencia. No redirijas a booking.`],
+      cancelling: [`El pasajero quiere CANCELAR. Confirmá la cancelación con amabilidad. No intentes upsell ni retención.`],
+      none: [],
+    },
+  };
+  const objRules = CLIENT_OBJ_RULES[userLang]?.[clientObj ?? "none"];
+  if (objRules?.length) {
+    rules.push(`10. ${objRules[0]}`);
+  }
 
   // P0.9.2: Informational redirect
   if (isInformational) {

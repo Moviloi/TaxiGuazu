@@ -10,11 +10,15 @@ Mapa operativo: "Si necesito modificar X, buscar Y".
 |----------------------|-------------|-------|
 | **Clasificación de intención** | `src/lib/ai/core.ts` | Regex + computeConfidence. 11 intents. |
 | **Routing de respuesta** | `src/lib/ai/router.ts` | CoreDecision → OutputType. 46 líneas. |
-| **Pipeline principal** | `src/lib/ai/handler.ts` | CORE → ROUTER → POLICY. Entry point. |
-| **Política AHORA** | `src/lib/ai/policy-ahora.ts` | Respuesta inmediata. 141 líneas. |
-| **Política RESERVA** | `src/lib/ai/policy-reserva.ts` | Reserva programada. 486 líneas — el mayor AI module. |
-| **Builder de respuestas** | `src/lib/ai/response-builder.ts` | Generación de texto. i18n inline. 233 líneas. |
-| **Guard de pipeline** | `src/lib/ai/guard.ts` | Enforcement de orden. ⚠️ State a nivel de módulo. 91 líneas. |
+| **Pipeline conversacional (ADR-008)** | `src/lib/ai/handler.ts` | CORE → Conversation Interpreter → Client Objective → StrategyDecision → Router → Policy → LLM. 179 líneas. |
+| **StrategyDecision** | `src/lib/ai/conversation-strategy.ts` | computeStrategyDecision(). Función pura. 230 líneas. |
+| **Conversation Interpreter** | `src/lib/ai/conversation-interpreter.ts` | Clasifica rol conversacional (MessageType). Función pura. 101 líneas. |
+| **Client Objective** | `src/lib/ai/client-objective.ts` | computeClientObjective(). Sintetiza señales. 109 líneas. |
+| **Política AHORA** | `src/lib/ai/policy-ahora.ts` | Respuesta inmediata. 153 líneas. |
+| **Política RESERVA** | `src/lib/ai/policy-reserva.ts` | Reserva programada. 507 líneas — el mayor AI module. |
+| **Builder de respuestas** | `src/lib/ai/response-builder.ts` | Generación de texto. i18n inline. 170 líneas. |
+| **Prompt LLM** | `src/lib/ai/llm-response.ts` | Construcción del prompt con contexto de StrategyDecision. 389 líneas. |
+| **Guard de pipeline** | `src/lib/ai/guard.ts` | Enforcement de orden. 91 líneas. |
 | **Extracción de datos** | `src/lib/services/extraction/extraction-runner.ts` | Runner principal. 443 líneas — GOD FUNCTION. |
 | **Comprensión** | `src/lib/services/extraction/comprehension.ts` | Scoring de comprensión. 165 líneas. |
 | **Confianza** | `src/lib/services/extraction/confidence.ts` | Cálculo de confianza. 160 líneas. |
@@ -29,7 +33,7 @@ Mapa operativo: "Si necesito modificar X, buscar Y".
 | Necesito modificar... | Buscar en... | Notas |
 |----------------------|-------------|-------|
 | **Workflow de conversación** | `src/lib/services/workflow/slot-workflow.ts` | State machine. 55 líneas. |
-| **Pipeline de políticas** | `src/lib/services/workflow/policy-pipeline.ts` | Policy + trip execution. 312 líneas. |
+| **Pipeline de políticas** | `src/lib/services/workflow/policy-pipeline.ts` | Policy + trip execution. 387 líneas. |
 | **Setup de conversación** | `src/lib/services/workflow/conversation-setup.ts` | Session init. 45 líneas. |
 | **Contexto de extracción** | `src/lib/services/workflow/build-extraction-context.ts` | Builder con 7 parámetros. 50 líneas. |
 | **Comandos** | `src/lib/services/workflow/command-shortcuts.ts` | Atajos de comando. 75 líneas. |
@@ -138,10 +142,10 @@ Mapa operativo: "Si necesito modificar X, buscar Y".
 
 | Necesito modificar... | Buscar en... | Notas |
 |----------------------|-------------|-------|
-| **Orquestador principal** | `src/lib/services/lead.service.ts` | 270 líneas, 27 imports, 11 cross-service. ⚠️ Monolithic. |
-| **Pipeline de efectos** | `src/lib/core/pipeline.ts` | Executor de efectos. 109 líneas. |
+| **Orquestador principal** | `src/lib/services/lead.service.ts` | 301 líneas, orquesta webhook → sub-handlers → policy-pipeline. ⚠️ High complexity. |
+| **Pipeline de efectos** | `src/lib/pipeline.ts` | Executor de efectos (processLead). 109 líneas. |
 | **Webhook entry** | `src/app/api/whatsapp/webhook/route.ts` | Punto de entrada HTTP |
-| **Handler de IA** | `src/lib/ai/handler.ts` | Entry point del pipeline AI |
+| **Handler de IA** | `src/lib/ai/handler.ts` | Entry point del pipeline AI conversacional (ADR-008). 179 líneas. |
 
 ---
 

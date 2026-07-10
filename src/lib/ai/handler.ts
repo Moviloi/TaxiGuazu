@@ -19,6 +19,9 @@ import { policyReserva } from "./policy-reserva";
 import { assertOutputSource, assertPipelineComplete } from "./guard";
 import { generateLLMResponse } from "./llm-response";
 import { buildInformationalResponse, buildCommercialResponse } from "./response-builder";
+import { interpretMessage } from "./conversation-interpreter";
+import { computeClientObjective } from "./client-objective";
+import { computeStrategyDecision } from "./conversation-strategy";
 import type { HandleMessageResult, HandlerContext, Mode, PolicyOutput, ConversationDomain, OperationalMode } from "./types";
 import { log } from "@/lib/utils/logger";
 
@@ -80,7 +83,52 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
     : opMode === "RESERVATION" ? "reservation"
     : (ctx?.domain && !hasExtraction) ? ctx.domain
     : (mode === "AHORA" ? "dispatch" : "reservation");
-  const policy = buildDomainPolicy(decision, domain, ctx);
+  // E11 + E11-B + E12: enriquecer ctx con señales semánticas para Policy
+  const urgencyFact = decision.core.facts.find(f => f.startsWith("urgency:"));
+  const urgency = urgencyFact ? urgencyFact.replace("urgency:", "") : null;
+  const classification = interpretMessage({
+    text: input,
+    intent: decision.core.intent,
+    slotState: ctx?.extraction?.conversationalState ?? null,
+    prevSlots: Object.fromEntries(
+      Object.entries(ctx?.extraction?.slots ?? {}).map(([k, v]) => [k, v?.value]),
+    ),
+    lastClarifyField: ctx?.extraction?.clarifyField ?? null,
+  });
+  // E12: sintetizar señales en clientObjective
+  const clientObj = computeClientObjective(
+    decision.core.facts,
+    decision.core.purchaseIntent,
+    classification.type,
+    input,
+  );
+  // R1+R5: sintetizar StrategyDecision primero, luego crear enrichedCtx con ella
+  const strategyDecision = computeStrategyDecision({
+    facts: decision.core.facts,
+    purchaseIntent: decision.core.purchaseIntent,
+    urgency,
+    messageType: classification.type,
+    isCorrection: classification.isCorrection,
+    clientObjective: clientObj,
+    decision: decision.decision,
+    intent: decision.core.intent,
+  });
+  const enrichedCtx: HandlerContext = ctx
+    ? { ...ctx, purchaseIntent: decision.core.purchaseIntent, urgency, messageType: classification.type, isCorrection: classification.isCorrection, clientObjective: clientObj, strategyDecision }
+    : { purchaseIntent: decision.core.purchaseIntent, urgency, messageType: classification.type, isCorrection: classification.isCorrection, clientObjective: clientObj, strategyDecision };
+  log.info("[STRATEGY]", {
+    mode: strategyDecision.mode,
+    tone: strategyDecision.tone,
+    speed: strategyDecision.speed,
+    greetingLength: strategyDecision.greetingLength,
+    responseLength: strategyDecision.responseLength,
+    reassuranceNeeded: strategyDecision.reassuranceNeeded,
+    callToAction: strategyDecision.callToAction,
+    fieldAcquisitionMode: strategyDecision.fieldAcquisitionMode,
+    fieldPriority: strategyDecision.fieldPriority,
+    flags: strategyDecision.behaviorFlags,
+  });
+  const policy = buildDomainPolicy(decision, domain, enrichedCtx);
 
   // Hard enforcement: policy debe ser la fuente del output.
   assertOutputSource(policy.outputSource);
@@ -97,6 +145,9 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
     mode,
     operationalMode: opMode,
     hasExtraction,
+    messageType: classification.type,
+    urgency,
+    clientObjective: clientObj,
   });
   log.info(
     `[POLICY] mode=${policy.mode} hint="${policy.policyHint}" requiresConfirmation=${policy.requiresConfirmation}`,
@@ -106,15 +157,15 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
   // P0.3: Gatear llamada LLM para ahorrar calls innecesarias.
   // - EXECUTE sin placeholders en template → usar template directo (ej: "Buscando chofer...")
   // - purchaseIntent=low → especulador, no malgastar LLM, template basta
+  // R1: purchaseIntent migrado a strategyDecision.behaviorFlags.skipLLM
   const hasPlaceholder = policy.finalResponse.includes("{");
   const isExecute = policy.decision === "EXECUTE";
-  const isLowIntent = decision.core.purchaseIntent === "low";
-  const skipLLM = (isExecute && !hasPlaceholder) || isLowIntent;
+  const skipLLM = (isExecute && !hasPlaceholder) || strategyDecision.behaviorFlags.skipLLM;
 
   let llmResponse: string | null = null;
   if (!skipLLM) {
-    llmResponse = await generateLLMResponse(policy, ctx);
-  } else if (isLowIntent) {
+    llmResponse = await generateLLMResponse(policy, enrichedCtx);
+  } else if (strategyDecision.behaviorFlags.skipLLM) {
     log.info("[LLM_RESPONSE] skipped (low purchase intent — speculator path)");
   } else if (isExecute) {
     log.info("[LLM_RESPONSE] skipped (EXECUTE without placeholders — template is final)");

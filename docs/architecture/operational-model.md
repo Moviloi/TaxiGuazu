@@ -144,7 +144,8 @@ Intents include:
 - `BOOKING` / `NOW` / `RESCHEDULE` — operational requests
 - `GREETING` / `INFORMATIONAL` / `CONSULTA` — informational
 - `EMERGENCY` / `POST_SERVICE` — laterals that bypass the normal flow
-- `AMBIGUOUS` / `UNKNOWN` — low confidence
+- `AMBIGUOUS` — low confidence (intent)
+- `UNKNOWN` — low confidence (temporal mode)
 
 Source: `src/lib/ai/core.ts`, `src/lib/ai/types.ts`.
 
@@ -205,9 +206,29 @@ Source: `src/lib/services/pricing/tariff-resolver.ts`,
 
 ### 5.6 Decide
 
-`policy-pipeline.ts` decides whether to execute, answer, or clarify.
+Decision-making happens in two stages:
 
-Inputs:
+#### Stage 1 — Handler pipeline (ADR-008)
+
+Inside `handler.ts`, the system executes the ADR-008 conversational pipeline:
+
+1. **CORE** (`core.ts`) — deterministic intent + facts
+2. **Conversation Interpreter** (`conversation-interpreter.ts`) — message role classification
+3. **Client Objective** (`client-objective.ts`) — synthesize user goal
+4. **StrategyDecision** (`conversation-strategy.ts`) — **central strategic decision** (tone, speed, flags)
+5. **Router** (`router.ts`) — maps CORE → OutputType
+6. **Policies** (`policy-ahora.ts` / `policy-reserva.ts`) — produce PolicyOutput consuming StrategyDecision flags
+7. **LLM** (`llm-response.ts`) — expresses final response with SD context injected
+
+See `docs/architecture/conversation-pipeline.md` for the full pipeline.
+
+#### Stage 2 — policy-pipeline orchestration
+
+`policy-pipeline.ts` orchestrates the outer flow: temporal mode,
+operational readiness, dispatch, and finally calls `processLead()` →
+`handler.ts`.
+
+Inputs to Stage 2:
 
 - CoreDecision (intent + facts)
 - Extracted slots + confidence
@@ -221,12 +242,17 @@ Outputs:
 
 No message is sent without passing through policy.
 
-Source: `src/lib/services/workflow/policy-pipeline.ts`.
+Source: `src/lib/services/workflow/policy-pipeline.ts`, `src/lib/ai/handler.ts`.
 
-### 5.7 Render
+### 5.7 Express
 
-The response builder generates text in the customer's language.
-The LLM can refine wording, but it cannot change the decision.
+The LLM prompt (`llm-response.ts`) receives StrategyDecision context
+(tone, responseLength, reassuranceNeeded, callToAction) and the
+policy template (`policy.finalResponse`). The LLM refines wording
+according to the strategic directives, but it **cannot change the decision**.
+
+The response builder (`response-builder.ts`) provides deterministic
+templates for non-LLM paths (greetings, clarifications, safe fallbacks).
 
 Source: `src/lib/ai/response-builder.ts`, `src/lib/ai/llm-response.ts`.
 
@@ -341,6 +367,8 @@ Source: `docs/ai/INVARIANTS.md`.
 |----------|--------------|
 | `docs/SYSTEM_BIBLE.md` | Why the operational model exists |
 | `docs/architecture/decision-architecture.md` | How decisions are made on top of the model |
+| `docs/architecture/strategy-decision.md` | StrategyDecision lifecycle (ADR-008) |
+| `docs/architecture/conversation-pipeline.md` | Full conversational pipeline |
 | `docs/architecture/knowledge-map.md` | Where the knowledge that feeds the model lives |
 | `docs/architecture/domains/trip.md` | Deep dive into trip domain |
 | `docs/architecture/domains/session.md` | Deep dive into session domain |
@@ -350,5 +378,5 @@ Source: `docs/ai/INVARIANTS.md`.
 
 ---
 
-*Last updated: 2026-07-06*
+*Last updated: 2026-07-10*
 *Authority: source code, ADRs, and database schema*

@@ -1,7 +1,7 @@
-// Tipos base de la arquitectura CORE → ROUTER → POLICIES
-// Determinista, sin LLM en la decisión ni en el output final.
+﻿// Tipos base de la arquitectura CORE â†’ ROUTER â†’ POLICIES
+// Determinista, sin LLM en la decisiÃ³n ni en el output final.
 //
-// PolicyOutput es la ÚNICA fuente del finalResponse.
+// PolicyOutput es la ÃšNICA fuente del finalResponse.
 // outputSource es un discriminante que el guardrail enforce.
 
 export type Intent = "GREETING" | "INFORMATIONAL" | "COMMERCIAL" | "PRE_BOOKING" | "BOOKING" | "NOW" | "RESCHEDULE" | "POST_SERVICE" | "EMERGENCY" | "CONSULTA" | "AMBIGUOUS";
@@ -18,6 +18,79 @@ export type ConversationalState = "idle" | "collecting_slots" | "slot_confirmati
 
 export type DispatchState = "idle" | "nivel_1" | "nivel_2" | "nivel_3" | "waiting_driver" | "closed";
 
+// E12: Client Objective Model â€” sintetiza seÃ±ales existentes en un valor
+// que describe quÃ© quiere lograr el pasajero en este turno conversacional.
+export type ClientObjective =
+  | "booking_urgent"      // purchaseIntent=high + urgency: o now: fact
+  | "booking_future"      // purchaseIntent=high + date: o time: fact
+  | "booking_generic"     // purchaseIntent=high sin seÃ±ales temporales
+  | "inquiry_price"       // commercial: fact presente + purchaseIntent NOT high
+  | "comparing_options"   // pre_booking: fact presente
+  | "trust_check"         // preguntas de confianza/seguridad (nueva detecciÃ³n E12)
+  | "info_request"        // informational: fact presente
+  | "cancelling"          // messageType === "cancel"
+  | "none";               // sin objetivo claro
+
+// R1: Strategy Decision â€” sÃ­ntesis de seÃ±ales estratÃ©gicas para Policy.
+// Determinado por computeStrategyDecision() en conversation-strategy.ts.
+// Centraliza decisiones que antes estaban distribuidas en policies.
+
+export type ConversationMode = "execute_immediate" | "execute_confirm" | "clarify" | "answer" | "safe_fallback";
+export type ConversationTone = "urgent" | "warm" | "direct" | "gentle";
+export type ConversationSpeed = "fast" | "normal" | "slow";
+
+export interface BehaviorFlags {
+  /** booking_urgent â†’ dispatch sin preguntar campos faltantes */
+  skipFieldResolution: boolean;
+  /** inquiry_price â†’ no cerrar booking en affirmation */
+  inhibitBookingAccept: boolean;
+  /** cancel â†’ no continuar flujo comercial */
+  inhibitNewBooking: boolean;
+  /** correction â†’ preservar contexto conversacional */
+  preserveContext: boolean;
+  /** low purchaseIntent o execute sin placeholder â†’ saltar LLM */
+  skipLLM: boolean;
+  /** EMERGENCY/RESCHEDULE â†’ notificar admin */
+  needsAdminNotify: boolean;
+  // â”€â”€ R2 Phase 1: Conversation Speed â”€â”€
+  /** speed=fast â†’ saltar turno de confirmaciÃ³n (no preguntar "Â¿ConfirmÃ¡s?") */
+  skipConfirmation: boolean;
+  /** speed=fast â†’ minimizar preguntas al usuario */
+  minimizeQuestions: boolean;
+}
+
+// R3: Response length â€” quÃ© tan verbose debe ser la respuesta.
+// short=1-2 oraciones, normal=2-3 oraciones, detailed=hasta 5 oraciones.
+export type ResponseLength = "short" | "normal" | "detailed";
+
+// R3: Call-to-action intensity â€” si el bot debe intentar cerrar booking.
+export type CTAIntensity = "none" | "soft" | "direct";
+
+// R4: Field acquisition mode â€” quÃ© tan agresivamente preguntar campos faltantes.
+// skip=no preguntar (booking_urgent/emergency), minimal=solo esencial (fast speed), normal=preguntar todo.
+export type FieldAcquisitionMode = "skip" | "minimal" | "normal";
+
+export interface StrategyDecision {
+  mode: ConversationMode;
+  tone: ConversationTone;
+  speed: ConversationSpeed;
+  /** R4: Prioridad de campos a preguntar (ordenado, vacÃ­o si skip mode) */
+  fieldPriority: string[];
+  /** R2: Longitud del saludo segÃºn velocidad de conversaciÃ³n */
+  greetingLength: "short" | "full";
+  // â”€â”€ R3 Phase 1: Conversation Tone â”€â”€
+  /** R3: Verbosidad de la respuesta (short=fast, detailed=ANSWER) */
+  responseLength: ResponseLength;
+  /** R3: Si la respuesta debe incluir lenguaje de confianza/seguridad */
+  reassuranceNeeded: boolean;
+  /** R3: Intensidad del llamado a acciÃ³n (none=info, booking) */
+  callToAction: CTAIntensity;
+  // â”€â”€ R4 Phase 1: Field Priority â”€â”€
+  /** R4: Modo de adquisiciÃ³n de campos faltantes */
+  fieldAcquisitionMode: FieldAcquisitionMode;
+  behaviorFlags: BehaviorFlags;
+}
+
 // TripState: solo "opportunity" es operativo.
 // El cierre real del viaje usa trips.status / trips.trip_phase.
 // null = sin opportunity activa.
@@ -28,12 +101,12 @@ export type OutputSource = "POLICY";
 export type Lang = "es" | "en" | "pt";
 
 // slot stability + role lock:
-// "locked" = el slot fue fijado por la estructura sintáctica del input
-//   (ej. "estoy en X" → origin locked a X). No se reinterpreta en turnos
+// "locked" = el slot fue fijado por la estructura sintÃ¡ctica del input
+//   (ej. "estoy en X" â†’ origin locked a X). No se reinterpreta en turnos
 //   posteriores.
-// "ambiguous" = el slot tiene un valor genérico (centro, hotel) que requiere
-//   refinamiento, pero su rol (origin/destination) ya está fijado.
-// "open" = el slot no fue detectado; está disponible para asignación.
+// "ambiguous" = el slot tiene un valor genÃ©rico (centro, hotel) que requiere
+//   refinamiento, pero su rol (origin/destination) ya estÃ¡ fijado.
+// "open" = el slot no fue detectado; estÃ¡ disponible para asignaciÃ³n.
 export type SlotStability = "locked" | "ambiguous" | "open";
 
 export interface RoleLock {
@@ -46,10 +119,10 @@ export interface SlotStabilityMap {
   destination: SlotStability;
 }
 
-/** Confianza de asignación de slot basada en sintaxis.
- *  "estoy en {X}" → origin=0.95, "ir a {Y}" → destination=0.90
+/** Confianza de asignaciÃ³n de slot basada en sintaxis.
+ *  "estoy en {X}" â†’ origin=0.95, "ir a {Y}" â†’ destination=0.90
  *  0 = no detectado, 1 = certeza absoluta del rol.
- *  Esto NO es confianza de entidad (cuál lugar específico).
+ *  Esto NO es confianza de entidad (cuÃ¡l lugar especÃ­fico).
  */
 export interface SlotAssignmentConfidence {
   origin: number;
@@ -67,7 +140,7 @@ export interface CoreDecision {
   slotAssignmentConfidence?: SlotAssignmentConfidence;
   // lateral metadata (optional for backward compat)
   lateral?: CoreLateral;
-  // P0.6: detección de intención de compra (high = pasajero da datos específicos, low = especula)
+  // P0.6: detecciÃ³n de intenciÃ³n de compra (high = pasajero da datos especÃ­ficos, low = especula)
   purchaseIntent?: "high" | "medium" | "low";
 }
 
@@ -88,8 +161,8 @@ export interface ConfirmedSlot {
   status?: string;
 }
 
-// Mapa de certeza por dimensión (FASE A4)
-// Cada dimensión representa qué tan seguro está el sistema del valor detectado.
+// Mapa de certeza por dimensiÃ³n (FASE A4)
+// Cada dimensiÃ³n representa quÃ© tan seguro estÃ¡ el sistema del valor detectado.
 // 0.0 = completamente incierto, 1.0 = completamente cierto.
 export interface ConfidenceMap {
   intent: number;
@@ -119,7 +192,7 @@ export interface ExtractionContext {
   };
   // role lock + slot stability detectados por CORE.
   // POLICY usa esto para decidir entre "Perfecto, tengo origen en X..."
-  // (cuando slots están locked) vs CLARIFY.
+  // (cuando slots estÃ¡n locked) vs CLARIFY.
   roleLock?: RoleLock;
   slotStability?: SlotStabilityMap;
 }
@@ -134,6 +207,18 @@ export interface HandlerContext {
   domain?: ConversationDomain;
   temporalMode?: TemporalMode;
   operationalMode?: OperationalMode;
+  /** E11: purchase intent detectado por CORE (high=compra activa, low=especulaciÃ³n) */
+  purchaseIntent?: "high" | "medium" | "low";
+  /** E11-B: urgency detectada por CORE (valor del fact urgency:, ej: "ahora", "urgente") */
+  urgency?: string | null;
+  /** E11-B: MessageType del Conversation Interpreter (ADR-007) para decisiones de Policy */
+  messageType?: string;
+  /** E11-B: el mensaje actual es una correcciÃ³n explÃ­cita */
+  isCorrection?: boolean;
+  /** E12: Client Objective â€” quÃ© quiere lograr el pasajero */
+  clientObjective?: ClientObjective;
+  /** R1: Strategy Decision â€” sÃ­ntesis centralizada de decisiones estratÃ©gicas */
+  strategyDecision?: StrategyDecision;
 }
 
 export function operationalModeToMode(om: OperationalMode): Mode {
@@ -180,14 +265,14 @@ export interface PolicyOutput {
   requiresUserInput: boolean;
   nextExpectedFields: string[];
   outputSource: OutputSource;
-  // EXECUTION METADATA — flags para efectos secundarios post-decisión.
-  // Indican qué efectos secundarios ejecutar además de send+persist.
+  // EXECUTION METADATA â€” flags para efectos secundarios post-decisiÃ³n.
+  // Indican quÃ© efectos secundarios ejecutar ademÃ¡s de send+persist.
   needsGeo: boolean;
   needsSaveContext: boolean;
-  // ADMIN NOTIFY — side effect flag for lateral intents (EMERGENCY, RESCHEDULE).
+  // ADMIN NOTIFY â€” side effect flag for lateral intents (EMERGENCY, RESCHEDULE).
   needsAdminNotify?: boolean;
   adminNotifyBody?: string;
-  // CONFIRMATION UI — cuando la respuesta es una confirmación de ubicación,
+  // CONFIRMATION UI â€” cuando la respuesta es una confirmaciÃ³n de ubicaciÃ³n,
   // transporta los botones interactivos para sendInteractiveButtons.
   confirmationUI?: import("./slot-confirmation").SlotConfirmationUI;
 }
@@ -197,7 +282,7 @@ export interface HandleMessageResult {
   policy: PolicyOutput;
 }
 
-// ─── Opportunity types (shared across ai/ and services/learning) ───
+// â”€â”€â”€ Opportunity types (shared across ai/ and services/learning) â”€â”€â”€
 
 export interface OpportunityOffer {
   type: string;

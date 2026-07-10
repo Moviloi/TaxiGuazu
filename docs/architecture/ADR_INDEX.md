@@ -12,6 +12,7 @@
 |----------------------------|------------|
 | Overall structure and layering | [Core](#core) |
 | How the system talks to users | [Conversation](#conversation) |
+| **Who decides what** | [Decision Ownership Matrix](DECISION_OWNERSHIP_MATRIX.md) |
 | How knowledge is organized | [Knowledge](#knowledge) |
 | How places are resolved | [Geo](#geo) |
 | How prices are calculated | [Pricing](#pricing) |
@@ -41,6 +42,8 @@ Decisions that govern dialogue flow and language handling.
 |-----|----------|--------|--------|--------------|
 | ADR 001 | Layered architecture (conversation lives in Services/AI layers) | Accepted | Determines where state machines, policies, and responses belong | `operational-model.md`, `decision-architecture.md` |
 | ADR 005 | AI-first interpretation for ambiguous user input | Accepted | Recovery messages and ambiguity resolution use LLM instead of hardcoded rankings | `decision-architecture.md`, `fractal-architecture.md` |
+| [ADR 007: Conversation Interpreter](../adr/007-conversation-interpreter.md) | Nueva etapa del pipeline entre CORE y Extraction para clasificar rol conversacional | Accepted | Previene bug B3 y su familia. Separa interpretación de la conversación de las decisiones del sistema. | `decision-architecture.md`, `strategy-decision.md` |
+| [ADR 008: Conversational Decision Architecture](../adr/008-conversational-decision-architecture.md) | `computeStrategyDecision()` es la única fuente de verdad para decisiones estratégicas; Architecture Freeze | Accepted | Cierra la Serie R. Policies ya no reinterpretan señales. LLM expresa, no decide. Ownership único por concern. | `decision-architecture.md`, `strategy-decision.md`, `ARCHITECTURE_MILESTONE_v2.0.md` |
 
 ---
 
@@ -103,7 +106,7 @@ Decisions about events, opportunities, and fare adjustment.
 
 | ADR | Decision | Status | Impact | Related docs |
 |-----|----------|--------|--------|--------------|
-| [ADR 003: Learning Domain Architecture](../adr/003-learning-domain.md) | Learning is a first-class bounded context | Accepted (partial) | Creates dedicated learning modules; facade and 8 planned modules not yet implemented | `knowledge-map.md`, `maturity-model.md`, `capability-map.md` |
+| [ADR 003: Learning Domain Architecture](../adr/003-learning-domain.md) | Learning is a first-class bounded context | Accepted | Creates dedicated learning modules; facade and 8 planned modules not yet implemented | `knowledge-map.md`, `maturity-model.md`, `capability-map.md` |
 
 ---
 
@@ -153,5 +156,5 @@ These gaps are tracked in `ael/artifacts/BACKLOG.md`.
 
 ---
 
-*Last updated: 2026-07-06*
+*Last updated: 2026-07-10*
 *Authority: `docs/adr/`*

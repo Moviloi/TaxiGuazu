@@ -104,21 +104,41 @@ This documentation is organized by reader. Pick your path:
 
 ---
 
-## Core pipeline
+## Core pipeline (ADR-008)
 
 ```mermaid
 flowchart LR
     User["Usuario WhatsApp"] --> Webhook["WhatsApp Webhook"]
     Webhook --> Lead["lead.service.ts"]
-    Lead --> CORE["ai/core.ts<br/>Intent + Facts"]
-    Lead --> Extraction["extraction-runner.ts<br/>Slots + Pricing"]
-    Lead --> Policy["policy-pipeline.ts<br/>Decide"]
-    Policy --> Output["response-builder.ts<br/>Render"]
-    Output --> Sender["sender.ts<br/>WhatsApp API"]
+    Lead --> PolicyPipeline["policy-pipeline.ts<br/>Orchestrator"]
+    PolicyPipeline --> Handler["handler.ts (ADR-008)"]
+
+    subgraph Handler["handler.ts — Conversational Pipeline"]
+        CORE["CORE<br/>core.ts"]
+        CI["Conversation Interpreter<br/>conversation-interpreter.ts"]
+        CO["Client Objective<br/>client-objective.ts"]
+        SD["StrategyDecision<br/>conversation-strategy.ts"]
+        Router["Router<br/>router.ts"]
+        Policies["Policies<br/>policy-ahora.ts / policy-reserva.ts"]
+        LLM["LLM<br/>llm-response.ts"]
+        
+        CORE --> CI
+        CI --> CO
+        CO --> SD
+        SD --> Router
+        Router --> Policies
+        Policies --> LLM
+    end
+
+    PolicyPipeline --> Handler
+    Handler --> Sender["sender.ts<br/>WhatsApp API"]
     Sender --> User
-    Policy --> Trip["trip-execution"]
+    Handler --> Trip["trip-execution"]
     Trip --> Dispatch["dispatch engine"]
     Dispatch --> Driver["Driver WhatsApp"]
+
+    style SD fill:#ff9800,stroke:#e65100,color:#000
+    style Handler stroke:#1565c0,stroke-width:2px
 ```
 
 ---
@@ -145,6 +165,8 @@ flowchart TD
 - `docs/adr/004-service-boundaries.md` — Service boundaries and dependency order
 - `docs/adr/005-ai-first-interpretation.md` — AI-first interpretation with deterministic core
 - `docs/adr/006-schema-parity.md` — Schema parity between code and database
+- `docs/adr/007-conversation-interpreter.md` — Conversation Interpreter pipeline stage
+- `docs/adr/008-conversational-decision-architecture.md` — StrategyDecision + Architecture Freeze
 
 ---
 
@@ -211,4 +233,4 @@ Because AITOS is an operating system:
 
 ---
 
-*Last updated: 2026-07-06*
+*Last updated: 2026-07-10*
