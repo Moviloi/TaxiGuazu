@@ -75,8 +75,20 @@ Si la misión es trivial (typo, texto, config sin impacto), ejecutá directament
 ## Cierre de misión
 
 Antes de declarar una misión completa, verificá:
+
+### Calidad
 - Tests pasan (`npm test`)
 - Build compila (`npm run build`)
 - Contratos pasan (`bash ael/contracts/enforce.sh`)
 - Código commiteado
+
+### Documentación viva
+- `docs/project/PROJECT_BOARD.md`: tareas completadas marcadas DONE, nuevas tareas creadas, prioridades actualizadas
+- `docs/project/CHANGELOG.md`: entrada de misión agregada
+- `docs/ROADMAP.md`: actualizado si cambiaron hitos
+- `docs/certification/TECHNICAL_DEBT_BASELINE.md`: actualizado si la deuda cambió
+
+### Conocimiento
+- Decisiones significativas registradas (MEMORY.md o ADR)
+- Patrones detectados documentados
 - Conocimiento preservado si corresponde
