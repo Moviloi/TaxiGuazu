@@ -7,8 +7,8 @@ import { sendWhatsAppMessage } from "@/lib/sender";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { buildExtractionContext } from "@/lib/services/workflow/build-extraction-context";
 
+import { hardReset } from "@/lib/dev/hard-reset";
 import { handleCommandShortcuts } from "@/lib/services/workflow/command-shortcuts";
-import { handleResponseReset } from "@/lib/services/workflow/response-reset";
 import { handleAdminCommands } from "@/lib/services/workflow/command-router";
 import { handleConversationSetup } from "@/lib/services/workflow/conversation-setup";
 import { handleOpportunityResponse } from "@/lib/services/workflow/opportunity-response";
@@ -40,19 +40,23 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     const trimmed = text.trim();
     const lower = trimmed.toLowerCase();
 
-    // ── ZONE: COMMAND SHORTCUTS ──
+    // ── ZONE: DEVELOPMENT COMMAND ──
+    // .limpiar — Hard Conversation Reset (development only).
+    //   Intercepta ANTES de CORE, CI, CO, SD, Policies, Response Builder, LLM.
+    //   Limpia TODO el estado conversacional. Early return obligatorio.
     if (lower === ".limpiar") {
-      await handleResponseReset(phone);
-      const [postSession, postState] = await Promise.all([
-        getChatSession(phone).catch(() => null),
-        getConversationalState(phone).catch(() => null),
-      ]);
-      log.info("[AUDIT_LIMPIAR]", {
-        phone: phone.slice(-4),
-        command: ".limpiar",
-        postClearSlots: postSession?.slots ? parseSessionSlots(postSession.slots) : null,
-        postClearState: postState,
-      });
+      const HARD_RESET_MSG =
+        "🧹 Chat reiniciado para testeo.\n\n" +
+        "Todo el contexto conversacional fue eliminado correctamente.\n\n" +
+        "Ya podés comenzar una nueva prueba.";
+      try {
+        await hardReset(phone);
+      } catch (e) {
+        log.error("[LIMPIAR_ERROR]", { phone: phone.slice(-4), error: e instanceof Error ? e.message : String(e) });
+        // continuar — siempre enviar respuesta y hacer return
+      }
+      await sendWhatsAppMessage(phone, HARD_RESET_MSG);
+      log.info("[AUDIT_LIMPIAR]", { phone: phone.slice(-4), command: ".limpiar" });
       return;
     }
     if (await handleCommandShortcuts(phone, trimmed, lower)) return;

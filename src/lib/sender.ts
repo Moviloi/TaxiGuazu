@@ -78,6 +78,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
     type: "text",
     text: { body: text },
   };
+  log.info(`[QA_RESPONSE] phone=******${to.slice(-4)} text="${text}"`);
   log.info(`[SEND] → ******${to.slice(-4)}: ${text.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }
@@ -104,6 +105,7 @@ export async function sendInteractiveButtons(
       },
     },
   };
+  log.info(`[QA_RESPONSE] phone=******${to.slice(-4)} buttons="${bodyText.substring(0, 1024)}"`);
   log.info(`[SEND BUTTONS] → ******${to.slice(-4)}: ${bodyText.substring(0, 50)}`);
   await postToWhatsApp(payload);
 }

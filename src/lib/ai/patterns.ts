@@ -54,5 +54,3 @@ export function isCorrectionMessage(text: string): boolean {
  */
 export const AMBIGUOUS_HOTEL_LANDMARKS_RE =
   /\b(amerian|meli[áa]|panoramic|gran\s+hotel|falls\s+hotel|iguaz[uú]\s+grand|lo\s+de\s+ramona|hotel\s+\w+)\b/i;
-
-

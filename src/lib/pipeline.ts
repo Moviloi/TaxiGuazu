@@ -103,7 +103,19 @@ export async function processLead(
     // (askForConfirmation + tariff.matched).
     return needsGeo ? "completed" : "incomplete";
   } catch (e) {
-    log.error("[PIPELINE] error:", e);
+    const stageInfo = (() => {
+      try {
+        return { intent: execCtx?.intent, phone: execCtx?.phone?.slice(-4) ?? "unknown" };
+      } catch { return { stage: "unknown" }; }
+    })();
+    log.error("[PIPELINE] error", {
+      stage: "pipeline.run",
+      name: e instanceof Error ? e.name : typeof e,
+      message: e instanceof Error ? e.message : String(e),
+      stack: e instanceof Error ? e.stack?.split("\n").slice(0, 6).join("\n") : "N/A",
+      cause: e instanceof Error && (e as any).cause ? String((e as any).cause) : undefined,
+      ...stageInfo,
+    });
     return "error";
   }
 }
