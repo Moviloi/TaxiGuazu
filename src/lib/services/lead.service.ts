@@ -29,6 +29,8 @@ import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";
 import { log } from "@/lib/utils/logger";
 import { interpretMessage } from "@/lib/ai/conversation-interpreter";
+import { runShadowCognition, isEvidenceShadowModeEnabled } from "@/lib/evidence";
+import { isMemoryShadowModeEnabled, getDefaultMemoryService } from "@/lib/memory";
 
 // ── COORDINATOR ──
 // Routes the webhook message through sub-handlers. Each handler returns true
@@ -71,6 +73,34 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
 
     // ── ZONE: OPPORTUNITY RESPONSE ──
     if (await handleOpportunityResponse(phone, text, conversation.id, workflow)) return;
+
+    // ── ZONE: COGNITIVE SHADOW MODE (orquestado por runShadowCognition, PR-2F) ──
+    // Un solo punto de entrada al motor cognitivo. Internamente construye:
+    //   Signal → Observation → Fact[] → Evidence
+    // Retorna un ShadowResult (observable en memoria) o null.
+    // No depende de core(), analysis, intent, extracción ni LLM.
+    // Nunca afecta el flujo principal: fallo silencioso + log.
+    let shadowResult: import("@/lib/evidence").ShadowResult | null = null;
+    if (isEvidenceShadowModeEnabled()) {
+      shadowResult = runShadowCognition({ text, phone, conversationId: conversation.id });
+    }
+
+    // ── ZONE: COGNITIVE MEMORY PERSISTENCE (IM-1) ──
+    // Después de que el EE completa, antes del pipeline operacional.
+    // Preserva el par Belief + Decision como snapshot inmutable.
+    // Shadow Mode: solo si COGNITIVE_MEMORY_ENABLED=true.
+    // Nunca bloquea el pipeline operacional (fire-and-forget).
+    if (isMemoryShadowModeEnabled() && shadowResult?.isComplete) {
+      const memoryService = getDefaultMemoryService();
+      const result = await memoryService.store({
+        belief: shadowResult.belief!,
+        decision: shadowResult.decision!,
+        conversationId: String(conversation.id),
+      });
+      if (!result.success) {
+        log.warn("[MEMORY_STORE_FAILED]", { error: result.error });
+      }
+    }
 
     // ── ZONE: MEMORY + COMPREHENSION + EXTRACTION ──
     const session = await getChatSession(phone);

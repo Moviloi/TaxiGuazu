@@ -118,6 +118,11 @@ export class Signal {
       throw new SignalInvalidTimestampError('receivedAt must be a valid Date');
     }
 
+    // 5b. Validar que receivedAt no sea futuro
+    if (params.receivedAt.getTime() > Date.now()) {
+      throw new SignalInvalidTimestampError('receivedAt must not be in the future');
+    }
+
     // 6. Validar metadata (si se proporciona)
     if (params.metadata !== undefined && !isRecord(params.metadata)) {
       throw new SignalValidationError('metadata must be a Record<string, unknown>');
@@ -159,6 +164,7 @@ export class Signal {
     if (!isChannelType(params.channel)) return null;
     if (params.subtype !== undefined && !isSignalSubtype(params.subtype)) return null;
     if (!(params.receivedAt instanceof Date) || isNaN(params.receivedAt.getTime())) return null;
+    if (params.receivedAt.getTime() > Date.now()) return null;
     if (params.metadata !== undefined && !isRecord(params.metadata)) return null;
 
     return new Signal({

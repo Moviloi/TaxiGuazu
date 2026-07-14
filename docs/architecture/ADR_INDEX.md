@@ -122,6 +122,16 @@ Decisions about deployment, validation, and tooling.
 
 ---
 
+## Cognitive Architecture
+
+Decisions that define the cognitive pipeline (Evidence Engine).
+
+| ADR | Decision | Status | Impact | Related docs |
+|-----|----------|--------|--------|--------------|
+| [ADR 009: Evidence Engine Architecture](../adr/009-evidence-engine-architecture.md) | 7-layer cognitive pipeline frozen. Signal→Observation→Fact→Evidence→Knowledge→Belief→Decision. Base for Memory→Reflection→Learning→Goals→Planning. | Accepted | Freezes `src/lib/evidence/`. Any future cognitive layer requires new ADR. Anticipatory fields justified as architectural contract. | `ONTOLOGY.md`, `ENGINES.md`, `knowledge-map.md`, `system-map.md` |
+
+---
+
 ## Decision status legend
 
 | Status | Meaning |
@@ -156,5 +166,5 @@ These gaps are tracked in `ael/artifacts/BACKLOG.md`.
 
 ---
 
-*Last updated: 2026-07-10*
+*Last updated: 2026-07-13*
 *Authority: `docs/adr/`*

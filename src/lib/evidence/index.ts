@@ -37,6 +37,15 @@ export {
   EvidenceEmptyFactsError,
   EvidenceInvalidIdError,
   EvidenceInvalidObservationIdError,
+  KnowledgeValidationError,
+  KnowledgeInvalidIdError,
+  KnowledgeInvalidEvidenceIdError,
+  BeliefValidationError,
+  BeliefInvalidIdError,
+  BeliefInvalidKnowledgeIdError,
+  DecisionValidationError,
+  DecisionInvalidIdError,
+  DecisionInvalidBeliefIdError,
 } from './errors';
 
 // ---------------------------------------------------------------------------
@@ -80,3 +89,21 @@ export { Source } from './source';
 export { Confidence } from './confidence';
 export { Fact } from './fact';
 export { Evidence } from './evidence';
+export { Knowledge } from './knowledge';
+export { Belief } from './belief';
+export { Decision } from './decision';
+export type { CognitiveReadiness } from './decision';
+
+// ---------------------------------------------------------------------------
+// Pipeline Builders
+// ---------------------------------------------------------------------------
+export { buildSafe } from './build-safe';
+export { buildSignal, isEvidenceShadowModeEnabled } from './build-signal';
+export { buildObservation } from './build-observation';
+export { buildFact } from './build-fact';
+export { buildEvidence } from './build-evidence';
+export { buildKnowledge } from './build-knowledge';
+export { buildBelief } from './build-belief';
+export { buildDecision } from './build-decision';
+export { ShadowResult } from './shadow-result';
+export { runShadowCognition, isShadowLoggingEnabled } from './run-shadow-cognition';

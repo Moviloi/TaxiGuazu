@@ -1,7 +1,11 @@
 # ROADMAP — Plan Maestro de Evolución de AITOS
-## Versión 1.0 | Julio 2026
+## Versión 1.1 | Julio 2026 (actualizado PR-11A)
 
 > Derivado del Baseline certificado. Hoja de ruta oficial.
+
+> **⚠️ Separación presente/futuro (PR-11A):** Este documento contiene referencias a la arquitectura cognitiva. Se ha actualizado para distinguir explícitamente entre:
+> - **Pipeline real implementado:** EE → Shadow Observer → (output descartado)
+> - **Pipeline futuro (diseño conceptual):** EE → Memory → Pattern Discovery
 
 ---
 
@@ -11,7 +15,7 @@
 |---|---|
 | Build | ✅ PASS |
 | Contracts R1-R4 | ✅ PASS |
-| Tests | 875/876 (99.9%) |
+| Tests | 378+ en evidence (≥99.9% global) |
 | Deuda resuelta | 19 items (P0+P1) |
 | Deuda pendiente | 21 items (5 P1 + 10 P2 + 6 P3) |
 | R2 Phase 1 | ✅ Conversation Speed — greetingLength, skipConfirmation, minimizeQuestions en StrategyDecision |
@@ -39,6 +43,33 @@ Cualquier cambio arquitectónico requiere:
 2. Revisión del impacto en los 4 contratos R1-R4
 3. Aprobación explícita antes de implementar
 
+### Evidence Engine (ADR-009) — activado en PR-3E (2026-07-13)
+
+A partir de PR-3E, el Evidence Engine (7 capas cognitivas) está congelado:
+
+**Cobertura del freeze**:
+- `src/lib/evidence/` completo (Signal, Observation, Fact, Evidence, Knowledge, Belief, Decision)
+- Builders asociados (`build-*`)
+- Shadow mode (`runShadowCognition`, `ShadowResult`)
+- Contratos de error (`errors.ts`)
+- API pública (`index.ts`)
+
+**No se permite**:
+- Agregar nuevas capas sin ADR (Memory, Pattern Discovery — ambes diseño futuro)
+- Modificar entidades existentes (Signal, Observation, Fact, Evidence, Knowledge, Belief, Decision) sin ADR
+- Eliminar campos anticipados (`evidenceId`, `knowledgeId`, `beliefId`, `provenance`) sin ADR
+- Romper la cadena lineal estricta de dependencias entre capas
+- Introducir side effects (persistencia, envío de mensajes, modificación de estado conversacional)
+
+**Excepciones**:
+- Bug fixes que no alteran contratos (corrección de validaciones, tipos, errores)
+- Refactors que eliminan código muerto sin cambiar comportamiento observable
+- Extensiones de tests que no modifican la API pública
+
+**Precondición para nuevas capas**: ADR con especificación completa de la capa, sus dependencias, sus invariantes, y cómo consume los campos anticipados existentes.
+
+**Memory (ADR-010) — ⏳ DISEÑO FUTURO**: ✅ CONCEPTUAL DESIGN COMPLETE (2026-07-13). Arquitectura, contrato semántico y contrato de integración definidos. **Sin implementación — 0 archivos en src/lib/memory/**. Pendiente de PR de implementación.
+
 ---
 
 ## Dominios congelados
@@ -52,6 +83,7 @@ Estos dominios NO se tocan en el roadmap actual. Están estabilizados:
 | **Dispatch** | Maduro. 4-level escalation estable. |
 | **CORE** | Deterministic intent classifier. Cambios mínimos desde 2026-06. |
 | **Policy (Reserva/Ahora)** | Compleja pero estable. Riesgo alto de regresión. |
+| **Evidence Engine** | ✅ ARCHITECTURE FREEZE (ADR-009). 7 capas cognitivas congeladas. Base para Memory → Pattern Discovery (futuro). |
 
 ## Dominios en evolución
 
@@ -61,7 +93,7 @@ Estos dominios admiten cambios en las fases indicadas:
 |---|---|---|
 | **Lead Service** | Fase 2 | Split god orchestrator |
 | **Extraction** | Fase 2 | Unificar corrección de slots |
-| **Learning** | Fase 3 | Formalizar feedback loop |
+| **Learning** (operacional — ADR-003) | Fase 3 | Formalizar feedback loop operacional. **NO** es el Pattern Discovery cognitivo (futuro). |
 | **Survey** | Fase 3 | Cobertura de tests + mejoras |
 | **Admin** | Fase 3 | Cobertura de tests |
 | **I18n** | Fase 4 | Completar migración |
@@ -183,13 +215,13 @@ Estos dominios admiten cambios en las fases indicadas:
 - **Riesgo**: MEDIO — cambios en flujo conversacional
 - **Criterios de finalización**: Tasa de escalación reducida, sin falsos positivos
 
-### I3.3 — Formalizar feedback loop de aprendizaje
-- **Problema**: Learning engine disperso. Oportunidades, fare learning y policy A/B sin orquestación.
+### I3.3 — Formalizar feedback loop de aprendizaje (operacional)
+- **Problema**: Learning engine operacional disperso. Oportunidades, fare learning y policy A/B sin orquestación.
 - **Impacto**: Mejora continua automatizada de pricing y sugerencias
-- **Dominios**: Learning, Pricing, Dispatch
+- **Dominios**: Learning (operacional — ADR-003), Pricing, Dispatch
 - **Dependencias**: I2.5
 - **Riesgo**: ALTO — aprendizaje automático sobre decisiones de negocio
-- **Criterios de finalización**: Learning pipeline documentado, métricas de mejora
+- **Criterios de finalización**: Learning pipeline operacional documentado, métricas de mejora
 
 ### I3.4 — Hotspots restantes (>400L)
 - **Problema**: 7 archivos >400L. Complejidad cíclica alta.

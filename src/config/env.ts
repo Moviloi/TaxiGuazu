@@ -15,6 +15,19 @@ const envSchema = z.object({
   TURSO_DATABASE_URL: z.string().optional(),
   TURSO_DATABASE_TOKEN: z.string().optional(),
   CRON_SECRET: z.string().min(1, "CRON_SECRET es obligatorio. Generá un valor seguro para autenticar endpoints de cron"),
+  // COGNITIVE_MEMORY_ENABLED: variable de entorno opcional (default false).
+  // Habilita la persistencia de snapshots cognitivos (IM-1).
+  // Se lee directamente desde process.env en src/lib/memory/memory-service.ts
+  // siguiendo el mismo patrón que EVIDENCE_SHADOW_MODE en src/lib/evidence/build-signal.ts.
+
+  // PATTERN_DISCOVERY_ENABLED: variable de entorno opcional (default false).
+  // Habilita el pipeline de Pattern Discovery (PD-IM-1).
+  // Se lee desde process.env en src/lib/pattern-discovery/pd-service.ts
+
+  // PATTERN_DISCOVERY_DRY_RUN: variable de entorno opcional (default false).
+  // Ejecuta el pipeline completo SIN persistencia (PD-IM-0 §2.13).
+  // Se lee desde process.env en src/lib/pattern-discovery/pd-service.ts
+  // Precedencia: discoverDryRun() > config.dryRun > PATTERN_DISCOVERY_DRY_RUN > false
 });
 
 type Env = z.infer<typeof envSchema>;

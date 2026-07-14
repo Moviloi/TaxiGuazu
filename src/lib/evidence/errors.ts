@@ -215,3 +215,63 @@ export class EvidenceInvalidObservationIdError extends EvidenceValidationError {
     super(`Invalid observationId: "${obsId}". Evidence must reference a valid Observation`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge Errors
+// ---------------------------------------------------------------------------
+
+export class KnowledgeValidationError extends DomainError {
+  public readonly code = 'KNOWLEDGE_VALIDATION_ERROR';
+}
+
+export class KnowledgeInvalidIdError extends KnowledgeValidationError {
+  constructor(id: string) {
+    super(`Invalid Knowledge id: "${id}". Must be a non-empty string`);
+  }
+}
+
+export class KnowledgeInvalidEvidenceIdError extends KnowledgeValidationError {
+  constructor(evidenceId: string) {
+    super(`Invalid evidenceId: "${evidenceId}". Knowledge must reference a valid Evidence`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Belief Errors
+// ---------------------------------------------------------------------------
+
+export class BeliefValidationError extends DomainError {
+  public readonly code = 'BELIEF_VALIDATION_ERROR';
+}
+
+export class BeliefInvalidIdError extends BeliefValidationError {
+  constructor(id: string) {
+    super(`Invalid Belief id: "${id}". Must be a non-empty string`);
+  }
+}
+
+export class BeliefInvalidKnowledgeIdError extends BeliefValidationError {
+  constructor(knowledgeId: string) {
+    super(`Invalid knowledgeId: "${knowledgeId}". Belief must reference a valid Knowledge`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Decision Errors
+// ---------------------------------------------------------------------------
+
+export class DecisionValidationError extends DomainError {
+  public readonly code = 'DECISION_VALIDATION_ERROR';
+}
+
+export class DecisionInvalidIdError extends DecisionValidationError {
+  constructor(id: string) {
+    super(`Invalid Decision id: "${id}". Must be a non-empty string`);
+  }
+}
+
+export class DecisionInvalidBeliefIdError extends DecisionValidationError {
+  constructor(beliefId: string) {
+    super(`Invalid beliefId: "${beliefId}". Decision must reference a valid Belief`);
+  }
+}

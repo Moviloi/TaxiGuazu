@@ -1,9 +1,9 @@
 # TECHNICAL DEBT BASELINE v1.0 — AITOS
-## Generated: 2026-07-08 | Baseline for Stabilization Phase
+## Generated: 2026-07-08 | Last reviewed: 2026-07-13 (Evidence Engine Freeze)
 
 ---
 
-## Deuda resuelta (desde auditorías 000-005 + Hardening P0/P1)
+## Deuda resuelta (desde auditorías 000-005 + Hardening P0/P1 + PR-3E)
 
 | ID | Descripción | Resuelto en |
 |---|---|---|
@@ -18,6 +18,8 @@
 | C001 | findTariffByPriority ownership → pricing | P1 |
 | CODE_DIFF.md | Template vacío | P0 |
 | R5 | Híbrido StrategyDecision + señales originales (`??` fallbacks en policies) | R5 Phase 2 |
+| EE-S1 | Signal.create() no validaba receivedAt futuro | PR-3E (S-1) |
+| EE-O1 | Observation.create() no validaba validatedAt >= signal.receivedAt | PR-3E (O-1) |
 
 ---
 

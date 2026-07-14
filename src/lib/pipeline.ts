@@ -11,7 +11,7 @@
 //   geo:     { resolveGeoRoute }
 //   memory:  { saveContext }
 
-import type { ExtractionContext, ConversationDomain, Mode, TemporalMode, OperationalMode } from "@/lib/ai/types";
+import type { ExtractionContext, ConversationDomain, Mode, TemporalMode, OperationalMode, CoreDecision } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 
 export interface ExecutionContext {
@@ -30,6 +30,8 @@ export interface ExecutionContext {
   mode: Mode;
   temporal?: TemporalMode;
   operationalMode?: OperationalMode;
+  /** PR-2A: CoreDecision pre-computado para eliminar doble ejecuciÃ³n de core() */
+  analysis?: CoreDecision;
 }
 
 export interface ExecutionDeps {
@@ -73,6 +75,7 @@ export async function processLead(
       domain: execCtx.domain,
       temporalMode: execCtx.temporal,
       operationalMode: execCtx.operationalMode,
+      analysis: execCtx.analysis,
     });
     const { finalResponse, needsGeo, needsSaveContext, needsAdminNotify, adminNotifyBody, confirmationUI } = handlerResult.policy;
 

@@ -573,6 +573,30 @@ async function initSchema(): Promise<void> {
       created_at INTEGER DEFAULT (unixepoch())
     )`,
 
+    // ── COGNITIVE MEMORY (IM-1) ──
+    `CREATE TABLE IF NOT EXISTS cognitive_memory_snapshots (
+      conversation_id TEXT NOT NULL,
+      memory_id TEXT NOT NULL,
+      turn_number INTEGER NOT NULL,
+      stored_at INTEGER NOT NULL,
+      belief_id TEXT NOT NULL,
+      belief_observation_valid INTEGER NOT NULL,
+      belief_channel TEXT,
+      belief_has_content INTEGER NOT NULL,
+      belief_received_at TEXT,
+      belief_conversation_id TEXT,
+      belief_is_well_formed INTEGER NOT NULL,
+      belief_fact_count INTEGER NOT NULL,
+      decision_id TEXT NOT NULL,
+      decision_valid_input INTEGER NOT NULL,
+      decision_has_content INTEGER NOT NULL,
+      decision_readiness TEXT NOT NULL CHECK(decision_readiness IN ('ready','partial','invalid')),
+      decision_missing_info TEXT NOT NULL DEFAULT '[]',
+      decision_is_decided INTEGER NOT NULL,
+      decision_fact_count INTEGER NOT NULL,
+      PRIMARY KEY (conversation_id, turn_number)
+    )`,
+
     // ── INSERT SEED DATA ──
     `INSERT OR IGNORE INTO connection_state (key, value) VALUES ('status', 'disconnected')`,
   ]);

@@ -219,6 +219,8 @@ export interface HandlerContext {
   clientObjective?: ClientObjective;
   /** R1: Strategy Decision â€” sÃ­ntesis centralizada de decisiones estratÃ©gicas */
   strategyDecision?: StrategyDecision;
+  /** PR-2A: CoreDecision pre-computado para eliminar doble ejecuciÃ³n de core() */
+  analysis?: CoreDecision;
 }
 
 export function operationalModeToMode(om: OperationalMode): Mode {

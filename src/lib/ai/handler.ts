@@ -72,8 +72,8 @@ function buildDomainPolicy(decision: ReturnType<typeof router>, domain: Conversa
 }
 
 export async function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): Promise<HandleMessageResult> {
-  const coreDecision = core(input);
-  const decision = router(coreDecision, mode);
+  const analysis = ctx?.analysis ?? core(input);
+  const decision = router(analysis, mode);
   const hasExtraction = !!ctx?.extraction?.slots && Object.keys(ctx.extraction.slots).length > 0;
   // FASE 16: usar operationalMode para domain si disponible
   const opMode = ctx?.operationalMode;

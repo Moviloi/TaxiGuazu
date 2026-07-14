@@ -22,6 +22,7 @@ import {
   ObservationInvalidIdError,
   ObservationInvalidSignalIdError,
   ObservationInvalidStatusError,
+  ObservationTimestampBeforeSignalError,
   Signal,
   OBSERVATION_VALIDATION_STATUSES,
 } from "@/lib/evidence";
@@ -121,18 +122,51 @@ describe("Observation — fromSignal", () => {
     expect(obs.id).toBe("custom-obs-id");
   });
 
-  it("debe lanzar si validatedAt es anterior a receivedAt", () => {
-    // Esto no es posible con Date.now() >= signal.receivedAt
-    // porque fromSignal usa new Date(). Pero probamos directamente:
+  it("debe validar la invariante temporal cuando se provee signalReceivedAt", () => {
     const signal = validSignal();
+    // Sin signalReceivedAt → no hay validación (backward compatible)
     expect(() =>
       Observation.create({
         id: "obs-002",
         signalId: signal.id,
         status: "valid",
-        validatedAt: new Date("2020-01-01"), // antes del signal
+        validatedAt: new Date("2020-01-01"),
       }),
-    ).not.toThrow(); // La validación solo está en fromSignal
+    ).not.toThrow();
+
+    // Con signalReceivedAt posterior a validatedAt → debe rechazar
+    expect(() =>
+      Observation.create({
+        id: "obs-003",
+        signalId: signal.id,
+        status: "valid",
+        validatedAt: new Date("2020-01-01"),
+        signalReceivedAt: new Date("2025-01-01"),
+      }),
+    ).toThrow(ObservationTimestampBeforeSignalError);
+
+    // Con signalReceivedAt anterior o igual a validatedAt → debe aceptar
+    expect(() =>
+      Observation.create({
+        id: "obs-004",
+        signalId: signal.id,
+        status: "valid",
+        validatedAt: new Date("2025-06-01"),
+        signalReceivedAt: new Date("2025-01-01"),
+      }),
+    ).not.toThrow();
+
+    // Con timestamps iguales → debe aceptar
+    const sameDate = new Date("2025-06-01T12:00:00Z");
+    expect(() =>
+      Observation.create({
+        id: "obs-005",
+        signalId: signal.id,
+        status: "valid",
+        validatedAt: sameDate,
+        signalReceivedAt: sameDate,
+      }),
+    ).not.toThrow();
   });
 });
 

@@ -74,6 +74,10 @@ export class Observation {
     signalId: string;
     status: ObservationValidationStatus;
     validatedAt: Date;
+    /** Contexto de validación: receivedAt del Signal origen.
+     *  Cuando se provee, se verifica validatedAt >= signalReceivedAt.
+     *  No se almacena ni serializa. */
+    signalReceivedAt?: Date;
   }): Observation {
     // 1. Validar id
     if (!isNonEmptyString(params.id)) {
@@ -97,6 +101,13 @@ export class Observation {
       );
     }
 
+    // 5. Validar invariante temporal (contexto de validación únicamente)
+    if (params.signalReceivedAt !== undefined) {
+      if (params.validatedAt.getTime() < params.signalReceivedAt.getTime()) {
+        throw new ObservationTimestampBeforeSignalError();
+      }
+    }
+
     return new Observation(params);
   }
 
@@ -111,11 +122,6 @@ export class Observation {
   ): Observation {
     const now = new Date();
 
-    // Validar que validatedAt no sea anterior a receivedAt
-    if (now.getTime() < signal.receivedAt.getTime()) {
-      throw new ObservationTimestampBeforeSignalError();
-    }
-
     return Observation.create({
       id:
         id ??
@@ -123,6 +129,9 @@ export class Observation {
       signalId: signal.id,
       status,
       validatedAt: now,
+      // Pasa receivedAt como contexto de validación para que
+      // create() verifique la invariante temporal
+      signalReceivedAt: signal.receivedAt,
     });
   }
 
@@ -134,11 +143,16 @@ export class Observation {
     signalId: string;
     status: string;
     validatedAt: Date;
+    /** Contexto de validación (no se almacena) */
+    signalReceivedAt?: Date;
   }): Observation | null {
     if (!isNonEmptyString(params.id)) return null;
     if (!isNonEmptyString(params.signalId)) return null;
     if (!isObservationValidationStatus(params.status)) return null;
     if (!(params.validatedAt instanceof Date) || isNaN(params.validatedAt.getTime())) return null;
+    if (params.signalReceivedAt !== undefined) {
+      if (params.validatedAt.getTime() < params.signalReceivedAt.getTime()) return null;
+    }
 
     return new Observation({
       id: params.id,

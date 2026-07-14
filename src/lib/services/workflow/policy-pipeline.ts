@@ -122,6 +122,7 @@ export async function handlePolicyPipeline(
     mode,
     temporal,
     operationalMode,
+    analysis: leadCore,
   };
   const execDeps: ExecutionDeps = {
     send: sendWhatsAppMessage,
