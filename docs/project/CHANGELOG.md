@@ -5,7 +5,15 @@
 
 ## 2026-07-14 (current)
 
-### IM-1 — Memory Implementation (ATR-1 transition)
+### DEBT-12 — Persistence Stabilization (Fase 1+2)
+- **Tipo**: Estabilización técnica de infraestructura de persistencia
+- **Documentos**: `docs/adr/007-schema-sql-authority.md` (ADR-007), `schema/schema.sql`
+- **Resumen**: Extracción del DDL de initSchema() a schema/schema.sql como fuente única de verdad. Simplificación de connection.ts (740→187 líneas). Sincronización de 6 interfaces TypeScript con el esquema real. Smoke tests de persistencia. Canalización de verificación npm run verify.
+- **Arquitectura**: ADR-007 (Schema Authority). schema.sql es la única autoridad del DDL. connection.ts lee schema.sql vía splitSQLStatements().
+- **Archivos creados (2)**: `schema/schema.sql`, `tests/integration/persistence-smoke.test.ts`
+- **Archivos modificados (4)**: `src/lib/db/core/connection.ts` (initSchema simplificado, DDL removido + splitSQLStatements helper), `src/lib/db/types.ts` (6 correcciones de interfaz), `scripts/validate-schema-parity.ts` (ahora lee schema.sql, ADR-007), `package.json` (npm run verify)
+- **Tests**: 13 tests nuevos (persistence-smoke). 1395/1398 tests totales (3 pre-existing). Build ✅, Contratos ✅.
+- **Queda fuera**: Fases 3-6 del plan original (interfaces sincronizadas, smoke tests hechos). Limpieza del comando .limpiar (referencia a trip_status removido de schema y types pero query no actualizada).
 - **Tipo**: Implementación de capa cognitiva
 - **Documentos**: `docs/adr/010-memory-architecture.md`, `docs/architecture/IM-0_MEMORY_IMPLEMENTATION_SCOPE.md`, `docs/architecture/PR-13_ATR-1_ARCHITECTURE_TRANSITION_READINESS.md`
 - **Resumen**: Primera implementación de la capa Memory cognitiva. Memory preserva el par Belief + Decision de cada turno cognitivo como un snapshot inmutable de 19 campos.

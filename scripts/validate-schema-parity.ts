@@ -1,6 +1,6 @@
-// validate-schema-parity.ts — ADR-006 Schema parity validation
+// validate-schema-parity.ts — ADR-007 Schema parity validation
 // Usage: npx tsx scripts/validate-schema-parity.ts
-// Compares initSchema() DDL in connection.ts against the real Turso schema.
+// Compares schema/schema.sql (única autoridad del DDL) against the real Turso schema.
 // Fails with a clear report if any drift is detected.
 //
 // Requires: TURSO_DATABASE_URL and TURSO_DATABASE_TOKEN in .env
@@ -27,41 +27,60 @@ interface TableSchema {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-/** Extract all CREATE TABLE DDL statements from initSchema() in connection.ts */
-function extractInitSchemaDDL(): Map<string, TableSchema> {
-  const connPath = path.join(ROOT, "src", "lib", "db", "core", "connection.ts");
-  const src = fs.readFileSync(connPath, "utf-8");
+/** Extract all CREATE TABLE DDL statements from schema/schema.sql */
+function splitSQLStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = "";
+  let beginCount = 0;
+  const lines = sql.split("\n");
 
-  // Find the initSchema function body
-  const fnStart = src.indexOf("async function initSchema");
-  if (fnStart === -1) throw new Error("initSchema() not found in connection.ts");
-
-  const fnBlock = src.substring(fnStart);
-
-  // Match: initSchema() { ... db.batch([`...`, `...`, ...]); ... }
-  const batchMatch = fnBlock.match(
-    /async function initSchema\s*\(\)\s*:\s*Promise<void>\s*\{[\s\S]*?await\s+db\.batch\(\[([\s\S]*?)\]\);/,
-  );
-  if (!batchMatch) throw new Error("Could not match db.batch([ ... ]); in initSchema()");
-
-  const batchContent = batchMatch[1];
-
-  // Extract each backtick-delimited SQL string
-  const sqlStatements: string[] = [];
-  const sqlRegex = /`([\s\S]*?)`/g;
-  let m;
-  while ((m = sqlRegex.exec(batchContent)) !== null) {
-    sqlStatements.push(m[1]);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("--") && !current) {
+      current += line + "\n";
+      continue;
+    }
+    current += line + "\n";
+    const upper = trimmed.toUpperCase();
+    if (/\bBEGIN\b/.test(upper) && !trimmed.startsWith("--")) beginCount++;
+    if (trimmed === "END;" || trimmed === "END") {
+      beginCount--;
+      if (beginCount <= 0 && trimmed.endsWith(";")) {
+        const stmt = current.trim();
+        if (stmt && stmt !== ";") statements.push(stmt);
+        current = "";
+        beginCount = 0;
+      }
+      continue;
+    }
+    if (beginCount <= 0 && trimmed.endsWith(";")) {
+      const stmt = current.trim();
+      if (stmt && stmt !== ";") statements.push(stmt);
+      current = "";
+    }
   }
+  const remaining = current.trim();
+  if (remaining && !statements.includes(remaining)) {
+    statements.push(remaining);
+  }
+  return statements;
+}
 
-  if (sqlStatements.length === 0) {
-    throw new Error("No backtick SQL strings found in db.batch([]) — parser mismatch");
+function extractSchemaDDL(): Map<string, TableSchema> {
+  const schemaPath = path.join(ROOT, "schema", "schema.sql");
+  const src = fs.readFileSync(schemaPath, "utf-8");
+
+  // Split schema.sql into individual statements (handles BEGIN/END for triggers)
+  const statements = splitSQLStatements(src);
+
+  if (statements.length === 0) {
+    throw new Error("No SQL statements found in schema/schema.sql");
   }
 
   // Parse CREATE TABLE statements
   const tables = new Map<string, TableSchema>();
 
-  for (const sql of sqlStatements) {
+  for (const sql of statements) {
     const trimmed = sql.trim();
     if (!trimmed.toUpperCase().startsWith("CREATE TABLE")) continue;
 
@@ -79,7 +98,7 @@ function extractInitSchemaDDL(): Map<string, TableSchema> {
   }
 
   const createTableCount = tables.size;
-  const nonCreateCount = sqlStatements.length - createTableCount;
+  const nonCreateCount = statements.length - createTableCount;
   if (nonCreateCount > 0) {
     console.log(`  (${nonCreateCount} non-CREATE SQL statements skipped — triggers, etc.)`);
   }
@@ -129,7 +148,7 @@ function printReport(results: ValidationResult[]): boolean {
   let skipCount = 0;
 
   console.log("\n" + "=".repeat(70));
-  console.log("  SCHEMA PARITY VALIDATION REPORT  (ADR-006)");
+  console.log("  SCHEMA PARITY VALIDATION REPORT  (ADR-007)");
   console.log("=".repeat(70) + "\n");
 
   for (const result of results) {
@@ -152,10 +171,10 @@ function printReport(results: ValidationResult[]): boolean {
   console.log(`  Tables: ${results.length}  |  OK: ${okCount}  |  FAIL: ${failCount}  |  SKIP: ${skipCount}`);
 
   if (allPassed) {
-    console.log("  RESULT: ✅ PARITY CONFIRMED — initSchema() matches Turso schema");
+    console.log("  RESULT: ✅ PARITY CONFIRMED — schema.sql matches Turso schema");
   } else {
     console.log("  RESULT: ❌ DRIFT DETECTED — review errors above");
-    console.log("  ADR-006 requires fixing DDL in initSchema() before deploying.");
+    console.log("  ADR-007 requires fixing schema/schema.sql before deploying.");
   }
   console.log("=".repeat(70) + "\n");
 
@@ -165,14 +184,14 @@ function printReport(results: ValidationResult[]): boolean {
 // ── Main ───────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log("  Loading initSchema() DDL from connection.ts ...");
+  console.log("  Loading DDL from schema/schema.sql ...");
 
   let ddlTables: Map<string, TableSchema>;
   try {
-    ddlTables = extractInitSchemaDDL();
-    console.log(`  Found ${ddlTables.size} tables in initSchema()`);
+    ddlTables = extractSchemaDDL();
+    console.log(`  Found ${ddlTables.size} tables in schema.sql`);
   } catch (e: any) {
-    console.error(`\nFATAL: Cannot parse initSchema() — ${e.message}`);
+    console.error(`\nFATAL: Cannot parse schema.sql — ${e.message}`);
     process.exit(1);
   }
 
@@ -206,9 +225,9 @@ async function main(): Promise<void> {
         table: tableName,
         status: "FAIL",
         details: [
-          `  Tabla existe en DB pero NO en initSchema()`,
+          `  Tabla existe en DB pero NO en schema.sql`,
           `  Columnas en DB (${dbCols.length}): ${dbCols.join(", ")}`,
-          `  → Agregar CREATE TABLE IF NOT EXISTS a initSchema()`,
+          `  → Agregar CREATE TABLE IF NOT EXISTS a schema/schema.sql`,
         ],
       });
     }
@@ -217,7 +236,7 @@ async function main(): Promise<void> {
       results.push({
         table: tableName,
         status: "FAIL",
-        details: [`Tabla existe en initSchema() pero NO en DB real — posible tabla legacy o typo`],
+        details: [`Tabla existe en schema.sql pero NO en DB real — posible tabla legacy o typo`],
       });
     }
 
@@ -242,7 +261,7 @@ async function main(): Promise<void> {
         const diffLines: string[] = [];
         if (extraInDB.length > 0) {
           diffLines.push(`  En DB no en DDL: ${extraInDB.join(", ")}`);
-          diffLines.push(`  → Agregar columnas faltantes al CREATE TABLE en initSchema()`);
+          diffLines.push(`  → Agregar columnas faltantes al CREATE TABLE en schema/schema.sql`);
         }
         if (extraInDDL.length > 0) {
           diffLines.push(`  En DDL no en DB: ${extraInDDL.join(", ")}`);

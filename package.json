@@ -15,6 +15,7 @@
     "test": "vitest run --config src/config/vitest.config.ts",
     "ael:enforce": "bash ael/contracts/enforce.sh",
     "ael:validate": "npm test && npm run build && bash ael/contracts/enforce.sh",
+    "verify": "npm test && npm run build && npm run validate-schema-parity",
     "test:watch": "vitest --config src/config/vitest.config.ts",
     "evals": "npx tsx scripts/run-evals.ts",
     "validate-knowledge": "npx tsx scripts/validate-knowledge.ts",

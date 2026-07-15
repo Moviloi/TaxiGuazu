@@ -32,7 +32,7 @@
 | P1-03 | Deshabilitar auto-insert de aliases con Levenshtein ≤3 | DB | READY | N/A | B3, GEO Audit |
 | P1-04 | Cerrar fase-22 T2 (decisión de producto: ¿preservar origin en corrección parcial?) | Extraction | ADR_PENDING | N/A | S0 |
 | P1-05 | `placeIdCache` nunca se invalida — agregar TTL | Geo | READY | N/A | P3 Audit |
-| P1-06 | `is_principal2` nunca se escribe en código | DB | READY | N/A | P3 Audit |
+| P1-06 | `is_principal2` nunca se escribe en código | DB | **PARTIAL** (type agregado, write operations pendientes) | N/A | P3 Audit |
 | P1-07 | Configurar LOG_LEVEL=info en Vercel | Ops | READY | N/A | OPS1 |
 | P1-08 | PAIR_BASE y CORRIDOR_PAIRS → migrar a tabla DB | Geo | READY | N/A | P3 Audit |
 | P1-09 | ENTITY_CATALOG → migrar a tabla DB | Extraction | READY | N/A | P3 Audit |
@@ -47,7 +47,7 @@
 | P2-04 | Dropear 30 columnas fantasma (geo-catastral, zones metadata, drivers) | DB | READY | N/A | P3 Audit |
 | P2-05 | DEBT-02: Eliminar acoplamiento survey→lead | Services | READY | N/A | DEBT Baseline |
 | P2-06 | Completar i18n (15 strings restantes) | I18n | READY | N/A | DEBT Baseline |
-| P2-07 | Fix 4 type/DDL mismatches | DB | READY | N/A | P3 Audit |
+| P2-07 | Fix 4 type/DDL mismatches | DB | **DONE** | ADR-007 | P3 Audit |
 | P2-08 | Human Layer: templates con variación | UX | READY | N/A | UX Audit |
 | P2-09 | Métricas de experiencia conversacional | UX | READY | N/A | UX Audit |
 | P2-10 | Persistir `last_intent` en chat_sessions (1 columna) | DB/Pipeline | READY | N/A | E6/E9/E10 |
@@ -127,6 +127,7 @@
 | D48 | **S1A — Global Irreducibility Audit**: Pipeline EE→Memory→Learning refutado desde primeros principios. Hallazgo crítico: `runShadowCognition()` descarta su retorno (lead.service.ts:83) — el EE output nunca llega a Memory. Memory no existe como código. Learning cognitivo no existe. **Veredicto D**: contradicción entre teoría arquitectónica y código real. Documento: `docs/architecture/S1A_GLOBAL_IRREDUCIBILITY_AUDIT.md`. | — |
 | D49 | **PR-11 — Cognitive Reality Alignment Audit**: 5 auditorías de alineamiento post-S1A. Clasificación A/B/C/D de cada elemento. **Veredicto B**: la arquitectura debe documentarse como futura, no existente. Resolución propuesta: renombrar Learning cognitivo → Pattern Discovery, separar documentación presente/futuro, capturar ShadowResult. Documento: `docs/architecture/PR-11_COGNITIVE_REALITY_ALIGNMENT.md`. | — |
 | D50 | **IM-1 — Memory Implementation (ATR-1)**: Primera implementación de la capa Memory cognitiva. 7 archivos creados en `src/lib/memory/` (types, snapshot, builder, service, storage, init, index). Tabla `cognitive_memory_snapshots` en initSchema(). Feature flag `COGNITIVE_MEMORY_ENABLED`. Integración en `lead.service.ts`: ShadowResult capturado, store() llamado condicionalmente. 45 tests nuevos (38 unit + 7 integración). 0 regresiones. 6 normalizaciones documentales aplicadas. Build ✅, Contratos ✅. | — |
+| D51 | **DEBT-12 — Persistence Stabilization (Fase 1+2)**: DDL extraído a schema/schema.sql. connection.ts simplificado de 740→187 líneas. 6 type mismatches corregidos. 13 smoke tests. npm run verify. ADR-007 como autoridad del esquema. 1395/1398 tests, Build ✅, Contratos ✅. | — |
 
 ---
 

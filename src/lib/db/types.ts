@@ -12,7 +12,6 @@ export interface ConversationRow {
   taken_by_human: number;
   human_operator_phone: string | null;
   trip_id: string | null;
-  trip_status: string | null;
   last_message_at: number | null;
   created_at: number;
 }
@@ -57,7 +56,7 @@ export interface TripRow {
   confirmed_at: number | null;
   contact_shared_at: number | null;
   commission_amount: number | null;
-  commission_paid: number | null;
+  discount_explicit: number | null;
   comision_declarada: number | null;
   driver_payout: number | null;
   flight_number: string | null;
@@ -70,6 +69,8 @@ export interface TripRow {
   garantizado_base: number | null;
   trip_phase: TripPhase | null;
   closure_reason: TripClosureReason | null;
+  cancelled_at: number | null;
+  cancelled_by: string | null;
 }
 
 // Tipos para event sourcing de Trip (append-only audit log)
@@ -133,6 +134,7 @@ export interface DriverRow {
   is_guide: number | null;
   car_model: string | null;
   car_year: number | null;
+  is_principal2: number | null;
   status: DriverStatus | null;
   approved_at: number | null;
   approved_by: string | null;
