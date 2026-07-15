@@ -10,6 +10,8 @@
 | DEBT-01 | AFFIRMATION_RE duplicado | v2 |
 | DEBT-03 | guard.ts global state | v2 |
 | DEBT-12 | connection.ts initSchema() drift | v3.4 |
+| DEBT-13 | trip_status references eliminadas de código ejecutable | v3.5 |
+| DEBT-14 | import.meta.dirname → process.cwd() (Vercel TypeError fix) | v3.5 |
 | Z3.1-3 | guard.ts no-ops (setRequestState, assertCoreRouterPolicy, resetRequestState) | P0 |
 | Z3.4-6 | tool wrappers sin consumers (tool-geo, tool-dispatch, tool-fleet) | P0 |
 | L2.3 | handleDriverAccept legacy stub | P0 |

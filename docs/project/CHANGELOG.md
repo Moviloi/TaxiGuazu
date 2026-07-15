@@ -3,7 +3,42 @@
 
 ---
 
-## 2026-07-14 (current)
+## 2026-07-15 (current)
+
+### DEBT-14C — Post-fix verification & audit
+- **Tipo**: Verificación + Auditoría de infraestructura
+- **Commit**: —
+- **Resumen**: Verificación post-corrección de DEBT-14B (import.meta.dirname → process.cwd()). Build compila ✅ en 27.2s. Bundle .next/server/chunks/215.js verificado: `g().resolve(process.cwd(), "schema/schema.sql")` — sin `void 0`. Contratos R1-R4 PASS ✅. Auditoría completa del flujo `initSchema()`:
+  - **Flujo**: `getDb()` → crea cliente → dispara `initSchema()` (Promise<void>) → `schemaReady` singleton. `ensureSchema()` checkea y await. Sin race condition crítica (libSQL queue serializado).
+  - **splitSQLStatements()**: Manejo correcto de bloques BEGIN/END anidados para triggers. Todos los CREATE TRIGGER en schema.sql se parsean y ejecutan correctamente.
+  - **Idempotencia**: 100% — todos los CREATE usan `IF NOT EXISTS`. Seed data usa `INSERT OR IGNORE`.
+  - **Sin branching por entorno**: Schema loading path idéntico para dev y Vercel. `process.cwd()` en Vercel = `/var/task`. Schema.sql desplegado (no vercel.json, no .vercelignore).
+  - **Riesgo residual**: `getOrCreateConversation()` (database.ts:31) llama `getDb().execute()` sin `ensureSchema()` previo. Solo riesgoso en frío inicial con DB vacía. Schema loading (~670 líneas DDL) es rápido y libSQL serializa queries en orden. Riesgo BAJO.
+- **Checklist de deploy**: Schema.sql incluido por defecto. Sin archivos ignorados. `process.cwd()` funciona en serverless. Fallback `fs.existsSync` con error explícito. Build y contratos verificados. Tests (blackbox + integración) PASS.
+
+### DEBT-14B — Vercel TypeError fix (import.meta.dirname → process.cwd())
+- **Tipo**: Bug fix de infraestructura (producción-blocker)
+- **Commit**: —
+- **Resumen**: Corrección de la causa raíz identificada en DEBT-14. En `src/lib/db/core/connection.ts` línea 104: `path.resolve(import.meta.dirname, "../../../../schema/schema.sql")` → `path.resolve(process.cwd(), "schema/schema.sql")`. Agregado guard `fs.existsSync` con `throw Error(...)` explícito. Build verificado: `g().resolve(process.cwd(), "schema/schema.sql")` en bundle, sin `void 0`. Chunk 215.js confirmada limpia.
+- **Cambio**: +4/-1 en connection.ts. Único archivo modificado.
+- **Verificación**: Build ✅ (18.7s). Contratos R1-R4 PASS ✅. Bundle auditado — 0 occurrences de `void 0` en schema path. `import.meta.dirname` no existe en el bundle compilado.
+
+### DEBT-14 — Vercel TypeError root cause audit
+- **Tipo**: Auditoría de causa raíz
+- **Commit**: —
+- **Resumen**: Investigación de error `TypeError: The "paths[0]" argument must be of type string. Received undefined` en producción Vercel. Causa raíz confirmada: **`import.meta.dirname` (Node.js 20.11+) no tiene transform en webpack de Next.js**. En el bundle compilado (`.next/server/chunks/215.js:70`), `import.meta.dirname` → `void 0`. `path.resolve(void 0, ...)` lanza TypeError. `import.meta.url` sí tiene transform (se hardcodea el path absoluto). Contraste confirmado.
+- `constants.ts` usa `fileURLToPath(import.meta.url)` → NO afectado porque `TURSO_DATABASE_URL` está definido en Vercel y `DB_PATH` nunca se evalúa cuando Turso está configurado.
+- `process.cwd()` en Vercel = `/var/task`. `schema/schema.sql` está en raíz del repo (no ignorado) → se despliega correctamente.
+
+### DEBT-13 — trip_status elimination
+- **Tipo**: Limpieza de código muerto
+- **Commit**: `0a8719d`
+- **Resumen**: Eliminación de todas las referencias ejecutables a `trip_status` tras detectar en DEBT-12 que la columna fue removida de schema.sql pero persistía en código. Archivos modificados:
+  - `src/lib/dev/hard-reset.ts`: Queries de limpieza actualizadas (chat_sessions reemplaza la lógica legacy con workflow_state)
+  - `src/lib/db/database.ts`: `setConversationTripStatus` eliminado (0 callers verificado en Phase G)
+  - `src/lib/db/core/database.ts` (legacy): Eliminado
+  - `src/app/page.tsx`: Sección de status display eliminada
+- **Verificación**: `git grep trip_status` → solo documentación y comentarios. Black box audit `.limpiar`: 14/14 escenarios PASS con 0 errores.
 
 ### DEBT-12 — Persistence Stabilization (Fase 1+2)
 - **Tipo**: Estabilización técnica de infraestructura de persistencia

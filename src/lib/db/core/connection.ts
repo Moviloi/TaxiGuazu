@@ -101,7 +101,10 @@ async function initSchema(): Promise<void> {
   const db = getDb();
 
   // ── Leer y ejecutar schema.sql ──
-  const schemaPath = path.resolve(import.meta.dirname, "../../../../schema/schema.sql");
+  const schemaPath = path.resolve(process.cwd(), "schema/schema.sql");
+  if (!fs.existsSync(schemaPath)) {
+    throw new Error(`[SCHEMA] schema.sql no encontrado en: ${schemaPath}. Verificar que schema/schema.sql existe en la raíz del proyecto.`);
+  }
   const schemaSQL = fs.readFileSync(schemaPath, "utf-8");
   const statements = splitSQLStatements(schemaSQL);
 

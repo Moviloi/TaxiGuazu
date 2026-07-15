@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-14 | Etapa: IM-1 — Memory Implementation (ATR-1 transition)
+## Actualizado: 2026-07-15 | Etapa: DEBT-14 — Vercel TypeError fix & verification
 
 ---
 
@@ -128,6 +128,9 @@
 | D49 | **PR-11 — Cognitive Reality Alignment Audit**: 5 auditorías de alineamiento post-S1A. Clasificación A/B/C/D de cada elemento. **Veredicto B**: la arquitectura debe documentarse como futura, no existente. Resolución propuesta: renombrar Learning cognitivo → Pattern Discovery, separar documentación presente/futuro, capturar ShadowResult. Documento: `docs/architecture/PR-11_COGNITIVE_REALITY_ALIGNMENT.md`. | — |
 | D50 | **IM-1 — Memory Implementation (ATR-1)**: Primera implementación de la capa Memory cognitiva. 7 archivos creados en `src/lib/memory/` (types, snapshot, builder, service, storage, init, index). Tabla `cognitive_memory_snapshots` en initSchema(). Feature flag `COGNITIVE_MEMORY_ENABLED`. Integración en `lead.service.ts`: ShadowResult capturado, store() llamado condicionalmente. 45 tests nuevos (38 unit + 7 integración). 0 regresiones. 6 normalizaciones documentales aplicadas. Build ✅, Contratos ✅. | — |
 | D51 | **DEBT-12 — Persistence Stabilization (Fase 1+2)**: DDL extraído a schema/schema.sql. connection.ts simplificado de 740→187 líneas. 6 type mismatches corregidos. 13 smoke tests. npm run verify. ADR-007 como autoridad del esquema. 1395/1398 tests, Build ✅, Contratos ✅. | — |
+| D52 | **DEBT-13 — trip_status elimination**: Eliminadas todas las referencias ejecutables a `trip_status` (hard-reset.ts, page.tsx, database.ts, connection.ts). Solo documentación y comentarios preservados. Black box audit `.limpiar`: 14/14 escenarios PASS con 0 errores. | 0a8719d |
+| D53 | **DEBT-14 — Vercel TypeError fix**: Causa raíz identificada: `import.meta.dirname` (Node 20.11+) no tiene transform en webpack → `void 0` → `TypeError: paths[0]`. Fix: `path.resolve(process.cwd(), "schema/schema.sql")` + guard `fs.existsSync`. Build verificado sin `void 0` en bundle. 14/14 blackbox, Build ✅, Contratos ✅. | — |
+| D54 | **DEBT-14C — Post-fix verification & audit**: Build ✅, Contratos ✅, flujo `initSchema()` auditado (singleton, splitSQLStatements correcto con BEGIN/END, schema.sql idempotente con `IF NOT EXISTS`, sin branching por entorno, sin race condition crítica). Checklist de deploy preparado. | — |
 
 ---
 
