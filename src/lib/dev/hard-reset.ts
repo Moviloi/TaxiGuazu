@@ -79,7 +79,6 @@ export async function hardReset(phone: string): Promise<HardResetResult> {
     //    - mode → AI (not human)
     //    - release from human operator
     //    - unlink any trip
-    //    - reset trip_status to default
     //    - clear customer name
     //    - update last_message_at to now (so 48h inactivity check doesn't trigger)
     await getDb().execute({
@@ -88,7 +87,6 @@ export async function hardReset(phone: string): Promise<HardResetResult> {
         taken_by_human = 0,
         human_operator_phone = NULL,
         trip_id = NULL,
-        trip_status = 'consulta',
         name = NULL,
         last_message_at = unixepoch()
         WHERE id = ?`,

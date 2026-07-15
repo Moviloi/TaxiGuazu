@@ -141,7 +141,8 @@ async function initSchema(): Promise<void> {
   // NOTA: El bloque FASE 5.2.7 (RENAME f4_state→comprehension_state, DROP workflow_state,
   // confirmed_fields, source_message_ids, trip_status) fue eliminado en DEBT-12 Fase C3.
   // Todas esas columnas ya están en su estado final en los CREATE TABLE de initSchema()
-  // desde la Fase C1. Ver ADR-006 Addendum: C3.
+  // desde la Fase C1. Las referencias de código a trip_status fueron eliminadas posteriormente.
+  // Ver ADR-006 Addendum: C3.
 
   // FASE 6: Migrar alias_lookup → aliases, eliminar tabla legacy
   // → alias_lookup ya NO se crea en DDL. Solo DBs existentes lo tienen.

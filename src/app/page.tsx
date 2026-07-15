@@ -329,9 +329,7 @@ export default function Dashboard() {
                   }`}>
                     {conv.taken_by_human ? 'HUMAN' : 'AI'}
                   </span>
-                  {conv.trip_status && (
-                    <span className="text-xs text-gray-500">{conv.trip_status}</span>
-                  )}
+
                 </div>
                 {conv.last_message_preview && (
                   <p className="text-xs text-gray-400 mt-1 truncate">{conv.last_message_preview}</p>

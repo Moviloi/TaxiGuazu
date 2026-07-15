@@ -89,8 +89,8 @@ export async function setConversationTrip(conversationId: number, tripId: string
 }
 
 // setConversationTripStatus eliminado — 0 callers (verificado Phase G).
-// conversations.trip_status sigue existiendo en la tabla (DEFAULT 'consulta') y
-// es candidata a DROP COLUMN.
+// conversations.trip_status fue eliminado.
+// El estado del viaje vive exclusivamente en trips.status.
 
 
 
