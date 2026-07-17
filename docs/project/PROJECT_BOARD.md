@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-16 | Etapa: Architecture Freeze V3 — Serie CE CERTIFICADA — RRR-1 COMPLETED
+## Actualizado: 2026-07-17 | Etapa: QA-1 y QA-2 COMPLETED — Pendiente QA-3 Architectural Sanitization
 
 ---
 
@@ -149,6 +149,8 @@
 | D61 | **PR-5G — Cognitive Architecture Certification Closure**: Certificación de la Serie CE. Fix build (H-01), ADR-012 ACEPTADO (H-02), DRL geo integrado (H-03), recovery-resolver auditado (H-04), docs sincronizadas (H-05). Verdict: **CERTIFICADO**. Architecture Freeze V3 declarado. | — |
 | D62 | **RRR-1 — Release Readiness Review**: Review completa del sistema. Build ✅ (39.9s), Tests 1653/1657 ✅, Contratos ✅. Veredicto: **READY FOR STAGING WITH CONDITIONS**. Plan de activación en 7 fases. Condiciones documentadas para producción. | — |
 | D63 | **PR-H0A — Staging Hardening Audit**: Auditoría completa post-RRR-1 sobre 7 áreas. H0A-01 (flags): 11 sin documentar. H0A-02 (tests): 4 fallas clasificadas. H0A-03 (middleware): 0 existe. H0A-04 (key rotation): expuesta. H0A-05 (shadow flags): sin wrapper. H0A-06 (sentry): sin DSN. H0A-07 (memory): wiring gap confirmado. H0A-08 (pattern discovery): bug + DB schema ausente. H0A-09 (log_level): no configurado. H0A-10 (precommit): no activo. Documento: `docs/certification/H0A_STAGING_HARDENING_AUDIT.md`. | — |
+| D64 | **PR-QA1 — Architectural Consistency Audit**: Auditoría de consistencia arquitectónica de 18 componentes del pipeline. 27 hallazgos documentados. Cero código modificado. Documento: `docs/certification/PR-QA1_ARCHITECTURAL_CONSISTENCY_AUDIT.md`. | — |
+| D65 | **PR-QA2 — Runtime Flow Trace & Authority Verification**: Trazado runtime de 4 escenarios. 3 hallazgos críticos confirmados con evidencia. 4 nuevos hallazgos. Matriz de autoridades. Plan de eliminación para QA-3. Documento: `docs/certification/PR-QA2_RUNTIME_FLOW_TRACE.md`. | — |
 
 ---
 

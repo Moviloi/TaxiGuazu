@@ -3,7 +3,23 @@
 
 ---
 
-## 2026-07-16 (current)
+## 2026-07-17 (current)
+
+### PR-QA2 — Runtime Flow Trace & Authority Verification
+- **Tipo**: Auditoría de trazado dinámico
+- **Commit**: —
+- **Resumen**: Trazado runtime de 4 escenarios conversacionales (greeting→booking, price query, full reservation, geo ambiguity). Confirmación de los 3 hallazgos críticos de PR-QA1 (F-01 pipeline paralelo, F-02 afirmación triplicada, F-03 resolución de campos cuadruplicada) con evidencia dinámica. 4 hallazgos adicionales descubiertos (F-04 ambiguity handler falla en "sí", F-05 pricing resuelto 3× por trip, F-06 5/7 rutas bypassan handleMessage, F-07 price query interceptado por ambiguity antes de pricing). Matriz de autoridades construida. Plan de eliminación diseñado para PR-QA3. Cero modificaciones de código.
+- **Documento generado**: `docs/certification/PR-QA2_RUNTIME_FLOW_TRACE.md`
+- **Validación**: Solo documentación — build, tests, contratos no afectados (0 cambios de código)
+
+### PR-QA1 — Architectural Consistency Audit
+- **Tipo**: Auditoría arquitectónica
+- **Commit**: —
+- **Resumen**: Auditoría de consistencia arquitectónica de 18 componentes del pipeline. 27 hallazgos clasificados (3 🔴 críticos, 4 🟡 estructurales, 3 🟢 fortalezas + matrices por componente). Matrices de responsabilidad, RCA, roadmap de saneamiento. Cero modificaciones de código.
+- **Documento generado**: `docs/certification/PR-QA1_ARCHITECTURAL_CONSISTENCY_AUDIT.md`
+- **Validación**: Solo documentación — build, tests, contratos no afectados (0 cambios de código)
+
+## 2026-07-16
 
 ### PR-H0C.1b — Cierre arquitectónico: Middleware diferido a Post-v1
 - **Tipo**: Decisión arquitectónica
