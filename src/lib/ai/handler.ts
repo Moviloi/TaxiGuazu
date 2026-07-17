@@ -24,6 +24,12 @@ import { computeClientObjective } from "./client-objective";
 import { computeStrategyDecision } from "./conversation-strategy";
 import type { HandleMessageResult, HandlerContext, Mode, PolicyOutput, ConversationDomain, OperationalMode } from "./types";
 import { log } from "@/lib/utils/logger";
+import { isDrlResponseAssistanceEnabled, isBkeMessageEnabled } from "@/config/feature-flags";
+import { buildDrlEnrichment } from "@/lib/drl/assistance";
+import type { DRLInput } from "@/lib/drl/types";
+import { resolveMessageSync } from "@/lib/bke/domains/message";
+import { capturePipelineEvent } from "@/lib/cognitive/collector";
+import type { PipelineEventDetails } from "@/lib/cognitive/types";
 
 function buildSafeFallback(decision: ReturnType<typeof router>): PolicyOutput {
   return {
@@ -47,9 +53,22 @@ function buildDomainPolicy(decision: ReturnType<typeof router>, domain: Conversa
   }
   if (domain === "information" || domain === "commercial") {
     const domainHint = domain === "information" ? "INFORMATION" : "COMMERCIAL";
-    const msg = domain === "information"
-      ? buildInformationalResponse(decision.core.intent, lang)
-      : buildCommercialResponse(lang);
+    // PR-5E: BKE Message routing cuando el flag está activo
+    let msg: string;
+    if (isBkeMessageEnabled()) {
+      if (domain === "information") {
+        const bkeMsg = resolveMessageSync("informational", lang, { intent: decision.core.intent });
+        msg = bkeMsg?.resolved ?? buildInformationalResponse(decision.core.intent, lang);
+      } else {
+        const bkeMsg = resolveMessageSync("commercial", lang);
+        msg = bkeMsg?.resolved ?? buildCommercialResponse(lang);
+      }
+      log.info("[BKE:MESSAGE:ROUTE]", { domain, intent: decision.core.intent, source: "bke", lang });
+    } else {
+      msg = domain === "information"
+        ? buildInformationalResponse(decision.core.intent, lang)
+        : buildCommercialResponse(lang);
+    }
     return {
       decision: decision.decision,
       mode: decision.mode,
@@ -72,8 +91,16 @@ function buildDomainPolicy(decision: ReturnType<typeof router>, domain: Conversa
 }
 
 export async function handleMessage(input: string, mode: Mode, ctx?: HandlerContext): Promise<HandleMessageResult> {
+  // PR-5F: Iniciar tracking de pipeline cognitivo
+  const pipelineStart = performance.now();
+  const pipelineDetails: PipelineEventDetails = {
+    pipeline: "handler",
+  };
+  capturePipelineEvent(0, true, pipelineDetails);
+
   const analysis = ctx?.analysis ?? core(input);
   const decision = router(analysis, mode);
+  pipelineDetails.intent = decision.core.intent;
   const hasExtraction = !!ctx?.extraction?.slots && Object.keys(ctx.extraction.slots).length > 0;
   // FASE 16: usar operationalMode para domain si disponible
   const opMode = ctx?.operationalMode;
@@ -116,6 +143,46 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
   const enrichedCtx: HandlerContext = ctx
     ? { ...ctx, purchaseIntent: decision.core.purchaseIntent, urgency, messageType: classification.type, isCorrection: classification.isCorrection, clientObjective: clientObj, strategyDecision }
     : { purchaseIntent: decision.core.purchaseIntent, urgency, messageType: classification.type, isCorrection: classification.isCorrection, clientObjective: clientObj, strategyDecision };
+
+  // PR-5D: Enriquecer contexto con DRL antes de llamar al LLM (C2)
+  if (isDrlResponseAssistanceEnabled()) {
+    const drlInput: DRLInput = {
+      slots: {
+        ...(ctx?.extraction?.slots ?? {}),
+        _userText: input,
+        purchaseIntent: decision.core.purchaseIntent ?? "unknown",
+        clientObjective: clientObj ?? "none",
+        strategyTone: strategyDecision.tone,
+        strategyResponseLength: strategyDecision.responseLength,
+      },
+      requiredSlots: ["origin", "destination", "passengers", "scheduled_at"],
+      conversationState: classification.type ?? undefined,
+    };
+    const enrichment = buildDrlEnrichment(drlInput, "response");
+    if (enrichment) {
+      enrichedCtx.drlEnrichment = enrichment.text;
+      log.info("[DRL_RESPONSE_ASSISTANCE]", {
+        decision: enrichment.raw.decision,
+        confidence: enrichment.raw.overallConfidence,
+        executionMs: enrichment.raw.executionTimeMs,
+        completitud: `${enrichment.raw.completitud.completenessLevel} (${(enrichment.raw.completitud.completenessRatio * 100).toFixed(0)}%)`,
+        consistencia: enrichment.raw.consistencia.severityLevel,
+        clasificacion: `${enrichment.raw.clasificacion.extractionType}/${enrichment.raw.clasificacion.complexity}`,
+        prioridad: enrichment.raw.prioridad.suggestedNextField ?? "none",
+        escalamiento: enrichment.raw.escalamiento.shouldEscalate ? enrichment.raw.escalamiento.escalateTo : "none",
+      });
+      // PR-5F: Capturar evento DRL
+      const { captureDRLEvent } = await import("@/lib/cognitive/collector");
+      captureDRLEvent(enrichment.raw.executionTimeMs, true, {
+        rule: "response-assistance",
+        decision: enrichment.raw.decision,
+        confidence: enrichment.raw.overallConfidence,
+        executionTimeMs: enrichment.raw.executionTimeMs,
+        matchedRule: enrichment.raw.completitud.completenessLevel,
+      });
+    }
+  }
+
   log.info("[STRATEGY]", {
     mode: strategyDecision.mode,
     tone: strategyDecision.tone,
@@ -174,6 +241,12 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
     policy.finalResponse = llmResponse;
     log.info("[LLM_RESPONSE] applied");
   }
+
+  // PR-5F: Capturar evento de pipeline completado
+  const pipelineDuration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+  pipelineDetails.workflowState = decision.decision;
+  pipelineDetails.slotsCount = Object.keys(ctx?.extraction?.slots ?? {}).length;
+  capturePipelineEvent(pipelineDuration, true, pipelineDetails);
 
   return { decision, policy };
 }

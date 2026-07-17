@@ -40,7 +40,7 @@ describe("Memory Integration — módulos importables", () => {
     expect(mod.createMemorySnapshot).toBeDefined();
   });
 
-  it("debe importar MemoryService en lead.service.ts", async () => {
+  it("debe importar MemoryService en lead.service.ts", { timeout: 30000 }, async () => {
     const leadMod = await import("@/lib/services/lead.service");
     expect(leadMod.handleLeadMessage).toBeDefined();
     expect(typeof leadMod.handleLeadMessage).toBe("function");

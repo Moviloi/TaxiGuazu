@@ -220,11 +220,12 @@ beforeEach(() => {
 
 describe("Flow 1: Pasajeros antes de pricing (pipeline completo)", () => {
 
-  it("T1: slot_confirm sin pasajeros → pregunta pasajeros, NO muestra precio", async () => {
+  it("T1: slot_confirm sin pasajeros → pregunta pasajeros, NO muestra precio", { timeout: 30000 }, async () => {
     const { handleLeadMessage } = await import("@/lib/services/lead.service");
-    const { getChatSession } = await import("@/lib/db/database");
 
-    vi.mocked(getChatSession).mockResolvedValue({
+    // getChatSession mock is set up globally via vi.mock factory — just assign return value
+    const { getChatSession: mockGetChatSession } = await import("@/lib/db/database");
+    mockGetChatSession.mockResolvedValue({
       phone: TEST_PHONE,
       slots: JSON.stringify({ origin: "Aeropuerto IGR (Argentina)", destination: "Centro de Foz do Iguaçu (Brasil)" }),
       confidence: JSON.stringify({ origin: 0.6, destination: 0.6 }),
@@ -253,11 +254,11 @@ describe("Flow 1: Pasajeros antes de pricing (pipeline completo)", () => {
     expect(joined).not.toMatch(/\$\d+/);
   });
 
-  it("T2: change_passengers → pregunta pasajeros", async () => {
+  it("T2: change_passengers → pregunta pasajeros", { timeout: 30000 }, async () => {
     const { handleLeadMessage } = await import("@/lib/services/lead.service");
-    const { getChatSession } = await import("@/lib/db/database");
 
-    vi.mocked(getChatSession).mockResolvedValue({
+    const { getChatSession: mockGetChatSession } = await import("@/lib/db/database");
+    mockGetChatSession.mockResolvedValue({
       phone: TEST_PHONE,
       slots: JSON.stringify({ origin: "Aeropuerto IGR (Argentina)", destination: "Centro de Foz do Iguaçu (Brasil)" }),
       confidence: JSON.stringify({ origin: 0.6, destination: 0.6 }),

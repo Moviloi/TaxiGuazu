@@ -7,9 +7,7 @@ import { getAvailableDrivers } from "@/lib/db/database";
 import { getEnv } from "@/config/env";
 import { log } from "@/lib/utils/logger";
 
-export const ADMIN_PHONE: string = (() => {
-  try { return getEnv().ADMIN_PHONE; } catch { return "+5493757613215"; }
-})();
+export const ADMIN_PHONE: string = getEnv().ADMIN_PHONE;
 
 export async function notifyAdmin(message: string): Promise<void> {
   const phone = ADMIN_PHONE.replace(/\D/g, "");

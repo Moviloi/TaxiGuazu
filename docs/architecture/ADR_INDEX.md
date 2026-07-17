@@ -129,6 +129,7 @@ Decisions that define the cognitive pipeline (Evidence Engine).
 | ADR | Decision | Status | Impact | Related docs |
 |-----|----------|--------|--------|--------------|
 | [ADR 009: Evidence Engine Architecture](../adr/009-evidence-engine-architecture.md) | 7-layer cognitive pipeline frozen. Signal→Observation→Fact→Evidence→Knowledge→Belief→Decision. Base for Memory→Reflection→Learning→Goals→Planning. | Accepted | Freezes `src/lib/evidence/`. Any future cognitive layer requires new ADR. Anticipatory fields justified as architectural contract. | `ONTOLOGY.md`, `ENGINES.md`, `knowledge-map.md`, `system-map.md` |
+| [ADR 012: Cognitive Escalation Principle](../adr/012-cognitive-escalation-principle.md) | Stack 3 niveles: BKE → DRL → LLM. Prioridad del conocimiento explícito sobre la generación. El conocimiento y las reglas determinísticas tienen prioridad sobre los modelos generativos. | Accepted | Modifica parcialmente ADR-005. Define el modelo oficial de inteligencia. Formaliza el presupuesto cognitivo como métrica arquitectónica. | `CE-1_COGNITIVE_EFFICIENCY_AUDIT.md`, `CE-2_INEVITABILITY_CLASSIFICATION.md`, `CE-3A_BUSINESS_KNOWLEDGE_ENGINE.md`, `CE-3B_DETERMINISTIC_REASONING_LAYER.md`, `CE-4_MIGRATION_ROADMAP.md` |
 
 ---
 
@@ -166,5 +167,5 @@ These gaps are tracked in `ael/artifacts/BACKLOG.md`.
 
 ---
 
-*Last updated: 2026-07-13*
+*Last updated: 2026-07-16*
 *Authority: `docs/adr/`*

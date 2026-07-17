@@ -60,3 +60,18 @@
 | P3-04 | Dead params (_history, _customerName, etc.) |
 | P3-05 | Zombie comments en connection.ts |
 | P3-06 | FUT-01 a FUT-10 (features futuras) |
+
+## Deuda detectada en H0A (Staging Hardening Audit)
+
+| ID | Descripción | Prioridad | Dominio | Origen |
+|---|---|---|---|---|
+| H0A-01 | 11 feature flags sin documentar en `.env.example` — operadores no pueden configurar BKE/DRL | **P0 (BLOQUEA STAGING)** | Ops/Config | H0A Audit |
+| H0A-02 | 4 tests fallando (2 timeout LLM, 1 mock API, 1 assertion DRL geo) — CI/CD nunca 100% verde | **P0 (BLOQUEA STAGING)** | Testing | H0A Audit |
+| H0A-03 | Sin middleware.ts — auth inline en 15 routes, sin CSP, sin CSRF | **DIFERIDO a Post-v1** (ver `docs/architecture/DEFERRED_MIDDLEWARE.md`) | Security | H0A Audit |
+| H0A-04 | ADMIN_API_KEY expuesta en chat — requiere rotación urgente | **P0 (BLOQUEA PILOTO)** | Security/Ops | H0A Audit, P0-01 |
+| H0A-05 | 3 shadow flags leídas de process.env sin función wrapper (COGNITIVE_MEMORY_ENABLED, EVIDENCE_SHADOW_MODE, EVIDENCE_SHADOW_LOGGING) | P2 | Config | H0A Audit |
+| H0A-06 | SENTRY_DSN no configurado en Vercel — eventos descartados silenciosamente | P1 | Ops | H0A Audit, P0-02 |
+| H0A-07 | Memory no conectada al pipeline — lead.service.ts tiene 0 referencias a Memory (wiring gap) | P2 | Memory | H0A Audit |
+| H0A-08 | Pattern Discovery: bug parseo acceptance_json + DB schema ausente — runtime error garantizado si se activa | P1 | Pattern Discovery | H0A Audit |
+| H0A-09 | LOG_LEVEL no configurado en Vercel — sin visibilidad operacional | P2 | Ops | H0A Audit, P1-07 |
+| H0A-10 | Pre-commit hooks no activos — security check script existe pero no se ejecuta automáticamente | P3 | Ops | H0A Audit |

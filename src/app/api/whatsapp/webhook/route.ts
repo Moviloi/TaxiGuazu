@@ -26,7 +26,7 @@ import { getEnv } from "@/config/env";
 import { log } from "@/lib/utils/logger";
 
 function getBotPhone(): string {
-  try { return getEnv().BOT_PHONE; } catch { return "+543757646645"; }
+  return getEnv().BOT_PHONE;
 }
 
 function getAppSecret(): string | null {

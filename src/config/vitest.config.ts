@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   test: {
+    globals: true,
     include: ["tests/**/*.test.ts"],
     setupFiles: [path.resolve(rootDir, "tests/setup.ts")],
     root: rootDir,

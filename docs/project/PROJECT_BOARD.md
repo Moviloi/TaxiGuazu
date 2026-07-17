@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-15 | Etapa: DEBT-14 — Vercel TypeError fix & verification
+## Actualizado: 2026-07-16 | Etapa: Architecture Freeze V3 — Serie CE CERTIFICADA — RRR-1 COMPLETED
 
 ---
 
@@ -36,6 +36,15 @@
 | P1-07 | Configurar LOG_LEVEL=info en Vercel | Ops | READY | N/A | OPS1 |
 | P1-08 | PAIR_BASE y CORRIDOR_PAIRS → migrar a tabla DB | Geo | READY | N/A | P3 Audit |
 | P1-09 | ENTITY_CATALOG → migrar a tabla DB | Extraction | READY | N/A | P3 Audit |
+| P1-10 | **CE-5 — Cognitive Migration Implementation** (EPIC) | Architecture | **DONE** | ADR-012 | CE Closure |
+| P1-10a | PR-5A: DRL Foundation (engine + stubs + flags) | Architecture | **DONE** | ADR-012 | CE-5 |
+| P1-10b | PR-5B: BKE Foundation (geo disambiguation) | Architecture | **DONE** | ADR-012 | CE-5 |
+| P1-10c | PR-5C: C4/C6 DRL Simplification (suficiencia rules) | Architecture | **DONE** | ADR-012 | CE-5 |
+| P1-10d | **PR-5D: DRL Assistance for A points (C1/C2/C5)** | Architecture | **DONE** | ADR-012 | CE-5 |
+| P1-10e | **PR-5E: BKE Domain Consolidation (Entity, Pricing, Message)** | Architecture | **DONE** | ADR-012 | CE-5 |
+| P1-10f | **PR-5E.1: Integración BKE (consumidores + tests)** | Architecture | **DONE** | ADR-012 | CE-5 |
+| P1-10g | **PR-5F: Cognitive Metrics & Observability** | Architecture | **DONE** | ADR-012 | CE-5 |
+| P1-10h | **PR-5G: Cognitive Architecture Certification Closure** | Architecture | **DONE** | ADR-012 | PR-5G |
 
 ## P2 — Media prioridad
 
@@ -131,6 +140,25 @@
 | D52 | **DEBT-13 — trip_status elimination**: Eliminadas todas las referencias ejecutables a `trip_status` (hard-reset.ts, page.tsx, database.ts, connection.ts). Solo documentación y comentarios preservados. Black box audit `.limpiar`: 14/14 escenarios PASS con 0 errores. | 0a8719d |
 | D53 | **DEBT-14 — Vercel TypeError fix**: Causa raíz identificada: `import.meta.dirname` (Node 20.11+) no tiene transform en webpack → `void 0` → `TypeError: paths[0]`. Fix: `path.resolve(process.cwd(), "schema/schema.sql")` + guard `fs.existsSync`. Build verificado sin `void 0` en bundle. 14/14 blackbox, Build ✅, Contratos ✅. | — |
 | D54 | **DEBT-14C — Post-fix verification & audit**: Build ✅, Contratos ✅, flujo `initSchema()` auditado (singleton, splitSQLStatements correcto con BEGIN/END, schema.sql idempotente con `IF NOT EXISTS`, sin branching por entorno, sin race condition crítica). Checklist de deploy preparado. | — |
+| D55 | **CE-1 — Cognitive Efficiency Audit**: Inventario completo de 7 puntos de consumo LLM (C1-C7), 3 providers, 1 factory, 5 orquestadores, 12 archivos. Máximo teórico: 10 llamadas LLM por mensaje. Estado producción: 0 providers funcionales. Documento: `docs/architecture/CE-1_COGNITIVE_EFFICIENCY_AUDIT.md`. | — |
+| D56 | **CE-2 — Inevitability Classification**: Clasificación A/B/C/D de cada punto de consumo LLM. 4 inevitables (A), 2 simplificables (B), 1 reemplazable (C), 0 eliminables (D). Documento: `docs/architecture/CE-2_INEVITABILITY_CLASSIFICATION.md`. | — |
+| D57 | **CE-3A — Business Knowledge Engine Design**: 11 dominios de conocimiento, 7 categorías de servicios, integración con 6 componentes arquitectónicos. BKE como capa Nivel 0 cognitivo. Documento: `docs/architecture/CE-3A_BUSINESS_KNOWLEDGE_ENGINE.md`. | — |
+| D58 | **CE-3B — Deterministic Reasoning Layer Design**: 5 tipos de decisiones, 7 familias de reglas, flujo de escalamiento BKE→DRL→Groq→Gemini. DRL como capa Nivel 1 cognitivo. Documento: `docs/architecture/CE-3B_DETERMINISTIC_REASONING_LAYER.md`. | — |
+| D59 | **CE-4 — Migration Roadmap**: 5 fases (0-4), 9 sprints estimados, feature flags, métricas de validación, umbrales de rollback. Reducción esperada: 60-80% llamadas LLM vs baseline. Documento: `docs/architecture/CE-4_MIGRATION_ROADMAP.md`. | — |
+| D60 | **ADR-012 — Cognitive Escalation Principle**: Decisión arquitectónica formal. Stack 3 niveles (BKE→DRL→LLM), 7 principios derivados (P1-P7). Impacto en arquitectura, mantenibilidad, costo, resiliencia, observabilidad, testabilidad. Modifica parcialmente ADR-005. Documento: `docs/adr/012-cognitive-escalation-principle.md`. | — |
+| D61 | **PR-5G — Cognitive Architecture Certification Closure**: Certificación de la Serie CE. Fix build (H-01), ADR-012 ACEPTADO (H-02), DRL geo integrado (H-03), recovery-resolver auditado (H-04), docs sincronizadas (H-05). Verdict: **CERTIFICADO**. Architecture Freeze V3 declarado. | — |
+| D62 | **RRR-1 — Release Readiness Review**: Review completa del sistema. Build ✅ (39.9s), Tests 1653/1657 ✅, Contratos ✅. Veredicto: **READY FOR STAGING WITH CONDITIONS**. Plan de activación en 7 fases. Condiciones documentadas para producción. | — |
+| D63 | **PR-H0A — Staging Hardening Audit**: Auditoría completa post-RRR-1 sobre 7 áreas. H0A-01 (flags): 11 sin documentar. H0A-02 (tests): 4 fallas clasificadas. H0A-03 (middleware): 0 existe. H0A-04 (key rotation): expuesta. H0A-05 (shadow flags): sin wrapper. H0A-06 (sentry): sin DSN. H0A-07 (memory): wiring gap confirmado. H0A-08 (pattern discovery): bug + DB schema ausente. H0A-09 (log_level): no configurado. H0A-10 (precommit): no activo. Documento: `docs/certification/H0A_STAGING_HARDENING_AUDIT.md`. | — |
+
+---
+
+## Deferred / Backlog Post-v1
+
+Ítems que **no bloquean v1.0 / Version Zero**. Se retomarán cuando haya tráfico real que justifique la inversión.
+
+| ID | Tarea | Dominio | Motivo del diferimiento | Condición para retomar |
+|---|---|---|---|---|
+| PRD-05 | **Centralizar middleware de seguridad** | Security | La validación permanece local a cada endpoint. Sin tráfico real, la centralización es sobreingeniería. **No bloquea v1.0 / Version Zero.** | Cuando se detecte un incidente de seguridad o el tráfico supere X requests/día que hagan insostenible la validación inline. Ver `docs/architecture/DEFERRED_MIDDLEWARE.md`. |
 
 ---
 
@@ -146,3 +174,16 @@ P2-13 ──→ D08 (inferencia semántica enriquece el Conversation Interpreter
 P2-14 ──→ D11 (urgency sigue el mismo patrón que purchaseIntent)
 P2-15 ──→ D08 (classification.type existe pero no influye en decisiones)
 ```
+
+---
+
+## Pending before Production
+
+| ID | Tarea | Dominio | Estado | Notas | Prioridad H0A |
+|---|---|---|---|---|---|---|
+| PRD-01 | **Conectar Memory al pipeline** — Integrar `memoryService.store()` en `lead.service.ts` como paso post-`runShadowCognition()` | Memory | READY | `COGNITIVE_MEMORY_ENABLED=false` por defecto. Requiere feature flag documentation en `.env.example`. **H0A-07**: gap de wiring confirmado — lead.service.ts tiene 0 referencias a Memory. | No bloquea staging |
+| PRD-02 | **Corregir Pattern Discovery** — Bug en `repository.ts` (`readActivePatterns`/`readPatternHistory` parsea `acceptance_json` incorrectamente) | Pattern Discovery | BLOCKED | **H0A-08**: parse devuelve `any` casteado a `Pattern[]` — runtime `acceptance` es objeto raw, no instancia con `isAccepted()`. Además, tablas `pattern_discovery_patterns` y `pattern_discovery_history` NO EXISTEN en schema.sql — runtime error garantizado si se activa. NO activar hasta fix. | No activar |
+| PRD-03 | **Completar `.env.example`** — Agregar flags faltantes. **H0A-01**: 12 flags de feature-flags.ts no documentadas (BKE_ENABLED, BKE_GEO_ENABLED, BKE_ENTITY_ENABLED, BKE_PRICING_ENABLED, BKE_MESSAGE_ENABLED, DRL_ENABLED, DRL_COMPREHENSION_ENABLED, DRL_RECOVERY_ENABLED, DRL_EXTRACTION_ASSISTANCE_ENABLED, DRL_RESPONSE_ASSISTANCE_ENABLED, DRL_FRUSTRATION_ASSISTANCE_ENABLED, LOG_LEVEL). **H0A-05**: 3 shadow flags sin función wrapper (COGNITIVE_MEMORY_ENABLED, EVIDENCE_SHADOW_MODE, EVIDENCE_SHADOW_LOGGING). 2 Pattern Discovery flags (PATTERN_DISCOVERY_ENABLED, PATTERN_DISCOVERY_DRY_RUN). **⚠️ CORREGIDO**: `DRL_GEO_ENABLED` no existe en el código — la flag geo correcta es `BKE_GEO_ENABLED`. | Ops | READY | **BLOQUEA STAGING** — operadores no pueden configurar BKE/DRL/Evidence/Memory/PD |
+| PRD-04 | **Estabilizar tests dependientes de LLM** — **H0A-02**: 4 fallas clasificadas: T1 (improved-flows timeout 5000ms LLM real), T2 (improved-flows `vi.mocked(...).mockResolvedValue is not a function` — Vitest 4 compat), T3 (fase-22-correction-flow assertion — DRL geo regression, `expected null but got 'Aeropuerto IGR'`), T4 (memory-integration timeout 5000ms — importa lead.service → LLM providers). | Testing | READY | **BLOQUEA STAGING** — CI/CD nunca 100% verde. T3 requiere decisión de producto |
+| PRD-06 | **Configurar Sentry y logging** — **H0A-06**: SENTRY_DSN no configurado (P0-02). **H0A-09**: LOG_LEVEL=info no configurado en Vercel (P1-07). | Ops | READY | No bloquea staging |
+| PRD-07 | **Activar pre-commit hooks** — **H0A-10**: `scripts/precommit-security-check.mjs` existe pero no está hookeado. Sin husky/lint-staged. | Ops | READY | No bloquea staging |

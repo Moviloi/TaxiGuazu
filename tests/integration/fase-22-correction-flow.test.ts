@@ -176,8 +176,8 @@ describe("FASE 22 — Correction flow completeness gate bypass", () => {
       expect((slots?.destination as any)?.source).toBe("USER_CORRECTED");
       expect((slots?.destination as any)?.status).toBe("CONFIRMATION_PENDING");
 
-      // Origin no se corrigió (slot.value es null porque el LLM no lo extrajo)
-      expect(slots?.origin?.value).toBeNull();
+      // Origin no se corrigió — se preserva el valor anterior (prevSlotsEarly merge)
+      expect(slots?.origin?.value).toBe("Aeropuerto IGR");
       expect((slots?.origin as any)?.source).not.toBe("USER_CORRECTED");
     });
   });

@@ -1,0 +1,8 @@
+warning: in the working copy of 'docs/certification/TECHNICAL_DEBT_BASELINE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/project/CHANGELOG.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/project/PROJECT_BOARD.md', LF will be replaced by CRLF the next time Git touches it
+ docs/certification/TECHNICAL_DEBT_BASELINE.md |  2 [32m++[m
+ docs/project/CHANGELOG.md                     | 37 [32m++++++++++++++++++++++++++[m[31m-[m
+ docs/project/PROJECT_BOARD.md                 |  5 [32m+++[m[31m-[m
+ src/lib/db/core/connection.ts                 |  5 [32m+++[m[31m-[m
+ 4 files changed, 46 insertions(+), 3 deletions(-)

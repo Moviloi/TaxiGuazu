@@ -17,6 +17,7 @@ import { getDb, ensureSchema, type DbExecutor } from "./core/connection";
 import { query, queryOne, levenshtein } from "./core/helpers";
 import { validateReaderConsistency, reportTripPhaseNullCount } from "./domains/trips";
 import { getConnectionValue } from "./domains/connection-state";
+import { getEnv } from "@/config/env";
 import { log } from "@/lib/utils/logger";
 
 // ========== CONVERSATIONS ==========
@@ -67,7 +68,8 @@ export async function setConversationMode(conversationId: number, mode: 'AI' | '
 
 export async function takeConversation(conversationId: number): Promise<void> {
   await ensureSchema();
-  await getDb().execute({ sql: "UPDATE conversations SET taken_by_human = 1, human_operator_phone = ? WHERE id = ?", args: ['+543757613215', conversationId] });
+  const phone = getEnv().ADMIN_PHONE;
+  await getDb().execute({ sql: "UPDATE conversations SET taken_by_human = 1, human_operator_phone = ? WHERE id = ?", args: [phone, conversationId] });
 }
 
 export async function releaseConversation(conversationId: number): Promise<void> {

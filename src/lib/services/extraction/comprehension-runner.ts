@@ -13,6 +13,11 @@ import type { PredictedContext } from "@/lib/services/memory/predictive-routing"
 import type { ChatSessionRow } from "@/lib/db/types";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 import { detectLangWithFallback } from "@/lib/detect-lang";
+import { isDrlComprehensionEnabled, isDrlFrustrationAssistanceEnabled } from "@/config/feature-flags";
+import { buildDrlEnrichment } from "@/lib/drl/assistance";
+import type { DRLInput } from "@/lib/drl/types";
+import { capturePipelineEvent, captureDRLEvent } from "@/lib/cognitive/collector";
+import type { PipelineEventDetails } from "@/lib/cognitive/types";
 
 // P0.10.3: Detección de frustración del usuario (pattern desde escalation.json)
 const FRUSTRATION_RE = new RegExp(escalationPolicies.frustrationPattern, escalationPolicies.frustrationPatternFlags);
@@ -29,16 +34,49 @@ export interface ComprehensionRunnerParams {
 
 export async function runComprehensionCheck(params: ComprehensionRunnerParams): Promise<boolean> {
   const { phone, text, conversationId, leadCore, predictedContext, session, isFirstTurn } = params;
+  const pipelineStart = performance.now();
+  const pipelineDetails: PipelineEventDetails = {
+    pipeline: "comprehension",
+    phone: phone.slice(-4),
+    intent: leadCore.intent,
+  };
+  capturePipelineEvent(0, true, pipelineDetails);
 
   log.info("[TRACE INPUT]", { event: "comprehension_check", phone: phone.slice(-4), textLen: text.length });
 
   // P0.10.3: Detectar frustración del usuario — usar LLM para interpretar
   if (FRUSTRATION_RE.test(text)) {
     log.info("[FRUSTRATION_DETECTED]", { phone: phone.slice(-4), text: text.slice(0, 100) });
-    const frustratedMsg = await generateFrustrationResponse(text, session);
+
+    // PR-5D: Construir enriquecimiento DRL para C5 (frustration response)
+    let frustrationEnrichment: string | undefined;
+    if (isDrlFrustrationAssistanceEnabled()) {
+      const drlInput: DRLInput = {
+        slots: {
+          _userText: text,
+          ...(session?.slots ? (() => { try { return JSON.parse(session.slots); } catch { return {}; } })() : {}),
+        },
+        requiredSlots: ["origin", "destination", "passengers", "scheduled_at"],
+        conversationState: "frustration",
+      };
+      const enrichment = buildDrlEnrichment(drlInput, "frustration");
+      if (enrichment) {
+        frustrationEnrichment = enrichment.text;
+        log.info("[DRL_FRUSTRATION_ASSISTANCE]", {
+          decision: enrichment.raw.decision,
+          confidence: enrichment.raw.overallConfidence,
+          executionMs: enrichment.raw.executionTimeMs,
+        });
+      }
+    }
+
+    const frustratedMsg = await generateFrustrationResponse(text, session, frustrationEnrichment);
     if (frustratedMsg) {
       log.info("[TRACE RESPONSE]", { source: "FRUSTRATION_RECOVERY", text: frustratedMsg });
       await sendAndPersist(phone, conversationId, frustratedMsg);
+      const duration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+      pipelineDetails.workflowState = "frustration_resolved";
+      capturePipelineEvent(duration, true, pipelineDetails);
       return true;
     }
   }
@@ -91,15 +129,57 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
         clarifyField: session.clarify_field,
         state: session.conversational_state,
       });
+      const skipDuration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+      pipelineDetails.workflowState = "slot_filling_skip";
+      capturePipelineEvent(skipDuration, true, pipelineDetails);
       return false;
     }
 
-    // P3: Antes de escalar, intentar que el LLM reinterprete el mensaje libremente
-    // y genere una pregunta aclaratoria. Solo escalar a humano si el LLM también falla.
-    const reinterpretMsg = await generateReinterpretResponse(text, session, comprehensionScore);
+    // PR-5C: DRL-first — si el feature flag está activo, intentar reinterpretación determinística
+    // antes de llamar al LLM. Si DRL resuelve, se omite completamente la llamada LLM.
+    let reinterpretMsg: string | null = null;
+
+    if (isDrlComprehensionEnabled()) {
+      const { resolveComprehension } = await import("@/lib/bke/services/comprehension-resolver");
+      const drlStart = performance.now();
+      const drlResult = await resolveComprehension(text, session, comprehensionScore);
+      const drlDuration = Math.round((performance.now() - drlStart) * 100) / 100;
+      if (drlResult) {
+        reinterpretMsg = drlResult.message;
+        log.info("[COMPREHENSION_DRL]", {
+          source: drlResult.source,
+          message: drlResult.message,
+        });
+        captureDRLEvent(drlDuration, true, {
+          rule: "comprehension-resolver",
+          decision: "PROCEED",
+          confidence: 0.8,
+          executionTimeMs: drlDuration,
+        });
+      } else {
+        log.info("[COMPREHENSION_DRL_ESCALATE]", {
+          reason: "DRL could not resolve — falling back to LLM",
+        });
+        captureDRLEvent(drlDuration, false, {
+          rule: "comprehension-resolver",
+          decision: "ESCALATE",
+          confidence: 0,
+          executionTimeMs: drlDuration,
+        });
+      }
+    }
+
+    // P3: Si DRL no resolvió (o flag deshabilitado), intentar que el LLM reinterprete.
+    // Solo escalar a humano si el LLM también falla.
+    if (!reinterpretMsg) {
+      reinterpretMsg = await generateReinterpretResponse(text, session, comprehensionScore);
+    }
     if (reinterpretMsg) {
       log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_REINTERPRET", text: reinterpretMsg });
       await sendAndPersist(phone, conversationId, reinterpretMsg);
+      const duration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+      pipelineDetails.workflowState = "reinterpreted";
+      capturePipelineEvent(duration, true, pipelineDetails);
       return true;
     }
 
@@ -113,6 +193,9 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
     const escMsg = buildEscalationMessage();
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_ESCALATION", text: escMsg });
     await sendAndPersist(phone, conversationId, escMsg);
+    const duration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+    pipelineDetails.workflowState = "escalated";
+    capturePipelineEvent(duration, true, pipelineDetails);
     return true;
   }
 
@@ -137,9 +220,15 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
 
     log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_RECOVERY", text: recoveryMsg });
     await sendAndPersist(phone, conversationId, recoveryMsg);
+    const duration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+    pipelineDetails.workflowState = "recovery";
+    capturePipelineEvent(duration, true, pipelineDetails);
     return true;
   }
 
+  const finalDuration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+  pipelineDetails.workflowState = "ok";
+  capturePipelineEvent(finalDuration, true, pipelineDetails);
   return false;
 }
 
@@ -190,7 +279,11 @@ async function generateReinterpretResponse(
 
 // P0.10.3: LLM para interpretar mensajes frustrados del usuario
 // P5: Ahora usa LLMProvider (Gemini por defecto, Groq fallback)
-async function generateFrustrationResponse(userText: string, session: ChatSessionRow | null): Promise<string | null> {
+async function generateFrustrationResponse(
+  userText: string,
+  session: ChatSessionRow | null,
+  drlEnrichment?: string, // PR-5D: enriquecimiento DRL opcional
+): Promise<string | null> {
   try {
     const { getLLMProvider } = await import("@/lib/ai/llm-provider");
     const provider = getLLMProvider();
@@ -213,10 +306,15 @@ async function generateFrustrationResponse(userText: string, session: ChatSessio
     const lang = detectLangWithFallback(userText, session?.lang);
     const langName = lang === "en" ? "English" : lang === "pt" ? "Portuguese" : "Spanish";
 
-    const prompt = escalationPolicies.llmPrompts.frustrationPrompt
+    let prompt = escalationPolicies.llmPrompts.frustrationPrompt
       .replace("{userText}", userText)
       .replace("{context}", context)
       .replace("{langName}", langName);
+
+    // PR-5D: Inyectar enriquecimiento DRL antes del prompt de frustración
+    if (drlEnrichment) {
+      prompt = `${drlEnrichment}\n\n${prompt}`;
+    }
 
     return await provider.generateResponse(prompt, 120, 0.3);
   } catch (e) {

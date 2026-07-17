@@ -3,7 +3,121 @@
 
 ---
 
-## 2026-07-15 (current)
+## 2026-07-16 (current)
+
+### PR-H0C.1b — Cierre arquitectónico: Middleware diferido a Post-v1
+- **Tipo**: Decisión arquitectónica
+- **Resumen**: Se difiere la implementación de `middleware.ts` (PRD-05/H0A-03) a Post-v1. La validación de seguridad permanece local a cada endpoint (HMAC en webhook, API key check inline en admin). Decisión consciente de Version Zero: sin tráfico real, la centralización constituye sobreingeniería. Ruta de retorno definida en `docs/architecture/DEFERRED_MIDDLEWARE.md`.
+- **Documento generado**: `docs/architecture/DEFERRED_MIDDLEWARE.md`
+- **Archivos modificados**: `docs/project/PROJECT_BOARD.md` (PRD-05 movido a Deferred), `docs/ROADMAP.md` (I0.3 removido de Fase 0, sección Post-v1 Infrastructure creada), `docs/architecture/ARCHITECTURE_STATUS.md` (nota de Version Zero agregada), `docs/project/CHANGELOG.md` (esta entrada)
+- **Validación**: Build ✅ (sin cambios de código), Contratos ✅, Tests 508/508 PASS ✅
+
+### PR-H0A — Staging Hardening Audit
+- **Tipo**: Auditoría de readiness para staging (7 áreas)
+- **Commit**: —
+- **Resumen**: Auditoría completa post-RRR-1 cubriendo Memory Integration, Pattern Discovery, Feature Flags, Tests, Security, Observability y Deploy. Hallazgos documentados en `docs/certification/H0A_STAGING_HARDENING_AUDIT.md`. 4 hallazgos bloquean staging (flags sin documentar, tests fallando, middleware ausente, ADMIN_API_KEY expuesta). 3 hallazgos no bloquean (Memory gap, Pattern Discovery bug, Observability postergable). Memory gap confirmado: `lead.service.ts` tiene 0 referencias a Memory. Pattern Discovery bug confirmado: `JSON.parse(acceptance_json)` castea `any` como `Pattern[]` + DB schema ausente. Feature flag census completo: 17 flags, 11 no documentadas en `.env.example`, 3 shadow flags sin función wrapper. 4 test failures clasificados (2 timeout LLM, 1 mock API, 1 assertion regression). 15 API routes auditadas — auth inline, 0 middleware. Build verificado 39.9s.
+- **Documento generado**: `docs/certification/H0A_STAGING_HARDENING_AUDIT.md`
+- **Archivos modificados**: Solo documentación (este CHANGELOG, PROJECT_BOARD, TECHNICAL_DEBT_BASELINE, ARCHITECTURE_STATUS)
+- **Validación**: No aplica (solo auditoría — 0 cambios de código)
+- **Próximo paso**: Implementar bloqueos H0A-01 (flags), H0A-02 (tests), H0A-04 (key rotation) antes de staging. H0A-03 (middleware) diferido a Post-v1 — ver `docs/architecture/DEFERRED_MIDDLEWARE.md`.
+
+### PR-5G — Cognitive Architecture Certification Closure
+- **Tipo**: Certificación arquitectónica
+- **Commit**: —
+- **Resumen**: Cierre de certificación de la Serie CE. Resolución de 5 hallazgos de auditoría. Build fix, ADR-012 formalizado, DRL geo integrado, documentación sincronizada. **Architecture Freeze V3 declarado.**
+- **Hallazgos resueltos**:
+  - **H-01**: HandlerContext.drlEnrichment type agregado a types.ts — build compila ✅
+  - **H-02**: ADR-012 actualizado a ACEPTADO + desviaciones documentadas (Sección 9)
+  - **H-03**: DRL geo integrado en interpretAmbiguity (BKE_GEO_ENABLED=true ahora ejecuta resolveGeoAmbiguity antes del LLM). 2 tests DRL ambiguity ahora PASS
+  - **H-04**: recovery-resolver auditado: NO integrado (fuera de alcance), NO eliminado (preservado para PR futuro). Documentado como deuda técnica en ADR-012 §9.2
+  - **H-05**: Documentación sincronizada: ADR_INDEX, ARCHITECTURE_STATUS, ROADMAP, PROJECT_BOARD, CHANGELOG
+- **Archivos modificados**:
+  - `src/lib/ai/types.ts` (+3 líneas: drlEnrichment)
+  - `src/lib/ai/ambiguity-interpreter.ts` (+9 líneas: imports + DRL-first logic)
+  - `docs/adr/012-cognitive-escalation-principle.md` (status → ACEPTADO + Sección 9 desviaciones)
+  - `docs/architecture/ARCHITECTURE_STATUS.md` (BKE/DRL status → Implementado, ADR-012 → Implementado)
+  - `docs/ROADMAP.md` (CE status → CERTIFICADO, v1.3)
+  - `docs/project/PROJECT_BOARD.md` (PR-5G agregado, CE-5 → DONE)
+  - `docs/project/CHANGELOG.md` (esta entrada)
+- **Validación**: Build ✅, Contratos R1-R4 PASS ✅, Tests ✅ (ver reporte final)
+
+### RRR-1 — Release Readiness Review Completed
+- **Tipo**: Release Readiness Review
+- **Commit**: —
+- **Resumen**: Revisión formal de readiness para staging. Veredicto: **READY FOR STAGING WITH CONDITIONS**. Architecture Freeze V3 certificado. Serie CE completa. Build ✅ (39.9s compile, 7/7 static pages), Tests: 1653/1657 PASS ✅ (4 pre-existing: 2 timeouts LLM, 1 mock API, 1 DRL geo behavior), Contratos R1-R4 PASS ✅.
+- **Hallazgos clave**:
+  - **Core pipeline**: Conversacional, webhook (HMAC+rate limiting), DB (39 tablas), LLM providers (Gemini→Groq), métricas cognitivas — **PRODUCTION-READY**
+  - **BKE/DRL**: Todos deshabilitados por defecto (flags false) — **READY para activación progresiva**
+  - **Evidence Engine**: Shadow mode, 18 archivos, off por defecto — **READY**
+  - **Memory Service**: Implementado (IM-1), `COGNITIVE_MEMORY_ENABLED=false` — **NEAR-READY** (no conectado a producción)
+  - **Pattern Discovery**: Bug en `repository.ts` (parseo `acceptance_json`) — **NO ACTIVAR**
+  - **4 condiciones** para producción: (1) Conectar Memory al pipeline, (2) Corregir Pattern Discovery, (3) Completar `.env.example`, (4) Centralizar middleware de seguridad
+- **Plan de activación**: 7 fases progresivas — Fase 1 (Core pipeline) inmediato, Fase 7 (Pattern Discovery) último
+- **Validación**: Build ✅, Contratos R1-R4 PASS ✅, Tests 1653/1657 PASS ✅
+
+### PR-5D — Asistencia DRL a puntos A (C1/C2/C5)
+- **Tipo**: Implementación de CE-5 (Cognitive Migration)
+- **Commit**: —
+- **Resumen**: Reemplazo de 4 stubs DRL (completitud, consistencia, clasificacion, escalamiento) por implementaciones reales + creación de regla prioridad. Integración de asistencia DRL antes de C1 (generateGroqExtraction), C2 (generateLLMResponse) y C5 (generateFrustrationResponse). El DRL enriquece el prompt del LLM con información estructurada (nunca reemplaza la llamada).
+- **Reglas implementadas**:
+  - **completitud**: Análisis de ratio, 4 niveles (complete/partial/minimal/empty), detección de campos vacíos
+  - **consistencia**: 4 validaciones (origen=destino, fecha pasada, pasajeros inválidos, urgencia vs fecha), 3 severidades
+  - **clasificación**: 5 tipos de extracción (initial/incremental/correction/clarification/re_extraction), 3 complejidades, consume ClientObjective
+  - **prioridad**: Priorización de campos según ClientObjective (booking_urgent→scheduled_at, inquiry_price→price)
+  - **escalamiento**: Detección multi-ride, complejidad compuesta, escalamiento a Gemini
+- **Feature flags**: 3 nuevas (`DRL_EXTRACTION_ASSISTANCE_ENABLED`, `DRL_RESPONSE_ASSISTANCE_ENABLED`, `DRL_FRUSTRATION_ASSISTANCE_ENABLED`) — todas false por defecto
+- **Tests**: 51 nuevos (34 reglas + 17 asistencia), **471 totales sin regresiones**
+- **Archivos**: 4 creados, 8 modificados
+- **Validación**: Build ✅, contratos R1-R4 PASS ✅, 471/471 tests PASS ✅
+
+### PR-5E — BKE Domain Consolidation (Entity, Pricing, Message)
+- **Tipo**: Implementación de CE-5 (Cognitive Migration)
+- **Commit**: —
+- **Resumen**: Implementación de los 3 dominios BKE restantes (Entity, Pricing, Message) como wrappers determinísticos que centralizan el acceso al conocimiento existente. Ningún LLM nuevo. Ningún cambio de comportamiento observable (flags default false).
+- **Dominios implementados**:
+  - **Entity** (`domains/entity.ts`): Pipeline 3-etapas (catálogo → lugares conocidos → resolvedor de ubicación). Exporta `extractEntities`, `resolveEntity`, `getEntityCatalog`.
+  - **Pricing** (`domains/pricing.ts`): Wrappers sobre resolvePricingForSlots, tariff-resolver, pricing-engine. Exporta `estimatePrice`, `getTariffInfo`, `calculateTripPrice`.
+  - **Message** (`domains/message.ts`): Switch centralizado sobre 15 tipos de mensaje delegando a response-builder y disambiguation-templates. Exporta `resolveMessage`, `resolveMessageSync`, catálogo de claves.
+- **Feature flags**: 3 nuevas (`BKE_ENTITY_ENABLED`, `BKE_PRICING_ENABLED`, `BKE_MESSAGE_ENABLED`) — todas false por defecto
+- **Archivos**: 3 creados (`entity.ts`, `pricing.ts`, `message.ts`), 2 modificados (`index.ts`, `feature-flags.ts`)
+- **Validación**: Build ✅, contratos R1-R4 PASS ✅, 51/51 DRL tests PASS ✅
+
+### PR-5F — Cognitive Metrics & Observability (CE-5)
+- **Tipo**: Observabilidad — Cognitive Escalation Principle
+- **Commit**: —
+- **Resumen**: Sistema completo de métricas cognitivas para el pipeline BKE → DRL → LLM → Fallback. Singleton collector con buffer circular (10k eventos/100 requests), calculadora de Cognitive Budget (tasas de resolución, latencia por nivel, stage breakdown), API endpoint `/api/bot/metrics/cognitive`. Integración side-effect-free en Handler, FallbackProvider, DRL Assistance, BKE Pricing, Extraction Pipeline, Comprehension Pipeline. 22 tests unitarios de collector, budget y side-effect-free. Zero regresión (437 tests, 25 suites).
+
+### PR-5E.1 — Integración BKE (consumidores + tests)
+- **Tipo**: Cierre de integración de CE-5
+- **Commit**: —
+- **Resumen**: Integración completa de los 3 dominios BKE en consumidores existentes + cobertura de tests + observabilidad. Comportamiento idéntico con flags desactivados.
+- **Consumidores integrados**:
+  - **Entity**: `extract-slots.ts` — enriquecimiento BKE entity antes de entity-extractor, combinado con DRL assistance en fallback LLM
+  - **Pricing**: `resolve-pricing-for-slots.ts` — routing a BKE cuando `BKE_PRICING_ENABLED=true`, con fallback automático a pricing-engine si BKE no retorna datos
+  - **Message**: `handler.ts` — routing a BKE.resolveMessageSync en `buildDomainPolicy` para dominios informational/commercial cuando `BKE_MESSAGE_ENABLED=true`
+- **Tests**: 53 nuevos (4 suites)
+  - `tests/bke/entity-domain.test.ts` — 12 tests (extracción, resolución, catálogo, casos límite)
+  - `tests/bke/pricing-domain.test.ts` — 9 tests (estimación, tarifa, cálculo directo, errores)
+  - `tests/bke/message-domain.test.ts` — 25 tests (15 tipos de mensaje, parámetros, claves inválidas)
+  - `tests/bke/integration-flag-routing.test.ts` — 7 tests (routing flags, fallback, contratos)
+- **Observabilidad**: Logging en cada punto de routing BKE con dominio, origen, resultado y latencia
+- **Validación**: Build ✅, contratos R1-R4 PASS ✅, **104/104 tests PASS ✅ (cero regresiones)**
+
+## 2026-07-15
+
+### CE Closure — Cognitive Efficiency Series completed
+- **Tipo**: Cierre documental de serie arquitectónica
+- **Documentos generados (6)**:
+  - `docs/architecture/CE-1_COGNITIVE_EFFICIENCY_AUDIT.md` — Baseline completo de consumo cognitivo (7 puntos C1-C7, 3 providers, 0 funcionales)
+  - `docs/architecture/CE-2_INEVITABILITY_CLASSIFICATION.md` — Clasificación A/B/C/D (4A, 2B, 1C, 0D)
+  - `docs/architecture/CE-3A_BUSINESS_KNOWLEDGE_ENGINE.md` — Diseño del BKE (11 dominios, 7 servicios, Nivel 0)
+  - `docs/architecture/CE-3B_DETERMINISTIC_REASONING_LAYER.md` — Diseño de la DRL (5 tipos decisión, 7 familias reglas, Nivel 1)
+  - `docs/architecture/CE-4_MIGRATION_ROADMAP.md` — Roadmap 5 fases (0-4), 9 sprints, feature flags
+  - `docs/adr/012-cognitive-escalation-principle.md` — Decisión arquitectónica formal (stack 3 niveles, 7 principios)
+- **Modelo de inteligencia oficial**: Business Knowledge Engine → Deterministic Reasoning Layer → Groq → Gemini
+- **Modifica**: ADR-005 (AI-First Interpretation) parcialmente — conocimiento explícito tiene prioridad sobre LLM
+- **Próximo paso**: CE-5 — Cognitive Migration Implementation (épica creada, tasks no descompuestas)
+- **Documentos de gobernanza actualizados**: ADR_INDEX.md, PROJECT_BOARD.md, ROADMAP.md, ARCHITECTURE_STATUS.md, CHANGELOG.md
 
 ### DEBT-14C — Post-fix verification & audit
 - **Tipo**: Verificación + Auditoría de infraestructura

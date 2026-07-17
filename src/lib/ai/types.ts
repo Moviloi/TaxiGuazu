@@ -221,6 +221,8 @@ export interface HandlerContext {
   strategyDecision?: StrategyDecision;
   /** PR-2A: CoreDecision pre-computado para eliminar doble ejecuciÃ³n de core() */
   analysis?: CoreDecision;
+  /** PR-5D: Enriquecimiento DRL opcional para asistencia a LLM */
+  drlEnrichment?: string;
 }
 
 export function operationalModeToMode(om: OperationalMode): Mode {

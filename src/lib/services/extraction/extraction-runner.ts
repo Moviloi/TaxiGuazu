@@ -27,6 +27,8 @@ import { evaluateCompleteness } from "@/lib/services/workflow/evaluate-completen
 import { log } from "@/lib/utils/logger";
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
+import { capturePipelineEvent, captureBKEEvent } from "@/lib/cognitive/collector";
+import type { PipelineEventDetails } from "@/lib/cognitive/types";
 
 interface FallbackExtractionResult {
   pricing: PricingResult;
@@ -134,6 +136,13 @@ export async function runExtractionPipeline(
   history: any[],
   customerName: string | null,
 ): Promise<ExtractionResult | null> {
+  const pipelineStart = performance.now();
+  const pipelineDetails: PipelineEventDetails = {
+    pipeline: "extraction",
+    phone: phone.slice(-4),
+  };
+  capturePipelineEvent(0, true, pipelineDetails);
+
   let extractionNote: string | undefined;
   let multiRideBreakdown: MultiRideBreakdown | undefined;
   let workflowResult: SlotConversationalContext | undefined;
@@ -334,8 +343,16 @@ export async function runExtractionPipeline(
             confidenceResult.slots.price = { value: multiRideBreakdown.totalDiscounted, score: 1.0, reason: "multi_ride_backend" };
           } else {
             log.info(`[EXTRACTION] Calculando precio: origin="${parsed.data.origin}" dest="${parsed.data.destination}" pax=${pax}`);
+            const pricingStart = performance.now();
             const resolved = await resolvePricingForSlots({ origin: parsed.data.origin, destination: parsed.data.destination, passengers: pax });
+            const pricingDuration = Math.round((performance.now() - pricingStart) * 100) / 100;
             pricing = resolved.pricingResult;
+            captureBKEEvent(pricingDuration, !!pricing && pricing.final_price > 0, {
+              domain: "pricing",
+              query: `${parsed.data.origin} → ${parsed.data.destination}`,
+              resolutionSource: pricing?.final_price ? "backend" : "no_tariff",
+              confidence: pricing?.final_price ? 1.0 : 0,
+            });
             if (resolved.divergence) {
               log.info(`[PRICING] Divergence: v3=${resolved.divergence.v3Price} v2=${resolved.divergence.v2Price} level=${resolved.divergence.level}`);
             }
@@ -348,8 +365,16 @@ export async function runExtractionPipeline(
               const fbOrigin = route.origin;
               const fbDest = route.destination;
               if (fbOrigin && fbDest) {
+                const fbPricingStart = performance.now();
                 const fbResolved = await resolvePricingForSlots({ origin: fbOrigin, destination: fbDest, passengers: parsed.data.passengers || 1 });
+                const fbPricingDuration = Math.round((performance.now() - fbPricingStart) * 100) / 100;
                 const fbPricing = fbResolved.pricingResult;
+                captureBKEEvent(fbPricingDuration, fbPricing.final_price > 0, {
+                  domain: "pricing",
+                  query: `${fbOrigin} → ${fbDest}`,
+                  resolutionSource: fbPricing.final_price > 0 ? "backend" : "no_tariff",
+                  confidence: fbPricing.final_price > 0 ? 1.0 : 0,
+                });
                 if (fbPricing.final_price > 0) {
                   log.info(`[EXTRACTION] Fallback regex exitoso: origin="${fbOrigin}" dest="${fbDest}" price=${fbPricing.final_price}`);
                   pricing = fbPricing;
@@ -644,6 +669,12 @@ export async function runExtractionPipeline(
       log.info("[EXTRACTION_FALLBACK_APPLIED]", { used: false, reason: extractionNote ? "already_had_extraction" : "fallback_returned_null" });
     }
   }
+
+  // PR-5F: Capturar pipeline completado
+  const pipelineDuration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+  pipelineDetails.intent = leadCore.intent;
+  pipelineDetails.slotsCount = Object.keys(confidenceResult?.slots ?? {}).length;
+  capturePipelineEvent(pipelineDuration, !!extractionNote, pipelineDetails);
 
   return { extractionNote, workflowResult, parsed, confidenceResult, pricing, prevSlotsEarly, multiRideBreakdown };
 }
