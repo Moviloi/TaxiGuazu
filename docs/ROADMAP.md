@@ -1,5 +1,5 @@
 # ROADMAP — Plan Maestro de Evolución de AITOS
-## Versión 1.5 | Julio 2026 (actualizado PR-H0A — Staging Hardening Audit)
+## Versión 1.6b | Julio 2026 (actualizado PR-ADR13 — Conversation Decision Algorithm Ratification + PR-CAT1 — Black-Box Campaign)
 
 > Derivado del Baseline certificado. Hoja de ruta oficial.
 
@@ -19,6 +19,7 @@
 | Deuda resuelta | 19 items (P0+P1) |
 | Deuda pendiente | 21 items (5 P1 + 10 P2 + 6 P3) |
 | **Serie CE (Cognitive Efficiency)** | ✅ **CERTIFICADO** (PR-5G, 2026-07-16) — Architecture Freeze V3 habilitado |
+| **Conversation Decision Algorithm** | ✅ **CERTIFICADO** (PR-ADR13, 2026-07-17) — ADR-013 ratificado. Jerarquía normativa establecida. |
 | R2 Phase 1 | ✅ Conversation Speed — greetingLength, skipConfirmation, minimizeQuestions en StrategyDecision |
 | R3 Phase 1 | ✅ Conversation Tone — responseLength, reassuranceNeeded, callToAction en StrategyDecision |
 | R4 Phase 1 | ✅ Field Priority — fieldAcquisitionMode, fieldPriority en StrategyDecision |
@@ -418,4 +419,4 @@ Fase 5 (futuro)   ░░░░░░░░░░░░░░░░░░░░�
 
 ---
 
-## Estado: Architecture & Stabilization → CERRADA. Staging Hardening → ACTIVA (post-RRR-1). Human Experience & Pilot Optimization → PENDIENTE (post-Staging Hardening).
+## Estado: Architecture & Stabilization → CERRADA. Staging Hardening → ACTIVA (post-RRR-1). Conversation Decision Algorithm → CERTIFICADO (ADR-013). PR-CAT1 → COMPLETADO 🟡 (11/13 PASS, 2 timeouts, 3 hallazgos). QA-3 Sprint 3 (CDA Conformance Implementation) → PENDIENTE. Human Experience & Pilot Optimization → PENDIENTE (post-Staging Hardening + CDA Conformance).

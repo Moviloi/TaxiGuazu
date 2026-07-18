@@ -8,7 +8,7 @@
 >
 > ⚠️ This document belongs to **Level III-h (Contractual Authority)** of the AITOS
 > Document Hierarchy (CONSTITUTION.md §6). It derives from CONSTITUTION.md (Level I-a),
-> ONTOLOGY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), EVIDENCE_MODEL.md
+> SYSTEM_VOCABULARY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), EVIDENCE_MODEL.md
 > (Level III-a), DECISION_MODEL.md (Level III-b), COMMITMENT_MODEL.md (Level III-c),
 > CERTAINTY_CALCULUS.md (Level III-d), and KNOWLEDGE_MODEL.md (Level III-f).
 >
@@ -98,7 +98,7 @@ This document does **NOT** govern:
 | Source document | Relationship to this document |
 |---|---|
 | **CONSTITUTION.md** (Level I-a) | Source of supreme principles: §3 (Epistemic Stance), S-P1 (Evidence-Based Operation), S-P4 (Deterministic Core), S-P5 (Evidence Immutability), S-P6 (Knowledge Preservation), S-P7 (Human Escalation), S-P8 (Preservation over operation), P-I1 (Evidence Primacy), P-I4 (Humility Before Uncertainty), P-I5 (Auditability) |
-| **ONTOLOGY.md** (Level I-b) | Source of all terminology: Cognitive Cycle (7.1), all four phases (7.2-7.5), Knowledge State (6.1), Evidence Store (5.3), Decision (8.1), Commitment (8.2), Operational Projection (9.2), Action (12.1), Learning (13.3) |
+| **SYSTEM_VOCABULARY.md** (Level I-b) | Source of all terminology: Cognitive Cycle (7.1), all four phases (7.2-7.5), Knowledge State (6.1), Evidence Store (5.3), Decision (8.1), Commitment (8.2), Operational Projection (9.2), Action (12.1), Learning (13.3) |
 | **COGNITIVE_PRINCIPLES.md** (Level II-a) | Source of all cognitive principles: CP-01 through CP-39, especially those governing cycle structure, perception, reasoning, commitment, projection, interaction, and learning |
 | **EVIDENCE_MODEL.md** (Level III-a) | Defines Evidence lifecycle consumed by the architecture; sibling document |
 | **DECISION_MODEL.md** (Level III-b) | Defines Decision process consumed by the Commitment Phase; sibling document |
@@ -149,12 +149,12 @@ components, each defined by a Level III document:
 | 6 | **Commitment Gate** | COMMITMENT_MODEL.md | Gate Commitments by Certainty Threshold and Cost of Error |
 | 7 | **Action Executor** | ACTION_EXECUTOR.md | Translate Commitments into Actions; execute Projections |
 
-**Derivación Constitucional:** ONTOLOGY.md §7.1 (Cognitive Cycle phases); CP-01 (ciclo
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §7.1 (Cognitive Cycle phases); CP-01 (ciclo
 completo — toda unidad de trabajo debe completar las cuatro fases); CP-02 (secuencia
 estricta); delegaciones de todos los Level III documentos a COGNITIVE_ARCHITECTURE.md.
 
 **Justificación:** These seven components are the minimum necessary to satisfy the
-Cognitive Cycle defined in ONTOLOGY.md §7.1 and the principles defined in
+Cognitive Cycle defined in SYSTEM_VOCABULARY.md §7.1 and the principles defined in
 COGNITIVE_PRINCIPLES.md. Each component has a single responsibility and a single
 governing document. No component can be removed without breaking the cycle. No
 additional component is needed for cognitive completeness.
@@ -181,7 +181,7 @@ de los siete componentes? Si sí → brecha arquitectónica.
 ### R-CA-002 — The cognitive flow follows four sequential phases
 
 **Enunciado:** The seven components operate within four sequential phases that
-constitute the Cognitive Cycle (ONTOLOGY.md §7.1). Each phase consumes the output
+constitute the Cognitive Cycle (SYSTEM_VOCABULARY.md §7.1). Each phase consumes the output
 of the previous phase and produces the input for the next:
 
 ```
@@ -199,7 +199,7 @@ The seven components map to these phases as follows:
 | **Projection** | Action Executor + Knowledge State | Commitment | Action (Response + Operational Projection) |
 
 **Derivación Constitucional:** CP-01 (ciclo completo); CP-02 (secuencia estricta);
-CP-03 (completitud por fase); ONTOLOGY.md §7.2-7.5 (definición de cada fase).
+CP-03 (completitud por fase); SYSTEM_VOCABULARY.md §7.2-7.5 (definición de cada fase).
 
 **Justificación:** The four-phase sequence is not arbitrary — each phase transforms
 information into a form that the next phase requires. Perception converts raw Signals
@@ -243,7 +243,7 @@ Each layer may only interact with its adjacent layer. The Sensory Layer does not
 access the Executive Layer directly. The Executive Layer does not access the Sensory
 Layer directly.
 
-**Derivación Constitucional:** ONTOLOGY.md §14 (Prohibited Cross-Domain Violations:
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §14 (Prohibited Cross-Domain Violations:
 "Decision directly reads Perception" is prohibited; "Business directly reads Evidence"
 is prohibited); CP-28 (proyección de solo lectura — la Proyección no modifica el
 Knowledge State).
@@ -288,7 +288,7 @@ The Channel Adapter does NOT extract meaning, interpret intent, or perform any
 cognitive operation on the Signal.
 
 **Derivación Constitucional:** CP-05 (frontera percepción/evidencia); CP-07
-(determinismo perceptual); ONTOLOGY.md §7.2 (Perception Phase); CHANNEL_ADAPTER.md
+(determinismo perceptual); SYSTEM_VOCABULARY.md §7.2 (Perception Phase); CHANNEL_ADAPTER.md
 (responsabilidad del adaptador).
 
 **Justificación:** The Channel Adapter is the system's sensory organ. Its job is to
@@ -447,7 +447,7 @@ Responses. It prepares the epistemic foundation; it does not decide what to do.
 
 **Derivación Constitucional:** CP-13 (Hipótesis múltiples); CP-14 (condición de
 falsación); CP-15 (fusión conservadora); CP-16 (coexistencia de intenciones); CP-17
-(resolución por Evidence); ONTOLOGY.md §7.3 (Reasoning Phase).
+(resolución por Evidence); SYSTEM_VOCABULARY.md §7.3 (Reasoning Phase).
 
 **Justificación:** Reasoning is the most complex cognitive operation. It must be
 isolated from Commitment to prevent the system from biasing its interpretation toward
@@ -529,7 +529,7 @@ The Action Executor does NOT make Commitments, form Beliefs, or compute Certaint
 It executes; it does not decide.
 
 **Derivación Constitucional:** CP-27 (Proyección derivada); CP-28 (Proyección de solo
-lectura); CP-35 (Explicación antes de acción); ONTOLOGY.md §7.5 (Projection Phase);
+lectura); CP-35 (Explicación antes de acción); SYSTEM_VOCABULARY.md §7.5 (Projection Phase);
 ACTION_EXECUTOR.md (responsabilidades del ejecutor).
 
 **Justificación:** Separating execution from decision prevents the system from
@@ -725,7 +725,7 @@ Adapter for delivery to the user. The contract requires:
   channel-agnostic content). The Channel Adapter does not modify the response content.
 
 **Derivación Constitucional:** CHANNEL_ADAPTER.md (definición del adaptador);
-CP-33 (acompañamiento continuo); ONTOLOGY.md §12.2 (Response).
+CP-33 (acompañamiento continuo); SYSTEM_VOCABULARY.md §12.2 (Response).
 
 **Justificación:** Separating content generation (Action Executor) from channel
 formatting (Channel Adapter) allows the same cognitive content to be delivered
@@ -770,10 +770,10 @@ Each stage completes fully before the next begins. No stage may be skipped,
 reordered, or executed in parallel with another.
 
 **Derivación Constitucional:** CP-01 (ciclo completo); CP-02 (secuencia estricta);
-CP-03 (completitud por fase); ONTOLOGY.md §7.1 (Cognitive Cycle).
+CP-03 (completitud por fase); SYSTEM_VOCABULARY.md §7.1 (Cognitive Cycle).
 
 **Justificación:** The six-stage flow is the operationalization of the four-phase
-Cognitive Cycle (ONTOLOGY.md §7.1) with the addition of stage-level granularity that
+Cognitive Cycle (SYSTEM_VOCABULARY.md §7.1) with the addition of stage-level granularity that
 maps directly to component responsibilities. Stage 1-2 = Perception Phase. Stage 3 =
 Reasoning Phase. Stage 4 = Commitment Phase. Stage 5-6 = Projection Phase.
 
@@ -888,7 +888,7 @@ only phase with these constraints.
 
 **Derivación Constitucional:** CP-07 (determinismo perceptual — la Percepción no
 puede depender de componentes no deterministas); CP-05 (frontera percepción/evidencia);
-ONTOLOGY.md §7.2 (Perception Phase: "purely deterministic," "stateless," "must not
+SYSTEM_VOCABULARY.md §7.2 (Perception Phase: "purely deterministic," "stateless," "must not
 call the LLM").
 
 **Justificación:** The Perception Phase is the foundation of the entire cognitive
@@ -1222,7 +1222,7 @@ does not modify the Commitments or create new ones.
 
 **Derivación Constitucional:** CP-27 (Proyección derivada — la Operational Projection
 se deriva exclusivamente del Knowledge State); CP-28 (Proyección de solo lectura —
-no puede modificarse directamente); ONTOLOGY.md §9.2 (Operational Projection is a
+no puede modificarse directamente); SYSTEM_VOCABULARY.md §9.2 (Operational Projection is a
 read-only view).
 
 **Justificación:** The Operational Projection is the bridge between cognition and
@@ -1293,7 +1293,7 @@ adjust Source Confidence, recalibrate the Certainty Calculus, and update the
 Knowledge State (via new Evidence). Learning operates on multiple cycles, not within
 a single cycle.
 
-**Derivación Constitucional:** ONTOLOGY.md §13.3 (Learning — "no aprende durante un
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §13.3 (Learning — "no aprende durante un
 Ciclo Cognitivo, es un proceso offline o de background"); CP-37 (retroalimentación
 por outcome); CP-38 (ajuste de confianza); CP-39 (mejora no destructiva).
 
@@ -1384,7 +1384,7 @@ next cycle), which does not create a circular dependency because it crosses cycl
 boundaries.
 
 **Derivación Constitucional:** CP-02 (secuencia estricta — cada fase consume el
-output de la anterior); R-CA-003 (capas por distancia epistémica); ONTOLOGY.md §14
+output de la anterior); R-CA-003 (capas por distancia epistémica); SYSTEM_VOCABULARY.md §14
 (prohibited cross-domain violations).
 
 **Justificación:** Circular dependencies would make the architecture impossible to
@@ -1427,7 +1427,7 @@ function is assigned to exactly one component:
 | Action execution and projection | Action Executor |
 
 **Derivación Constitucional:** R-CA-004 a R-CA-010 (responsabilidades individuales);
-CP-01 (ciclo completo asigna cada fase); ONTOLOGY.md §7.2-7.5 (responsabilidades
+CP-01 (ciclo completo asigna cada fase); SYSTEM_VOCABULARY.md §7.2-7.5 (responsabilidades
 por fase).
 
 **Justificación:** Overlapping responsibilities would create ambiguity: when a
@@ -1462,7 +1462,7 @@ Knowledge State interface. Direct component-to-component calls beyond the contra
 are prohibited.
 
 **Derivación Constitucional:** R-CA-004 a R-CA-010 (responsabilidades — cada
-componente tiene su dominio); R-CA-031 (DAG de dependencias); ONTOLOGY.md §14
+componente tiene su dominio); R-CA-031 (DAG de dependencias); SYSTEM_VOCABULARY.md §14
 (prohibited cross-domain violations).
 
 **Justificación:** Direct access to another component's internal state would create
@@ -1505,7 +1505,7 @@ components hand off information:
 All other inter-component interaction occurs through the shared Knowledge State.
 
 **Derivación Constitucional:** R-CA-011 a R-CA-015 (contratos); CP-02 (secuencia
-estricta); ONTOLOGY.md §7.2-7.5 (fases del ciclo).
+estricta); SYSTEM_VOCABULARY.md §7.2-7.5 (fases del ciclo).
 
 **Justificación:** Explicit integration points make the architecture measurable and
 testable. Each IP can be verified independently: is the correct information being
@@ -1537,7 +1537,7 @@ Calculus writes Certainty values to it. The Commitment Gate writes Commitments t
 The Action Executor reads Commitments from it.
 
 **Derivación Constitucional:** KNOWLEDGE_MODEL.md R-KM-004 (única fuente de autoridad
-cognitiva); R-KM-051 (Decisiones leen del Knowledge State); ONTOLOGY.md §6.1
+cognitiva); R-KM-051 (Decisiones leen del Knowledge State); SYSTEM_VOCABULARY.md §6.1
 (Knowledge State produce toda Decisión).
 
 **Justificación:** Without a central hub, components would communicate peer-to-peer,
@@ -1583,7 +1583,7 @@ sequencer makes the cycle's governance visible and auditable.
   the architecture.
 - The sequencer does not perform cognitive operations — it orchestrates them.
 - The sequencer enforces the DAG of dependencies (R-CA-031).
-- The sequencer implements the timing budget (ONTOLOGY.md §7.6).
+- The sequencer implements the timing budget (SYSTEM_VOCABULARY.md §7.6).
 
 **Impacto Conversacional:** El ciclo cognitivo es confiable y predecible. Cada
 mensaje sigue exactamente el mismo proceso, garantizando que ningún paso se omita
@@ -1644,7 +1644,7 @@ Signal (CP-16), each intent follows the Cognitive Cycle independently from the
 Commitment Gate onward. The Perception and Reasoning phases are shared; the
 Commitment Gate evaluates each intent separately.
 
-**Derivación Constitucional:** CP-16 (coexistencia de intenciones); ONTOLOGY.md §8.6
+**Derivación Constitucional:** CP-16 (coexistencia de intenciones); SYSTEM_VOCABULARY.md §8.6
 (Intent), §8.7 (Primary Intent).
 
 **Justificación:** Multiple intents share the same Evidence and Knowledge State but
@@ -2012,7 +2012,7 @@ original Signal.
 **Implicaciones Arquitectónicas:**
 - Each cycle generates a single observability record.
 - The record is structured (not free text) for queryability.
-- The record is stored in Episodic Memory (ONTOLOGY.md §11.5).
+- The record is stored in Episodic Memory (SYSTEM_VOCABULARY.md §11.5).
 - The record is immutable once written.
 - The record is accessible for audit, debugging, and learning.
 
@@ -2185,7 +2185,7 @@ The Sensory Layer never accesses the Executive Layer directly. The Executive Lay
 never accesses the Sensory Layer directly. All communication flows through the
 Cognitive Layer and the Knowledge State.
 
-**Derivación Constitucional:** R-CA-003, ONTOLOGY.md §14 (prohibited violations).
+**Derivación Constitucional:** R-CA-003, SYSTEM_VOCABULARY.md §14 (prohibited violations).
 **Violation:** Direct Sensory-Executive communication.
 
 ---
@@ -2271,7 +2271,7 @@ The following documents receive implementation mandates from this architecture:
 > dependencias, límites, puntos de integración, reglas de coordinación,
 > propagación, sincronización, reconstrucción, observabilidad y evolución.
 >
-> Deriva exclusivamente de CONSTITUTION.md, ONTOLOGY.md, COGNITIVE_PRINCIPLES.md,
+> Deriva exclusivamente de CONSTITUTION.md, SYSTEM_VOCABULARY.md, COGNITIVE_PRINCIPLES.md,
 > EVIDENCE_MODEL.md, DECISION_MODEL.md, COMMITMENT_MODEL.md, CERTAINTY_CALCULUS.md,
 > y KNOWLEDGE_MODEL.md. No redefine ningún concepto ontológico ni introduce nuevos
 > modelos. Su función es integrar, no crear.

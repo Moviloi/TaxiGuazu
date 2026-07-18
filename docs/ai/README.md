@@ -19,7 +19,7 @@ Read these files in order before making any change:
 
 1. **[ARCHITECTURE_BIBLE.md](./ARCHITECTURE_BIBLE.md)** — What the system is, what must never break, principles, layers, prohibited dependencies, and how to modify safely.
 2. **[ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md)** — Strict rules derived from the code. Violations require ADR-level decisions.
-3. **[CONTRACTS.md](./CONTRACTS.md)** — Contracts between engines: inputs, outputs, invariants, errors, fallbacks, side effects.
+3. **[ENGINE_CONTRACTS.md](./ENGINE_CONTRACTS.md)** — Contracts between engines: inputs, outputs, invariants, errors, fallbacks, side effects.
 4. **[INVARIANTS.md](./INVARIANTS.md)** — Statements that must always remain true.
 5. **[DECISION_TREE.md](./DECISION_TREE.md)** — Runtime decision tree from message to response.
 6. **[QUALITY_GATE.md](./QUALITY_GATE.md)** — Checklist for every modification.
@@ -45,7 +45,7 @@ Continue with:
 When a code change affects:
 
 - **Invariants** → update `INVARIANTS.md`
-- **Engine boundaries or contracts** → update `CONTRACTS.md`
+- **Engine boundaries or contracts** → update `ENGINE_CONTRACTS.md`
 - **Rules** → update `ARCHITECTURE_RULES.md`
 - **Decision flow** → update `DECISION_TREE.md`
 - **Quality checks** → update `QUALITY_GATE.md`

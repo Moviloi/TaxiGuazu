@@ -7,7 +7,7 @@
 > Date: 2026-07-11
 >
 > ⚠️ This document belongs to **Level II-a (Structural Authority)** of the AITOS
-> Document Hierarchy. It derives from CONSTITUTION.md (Level I-a) and ONTOLOGY.md
+> Document Hierarchy. It derives from CONSTITUTION.md (Level I-a) and SYSTEM_VOCABULARY.md
 > (Level I-b). Every principle herein is binding on Level III and Level IV documents,
 > decisions, and implementations. Violations are technical debt managed under S-P9.
 
@@ -68,7 +68,7 @@ definida en CONSTITUTION.md Sección 6.
 | Dependencia | Relación |
 |---|---|
 | **CONSTITUTION.md** (Level I-a) | Fuente de principios constitucionales. CP refina, no repite. |
-| **ONTOLOGY.md** (Level I-b) | Fuente terminológica. CP usa términos definidos, no redefine. |
+| **SYSTEM_VOCABULARY.md** (Level I-b) | Fuente terminológica. CP usa términos definidos, no redefine. |
 | **COGNITIVE_ARCHITECTURE.md** (Level II-b) | Destino de delegación. CP dice QUÉ; Arquitectura dice DÓNDE. |
 | **ADRs** (Level II-c) | Decisiones arquitectónicas individuales. Deben ser compatibles con CP. |
 | Documentos de Nivel III | Destinos de delegación. Cada principio indica qué documento lo concreta. |
@@ -116,7 +116,7 @@ constitucional y a sus documentos de Nivel III.
 
 ## 2. Principios del Ciclo Cognitivo
 
-> El Ciclo Cognitivo (ONTOLOGY.md 7.1) es el proceso fundamental de AITOS:
+> El Ciclo Cognitivo (SYSTEM_VOCABULARY.md 7.1) es el proceso fundamental de AITOS:
 > desde la recepción de un Signal hasta la actualización del Knowledge State
 > y la generación de una Acción. Estos principios gobiernan cómo se estructura
 > y ejecuta el ciclo.
@@ -238,7 +238,7 @@ DECISION_MODEL.md (define los tiempos por fase según Strategic Posture).
 
 ## 3. Principios de Percepción
 
-> La Percepción (ONTOLOGY.md 4.x, 7.2) es la fase que transforma un Signal
+> La Percepción (SYSTEM_VOCABULARY.md 4.x, 7.2) es la fase que transforma un Signal
 > en Evidence. Es la puerta de entrada del sistema. Estos principios gobiernan
 > cómo los señales del mundo exterior se convierten en la materia prima de la
 > cognición.
@@ -253,7 +253,7 @@ DECISION_MODEL.md (define los tiempos por fase según Strategic Posture).
 Immutability).
 
 **Justificación:** La distinción entre Signal y Evidence es fundamental para
-la integridad epistémica del sistema (ONTOLOGY.md 4.1, 5.1). Un Signal que
+la integridad epistémica del sistema (SYSTEM_VOCABULARY.md 4.1, 5.1). Un Signal que
 existe solo en memoria volátil o en un buffer de entrada puede perderse y
 nunca afectar las decisiones del sistema. Solo lo que está registrado como
 Evidence puede fundamentar Beliefs y Commitment. Esta frontera evita que el
@@ -331,7 +331,7 @@ Percepción), EVIDENCE_MODEL.md (define el formato de Evidence raw).
 
 ## 4. Principios de Evidencia
 
-> La Evidence (ONTOLOGY.md 5.1) es la materia prima de toda cognición en
+> La Evidence (SYSTEM_VOCABULARY.md 5.1) es la materia prima de toda cognición en
 > AITOS. Es el sustituto operacional de la Verdad (CONSTITUTION.md 3.2).
 > Estos principios gobiernan cómo la Evidence se acumula, resuelve y utiliza.
 
@@ -388,7 +388,7 @@ de trazabilidad:
 - Canal de entrada (WhatsApp, API, web).
 - Timestamp de percepción (UTC).
 - Identificador del Ciclo Cognitivo que la generó.
-- Source del que procede (ONTOLOGY.md 4.6).
+- Source del que procede (SYSTEM_VOCABULARY.md 4.6).
 Si la trazabilidad no puede establecerse, la Evidence no puede utilizarse
 para decisiones que requieran auditabilidad (P-I5).
 
@@ -510,7 +510,7 @@ COGNITIVE_ARCHITECTURE.md (define los gates de suficiencia entre fases).
 
 ## 5. Principios de Razonamiento e Hipótesis
 
-> El Razonamiento (ONTOLOGY.md 7.3) es la fase que integra nueva Evidence con
+> El Razonamiento (SYSTEM_VOCABULARY.md 7.3) es la fase que integra nueva Evidence con
 > el Knowledge State existente, genera y resuelve Hipótesis, y prepara el
 > terreno para el Compromiso. Estos principios gobiernan cómo el sistema
 > piensa antes de decidir.
@@ -690,7 +690,7 @@ Hipótesis), COGNITIVE_ARCHITECTURE.md (define el ciclo de vida de Hipótesis).
 
 ## 6. Principios de Certidumbre
 
-> La Certidumbre (ONTOLOGY.md 6.2) es la medida de cuán confiado está el
+> La Certidumbre (SYSTEM_VOCABULARY.md 6.2) es la medida de cuán confiado está el
 > sistema de que una Belief corresponde a la Verdad. Es continua,
 > dinámica y siempre imperfecta. Estos principios gobiernan cómo la
 > Certidumbre se comporta en el sistema cognitivo.
@@ -715,7 +715,7 @@ representación de toda Belief, no añadido opcionalmente.
 - No existe "creencia sin calificación" en AITOS. Toda Belief lleva un
   número entre 0 y 1.
 - La Certidumbre 1.0 está reservada para verdades matemáticas e invariantes
-  del sistema (ONTOLOGY.md 6.2).
+  del sistema (SYSTEM_VOCABULARY.md 6.2).
 - La Certidumbre 0.0 significa "no tengo ninguna evidencia que apoye esta
   creencia" — la Belief no debería existir.
 - Los valores de Certidumbre no son opcionales ni implícitos. Deben
@@ -847,7 +847,7 @@ compromiso).
 
 ## 7. Principios de Compromiso
 
-> El Compromiso (ONTOLOGY.md 8.2) es el acto cognitivo de elegir una Belief
+> El Compromiso (SYSTEM_VOCABULARY.md 8.2) es el acto cognitivo de elegir una Belief
 > como base para la acción. Es el "punto de no retorno" del Ciclo Cognitivo.
 > Estos principios gobiernan cuándo y cómo el sistema se compromete.
 
@@ -1045,7 +1045,7 @@ DECISION_MODEL.md (define los criterios de agotamiento de medios).
 
 ## 8. Principios de Proyección
 
-> La Proyección (ONTOLOGY.md 7.5, 9.x) es la fase que traduce los
+> La Proyección (SYSTEM_VOCABULARY.md 7.5, 9.x) es la fase que traduce los
 > Compromisos en una Operational Projection: la vista del mundo expresada
 > en términos operacionales (viajes, despachos, mensajes). Estos principios
 > gobiernan cómo se construye y utiliza la Proyección.
@@ -1502,7 +1502,7 @@ Confidence por desempeño histórico es el mecanismo que permite que el
 sistema aprenda qué fuentes son más confiables en qué contextos.
 
 **Implicaciones cognitivas:**
-- Cada Source (ONTOLOGY.md 4.6) tiene una Confidence que se ajusta según
+- Cada Source (SYSTEM_VOCABULARY.md 4.6) tiene una Confidence que se ajusta según
   su historial de precisión.
 - El ajuste debe considerar:
   - Tasa de acierto histórico: cuántas veces la Source produjo Evidence
@@ -1511,7 +1511,7 @@ sistema aprenda qué fuentes son más confiables en qué contextos.
     información (extracción de ubicaciones) y no para otra (clasificación
     de intención).
   - Confianza base de la Source: las Sources tienen una Confidence inicial
-    por tipo (ONTOLOGY.md define el orden de Source por confiabilidad).
+    por tipo (SYSTEM_VOCABULARY.md define el orden de Source por confiabilidad).
 - El ajuste de Confidence es gradual: una fuente no pierde toda su
   confianza por un solo error.
 - La Confidence de Source es un input al cálculo de Certidumbre de las

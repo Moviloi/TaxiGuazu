@@ -50,7 +50,7 @@ De los documentos existentes:
 | Architecture Milestone v3.0 | `[COMMIT]` — a qué se compromete el sistema |
 | Architecture Milestone v3.0 | Learning produce Patterns. Goals consume Patterns. Goals produce Commitment. Planning consume Commitment. |
 | Architecture Milestone v3.0 | Goals NO consume Memory directamente. |
-| ONTOLOGY.md | "Compromiso con un resultado específico basado en patrones cognitivos" |
+| EVIDENCE_ONTOLOGY.md | "Compromiso con un resultado específico basado en patrones cognitivos" |
 | PR-7F/R-7G | Responsibilities: R10 (relevance filtering), R11 (functional dedup), R12 (interpretive categorization) |
 
 ### 1.2 Definición tentativa (para poder refutarla)

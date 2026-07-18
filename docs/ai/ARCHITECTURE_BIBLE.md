@@ -295,7 +295,7 @@ If the answer to any of questions 1-6 is "no", the change must be rejected or re
 After this file, read in this order:
 
 1. `docs/ai/ARCHITECTURE_RULES.md` — strict rules
-2. `docs/ai/CONTRACTS.md` — engine contracts
+2. `docs/ai/ENGINE_CONTRACTS.md` — engine contracts
 3. `docs/ai/INVARIANTS.md` — all invariants
 4. `docs/ai/DECISION_TREE.md` — runtime decision tree
 5. `docs/ai/QUALITY_GATE.md` — checklist for changes

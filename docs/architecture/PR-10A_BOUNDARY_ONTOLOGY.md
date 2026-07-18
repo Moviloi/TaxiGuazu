@@ -21,7 +21,7 @@ Mismo rigor aplicado en PR-6 a PR-9:
 
 ### 1.1 ¿Qué es el boundary cognitivo-operacional?
 
-Según PR-9A y ONTOLOGY.md post-PR-9:
+Según PR-9A y EVIDENCE_ONTOLOGY.md post-PR-9:
 
 ```
 COGNITIVO:     EE → Memory → Learning

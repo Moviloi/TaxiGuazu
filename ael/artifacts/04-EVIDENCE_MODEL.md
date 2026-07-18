@@ -8,7 +8,7 @@
 >
 > ⚠️ This document belongs to **Level III-a (Contractual Authority)** of the AITOS
 > Document Hierarchy (CONSTITUTION.md §6). It derives from CONSTITUTION.md (Level I-a),
-> ONTOLOGY.md (Level I-b), and COGNITIVE_PRINCIPLES.md (Level II-a).
+> SYSTEM_VOCABULARY.md (Level I-b), and COGNITIVE_PRINCIPLES.md (Level II-a).
 >
 > This document does not redefine any term or principle from its source documents.
 > It operationalizes them. Every rule herein is binding on Level IV documents
@@ -82,7 +82,7 @@ This document does **NOT** govern:
 | Source document | Relationship to this document |
 |----------------|------------------------------|
 | **CONSTITUTION.md** (Level I-a) | Source of supreme principles: S-P1 (Evidence-Based Operation), S-P5 (Evidence Immutability), S-P6 (Knowledge Preservation), P-I5 (Auditability), P-E1 (Evidence over Intuition), P-E4 (Revisability), P-E2 (Certainty is Continuous) |
-| **ONTOLOGY.md** (Level I-b) | Source of all terminology: Evidence (5.1), Belief (5.2), Evidence Store (5.3), Fact (4.3), Source (4.4), Signal (3.3), Observation (4.2), Certainty (6.2), Confidence (6.3) |
+| **SYSTEM_VOCABULARY.md** (Level I-b) | Source of all terminology: Evidence (5.1), Belief (5.2), Evidence Store (5.3), Fact (4.3), Source (4.4), Signal (3.3), Observation (4.2), Certainty (6.2), Confidence (6.3) |
 | **COGNITIVE_PRINCIPLES.md** (Level II-a) | Source of cognitive principles that delegate to this document: CP-05 through CP-12, CP-20, CP-29, CP-30, CP-37, CP-38, CP-39 |
 | **DECISION_MODEL.md** (Level III-b) | Sibling document — defines how Evidence feeds into commitment decisions |
 | **CERTAINTY_CALCULUS.md** (Level III-d) | Sibling document — defines how Certainty is computed from Evidence |
@@ -102,7 +102,7 @@ Each rule in this document follows a uniform structure:
 
 **Rationale:** Why this rule exists, referencing superior documents.
 
-**Source:** CONSTITUTION.md, ONTOLOGY.md, and/or COGNITIVE_PRINCIPLES.md references.
+**Source:** CONSTITUTION.md, SYSTEM_VOCABULARY.md, and/or COGNITIVE_PRINCIPLES.md references.
 
 **Implementation delegation:** Which Level III or Level IV documents must concretize this rule.
 ```
@@ -124,11 +124,11 @@ level of reliability, and is durably stored. No cognitive process operates on un
 information.
 
 **Rationale:** The Constitution (3.2) establishes Evidence as the operational substitute
-for Truth. ONTOLOGY.md (5.1) defines Evidence as a recorded set of Facts. This rule
+for Truth. SYSTEM_VOCABULARY.md (5.1) defines Evidence as a recorded set of Facts. This rule
 operationalizes those definitions by establishing the minimum conditions under which
 information qualifies as Evidence: it must be recorded, sourced, and persistently available.
 
-**Source:** CONSTITUTION.md §3.2, ONTOLOGY.md §5.1, CP-05 (Frontera percepción/evidencia).
+**Source:** CONSTITUTION.md §3.2, SYSTEM_VOCABULARY.md §5.1, CP-05 (Frontera percepción/evidencia).
 
 **Implementation delegation:** COGNITIVE_ARCHITECTURE.md (component that registers Evidence),
 EVIDENCE_MODEL implementation (Evidence Store write path).
@@ -148,7 +148,7 @@ humility is maintained at the data level.
 **Rationale:** CONSTITUTION.md §3.1 establishes that AITOS never has direct access to
 Truth. Evidence is the closest approximation, but it is always provisional and fallible.
 
-**Source:** CONSTITUTION.md §3.1, §3.5; ONTOLOGY.md §3.8.
+**Source:** CONSTITUTION.md §3.1, §3.5; SYSTEM_VOCABULARY.md §3.8.
 
 **Implementation delegation:** DECISION_MODEL.md (threshold calibration must account for
 the inherent fallibility of Evidence), CERTAINTY_CALCULUS.md (certainty must never reach
@@ -245,18 +245,18 @@ Each stage is a transformation gate with specific rules.
 
 **R-EM-006 — Signal stage (pre-evidence)**
 
-> **Statement:** A Signal (ONTOLOGY.md 3.3) is raw information that enters the system
+> **Statement:** A Signal (SYSTEM_VOCABULARY.md 3.3) is raw information that enters the system
 > through a Channel. At this stage, it has no epistemic status — it is neither Evidence
 > nor non-Evidence. It is merely a unit of information awaiting processing.
 
 **Guarantee:** Raw inputs are clearly distinguished from processed epistemic content.
 No cognitive process can operate on raw Signals — they must first become Observations.
 
-**Rationale:** ONTOLOGY.md defines Signal as "any unit of information that can be perceived
+**Rationale:** SYSTEM_VOCABULARY.md defines Signal as "any unit of information that can be perceived
 by the system, before any interpretation or processing." The Signal is the lowest level of
 abstraction. Operating on Signals bypasses all validation and registration gates.
 
-**Source:** ONTOLOGY.md §3.3, CP-05.
+**Source:** SYSTEM_VOCABULARY.md §3.3, CP-05.
 
 **Implementation delegation:** CHANNEL_ADAPTER.md (Signal reception), COGNITIVE_ARCHITECTURE.md
 (Perception Phase gateway).
@@ -265,7 +265,7 @@ abstraction. Operating on Signals bypasses all validation and registration gates
 
 **R-EM-007 — Observation stage (validation gate)**
 
-> **Statement:** A Signal becomes an Observation (ONTOLOGY.md 4.2) when it has passed
+> **Statement:** A Signal becomes an Observation (SYSTEM_VOCABULARY.md 4.2) when it has passed
 > channel-level validation: format verification, authentication, rate-limit check, and
 > idempotency verification. An Observation is guaranteed to be structurally valid but not
 > semantically interpreted.
@@ -274,12 +274,12 @@ abstraction. Operating on Signals bypasses all validation and registration gates
 unauthorized, or duplicate Signals are filtered before any cognitive resources are
 consumed.
 
-**Rationale:** ONTOLOGY.md §4.2 defines Observation as "a Signal that has passed
+**Rationale:** SYSTEM_VOCABULARY.md §4.2 defines Observation as "a Signal that has passed
 channel-level validation." This gate protects the cognitive system from processing
 invalid inputs. The Observation is the first entity that can be referenced in the
 Evidence Store (as the source of Facts).
 
-**Source:** ONTOLOGY.md §4.2, CP-07 (Determinismo perceptual).
+**Source:** SYSTEM_VOCABULARY.md §4.2, CP-07 (Determinismo perceptual).
 
 **Implementation delegation:** CHANNEL_ADAPTER.md (validation rules per channel),
 COGNITIVE_ARCHITECTURE.md (Perception Phase).
@@ -288,7 +288,7 @@ COGNITIVE_ARCHITECTURE.md (Perception Phase).
 
 **R-EM-008 — Fact stage (extraction gate)**
 
-> **Statement:** An Observation is decomposed into one or more Facts (ONTOLOGY.md 4.3)
+> **Statement:** An Observation is decomposed into one or more Facts (SYSTEM_VOCABULARY.md 4.3)
 > through extraction. Each Fact is an atomic claim about the world — a single proposition
 > that can be true or false. Facts are the atoms of the epistemic system.
 
@@ -297,12 +297,12 @@ message ("I need a ride from Asunción to the airport at 5 PM") generates multip
 one for origin, one for destination, one for time. This decomposition enables granular
 Certainty assessment and conflict resolution.
 
-**Rationale:** ONTOLOGY.md §4.3 defines Fact as "the smallest atomic unit of meaning
+**Rationale:** SYSTEM_VOCABULARY.md §4.3 defines Fact as "the smallest atomic unit of meaning
 extracted from an Observation." Facts are the output of perception and the input to the
 Evidence Store. Each Fact carries its own Source and Confidence, enabling the system to
 treat different parts of the same message with different levels of trust.
 
-**Source:** ONTOLOGY.md §4.3, CP-06 (Registro antes de interpretación), CP-07.
+**Source:** SYSTEM_VOCABULARY.md §4.3, CP-06 (Registro antes de interpretación), CP-07.
 
 **Implementation delegation:** COGNITIVE_ARCHITECTURE.md (extraction in Perception Phase),
 EVIDENCE_MODEL implementation (Fact schema).
@@ -324,7 +324,7 @@ Evidence only when registered in the Evidence Store. CP-06 (Registro antes de
 interpretación) requires that registration occur before any interpretation. This means
 the raw Fact (pre-interpretation) must be the first thing registered.
 
-**Source:** CP-05, CP-06, ONTOLOGY.md §5.1.
+**Source:** CP-05, CP-06, SYSTEM_VOCABULARY.md §5.1.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (Evidence Store write path),
 COGNITIVE_ARCHITECTURE.md (registration as first step of Perception Phase).
@@ -425,7 +425,7 @@ and independent of the Evidence's content, validity, or usefulness.
 **Rationale:** Traceability (CP-09) and auditability (P-I5) require that Evidence be
 individually referable. A mutable or reusable identity would break the audit chain.
 
-**Source:** CP-09, P-I5, ONTOLOGY.md §3.1 (Entity identity constraint).
+**Source:** CP-09, P-I5, SYSTEM_VOCABULARY.md §3.1 (Entity identity constraint).
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (ID generation strategy must
 guarantee global uniqueness and non-reuse).
@@ -442,11 +442,11 @@ guarantee global uniqueness and non-reuse).
 **Guarantee:** The propositional content of Evidence is explicit and unambiguous. Two
 Evidence records with the same Fact content are semantically comparable.
 
-**Rationale:** ONTOLOGY.md §4.3 defines Fact as an atomic claim. The propositional
+**Rationale:** SYSTEM_VOCABULARY.md §4.3 defines Fact as an atomic claim. The propositional
 structure enables the system to compare, aggregate, and resolve conflicts between pieces
 of Evidence that address the same subject.
 
-**Source:** ONTOLOGY.md §4.3, §5.1.
+**Source:** SYSTEM_VOCABULARY.md §4.3, §5.1.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (Fact schema with
 subject/predicate/object structure), KNOWLEDGE_MODEL.md (Fact indexing and conflict
@@ -456,7 +456,7 @@ detection).
 
 **R-EM-015 — Source**
 
-> **Statement:** Every Evidence record must declare its Source (ONTOLOGY.md 4.4) — the
+> **Statement:** Every Evidence record must declare its Source (SYSTEM_VOCABULARY.md 4.4) — the
 > origin of the Fact, describing how it was obtained. The Source must be one of the
 > canonical Source types: DirectExtraction, Inference, UserConfirmation,
 > KnowledgeBaseLookup, DefaultValue, LLMInference, or SilenceDetection.
@@ -465,12 +465,12 @@ detection).
 type. The system knows whether a Fact came from explicit user confirmation, algorithmic
 extraction, LLM inference, or default assumption.
 
-**Rationale:** ONTOLOGY.md §4.4 defines Source types ordered by reliability. CP-38 (Ajuste
+**Rationale:** SYSTEM_VOCABULARY.md §4.4 defines Source types ordered by reliability. CP-38 (Ajuste
 de confianza de fuente) requires that Source Confidence be adjusted based on historical
 accuracy. Without explicit Source attribution, neither reliability ordering nor historical
 adjustment is possible.
 
-**Source:** ONTOLOGY.md §4.4, CP-38, CP-09.
+**Source:** SYSTEM_VOCABULARY.md §4.4, CP-38, CP-09.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (Source type enumeration and
 storage), DECISION_MODEL.md (Source-based weighting in belief formation).
@@ -479,7 +479,7 @@ storage), DECISION_MODEL.md (Source-based weighting in belief formation).
 
 **R-EM-016 — Confidence**
 
-> **Statement:** Every Evidence record must carry a Confidence value (ONTOLOGY.md 6.3)
+> **Statement:** Every Evidence record must carry a Confidence value (SYSTEM_VOCABULARY.md 6.3)
 > that represents the reliability of its Source at the moment of registration. Confidence
 > is a value in [0, 1] where higher values indicate greater expected reliability.
 
@@ -487,12 +487,12 @@ storage), DECISION_MODEL.md (Source-based weighting in belief formation).
 reliability. The system can distinguish between "the user explicitly confirmed this"
 (Confidence ≈ 0.95) and "an LLM inferred this" (Confidence ≈ 0.70).
 
-**Rationale:** ONTOLOGY.md §6.3 defines Confidence as "a measure of the reliability of a
+**Rationale:** SYSTEM_VOCABULARY.md §6.3 defines Confidence as "a measure of the reliability of a
 Source." CP-38 requires historical adjustment of Confidence. The Confidence value at
 registration time is the initial value, which may be adjusted later based on outcome
 feedback (see §13).
 
-**Source:** ONTOLOGY.md §6.3, CP-38, CP-37.
+**Source:** SYSTEM_VOCABULARY.md §6.3, CP-38, CP-37.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (Confidence storage and
 update mechanism), CERTAINTY_CALCULUS.md (use of Confidence in Certainty computation),
@@ -514,7 +514,7 @@ is this Evidence?), and audit (when was this information registered?).
 without confirming Evidence. Degradation requires knowing the age of Evidence. CP-09
 requires traceability to the moment of perception.
 
-**Source:** CP-19, CP-09, ONTOLOGY.md §4.1 (Message timestamp constraint).
+**Source:** CP-19, CP-09, SYSTEM_VOCABULARY.md §4.1 (Message timestamp constraint).
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (timestamp storage),
 CERTAINTY_CALCULUS.md (degradation function uses perception time).
@@ -824,7 +824,7 @@ explicit grouping. The proposition structure enables automatic aggregation.
 Evidence relevant to a proposition. The propositional structure is the natural grouping
 key.
 
-**Source:** CP-18, CP-20, ONTOLOGY.md §4.3, §5.1.
+**Source:** CP-18, CP-20, SYSTEM_VOCABULARY.md §4.3, §5.1.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (proposition-based indexing),
 CERTAINTY_CALCULUS.md (aggregation over Evidence groups).
@@ -849,11 +849,11 @@ machine-readable. The system can navigate the Evidence graph to understand how p
 of Evidence relate to each other, which ones support the same conclusion, and which
 ones conflict.
 
-**Rationale:** ONTOLOGY.md (5.1, 6.5) and CP-10 (Resolución de Evidence conflictiva)
+**Rationale:** SYSTEM_VOCABULARY.md (5.1, 6.5) and CP-10 (Resolución de Evidence conflictiva)
 and CP-15 (Fusión conservadora) require the system to understand relationships between
 pieces of Evidence. Explicit relationship types make these relationships computable.
 
-**Source:** CP-10, CP-15, ONTOLOGY.md §5.1.
+**Source:** CP-10, CP-15, SYSTEM_VOCABULARY.md §5.1.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (relationship storage and
 traversal), COGNITIVE_ARCHITECTURE.md (relationship-aware reasoning),
@@ -897,10 +897,10 @@ relationships), EVIDENCE_MODEL implementation (query by proposition).
 **Guarantee:** The system can reason about the smallest possible unit of information.
 Atomic Evidence is the granularity at which conflicts are detected and resolved.
 
-**Rationale:** ONTOLOGY.md §4.3 defines Fact as the smallest atomic unit of meaning.
+**Rationale:** SYSTEM_VOCABULARY.md §4.3 defines Fact as the smallest atomic unit of meaning.
 Atomic Evidence is a Fact stored in the Evidence Store.
 
-**Source:** ONTOLOGY.md §4.3.
+**Source:** SYSTEM_VOCABULARY.md §4.3.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (atomic Evidence schema).
 
@@ -921,7 +921,7 @@ specific proposition evaluation.
 (they came from the same Observation) but address different propositions. Composite
 Evidence captures this grouping without losing atomic granularity.
 
-**Source:** ONTOLOGY.md §4.3 (Fact is part of Evidence), CP-06.
+**Source:** SYSTEM_VOCABULARY.md §4.3 (Fact is part of Evidence), CP-06.
 
 **Implementation delegation:** EVIDENCE_MODEL implementation (grouping by Observation ID).
 
@@ -985,10 +985,10 @@ persistent record; aggregation is a read-time computation, not a write-time redu
 Evidence. Conflict is a well-defined, computable property.
 
 **Rationale:** CP-10 (Resolución de Evidence conflictiva) requires conflict detection
-as a prerequisite for resolution. ONTOLOGY.md defines the propositional structure that
+as a prerequisite for resolution. SYSTEM_VOCABULARY.md defines the propositional structure that
 makes conflict detection possible.
 
-**Source:** CP-10, ONTOLOGY.md §4.3, §5.1.
+**Source:** CP-10, SYSTEM_VOCABULARY.md §4.3, §5.1.
 
 **Implementation delegation:** COGNITIVE_ARCHITECTURE.md (Reasoning Phase conflict
 detection), EVIDENCE_MODEL implementation (conflict query: "all Evidence for proposition
@@ -1027,7 +1027,7 @@ COGNITIVE_ARCHITECTURE.md (Reasoning Phase).
 > using epistemic rules, never using arbitrary rules. The following factors are considered,
 > in this order of precedence:
 
-> 1. **Source type reliability**: Evidence from a higher-reliability Source type (ONTOLOGY.md
+> 1. **Source type reliability**: Evidence from a higher-reliability Source type (SYSTEM_VOCABULARY.md
 >    §4.4 hierarchy) prevails over Evidence from a lower-reliability Source type.
 > 2. **Confidence value**: Between Evidence of the same Source type, higher Confidence
 >    prevails.
@@ -1044,7 +1044,7 @@ selection). The resolution is based on epistemic weight.
 epistemic resolution. CP-17 (Resolución por Evidence) prohibits resolution by non-epistemic
 criteria. This rule defines the epistemic hierarchy.
 
-**Source:** CP-10, CP-17, ONTOLOGY.md §4.4.
+**Source:** CP-10, CP-17, SYSTEM_VOCABULARY.md §4.4.
 
 **Implementation delegation:** DECISION_MODEL.md (resolution algorithm),
 CERTAINTY_CALCULUS.md (weighting function that incorporates these factors).
@@ -1090,10 +1090,10 @@ with supersession link and reason).
 **Guarantee:** The system has a clear, predictable hierarchy for weighing Evidence.
 User-confirmed information is always given the highest epistemic weight.
 
-**Rationale:** ONTOLOGY.md §4.4 orders Sources by reliability. This rule operationalizes
+**Rationale:** SYSTEM_VOCABULARY.md §4.4 orders Sources by reliability. This rule operationalizes
 that ordering as a precedence hierarchy for belief formation.
 
-**Source:** ONTOLOGY.md §4.4, CP-10, CP-17.
+**Source:** SYSTEM_VOCABULARY.md §4.4, CP-10, CP-17.
 
 **Implementation delegation:** CERTAINTY_CALCULUS.md (precedence-weighted aggregation),
 DECISION_MODEL.md (threshold decisions consider precedence).
@@ -1106,7 +1106,7 @@ DECISION_MODEL.md (threshold decisions consider precedence).
 
 **R-EM-042 — Certainty is a function of Evidence**
 
-> **Statement:** The Certainty (ONTOLOGY.md 6.2) of a Belief is computed exclusively from
+> **Statement:** The Certainty (SYSTEM_VOCABULARY.md 6.2) of a Belief is computed exclusively from
 > the Evidence that supports or refutes it. Certainty is NOT an independent attribute of
 > the Belief — it is a derived value, recomputed each time the relevant Evidence changes.
 
@@ -1207,18 +1207,18 @@ CERTAINTY_CALCULUS.md (recalculation function).
 
 **R-EM-046 — Beliefs are derived from Evidence**
 
-> **Statement:** Every Belief (ONTOLOGY.md 5.2) in AITOS is a proposition that the system
+> **Statement:** Every Belief (SYSTEM_VOCABULARY.md 5.2) in AITOS is a proposition that the system
 > holds with a degree of Certainty, derived from the accumulated Evidence for that
 > proposition. A Belief must reference the Evidence from which it is derived.
 
 **Guarantee:** All Beliefs are grounded in Evidence. There is no such thing as a Belief
 without evidentiary support. The Evidence-to-Belief mapping is explicit and auditable.
 
-**Rationale:** ONTOLOGY.md §5.2 defines Belief as depending on Evidence. CP-17
+**Rationale:** SYSTEM_VOCABULARY.md §5.2 defines Belief as depending on Evidence. CP-17
 (Resolución por Evidence) requires that hypotheses be resolved into Beliefs exclusively
 through Evidence accumulation. S-P1 requires that every Belief be based on Evidence.
 
-**Source:** ONTOLOGY.md §5.2, CP-17, S-P1.
+**Source:** SYSTEM_VOCABULARY.md §5.2, CP-17, S-P1.
 
 **Implementation delegation:** KNOWLEDGE_MODEL.md (Belief structure and Evidence reference),
 COGNITIVE_ARCHITECTURE.md (Belief formation in Reasoning Phase).
@@ -1278,8 +1278,8 @@ DECISION_MODEL.md (replacement criteria).
 
 **R-EM-049 — The Evidence Store is the persistent foundation**
 
-> **Statement:** The Evidence Store (ONTOLOGY.md 5.3) is the persistent, append-only
-> foundation of the Knowledge State (ONTOLOGY.md 6.1). All other components of the
+> **Statement:** The Evidence Store (SYSTEM_VOCABULARY.md 5.3) is the persistent, append-only
+> foundation of the Knowledge State (SYSTEM_VOCABULARY.md 6.1). All other components of the
 > Knowledge State — Beliefs, active Hypotheses, and Commitments — are derived from or
 > depend on the Evidence Store.
 
@@ -1287,12 +1287,12 @@ DECISION_MODEL.md (replacement criteria).
 If the volatile parts of the Knowledge State are lost (system restart), the Evidence
 Store alone is sufficient to reconstruct the Knowledge State.
 
-**Rationale:** ONTOLOGY.md defines the Evidence Store as part of the Knowledge State and
+**Rationale:** SYSTEM_VOCABULARY.md defines the Evidence Store as part of the Knowledge State and
 as the single source of truth for "what has the system perceived?" CP-29 (Reconstrucción
 desde Evidence) requires that the Operational Projection be reconstructible from the
 Evidence Store alone.
 
-**Source:** ONTOLOGY.md §5.3, CP-29, S-P6.
+**Source:** SYSTEM_VOCABULARY.md §5.3, CP-29, S-P6.
 
 **Implementation delegation:** KNOWLEDGE_MODEL.md (Knowledge State structure depends on
 Evidence Store), COGNITIVE_ARCHITECTURE.md (reconstruction from Evidence Store).
@@ -1301,7 +1301,7 @@ Evidence Store), COGNITIVE_ARCHITECTURE.md (reconstruction from Evidence Store).
 
 **R-EM-050 — The Hypothesis Network reads from Evidence**
 
-> **Statement:** The Hypothesis Network (ONTOLOGY.md 6.5) reads from the Evidence Store
+> **Statement:** The Hypothesis Network (SYSTEM_VOCABULARY.md 6.5) reads from the Evidence Store
 > to generate and maintain competing Hypotheses. Hypotheses are supported or refuted by
 > Evidence. The Hypothesis Network does NOT write to the Evidence Store — it only reads.
 
@@ -1311,7 +1311,7 @@ hypothesis generation process is a reader of Evidence, never a modifier.
 **Rationale:** CP-13 (Hipótesis múltiples) requires hypotheses to be generated from
 available Evidence. CP-08 prohibits cognitive processes from modifying Evidence.
 
-**Source:** CP-13, CP-08, ONTOLOGY.md §6.5.
+**Source:** CP-13, CP-08, SYSTEM_VOCABULARY.md §6.5.
 
 **Implementation delegation:** KNOWLEDGE_MODEL.md (Hypothesis Network reads from Evidence
 Store), COGNITIVE_ARCHITECTURE.md (Reasoning Phase generates hypotheses from Evidence).
@@ -1353,7 +1353,7 @@ COGNITIVE_ARCHITECTURE.md (startup recovery flow), EVIDENCE_MODEL implementation
 
 **R-EM-052 — Commitment requires sufficient Evidence**
 
-> **Statement:** A Commitment (ONTOLOGY.md 8.2) may only be made when the accumulated
+> **Statement:** A Commitment (SYSTEM_VOCABULARY.md 8.2) may only be made when the accumulated
 > Evidence for the relevant proposition(s) yields a Certainty equal to or above the
 > Commitment Threshold for that type of Commitment. The Commitment Threshold is defined
 > in DECISION_MODEL.md and varies by Commitment type and Strategic Posture.
@@ -1506,11 +1506,11 @@ Evidence), EVIDENCE_MODEL implementation (append-only invariant enforced).
 no "shadow evidence" stored in caches, logs, or component-specific stores that could
 diverge from the canonical record.
 
-**Rationale:** ONTOLOGY.md §5.3 defines the Evidence Store as "the canonical store of all
+**Rationale:** SYSTEM_VOCABULARY.md §5.3 defines the Evidence Store as "the canonical store of all
 Evidence." CP-05 requires that Evidence be registered in the Evidence Store. Having
 multiple stores would violate the principle of a single source of truth.
 
-**Source:** ONTOLOGY.md §5.3, CP-05.
+**Source:** SYSTEM_VOCABULARY.md §5.3, CP-05.
 
 **Implementation delegation:** COGNITIVE_ARCHITECTURE.md (all components read from and
 write to the same Evidence Store), EVIDENCE_MODEL implementation (single logical store).
@@ -1704,7 +1704,7 @@ identifier is provided.
 
 **Verification:** Registration must reject any Evidence without a populated Source field.
 
-**Source:** R-EM-015, ONTOLOGY.md §4.4.
+**Source:** R-EM-015, SYSTEM_VOCABULARY.md §4.4.
 
 ---
 
@@ -1715,7 +1715,7 @@ identifier is provided.
 
 **Verification:** Registration must reject Evidence with empty propositional content.
 
-**Source:** R-EM-014, ONTOLOGY.md §4.3.
+**Source:** R-EM-014, SYSTEM_VOCABULARY.md §4.3.
 
 ---
 
@@ -1756,7 +1756,7 @@ Archival moves records to a different logical store but preserves them.
 Store. Writes to other stores (databases, files, external APIs) must be traced back to
 the Evidence Store as their source.
 
-**Source:** CP-05, CP-08, ONTOLOGY.md §5.3.
+**Source:** CP-05, CP-08, SYSTEM_VOCABULARY.md §5.3.
 
 ---
 
@@ -1969,12 +1969,12 @@ Model. Each document must be compatible with this model and may not contradict i
 
 ---
 
-## Appendix A — Concepts defined in this document vs. ONTOLOGY.md
+## Appendix A — Concepts defined in this document vs. SYSTEM_VOCABULARY.md
 
-This document does not redefine ONTOLOGY.md concepts. It refines them for the Evidence
+This document does not redefine SYSTEM_VOCABULARY.md concepts. It refines them for the Evidence
 Model context. The following table clarifies the relationship:
 
-| Concept | Defined in ONTOLOGY.md | Refined in this document |
+| Concept | Defined in SYSTEM_VOCABULARY.md | Refined in this document |
 |---------|------------------------|--------------------------|
 | **Evidence** | §5.1 — Recorded set of Facts with Source and Confidence | R-EM-001 (operational definition), R-EM-013 to R-EM-019 (essential attributes) |
 | **Evidence Store** | §5.3 — Canonical store of all Evidence | R-EM-058 (single canonical store), R-EM-059 (append-only), R-EM-060 (retention) |
@@ -2010,7 +2010,7 @@ answer it.
 
 *Fin de 04-EVIDENCE_MODEL.md — Versión 1.0-draft*
 
-> Este documento fue redactado a partir de CONSTITUTION.md (Level I-a), ONTOLOGY.md
+> Este documento fue redactado a partir de CONSTITUTION.md (Level I-a), SYSTEM_VOCABULARY.md
 > (Level I-b), y COGNITIVE_PRINCIPLES.md (Level II-a) siguiendo las delegaciones
 > explícitas de CP §13.2 y la jerarquía documental de CONSTITUTION.md §6.
 >

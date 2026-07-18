@@ -244,6 +244,7 @@ export async function handlePolicyPipeline(
             text,
             history,
             customerName: customerName ?? null,
+            analysis: leadCore,
           }, execDeps);
         } else {
           await executeTrip({
@@ -259,6 +260,7 @@ export async function handlePolicyPipeline(
             text,
             history,
             customerName: customerName ?? null,
+            analysis: leadCore,
           }, execDeps);
         }
         await setConversationalState(phone, "idle");

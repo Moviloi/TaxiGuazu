@@ -1,4 +1,4 @@
-# AITOS Cognitive Constitution — ONTOLOGY.md
+# AITOS Cognitive Constitution — SYSTEM_VOCABULARY.md
 
 > **Normative Vocabulary of the AI Transportation Operating System**
 >
@@ -1787,6 +1787,6 @@ without defining it here must propose an amendment to this ontology.
 
 ---
 
-*End of ONTOLOGY.md — Version 1.0-draft*
+*End of SYSTEM_VOCABULARY.md — Version 1.0-draft*
 
 *Next step: Approval by Constituent Assembly, then proceed to 01-CONSTITUTION.md*

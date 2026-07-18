@@ -87,7 +87,7 @@
 | Glossary | [`glossary.md`](./glossary.md) | Canonical terminology |
 | ADRs | [`../adr/`](../adr/) | Permanent architecture decisions |
 | AI rules | [`../ai/ARCHITECTURE_RULES.md`](../ai/ARCHITECTURE_RULES.md) | Strict rules for agents |
-| AI contracts | [`../ai/CONTRACTS.md`](../ai/CONTRACTS.md) | Engine contracts |
+| AI contracts | [`../ai/ENGINE_CONTRACTS.md`](../ai/ENGINE_CONTRACTS.md) | Engine contracts |
 | Invariants | [`../ai/INVARIANTS.md`](../ai/INVARIANTS.md) | Non-negotiable invariants |
 | Decision tree | [`../ai/DECISION_TREE.md`](../ai/DECISION_TREE.md) | Runtime decision tree |
 | Quality gate | [`../ai/QUALITY_GATE.md`](../ai/QUALITY_GATE.md) | Change checklist |

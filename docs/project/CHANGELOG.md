@@ -3,7 +3,66 @@
 
 ---
 
-## 2026-07-17 (current)
+## 2026-07-18 (current)
+
+### PR-VERIFY-SDL — Strategic Director Layer Verification
+- **Tipo**: Auditoría de certificación — verificación del SDL
+- **Resumen**: Auditoría completa de la implementación del Strategic Director Layer sobre el arnés AITOS. 5 verificaciones (V-01 a V-05) con veredicto ✅ IMPLEMENTACIÓN CORRECTA. V-01: `ael` clasificado como orquestador operacional / Mission Planner, no como agente base ni wrapper. V-02: `ael` usa Current Session Model por omisión histórica (nunca tuvo modelo asignado). V-03: Strategic Director configurado exclusivamente para planificación pura (sin permisos edit/bash, única delegación a `ael`, prohibiciones explícitas documentadas). V-04: 6 agentes especializados preservan sus modelos hardcodeados originales. V-05: `ael` no constituye excepción a la regla — es orquestador operacional, no planificador estratégico. Diagrama de responsabilidades (3 capas: SDL → AEL → Subagentes), flujo de ejecución documentado. 4 hallazgos pre-existentes documentados (H-01 a H-04): nomenclatura inconsistente entre `ael.md` y `opencode.json`, comandos desalineados, `ael/AGENTS.md` faltante, `ael` sin modelo explícito. No se modificó código — solo auditoría.
+- **Documentos generados/modificados**: `docs/certification/PR_VERIFY_STRATEGIC_DIRECTOR_LAYER.md` (nuevo, certificación completa)
+- **Validación**: Build ✅ (40.1s), Contratos R1-R4 PASS ✅, no se modificó código de producción
+
+### PR-SDL-2 — Strategic Director Layer Contract Certification
+- **Tipo**: Certificación de contrato arquitectónico
+- **Resumen**: Certificación completa del Strategic Director Layer como **rol cognitivo** (no modelo específico). 8 verificaciones (V-01 a V-08) con veredicto ✅ CERTIFICADO. V-01: SD descrito como rol en archivos vivos (hallazgo: reporte de implementación obsoleto con 4 referencias a `GPT-5.4 mini`). V-02: Responsabilidades limitadas a análisis/planificación — 6 responsabilidades positivas, 7 prohibiciones, matriz de permisos consistente. V-03: Current Session Model como **decisión arquitectónica consciente** (referencia explícita en prompt línea 62 + omisión intencional de campo `model`). V-04: Delegación exclusiva al AEL (`task: { "*": "deny", "ael": "allow" }`). V-05: 6/6 subagentes con modelos hardcodeados originales inalterados. V-06: Auditoría de opencode.json — 4 preguntas respondidas sobre Current Session Model, riesgos documentados. V-07: Contrato formal **StrategicDirectorContract v1.0** propuesto con 9 elementos contractuales. V-08: 6 escenarios de ruptura evaluados — 0 rupturas arquitectónicas. **StrategicDirectorContract v1.0** formalizado con: nombre, 6 responsabilidades, 7 prohibiciones, 5 entradas, 2 salidas, 6 invariantes (SD-I1 a SD-I6), 4 dependencias, política de delegación y política de escalamiento. 4 hallazgos documentados (R-01 a R-04, incluyendo R-01 como nuevo: reporte de implementación obsoleto).
+- **Documentos generados/modificados**: `docs/certification/SDL_CONTRACT_CERTIFICATION.md` (nuevo, certificación de contrato completa)
+- **Validación**: Build ✅, Contratos R1-R4 PASS ✅, no se modificó código de producción
+
+## 2026-07-17
+
+### PR-CDA1 — Conversation Decision Algorithm
+- **Tipo**: Definición algorítmica normativa
+- **Resumen**: Se creó `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` como la especificación normativa del comportamiento conversacional de AITOS. El algoritmo sintetiza FUNCTIONAL_BEHAVIOR_SPECIFICATION.md, Conversation Playbook, Principios AITOS LAB, QA1, QA2, QA2B, QA3-S2B, ADR-007, ADR-008 y ADR-012 en un pipeline de 11 pasos con 15 invariantes verificables (I-01 a I-15). 11 secciones: objetivo, pipeline, prioridades (7 niveles), invariantes, merge incremental, activación de Ambiguity (6 SÍ / 6 NO), preservación de intención (tabla de evolución + Booking Floating), UPDATE vs RESET, árbol de decisión completo, trazabilidad (regla por regla a fuentes), verificación (13 bugs mapeados contra algoritmo).
+- **Documentos generados/modificados**: `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` (nuevo, 49KB, 1026 líneas)
+- **Validación**: Solo documentación — 0 cambios de código, build y tests no afectados
+
+### PR-QA3-S2B — Hotel Esturión Trace (QA-3 Sprint 2B)
+- **Tipo**: Traza funcional contra Specification
+- **Resumen**: Trazado de 12 puntos de control del escenario "Hotel Esturión" contra FUNCTIONAL_BEHAVIOR_SPECIFICATION.md. 3 desviaciones funcionales confirmadas: **F01-DG** (Ambiguity sin verificar clarify_field en lead.service.ts:203), **F02-DG** (intención no preservada — core.ts:277-283 solo cubre PRE_BOOKING), **F03-DG** (merge no ejecutado por bypass de ambigüedad). 2 ambigüedades de especificación resueltas: A01-DG (cuándo preservar intención), A02-DG (cuándo activar Ambiguity). Causa raíz compartida: el sistema no distingue entre "usuario dando nueva información" y "usuario respondiendo a una pregunta del sistema". 2 invariantes violados (I-C1, I-C3). 0 código modificado.
+- **Documentos generados/modificados**: `docs/certification/PR-QA3_S2B_HOTEL_ESTURION_TRACE.md` (nuevo)
+- **Validación**: Solo documentación — 0 cambios de código, build y tests no afectados
+
+### PR-CAT1 — External Black-Box Acceptance Campaign
+- **Tipo**: Campaña de aceptación conversacional (caja negra)
+- **Resumen**: Campaña de 13 escenarios conversacionales ejecutados contra el sistema real (Turso remoto, LLMs Gemini→Groq) tratado como caja negra. Cada escenario usó un número de teléfono único (5491110000001–5491110000013). Resultados: 11/13 escenarios funcionales ✅, 2 timeouts por latencia LLM (S1 30s, S5 >60s), 0 errores de sistema. Confirmación de F01-DG (ambiguity sin clarify_field, S9) y F02-DG (intención preservada vía LLM no determinísticamente, S7). Hallazgo UX: ambigüedad resuelta automáticamente sin confirmación del usuario (S13). Veredicto: 🟡 ACEPTABLE CON HALLAZGOS.
+- **Documentos generados/modificados**: `docs/certification/PR-CAT1_EXTERNAL_ACCEPTANCE_CAMPAIGN.md` (nuevo), `tests/campaign-cat1.test.ts` (nuevo — archivo de campaña)
+- **Validación**: Solo documentación — 0 cambios de código de producción, build y tests no afectados
+
+### ADR-013 — Conversation Decision Algorithm Ratification
+- **Tipo**: ADR — ratificación de autoridad funcional
+- **Resumen**: Se creó `docs/adr/013-conversation-decision-algorithm.md` elevando el CDA a norma arquitectónica oficial. Se define la jerarquía normativa: Implementation → CDA → Specification → ADR (el nivel superior prevalece). Se declara al CDA como autoridad funcional del comportamiento conversacional. Se documentan relaciones con todos los ADRs previos, Specification, Playbook, AITOS LAB y las 4 auditorías QA. Architecture Freeze V3 queda complementado por una autoridad funcional. 0 código modificado.
+- **Documentos generados/modificados**: `docs/adr/013-conversation-decision-algorithm.md` (nuevo), `docs/architecture/ADR_INDEX.md` (actualizado)
+- **Validación**: Solo documentación — 0 cambios de código, build y tests no afectados
+
+### IN-DG — Documentation Governance Initiative
+- **Tipo**: Gobernanza documental — normalización, taxonomía, jerarquía, SSOT
+- **Resumen**: Se completó la formalización de la gobernanza documental del proyecto. Seis componentes establecidos: normalización de nomenclatura (289 archivos auditados, ~98% compliance), taxonomía documental de 15 tipos con definiciones formales, jerarquía en 6 Tiers con cadena conceptual, política SSOT (Rule 4), identidad documental (Rule 6) y convención de nombres (Rules 1-5 + Exceptions). 3 conflictos SSOT resueltos mediante renombres controlados: `docs/ai/CONTRACTS.md` → `ENGINE_CONTRACTS.md`, `docs/certification/ONTOLOGY.md` → `EVIDENCE_ONTOLOGY.md`, `ael/artifacts/ONTOLOGY.md` → `SYSTEM_VOCABULARY.md`. ~30 referencias actualizadas sin enlaces rotos. Las futuras modificaciones de gobernanza requieren ADR (no cambios ad hoc).
+- **Documentos generados/modificados**: `docs/architecture/GOVERNANCE.md` (+650 líneas: naming convention + taxonomy + hierarchy), `docs/certification/NOMENCLATURE_AUDIT.md` (actualizado con certificación y Future Revisions), `docs/ai/ENGINE_CONTRACTS.md` (renombrado), `docs/certification/EVIDENCE_ONTOLOGY.md` (renombrado), `ael/artifacts/SYSTEM_VOCABULARY.md` (renombrado)
+- **Validación**: Solo documentación — 0 cambios de código, 0 referencias rotas, build y tests no afectados
+
+### PR-QA3-S2A — Eliminate Double Core Evaluation (QB-05)
+- **Tipo**: Fix estructural (eliminación de doble clasificación)
+- **Commit**: —
+- **Resumen**: Se eliminó la doble ejecución de `core()` durante el procesamiento de un mensaje (QB-05 de PR-QA2B). La infraestructura existente (PR-2A) ya soportaba `analysis?: CoreDecision` en `HandlerContext`, pero `executeTrip` y `executeMultiLegTrip` no lo pasaban → el handler hacía fallback a `core(input)` como segunda clasificación. Fix: se agregó `analysis` a `TripExecutionInput`/`MultiLegTripExecutionInput`, se pasa `leadCore` desde `policy-pipeline.ts`, y se agregó traza `[CORE_SOURCE_AUDIT]` para verificar la fuente de clasificación.
+- **Cero cambios funcionales**: NO se modificaron prompts, dominio conversacional ni capacidades. ÚNICA clasificación ahora: `lead.service.ts:108` → `core(text, prevIntent)`.
+- **Validación**: Build ✅, Tests ✅ 111 files/1668 PASS, Contratos R1-R4 PASS ✅, Audit trace `source: "lead.service"` confirmado en todos los caminos.
+
+### PR-QA3-S1 — QB-01 GREETING Context Preservation + QB-04 Field Resolution Unification
+- **Tipo**: Fix arquitectónico + unificación de autoridad
+- **Commit**: —
+- **Resumen**: QA-3 Sprint 1 completado. Dos hallazgos críticos de PR-QA2B resueltos:
+  - **QB-01 FIX**: GREETING shortcut ya no destruye el contexto conversacional. Cuando un usuario saluda en medio de una conversación activa (slots con origin/destination o estado no-idle), el sistema reconoce el saludo y continúa al pipeline normal — preservando prevSlots y estado conversacional. `lead.service.ts` modificado.
+  - **QB-04 FIX**: Resolución de campos unificada. Se estableció `field-resolver.ts` como la autoridad ÚNICA para determinar "qué campo preguntar". `resolveSimpleFieldGap()` reemplaza a `evaluateCompleteness()` en `extraction-runner.ts`. `evaluateCompleteness` delegada a `field-resolver.ts` para backward compat.
+- **Validación**: Tests ✅ 112 files / 1673 tests PASS, Build ✅ (Next.js 15.5.18 compile 35.0s), Contratos R1-R4 PASS ✅, 0 regresiones
 
 ### PR-QA2 — Runtime Flow Trace & Authority Verification
 - **Tipo**: Auditoría de trazado dinámico
@@ -423,7 +482,7 @@
   - 0 invariantes de ADR-009 o ADR-010 se pierden.
   - 0 cambios de código requeridos.
   - Pipeline oficial: EE → Memory → Learning → Goals → Planning.
-- **Archivos**: `docs/adr/011-reflection-elimination.md` (nuevo), `docs/certification/ONTOLOGY.md` (actualizado), `docs/project/PROJECT_BOARD.md` (D36 agregado), `docs/project/CHANGELOG.md` (esta entrada).
+- **Archivos**: `docs/adr/011-reflection-elimination.md` (nuevo), `docs/certification/EVIDENCE_ONTOLOGY.md` (actualizado), `docs/project/PROJECT_BOARD.md` (D36 agregado), `docs/project/CHANGELOG.md` (esta entrada).
 - **Verificación**: No aplica (conceptual). ADR-011 aceptado. Pipeline simplificado.
 
 ### PR-6H — Architecture Milestone v3.0
@@ -440,7 +499,7 @@
   - `COGNITIVE_MEMORY_ENABLED` flag necesaria para mantener el patrón Shadow Mode
   - Memory debe vivir en `src/lib/memory/` (no en `src/lib/evidence/` ni `src/lib/services/memory/`)
   - 0 violaciones al EE Freeze identificadas
-- **Archivos**: `docs/adr/010-memory-architecture.md` (nuevo, integra PR-5A + PR-5B + PR-5C), `docs/certification/ONTOLOGY.md` (actualizado con entidad Memory), `docs/project/PROJECT_BOARD.md` (D33-D35 agregados), `docs/project/CHANGELOG.md` (misión actual).
+- **Archivos**: `docs/adr/010-memory-architecture.md` (nuevo, integra PR-5A + PR-5B + PR-5C), `docs/certification/EVIDENCE_ONTOLOGY.md` (actualizado con entidad Memory), `docs/project/PROJECT_BOARD.md` (D33-D35 agregados), `docs/project/CHANGELOG.md` (misión actual).
 - **Verificación**: Build no aplica (conceptual). Contratos R1-R4 no aplican (sin código). ADR-010 aceptado. 14 invariantes Memory documentados. Ontología actualizada.
 
 ### PR-5B — Memory Semantic Contract Audit
@@ -466,7 +525,7 @@
 - **S-1 — Signal future-date invariant**: `Signal.create()` valida que `receivedAt` no sea futuro. Lanza `SignalInvalidTimestampError` si lo es. `tryCreate()` retorna `null` en ese caso. Backward compatible.
 - **O-1 — Observation temporal invariant**: `Observation.create()` acepta `signalReceivedAt?: Date` como contexto de validación (no se almacena ni serializa). Cuando se provee, verifica `validatedAt >= signalReceivedAt`. `fromSignal()` delega esta validación a `create()`.
 - **Arquitectura Freeze**: Las 7 capas (Signal, Observation, Fact, Evidence, Knowledge, Belief, Decision) quedan congeladas. Cualquier modificación futura requiere ADR con evidencia. Los "campos anticipados" (evidenceId, knowledgeId, beliefId, provenance) quedan explícitamente justificados como parte del contrato arquitectónico.
-- **Archivos**: `docs/adr/009-evidence-engine-architecture.md` (nuevo), `src/lib/evidence/signal.ts` (S-1), `src/lib/evidence/observation.ts` (O-1), `tests/unit/evidence/observation.test.ts` (test actualizado), `docs/project/PROJECT_BOARD.md`, `docs/project/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/certification/TECHNICAL_DEBT_BASELINE.md`, `docs/certification/ONTOLOGY.md` (nuevo).
+- **Archivos**: `docs/adr/009-evidence-engine-architecture.md` (nuevo), `src/lib/evidence/signal.ts` (S-1), `src/lib/evidence/observation.ts` (O-1), `tests/unit/evidence/observation.test.ts` (test actualizado), `docs/project/PROJECT_BOARD.md`, `docs/project/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/certification/TECHNICAL_DEBT_BASELINE.md`, `docs/certification/EVIDENCE_ONTOLOGY.md` (nuevo).
 - **Verificación**: 378/378 tests de evidence PASS (19 files) ✅. `tsc --noEmit` sin errores nuevos en evidence ✅. Build compila ✅. Contratos R1-R4 PASS ✅. 0 regresiones.
 
 ### PR-3C — Decision Builder (Evidence Engine)

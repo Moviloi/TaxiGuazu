@@ -302,7 +302,7 @@ Changing invariants, contracts, or rules without updating `docs/ai/`.
 - Documentation drifts from code.
 
 ### Correct pattern
-- Update `INVARIANTS.md`, `CONTRACTS.md`, `ARCHITECTURE_RULES.md`, `DECISION_TREE.md` when behavior changes.
+- Update `INVARIANTS.md`, `ENGINE_CONTRACTS.md`, `ARCHITECTURE_RULES.md`, `DECISION_TREE.md` when behavior changes.
 
 ### Source
 - `docs/ai/README.md`

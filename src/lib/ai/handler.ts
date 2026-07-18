@@ -99,6 +99,16 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
   capturePipelineEvent(0, true, pipelineDetails);
 
   const analysis = ctx?.analysis ?? core(input);
+  // PR-QA3-S2A: Audit trace — confirma clasificación única por mensaje.
+  // source "lead.service" = reutiliza CoreDecision pre-computado (sin doble core()).
+  // source "handler" = fallback a core() (no debería ocurrir tras S2A).
+  log.info("[CORE_SOURCE_AUDIT]", {
+    source: ctx?.analysis ? "lead.service" : "handler_fallback",
+    intent: analysis.intent,
+    confidence: analysis.confidence,
+    facts: analysis.facts,
+    inputPreview: input.substring(0, 60),
+  });
   const decision = router(analysis, mode);
   pipelineDetails.intent = decision.core.intent;
   const hasExtraction = !!ctx?.extraction?.slots && Object.keys(ctx.extraction.slots).length > 0;

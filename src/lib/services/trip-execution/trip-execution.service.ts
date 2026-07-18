@@ -24,7 +24,7 @@ import type { PricingResult } from "@/lib/services/pricing/resolve-pricing-for-s
 import type { Lang } from "@/lib/ai/types";
 import { processLead } from "@/lib/pipeline";
 import type { ExecutionContext, ExecutionDeps } from "@/lib/pipeline";
-import type { ConfirmedSlot, ConversationalState } from "@/lib/ai/types";
+import type { ConfirmedSlot, ConversationalState, CoreDecision } from "@/lib/ai/types";
 import { log } from "@/lib/utils/logger";
 
 export interface TripExecutionInput {
@@ -40,6 +40,8 @@ export interface TripExecutionInput {
   text: string;
   history: Array<{ role: string; content: string }>;
   customerName?: string | null;
+  /** PR-QA3-S2A: CoreDecision pre-computado para eliminar doble core() */
+  analysis?: CoreDecision;
 }
 
 export interface TripExecutionResult {
@@ -60,6 +62,8 @@ export interface MultiLegTripExecutionInput {
   text: string;
   history: Array<{ role: string; content: string }>;
   customerName?: string | null;
+  /** PR-QA3-S2A: CoreDecision pre-computado para eliminar doble core() */
+  analysis?: CoreDecision;
 }
 
 export async function executeMultiLegTrip(input: MultiLegTripExecutionInput, deps: ExecutionDeps): Promise<TripExecutionResult> {
@@ -110,6 +114,7 @@ export async function executeMultiLegTrip(input: MultiLegTripExecutionInput, dep
     intent: "MOVE",
     domain: "reservation",
     mode: "RESERVA",
+    analysis: input.analysis,
   };
 
   const pipelineResult = await processLead(execCtx, deps);
@@ -262,6 +267,7 @@ export async function executeTrip(input: TripExecutionInput, deps: ExecutionDeps
     intent: "MOVE",
     domain: "reservation",
     mode: "RESERVA",
+    analysis: input.analysis,
   };
 
   const pipelineResult = await processLead(execCtx, deps);

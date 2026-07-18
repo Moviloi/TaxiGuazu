@@ -8,7 +8,7 @@
 >
 > ⚠️ This document belongs to **Level III-b (Contractual Authority)** of the AITOS
 > Document Hierarchy (CONSTITUTION.md §6). It derives from CONSTITUTION.md (Level I-a),
-> ONTOLOGY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), and
+> SYSTEM_VOCABULARY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), and
 > EVIDENCE_MODEL.md (Level III-a).
 >
 > This document does not redefine any term or principle from its source documents.
@@ -85,7 +85,7 @@ This document does **NOT** govern:
 | Source document | Relationship to this document |
 |----------------|------------------------------|
 | **CONSTITUTION.md** (Level I-a) | Source of supreme principles: S-P1 (Evidence-Based Operation), S-P7 (Human Escalation), P-I1 (Evidence Primacy), P-I4 (Humility Before Uncertainty), P-I5 (Auditability), P-E5 (Proportional Response) |
-| **ONTOLOGY.md** (Level I-b) | Source of all terminology: Decision (8.1), Commitment (8.2), Cost of Error (8.3), Certainty Threshold (8.4), Strategic Posture (8.5), Intent (8.6), Hypothesis (6.4), Belief (5.2) |
+| **SYSTEM_VOCABULARY.md** (Level I-b) | Source of all terminology: Decision (8.1), Commitment (8.2), Cost of Error (8.3), Certainty Threshold (8.4), Strategic Posture (8.5), Intent (8.6), Hypothesis (6.4), Belief (5.2) |
 | **COGNITIVE_PRINCIPLES.md** (Level II-a) | Source of cognitive principles: CP-04, CP-10 through CP-17, CP-19, CP-21 through CP-26, CP-34, CP-36, CP-37, CP-38 |
 | **EVIDENCE_MODEL.md** (Level III-a) | Defines the Evidence that feeds into decisions; sibling document |
 
@@ -98,7 +98,7 @@ Each rule in this document follows this uniform format:
 
 **Enunciado:** The normative statement.
 
-**Derivación Constitucional:** References to CONSTITUTION.md, ONTOLOGY.md,
+**Derivación Constitucional:** References to CONSTITUTION.md, SYSTEM_VOCABULARY.md,
 COGNITIVE_PRINCIPLES.md, and/or EVIDENCE_MODEL.md.
 
 **Justificación:** Why this rule exists and what architectural problem it solves.
@@ -124,7 +124,7 @@ la Evidence acumulada, la Certainty resultante, y el Costo de Error estimado. Un
 no es un output; es un proceso que produce un output.
 
 **Derivación Constitucional:** CONSTITUTION.md §2.2 (el sistema no es un árbol de decisión
-basado en reglas — evalúa certidumbre contra costo de error); ONTOLOGY.md §8.1 (Decisión
+basado en reglas — evalúa certidumbre contra costo de error); SYSTEM_VOCABULARY.md §8.1 (Decisión
 como "a choice among alternatives that results in a Commitment"); CP-17 (resolución por
 Evidence); CP-22 (compromiso explícito).
 
@@ -861,7 +861,7 @@ CERTAINTY_CALCULUS.md (define el margen epistémico).
 4. Procesar la Intención Primaria primero, pero no descartar las secundarias.
 5. Almacenar las intenciones secundarias para el próximo ciclo cognitivo.
 
-**Derivación Constitucional:** CP-16 (coexistencia de intenciones), ONTOLOGY.md §8.6
+**Derivación Constitucional:** CP-16 (coexistencia de intenciones), SYSTEM_VOCABULARY.md §8.6
 (Intent) y §8.7 (Primary Intent).
 
 **Justificación:** Los usuarios frecuentemente expresan múltiples intenciones en un solo
@@ -1491,7 +1491,7 @@ COGNITIVE_ARCHITECTURE.md (define cómo se integra el contexto en el Razonamient
 
 ### R-DM-035 — Strategic Posture as risk modulator
 
-**Enunciado:** La Strategic Posture (ONTOLOGY.md 8.5) es un parámetro del sistema que
+**Enunciado:** La Strategic Posture (SYSTEM_VOCABULARY.md 8.5) es un parámetro del sistema que
 modula la tolerancia al riesgo ajustando los umbrales de decisión y los Costos de Error.
 La postura tiene tres valores:
 
@@ -1502,7 +1502,7 @@ La postura tiene tres valores:
 | **AGGRESSIVE** | Reduce umbrales (más fácil COMMIT) | Contextos de bajo riesgo: usuario recurrente, acciones reversibles, urgencia |
 
 **Derivación Constitucional:** CP-23 (umbral dinámico), P-E5 (Proportional Response),
-ONTOLOGY.md §8.5 (Strategic Posture).
+SYSTEM_VOCABULARY.md §8.5 (Strategic Posture).
 
 **Justificación:** El mismo nivel de certidumbre puede justificar una decisión en un
 contexto y no en otro. La Strategic Posture captura esta sensibilidad al contexto de
@@ -1541,7 +1541,7 @@ explícitas:
 
 La transición debe registrarse como parte del registro de decisión.
 
-**Derivación Constitucional:** CP-23 (umbral dinámico), ONTOLOGY.md §8.5 (Strategic
+**Derivación Constitucional:** CP-23 (umbral dinámico), SYSTEM_VOCABULARY.md §8.5 (Strategic
 Posture).
 
 **Justificación:** La postura debe tener reglas de transición claras para que el cambio
@@ -1572,7 +1572,7 @@ ciclo), DECISION_MODEL.md (define las reglas de transición).
 
 **Enunciado:** En cada Ciclo Cognitivo, el sistema debe identificar la(s) Intención(es)
 del usuario a partir de la Evidence disponible. La Intención es una Hipótesis sobre el
-objetivo del usuario (ONTOLOGY.md §8.6). Las intenciones válidas son:
+objetivo del usuario (SYSTEM_VOCABULARY.md §8.6). Las intenciones válidas son:
 
 | Intención | Significado |
 |-----------|-------------|
@@ -1586,7 +1586,7 @@ objetivo del usuario (ONTOLOGY.md §8.6). Las intenciones válidas son:
 Una intención adicional, **CONTINUATION**, se usa cuando el mensaje del usuario es una
 respuesta a una pregunta del sistema (no inicia un nuevo tema).
 
-**Derivación Constitucional:** CP-16 (coexistencia de intenciones), ONTOLOGY.md §8.6
+**Derivación Constitucional:** CP-16 (coexistencia de intenciones), SYSTEM_VOCABULARY.md §8.6
 (Intent) y §8.7 (Primary Intent).
 
 **Justificación:** Sin una clasificación explícita de intenciones, el sistema no sabe
@@ -2035,7 +2035,7 @@ como la percepción), CP-07 (espíritu de determinismo).
 
 *Fin de 05-DECISION_MODEL.md — Versión 1.0-draft*
 
-> Este documento fue redactado a partir de CONSTITUTION.md (Level I-a), ONTOLOGY.md
+> Este documento fue redactado a partir de CONSTITUTION.md (Level I-a), SYSTEM_VOCABULARY.md
 > (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), y EVIDENCE_MODEL.md (Level III-a)
 > siguiendo las delegaciones explícitas de CP §13.2.
 >

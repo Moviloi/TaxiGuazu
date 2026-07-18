@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-17 | Etapa: QA-1 y QA-2 COMPLETED — Pendiente QA-3 Architectural Sanitization
+## Actualizado: 2026-07-18 | Etapa: QA-3 Sprint 1 ✅ — Sprint 2A ✅ — Sprint 2B ✅ — PR-CDA1 ✅ — ADR-013 ✅ — PR-CAT1 ✅ — PR-VERIFY-SDL ✅ — **PR-SDL-2 ✅ (SDL Contract Certification)**
 
 ---
 
@@ -151,6 +151,44 @@
 | D63 | **PR-H0A — Staging Hardening Audit**: Auditoría completa post-RRR-1 sobre 7 áreas. H0A-01 (flags): 11 sin documentar. H0A-02 (tests): 4 fallas clasificadas. H0A-03 (middleware): 0 existe. H0A-04 (key rotation): expuesta. H0A-05 (shadow flags): sin wrapper. H0A-06 (sentry): sin DSN. H0A-07 (memory): wiring gap confirmado. H0A-08 (pattern discovery): bug + DB schema ausente. H0A-09 (log_level): no configurado. H0A-10 (precommit): no activo. Documento: `docs/certification/H0A_STAGING_HARDENING_AUDIT.md`. | — |
 | D64 | **PR-QA1 — Architectural Consistency Audit**: Auditoría de consistencia arquitectónica de 18 componentes del pipeline. 27 hallazgos documentados. Cero código modificado. Documento: `docs/certification/PR-QA1_ARCHITECTURAL_CONSISTENCY_AUDIT.md`. | — |
 | D65 | **PR-QA2 — Runtime Flow Trace & Authority Verification**: Trazado runtime de 4 escenarios. 3 hallazgos críticos confirmados con evidencia. 4 nuevos hallazgos. Matriz de autoridades. Plan de eliminación para QA-3. Documento: `docs/certification/PR-QA2_RUNTIME_FLOW_TRACE.md`. | — |
+| D66 | **IN-DG — Documentation Governance Initiative**: Normalización de nomenclatura (289 archivos auditados, ~98% compliance). Taxonomía documental de 15 tipos con definiciones formales y jerarquía en 6 Tiers. Política SSOT (Rule 4), identidad documental (Rule 6) y convención de nombres (Rules 1-5 + Exceptions) formalizadas en `docs/architecture/GOVERNANCE.md`. 3 conflictos SSOT resueltos: `docs/ai/CONTRACTS.md`→`ENGINE_CONTRACTS.md`, `docs/certification/ONTOLOGY.md`→`EVIDENCE_ONTOLOGY.md`, `ael/artifacts/ONTOLOGY.md`→`SYSTEM_VOCABULARY.md`. ~30 referencias actualizadas sin roturas. Future Revisions requieren ADR. Documentos: `docs/architecture/GOVERNANCE.md`, `docs/certification/NOMENCLATURE_AUDIT.md`. | — |
+| D67 | **PR-QA3-S2B — Hotel Esturión Trace (QA-3 Sprint 2B)**: 12 puntos de control trazados contra FUNCTIONAL_BEHAVIOR_SPECIFICATION.md. 3 desviaciones funcionales (F01-DG: Ambiguity sin clarify_field, F02-DG: intención no preservada, F03-DG: merge bypass por ambigüedad). 2 ambigüedades de especificación resueltas (A01-DG, A02-DG). Causa raíz compartida identificada. 0 código modificado. Documento: `docs/certification/PR-QA3_S2B_HOTEL_ESTURION_TRACE.md`. | — |
+| D68 | **PR-CDA1 + ADR-013 — Conversation Decision Algorithm Ratification**: Creación de `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` (49KB, 1026 líneas, 11 secciones, 15 invariantes). Ratificación como ADR-013 con jerarquía normativa Implementation → CDA → Specification → ADR. 0 código modificado. Documentos: `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md`, `docs/adr/013-conversation-decision-algorithm.md`. | — |
+| D69 | **PR-CAT1 — External Black-Box Acceptance Campaign**: 13 escenarios conversacionales ejecutados contra sistema real (Turso, Gemini/Groq) como caja negra. 11/13 PASS funcionales, 2 timeouts por latencia LLM, 0 errores. F01-DG y F02-DG confirmados con evidencia externa. Hallazgo UX en ambigüedad automática. Veredicto: 🟡 ACEPTABLE CON HALLAZGOS. Documento: `docs/certification/PR-CAT1_EXTERNAL_ACCEPTANCE_CAMPAIGN.md`. | — |
+| D70 | **PR-VERIFY-SDL — Strategic Director Layer Verification**: Auditoría completa de la implementación del SDL. 5 verificaciones (V-01 a V-05) — ✅ IMPLEMENTACIÓN CORRECTA. `ael` clasificado como orquestador operacional (V-01). Modelo por omisión histórica (V-02). SDL correctamente restringido a planificación pura (V-03). 6 subagentes preservan modelos hardcodeados (V-04). `ael` no constituye excepción (V-05). 4 hallazgos pre-existentes documentados (H-01 a H-04). 0 código modificado. Documento: `docs/certification/PR_VERIFY_STRATEGIC_DIRECTOR_LAYER.md`. | — |
+| D71 | **PR-SDL-2 — SDL Contract Certification**: Certificación de contrato arquitectónico del SDL. 8 verificaciones (V-01 a V-08) — ✅ CERTIFICADO. Strategic Director certificado como rol cognitivo (no modelo). Current Session Model verificado como decisión consciente (V-03). StrategicDirectorContract v1.0 formalizado con 9 elementos contractuales (V-07). 6 escenarios de ruptura evaluados sin fallos (V-08). 4 hallazgos documentados (R-01 a R-04). 0 código modificado. Documento: `docs/certification/SDL_CONTRACT_CERTIFICATION.md`. | — |
+
+---
+
+## ✅ QA-3 Sprint 1 — COMPLETED
+
+| ID | Tarea | Dominio | Hallazgo | Archivos modificados |
+|---|---|---|---|---|
+| **QA3-S1-01** | **QB-01 FIX**: GREETING preserves conversational context | Pipeline | GREETING shortcut destruía contexto activo — `lead.service.ts:123-136` | `src/lib/services/lead.service.ts` |
+| **QA3-S1-02** | **QB-04 FIX**: Unified field resolution (F-04/F-05) | Pipeline | 4 autoridades competían por "qué campo preguntar" — ahora `field-resolver.ts` es la autoridad única | `src/lib/ai/field-resolver.ts`, `src/lib/services/extraction/extraction-runner.ts`, `src/lib/services/workflow/evaluate-completeness.ts`, `tests/services/extraction-runner.test.ts` |
+
+## ✅ QA-3 Sprint 2A — COMPLETED
+
+| ID | Tarea | Dominio | Hallazgo | Archivos modificados |
+|---|---|---|---|---|
+| **QA3-S2A-01** | **QB-05 FIX**: Single core() evaluation (F-01) | Pipeline | `executeTrip`/`executeMultiLegTrip` no pasaban `analysis` → handler hacía fallback a 2º `core()`. Infraestructura de PR-2A ya existía, faltaba threading. | `src/lib/ai/handler.ts` (+audit trace), `src/lib/services/workflow/policy-pipeline.ts` (+`analysis:leadCore`), `src/lib/services/trip-execution/trip-execution.service.ts` (+`analysis` field) |
+
+## ✅ QA-3 Sprint 2B — COMPLETED (Documental)
+
+| ID | Tarea | Dominio | Hallazgo | Archivos generados |
+|---|---|---|---|---|
+| **QA3-S2B-01** | **Hotel Esturión Trace** — traza 12 puntos contra Specification | Auditoría | 3 desviaciones (F01-DG, F02-DG, F03-DG). 2 ambigüedades resueltas. Causa raíz compartida. | `docs/certification/PR-QA3_S2B_HOTEL_ESTURION_TRACE.md` |
+| **QA3-S2B-02** | **PR-CDA1 — Conversation Decision Algorithm** | Especificación | Algoritmo normativo en 11 secciones, 15 invariantes, 49KB | `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` |
+| **QA3-S2B-03** | **ADR-013 — Ratificación del CDA** | Arquitectura | Jerarquía normativa. CDA como autoridad funcional. | `docs/adr/013-conversation-decision-algorithm.md` |
+
+## ⏳ QA-3 Sprint 3 — PENDING (CDA Conformance Implementation)
+
+| ID | Tarea | Dominio | Hallazgo | Prioridad |
+|---|---|---|---|---|
+| **QA3-S3-01** | Fix F01-DG: Ambiguity sin verificar clarify_field | Pipeline | `lead.service.ts:203` activa ambiguity sin verificar `session.clarify_field` o `leadCore.roleLock`. **Confirmado por PR-CAT1 S9** — la ambigüedad se activa incluso cuando el usuario responde a `clarify_field`. | **P0** |
+| **QA3-S3-02** | Fix F02-DG: Intención no preservada | Pipeline | `core.ts:277-283` solo preserva PRE_BOOKING, no BOOKING. **PR-CAT1 S7 confirmó** que la preservación actual ocurre vía LLM, no determinísticamente — frágil. | **P0** |
+| **QA3-S3-03** | Fix F03-DG: Merge bypass por ambigüedad | Pipeline | Mensajes no se fusionan cuando se activa ambigüedad | **P0** |
+| **QA3-S3-04** | UX: Resolución automática de ambigüedad sin confirmación (PR-CAT1 S13) | UX | "Hotel Iguazú" resuelto automáticamente sin preguntar al usuario. Gap contra CDA §6. | **P1** |
 
 ---
 

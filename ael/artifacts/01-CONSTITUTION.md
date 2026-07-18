@@ -60,7 +60,7 @@ This Constitution is NOT:
   knowledge structures belong in subordinate documents (Section 6).
 - An **implementation guide**. No line of code, no database schema, no API contract
   belongs here.
-- A **terminology glossary**. Terms are defined in ONTOLOGY.md, which is lexicographically
+- A **terminology glossary**. Terms are defined in SYSTEM_VOCABULARY.md, which is lexicographically
   superior to this document (see 1.7).
 
 ### 1.4 Scope of authority
@@ -105,8 +105,8 @@ codebase. Existing violations are technical debt of the highest order.
 This Constitution shall be interpreted according to the following rules:
 
 1. **Consistency with the Ontology**: All terms used in this Constitution must be
-   interpreted as defined in ONTOLOGY.md. If a term is used in a way that conflicts with
-   ONTOLOGY.md, ONTOLOGY.md prevails on the definition, and this Constitution must be
+   interpreted as defined in SYSTEM_VOCABULARY.md. If a term is used in a way that conflicts with
+   SYSTEM_VOCABULARY.md, SYSTEM_VOCABULARY.md prevails on the definition, and this Constitution must be
    corrected.
 2. **Internal consistency**: If two sections of this Constitution appear to conflict,
    the more specific section prevails over the more general, and the later section
@@ -120,21 +120,21 @@ This Constitution shall be interpreted according to the following rules:
    power is not explicitly granted, it does not exist. If a constraint is not explicitly
    stated, it is not a constitutional constraint.
 
-### 1.7 Relationship with ONTOLOGY.md
+### 1.7 Relationship with SYSTEM_VOCABULARY.md
 
-This Constitution and ONTOLOGY.md share the highest level of authority, in two different
+This Constitution and SYSTEM_VOCABULARY.md share the highest level of authority, in two different
 dimensions:
 
 | Dimension | Primary authority | Principle |
 |-----------|------------------|-----------|
 | **Principles and governance** | CONSTITUTION.md | The Constitution establishes what must be done and what must never be done. |
-| **Terminology and definitions** | ONTOLOGY.md | The Ontology defines the meaning of every term used in the Constitution and all subordinate documents. |
-| **Conflict on a term** | ONTOLOGY.md | If the Constitution uses a term differently than ONTOLOGY.md, ONTOLOGY.md's definition prevails and the Constitution must be corrected. |
+| **Terminology and definitions** | SYSTEM_VOCABULARY.md | The Ontology defines the meaning of every term used in the Constitution and all subordinate documents. |
+| **Conflict on a term** | SYSTEM_VOCABULARY.md | If the Constitution uses a term differently than SYSTEM_VOCABULARY.md, SYSTEM_VOCABULARY.md's definition prevails and the Constitution must be corrected. |
 | **Conflict on a principle** | CONSTITUTION.md | If the Ontology implies a principle that contradicts the Constitution, the Constitution prevails. |
 
-The Constitution does not redefine terms. It uses them as defined in ONTOLOGY.md.
-Where the Constitution needs a term not yet defined in ONTOLOGY.md, that term must be
-added to ONTOLOGY.md as part of the same amendment process.
+The Constitution does not redefine terms. It uses them as defined in SYSTEM_VOCABULARY.md.
+Where the Constitution needs a term not yet defined in SYSTEM_VOCABULARY.md, that term must be
+added to SYSTEM_VOCABULARY.md as part of the same amendment process.
 
 ### 1.8 Supremacy clause
 
@@ -269,7 +269,7 @@ the Cost of Error estimate, and the Strategic Posture that modulated the thresho
 
 AITOS does not have access to Truth.
 
-Truth — as defined in ONTOLOGY.md (3.8) — is the actual state of the world outside the
+Truth — as defined in SYSTEM_VOCABULARY.md (3.8) — is the actual state of the world outside the
 system. It is what the passenger actually wants, where they actually need to go, whether
 the driver will actually arrive. AITOS never directly perceives Truth. It perceives
 Signals, which it transforms into Evidence, from which it forms Beliefs.
@@ -285,11 +285,11 @@ its knowledge, even if only internally.
 
 ### 3.2 Evidence as the operational substitute for truth
 
-Since Truth is inaccessible, AITOS operates on Evidence (ONTOLOGY.md 5.1).
+Since Truth is inaccessible, AITOS operates on Evidence (SYSTEM_VOCABULARY.md 5.1).
 
 Evidence is the closest approximation to Truth that the system can achieve. Every
-Belief (ONTOLOGY.md 5.2) must be supported by Evidence. Every Decision (ONTOLOGY.md 8.1)
-must be traceable to Evidence. Every Commitment (ONTOLOGY.md 8.2) must be justified by
+Belief (SYSTEM_VOCABULARY.md 5.2) must be supported by Evidence. Every Decision (SYSTEM_VOCABULARY.md 8.1)
+must be traceable to Evidence. Every Commitment (SYSTEM_VOCABULARY.md 8.2) must be justified by
 the accumulated Evidence.
 
 Evidence is not Truth — but it is the operational foundation of all system cognition.
@@ -304,7 +304,7 @@ certainty:
 #### 3.3.1 Internal domain (cognitive)
 
 In its internal cognitive processes, AITOS maintains a **continuous, probabilistic**
-representation of certainty. Every Belief carries a Certainty value (ONTOLOGY.md 6.2)
+representation of certainty. Every Belief carries a Certainty value (SYSTEM_VOCABULARY.md 6.2)
 in the range [0, 1]. This value represents the system's estimate of how likely the
 Belief is to correspond to Truth, given the available Evidence.
 
@@ -312,7 +312,7 @@ Internal epistemic rules:
 - Certainty is always continuous. Binary certainty (true/false) is prohibited in the
   cognitive layer.
 - Certainty must be updated with each new Evidence. Stale Certainty is a violation.
-- Certainty must consider the Confidence of the Source (ONTOLOGY.md 6.3).
+- Certainty must consider the Confidence of the Source (SYSTEM_VOCABULARY.md 6.3).
 - Certainty must decay over time without confirming Evidence (see COGNITIVE_PRINCIPLES.md).
 
 #### 3.3.2 External domain (conversational)
@@ -367,14 +367,14 @@ AITOS must maintain permanent epistemic humility:
 
 1. **The system does not know.** It believes, with a degree of Certainty, based on
    available Evidence. The verb "to know" is reserved for Truth (inaccessible). Using
-   "know" to describe system Beliefs is a terminology violation per ONTOLOGY.md R-TERM-005.
+   "know" to describe system Beliefs is a terminology violation per SYSTEM_VOCABULARY.md R-TERM-005.
 
 2. **The system can be wrong.** Every Belief is fallible. Every Decision carries a risk
    of error. The system must acknowledge this internally and be designed to detect and
    correct errors when new Evidence arrives.
 
 3. **The system does not have access to the user's mind.** The user's intent is a
-   Hypothesis (ONTOLOGY.md 6.4), not a directly observable fact. The system infers intent
+   Hypothesis (SYSTEM_VOCABULARY.md 6.4), not a directly observable fact. The system infers intent
    from Evidence; it never reads minds.
 
 4. **The system's knowledge is provisional.** All Beliefs are subject to revision when
@@ -491,7 +491,7 @@ for new channels.
 > The set of capabilities required for safe system operation must function without
 > reliance on non-deterministic components (LLMs, external APIs, probabilistic models).
 
-**Rationale**: The LLM is a source of evidence, not a decision-maker (ONTOLOGY.md R-TERM-007,
+**Rationale**: The LLM is a source of evidence, not a decision-maker (SYSTEM_VOCABULARY.md R-TERM-007,
 Section 2.2). The system must be able to reach a safe outcome (clarify, escalate, or
 fall back to a default) even when non-deterministic components fail, time out, or produce
 unreliable output.
@@ -517,10 +517,10 @@ These principles define what the system must never destroy or lose.
 > Once recorded, Evidence must never be modified or deleted.
 
 **Rationale**: Evidence is the immutable foundation of all system cognition (Section 3.2,
-ONTOLOGY.md 5.3). If Evidence can be altered, the system loses its ability to audit
+SYSTEM_VOCABULARY.md 5.3). If Evidence can be altered, the system loses its ability to audit
 decisions, correct errors, and learn from outcomes.
 
-**Scope**: The Evidence Store (ONTOLOGY.md 5.3). This principle applies to all recorded
+**Scope**: The Evidence Store (SYSTEM_VOCABULARY.md 5.3). This principle applies to all recorded
 Evidence, regardless of age, relevance, or apparent usefulness.
 
 **Exceptions**: The only exception is a court order, legal requirement, or passenger
@@ -538,7 +538,7 @@ cleanup tasks, or performance optimization. Data must never be sacrificed for sp
 > The system must never enter a state from which its accumulated Evidence and active
 > Commitments cannot be recovered.
 
-**Rationale**: The Knowledge State (ONTOLOGY.md 6.1) is the system's mind. If it is lost,
+**Rationale**: The Knowledge State (SYSTEM_VOCABULARY.md 6.1) is the system's mind. If it is lost,
 the system cannot continue a conversation, honor a Commitment, or explain a Decision.
 
 **Scope**: Evidence Store, active Commitments, and the ability to reconstruct the
@@ -612,7 +612,7 @@ governing body responsible.
 #### S-P10 — Principle of Minimal Constitutional Scope
 
 > The Constitution governs only what it must. Everything not explicitly governed by
-> this Constitution is governed by subordinate documents (ONTOLOGY.md, COGNITIVE_PRINCIPLES.md,
+> this Constitution is governed by subordinate documents (SYSTEM_VOCABULARY.md, COGNITIVE_PRINCIPLES.md,
 > ADRs, and implementation contracts).
 
 **Rationale**: A constitution that tries to govern everything governs nothing. The
@@ -910,12 +910,12 @@ To exceed a negotiable boundary:
 | Position | Documents | Authority |
 |----------|-----------|-----------|
 | I-a | **CONSTITUTION.md** (this document) | Supreme normative authority. Establishes principles, boundaries, and governance. |
-| I-b | **ONTOLOGY.md** | Supreme lexical authority. Defines all terms used across the hierarchy. |
+| I-b | **SYSTEM_VOCABULARY.md** | Supreme lexical authority. Defines all terms used across the hierarchy. |
 
 **Relationship:** Constitution and Ontology share Level I by dimension, not by rank.
 The Constitution governs principles; the Ontology governs terms. They cannot conflict
 because they govern different dimensions. If the Constitution uses a term in a way that
-contradicts ONTOLOGY.md, the document must be corrected (not the Ontology).
+contradicts SYSTEM_VOCABULARY.md, the document must be corrected (not the Ontology).
 
 **Amendment requirement**: Any change to Level I documents requires a constitutional
 amendment (Section 7).
@@ -984,7 +984,7 @@ They must, however, maintain compatibility with all higher levels.
 ### 6.2 Visual hierarchy
 
 ```
-Level I:  CONSTITUTION.md ────────── ONTOLOGY.md
+Level I:  CONSTITUTION.md ────────── SYSTEM_VOCABULARY.md
                     │                      │
               (principles)           (definitions)
                     │                      │
@@ -1012,7 +1012,7 @@ or metadata.
 **R-H2 — Compatibility**: A document at level N is compatible with level N-1 if:
 1. It does not contradict any principle, definition, or structural decision in level N-1.
 2. It respects the boundaries established in level N-1.
-3. It uses terms as defined in ONTOLOGY.md (Level I-b).
+3. It uses terms as defined in SYSTEM_VOCABULARY.md (Level I-b).
 
 **R-H3 — Conflict resolution**: When two documents conflict:
 1. **Different levels**: The higher level prevails. Resolve and correct the lower document.
@@ -1110,7 +1110,7 @@ The proposal must:
 
 **Step 2 — Review**: The amendment is reviewed by the Constituent Body. The review must:
 - Verify compatibility with all other sections of the Constitution.
-- Verify that the terms used are consistent with ONTOLOGY.md.
+- Verify that the terms used are consistent with SYSTEM_VOCABULARY.md.
 - Identify any downstream changes required in subordinate documents.
 - Publish a review period of at least 7 calendar days.
 

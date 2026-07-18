@@ -3,7 +3,7 @@
 **Tipo:** Auditoría única de sistema completo
 **Fecha:** 2026-07-12
 **Auditor:** ARNÉS Director — Mission Planner
-**Corpus auditado:** 11 documentos (01-CONSTITUTION.md a 11-COGNITIVE_ARCHITECTURE.md + ONTOLOGY.md)
+**Corpus auditado:** 11 documentos (01-CONSTITUTION.md a 11-COGNITIVE_ARCHITECTURE.md + SYSTEM_VOCABULARY.md)
 
 ---
 
@@ -24,9 +24,9 @@ Los hallazgos se clasifican por:
 
 ### 1.1 Verificación de definiciones únicas
 
-**Resultado: SATISFACTORIO.** Cada concepto tiene exactamente una definición en ONTOLOGY.md.
+**Resultado: SATISFACTORIO.** Cada concepto tiene exactamente una definición en SYSTEM_VOCABULARY.md.
 No se detectaron redefiniciones parciales en documentos subordinados. Todos los documentos
-Level III respetan los términos de ONTOLOGY.md.
+Level III respetan los términos de SYSTEM_VOCABULARY.md.
 
 Verificación cruzada de conceptos críticos:
 
@@ -124,7 +124,7 @@ es archivo 08, III-f (ACTION_EXECUTOR) es archivo 09. El archivo 10 (KNOWLEDGE_M
 sería III-g y 11 (COGNITIVE_ARCHITECTURE) sería III-h. La numeración de archivos está
 desordenada respecto a la jerarquía alfabética.
 
-Además, ONTOLOGY.md no tiene prefijo numérico (no es 02-ONTOLOGY.md) mientras que
+Además, SYSTEM_VOCABULARY.md no tiene prefijo numérico (no es 02-SYSTEM_VOCABULARY.md) mientras que
 todos los demás documentos sí tienen numeración.
 
 **Impacto arquitectónico:** Bajo. No afecta autoridad ni contenido.

@@ -1,5 +1,19 @@
 // FIELD RESOLVER — single source of truth for "¿qué campo pedir después?"
 //
+// QB-04 UNIFICATION: This file is the SINGLE authority for field-resolution
+// decisions. Downstream consumers must use these functions instead of
+// implementing their own completeness checks.
+//
+// ── resolveNextRequiredField (full authority) ──
+//   Used by policy-ahora.ts / policy-reserva.ts for full priority-based
+//   field resolution with status (CONFIRMATION_PENDING, USER_CORRECTED) and
+//   confidence thresholds.
+//
+// ── resolveSimpleFieldGap (early blocking) ──
+//   Used by extraction-runner.ts for early pipeline blocking. Checks only
+//   mandatory field presence (origin, destination). Works with raw values
+//   (strings/numbers) OR scored slot objects. Replaces evaluateCompleteness.
+//
 // Prioridad FASE 20.4 (basada en status semántico, no en reason string):
 //   1. CONFIRMATION_PENDING origin/destination (necesitan confirmación antes que todo)
 //   2. USER_CORRECTED (corrección pendiente de re-confirmación)
@@ -9,11 +23,49 @@
 //   6. Core facts time/passengers faltantes
 //   7. null = todos completos
 
-import type { HandlerContext } from "./types";
+import type { HandlerContext, ConversationDomain } from "./types";
 
 export interface RequiredField {
   field: "origin" | "destination" | "passengers" | "scheduled_at" | null;
-  reason: "missing" | "ambiguous" | "low_confidence";
+  reason: "missing" | "ambiguous" | "low_confidence" | "complete";
+}
+
+/**
+ * Simple field gap analysis — SINGLE authority for early pipeline blocking.
+ * Replaces evaluateCompleteness as the extraction-runner's field-resolution
+ * function. Works with both raw slot values (strings/numbers) AND scored
+ * slot objects ({ value, score, ... }).
+ *
+ * Only checks origin and destination presence — passengers/scheduled_at are
+ * handled downstream by resolveNextRequiredField in policy-ahora/reserva.
+ *
+ * @param slots — Raw slot map (values or scored objects)
+ * @param domain — Conversation domain (information domain → always complete)
+ * @returns { field: null, reason: "complete" } if all mandatory fields present,
+ *          otherwise { field: "origin"|"destination", reason: "missing" }
+ */
+export function resolveSimpleFieldGap(
+  slots: Record<string, any> | null | undefined,
+  domain?: ConversationDomain,
+): RequiredField {
+  if (domain === "information") {
+    return { field: null, reason: "complete" };
+  }
+
+  const getValue = (key: string): string | null => {
+    const s = slots?.[key];
+    if (s == null) return null;
+    if (typeof s === "object" && s !== null) {
+      const v = s.value ?? s;
+      return v != null && String(v).trim() !== "" ? String(v).trim() : null;
+    }
+    return String(s).trim() !== "" ? String(s).trim() : null;
+  };
+
+  if (!getValue("origin")) return { field: "origin", reason: "missing" };
+  if (!getValue("destination")) return { field: "destination", reason: "missing" };
+
+  return { field: null, reason: "complete" };
 }
 
 export function resolveNextRequiredField(

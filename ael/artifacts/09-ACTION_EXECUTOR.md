@@ -2,7 +2,7 @@
 
 **Nivel:** III-g (Modelo de Ejecución)
 **Versión:** 1.0-draft
-**Dependencias:** ONTOLOGY.md, CONSTITUTION.md, COGNITIVE_PRINCIPLES.md, DECISION_MODEL.md, COMMITMENT_MODEL.md, COGNITIVE_ARCHITECTURE.md
+**Dependencias:** SYSTEM_VOCABULARY.md, CONSTITUTION.md, COGNITIVE_PRINCIPLES.md, DECISION_MODEL.md, COMMITMENT_MODEL.md, COGNITIVE_ARCHITECTURE.md
 
 > **Nota de navegación:** Este documento es parte de la familia de 8 modelos Level III.
 > Hermano de: EVIDENCE_MODEL (III-a), DECISION_MODEL (III-b), COMMITMENT_MODEL (III-c),
@@ -28,7 +28,7 @@ cognitivo de ejecución**.
 | Fuente | Sección/Regla | Relación |
 |--------|---------------|----------|
 | CONSTITUTION.md | §2.3, §5.2, S-P1, S-P6, S-P7, P-I5 | Autoridad del sistema, límites, preservación, auditabilidad |
-| ONTOLOGY.md | §8 (Proyección), §9 (Compromiso), §12 (Acción y Outcome) | Vocabulario: Action, Response, Outcome |
+| SYSTEM_VOCABULARY.md | §8 (Proyección), §9 (Compromiso), §12 (Acción y Outcome) | Vocabulario: Action, Response, Outcome |
 | COGNITIVE_PRINCIPLES.md | CP-01, CP-22, CP-31, CP-35, CP-37, CP-38, CP-39 | Base operacional, compromiso, explicación, feedback, delegación, compensación |
 | DECISION_MODEL.md | R-DM-025, R-DM-026 | Interfaz Commitment → Action Executor, outcome feedback |
 | COMMITMENT_MODEL.md | R-CM-001, R-CM-005, R-CM-008, R-CM-014, R-CM-019, R-CM-020, R-CM-025, R-CM-037, R-CM-038, R-CM-045 | Naturaleza del Commitment, ejecución, outcomes, compensaciones |
@@ -56,7 +56,7 @@ decisiones — produce acciones.
 
 **Derivación Constitucional:** CP-38 (Action Delegation — la ejecución puede delegarse
 a un subsistema específico); R-CA-010 (Action Executor responsibility — el Executor
-no decide, ejecuta); ONTOLOGY.md §12.1 (Action como output del sistema).
+no decide, ejecuta); SYSTEM_VOCABULARY.md §12.1 (Action como output del sistema).
 
 **Justificación:** Separar la ejecución de la decisión evita que el sistema "decida
 haciendo" — una violación epistemológica grave. La ejecución debe ser un acto
@@ -85,7 +85,7 @@ que puede generar es el Outcome (ontológicamente posterior a la acción).
 
 **Derivación Constitucional:** R-CA-010 (Action Executor no forma Beliefs, no computa
 Certainty); CP-38 (Action Delegation — la ejecución es un acto delegado, no cognitivo);
-ONTOLOGY.md §12.3 (Outcome como resultado observable de la acción).
+SYSTEM_VOCABULARY.md §12.3 (Outcome como resultado observable de la acción).
 
 **Justificación:** Si la ejecución generara conocimiento, el Action Executor sería un
 agente cognitivo completo, violando la separación de responsabilidades de la
@@ -116,7 +116,7 @@ monitoreo continuo), pero cada acción individual se origina de un Commitment es
 
 **Derivación Constitucional:** R-CM-045 (No action without a Commitment — toda acción
 debe tener referencia a un Commitment ACTIVE); CP-01 (Evidence-Based Operation — la
-acción debe estar fundamentada); ONTOLOGY.md §12.1 (toda Acción corresponde a
+acción debe estar fundamentada); SYSTEM_VOCABULARY.md §12.1 (toda Acción corresponde a
 exactamente una Decisión, mediada por Commitment).
 
 **Justificación:** Sin esta regla, el sistema podría ejecutar acciones espurias sin
@@ -144,7 +144,7 @@ es una obligación. La acción "enviar señal de despacho a conductor X" es un e
 El Action Executor trabaja en la ontología del ser: produce eventos a partir de
 obligaciones.
 
-**Derivación Constitucional:** ONTOLOGY.md §8.2 (Commitment como obligación), §12.1
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §8.2 (Commitment como obligación), §12.1
 (Action como output del sistema), §12.3 (Outcome como resultado observable).
 
 **Justificación:** Confundir obligaciones con acciones es un error categorial. El sistema
@@ -178,7 +178,7 @@ distintas, a partir de los Commitments activos:
 | **Response** | Comunicación | Channel Adapter (→ usuario) | Confirmación de viaje, pregunta de aclaración, notificación de error |
 | **Operational Projection** | Acción operacional | Sistemas externos / mundo real | Despacho de conductor, creación de viaje, actualización de precio |
 
-**Derivación Constitucional:** R-CA-012 (Projection Outputs); ONTOLOGY.md §8.3
+**Derivación Constitucional:** R-CA-012 (Projection Outputs); SYSTEM_VOCABULARY.md §8.3
 (Operational Projection como vista ejecutable), §12.1.1 (Response como subtipo de
 Action).
 
@@ -455,7 +455,7 @@ idéntica? Si sí → violación (debe respetar la semántica de cada subtipo).
 toda la información necesaria para que el sistema actúe, pero no contiene la
 implementación de la acción. Es una "receta" semántica, no un comando técnico.
 
-**Derivación Constitucional:** ONTOLOGY.md §8.3 (Operational Projection como vista
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §8.3 (Operational Projection como vista
 ejecutable del Knowledge State); R-CA-012 (Projection Outputs).
 
 **Justificación:** La Proyección debe ser interpretable por un ejecutor técnico
@@ -516,7 +516,7 @@ usuario. Se produce para:
 - Notificar errores (Outcomes FAILURE)
 - Informar escalaciones (Decisión ESCALATE)
 
-**Derivación Constitucional:** ONTOLOGY.md §12.1.1 (Response como subtipo de Action
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §12.1.1 (Response como subtipo de Action
 — comunicación al usuario); R-CA-015 (Action Executor → Channel Adapter contract);
 R-CA-012 (Projection Outputs — la Proyección incluye Response).
 
@@ -548,8 +548,8 @@ mundo externo al sistema. Incluye:
 - Ejecutar compensaciones
 - Cualquier otra acción que tenga efecto observable fuera del sistema cognitivo
 
-**Derivación Constitucional:** ONTOLOGY.md §8.3 (Operational Projection — vista
-ejecutable del estado del mundo); ONTOLOGY.md §12.1 (Action como output del sistema);
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §8.3 (Operational Projection — vista
+ejecutable del estado del mundo); SYSTEM_VOCABULARY.md §12.1 (Action como output del sistema);
 R-CM-005 (Subtipo ontológico según impacto operacional).
 
 **Justificación:** La Operational Projection es el mecanismo por el cual el sistema
@@ -854,7 +854,7 @@ de una acción ejecutada. No es la acción misma ni el Commitment — es la evid
 de lo que ocurrió después de la acción. Ontológicamente, el Outcome es un tipo de
 Evidence (EVIDENCE_MODEL.md) que describe el resultado de una ejecución.
 
-**Derivación Constitucional:** ONTOLOGY.md §12.3 (Outcome como resultado observable
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §12.3 (Outcome como resultado observable
 de la acción); R-CM-038 (Outcome feedback — el resultado de la ejecución se registra
 como Evidence); R-DM-026 (Outcome feedback loop — el outcome retroalimenta el modelo).
 
@@ -889,7 +889,7 @@ violación.
 | **PENDING_OUTCOME** | La acción se ejecutó pero el resultado aún no puede observarse (ej.: monitoreo en curso) |
 
 **Derivación Constitucional:** R-CM-038 (Estados definidos en el outcome feedback);
-ONTOLOGY.md §12.3 (Outcome como resultado observable).
+SYSTEM_VOCABULARY.md §12.3 (Outcome como resultado observable).
 
 **Justificación:** Cuatro estados binarios no capturan la riqueza de los resultados
 posibles. PARTIAL captura ejecuciones parcialmente exitosas. PENDING_OUTCOME captura
@@ -955,7 +955,7 @@ violación.
 - La calibración de certidumbre (CERTAINTY_CALCULUS.md)
 - La estimación de Costo de Error (DECISION_MODEL.md)
 - El aprendizaje de patrones (KNOWLEDGE_MODEL.md)
-- La Episodic Memory (ONTOLOGY.md §11.4)
+- La Episodic Memory (SYSTEM_VOCABULARY.md §11.4)
 
 **Derivación Constitucional:** R-DM-026 (Outcome feedback loop — el outcome
 retroalimenta el modelo); CP-37 (Feedback by Outcome — el outcome retroalimenta
@@ -993,7 +993,7 @@ En estos casos, el Outcome se registra como PENDING_OUTCOME hasta que se reciba
 confirmación o expire el plazo de observación.
 
 **Derivación Constitucional:** R-CM-038 (Outcome — el resultado puede no estar
-disponible inmediatamente); ONTOLOGY.md §12.3 (Outcomes son observables pero no
+disponible inmediatamente); SYSTEM_VOCABULARY.md §12.3 (Outcomes son observables pero no
 siempre disponibles inmediatamente).
 
 **Justificación:** Forzar un Outcome definitivo cuando no hay suficiente información
@@ -1412,5 +1412,5 @@ Response no fue generado antes de la ejecución, el sistema está en estado inv�
 > COGNITIVE_PRINCIPLES.md (CP-01, CP-31, CP-35, CP-37, CP-38, CP-39), los contratos
 > de COMMITMENT_MODEL.md (R-CM-001 a R-CM-045), COGNITIVE_ARCHITECTURE.md
 > (R-CA-010 a R-CA-015), DECISION_MODEL.md (R-DM-025, R-DM-026), y la terminología
-> de ONTOLOGY.md. Es un DRAFT hasta su ratificación mediante el proceso de gobierno
+> de SYSTEM_VOCABULARY.md. Es un DRAFT hasta su ratificación mediante el proceso de gobierno
 > de la Constitución (CONSTITUTION.md Sección 7.2).

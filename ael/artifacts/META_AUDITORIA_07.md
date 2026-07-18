@@ -425,7 +425,7 @@ Constitución lo gobierna. Según S-P10, la Constitución no dice nada sobre com
 messages." Pero ambas son compatibles: 1.4 dice que el COMMIT está dentro del
 dominio de la Constitución. S-P10 dice que la Constitución no regula el FORMATO
 del commit a menos que lo diga explícitamente. Si la Constitución tiene una regla
-sobre términos obsoletos (ONTOLOGY.md R-ONT-005), entonces SÍ aplica al commit.
+sobre términos obsoletos (SYSTEM_VOCABULARY.md R-ONT-005), entonces SÍ aplica al commit.
 
 **Veredicto:** ❌ **No confirmado — Falso positivo.** 1.4 y S-P10 son compatibles
 como jurisdicción vs. alcance regulatorio. No hay contradicción.
@@ -728,17 +728,17 @@ como REFERENCIA a reglas de negocio externas, no como un concepto que ella misma
 define.
 
 **B. Sin embargo, el problema es REAL:**
-Si "standard fare" no está definido en NINGÚN documento (ni ONTOLOGY.md, ni
+Si "standard fare" no está definido en NINGÚN documento (ni SYSTEM_VOCABULARY.md, ni
 documentos de negocio), entonces la restricción "50% above or below standard fare"
 NO TIENE SIGNIFICADO VERIFICABLE. Un implementador no sabría qué es "standard
 fare" y por lo tanto no sabría si una tarifa está dentro o fuera del límite.
 
 **C. No es un problema constitucional — es un problema de documentación:**
-"Standard fare" necesita definirse en un documento de negocio (o en ONTOLOGY.md).
+"Standard fare" necesita definirse en un documento de negocio (o en SYSTEM_VOCABULARY.md).
 Su ausencia es una omisión en la cadena de definiciones, no en la Constitución.
 
 **Veredicto:** ✅ **Confirmado — 🟢 Baja.** El término no está definido y
-necesita estarlo. Pero la corrección es documentar el término en ONTOLOGY.md o
+necesita estarlo. Pero la corrección es documentar el término en SYSTEM_VOCABULARY.md o
 en un documento de negocio, no enmendar la Constitución.
 
 ---
@@ -906,7 +906,7 @@ válidos. No es un problema que bloquee ratificación.
 | H-16 | ❌ Falso positivo | 🟡 Media | — | 85% | Procesos implícitos en flujo de enmiendas. |
 | H-17 | ⚠️ Parcial | 🟡 Media | 🟢 Baja | 80% | Regla funcionalmente correcta. Objeción estilística, no estructural. |
 | H-18 | ❌ Falso positivo | 🟢 Baja | — | 90% | Canal API no implica input estructurado obligatorio. |
-| H-19 | ✅ Confirmado | 🟢 Baja | 🟢 Baja | 95% | Término realmente no definido. Corrección en ONTOLOGY.md o documento de negocio. |
+| H-19 | ✅ Confirmado | 🟢 Baja | 🟢 Baja | 95% | Término realmente no definido. Corrección en SYSTEM_VOCABULARY.md o documento de negocio. |
 | H-20 | ❌ Falso positivo | 🟢 Baja | — | 90% | R-H5 responde explícitamente. No hay ambigüedad. |
 | H-21 | ❌ Falso positivo | 🟡 Media | — | 90% | Ausencia de cláusula no es defecto. Umbrales de enmienda protegen. |
 | H-22 | ❌ Falso positivo | 🟡 Media | — | 95% | 7.4 + S-P9 + 1.5 ya cubren emergencias existenciales. |

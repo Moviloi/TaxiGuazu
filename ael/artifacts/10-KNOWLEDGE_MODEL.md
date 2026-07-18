@@ -8,7 +8,7 @@
 >
 > ⚠️ This document belongs to **Level III-f (Contractual Authority)** of the AITOS
 > Document Hierarchy (CONSTITUTION.md §6). It derives from CONSTITUTION.md (Level I-a),
-> ONTOLOGY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), EVIDENCE_MODEL.md
+> SYSTEM_VOCABULARY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), EVIDENCE_MODEL.md
 > (Level III-a), DECISION_MODEL.md (Level III-b), COMMITMENT_MODEL.md (Level III-c),
 > and CERTAINTY_CALCULUS.md (Level III-d).
 >
@@ -101,7 +101,7 @@ This document does **NOT** govern:
 | Source document | Relationship to this document |
 |---|---|
 | **CONSTITUTION.md** (Level I-a) | Source of supreme principles: §3 (Epistemic Stance), S-P6 (Knowledge Preservation), S-P5 (Evidence Immutability), P-I5 (Auditability), P-E1 (Evidence over Intuition), P-E4 (Revisability), S-P8 (Preservation over operation) |
-| **ONTOLOGY.md** (Level I-b) | Source of all terminology: Knowledge (3.6), Knowledge State (6.1), Belief (5.2), Evidence (5.1), Hypothesis (6.4), Certainty (6.2), Confidence (6.3), Memory (11.1), Commitment (8.2), Decision (8.1), Operational Projection (9.2) |
+| **SYSTEM_VOCABULARY.md** (Level I-b) | Source of all terminology: Knowledge (3.6), Knowledge State (6.1), Belief (5.2), Evidence (5.1), Hypothesis (6.4), Certainty (6.2), Confidence (6.3), Memory (11.1), Commitment (8.2), Decision (8.1), Operational Projection (9.2) |
 | **COGNITIVE_PRINCIPLES.md** (Level II-a) | Source of cognitive principles: CP-27 (Proyección derivada), CP-28 (Proyección de solo lectura), CP-29 (Reconstrucción desde Evidence), CP-30 (Preservación del estado cognitivo), CP-31 (Archivo por relevancia), CP-39 (Mejora no destructiva) |
 | **EVIDENCE_MODEL.md** (Level III-a) | Defines the Evidence Store as the foundation of the Knowledge State; sibling document |
 | **DECISION_MODEL.md** (Level III-b) | Defines how Decisions consume and produce Knowledge; sibling document |
@@ -118,7 +118,7 @@ Each rule in this document follows this uniform format:
 **Enunciado:** The normative statement.
 
 **Derivación Constitucional:** Source principles from CONSTITUTION.md,
-ONTOLOGY.md, COGNITIVE_PRINCIPLES.md, or sibling Level III documents.
+SYSTEM_VOCABULARY.md, COGNITIVE_PRINCIPLES.md, or sibling Level III documents.
 
 **Justificación:** Why this rule exists — the reasoning behind it.
 
@@ -141,9 +141,9 @@ ONTOLOGY.md, COGNITIVE_PRINCIPLES.md, or sibling Level III documents.
 Hypotheses, and Commitments that the system holds at a given moment, structured by
 their semantic relationships. It is the system's internal model of the world.
 
-**Derivación Constitucional:** ONTOLOGY.md §3.6 (Knowledge definition: "that which the
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §3.6 (Knowledge definition: "that which the
 system holds to be true at a given moment, composed of beliefs, data, and models");
-ONTOLOGY.md §6.1 (Knowledge State: "complete set of Beliefs, Evidence, active
+SYSTEM_VOCABULARY.md §6.1 (Knowledge State: "complete set of Beliefs, Evidence, active
 Hypotheses, and current Commitments"); CONSTITUTION.md §3.5.4 ("The system's knowledge
 is provisional").
 
@@ -247,7 +247,7 @@ EVIDENCE_MODEL implementation (garantiza que el Evidence Store sea consultable).
 Actions, and external communications. No cognitive process may operate on information
 that is not part of the Knowledge State.
 
-**Derivación Constitucional:** ONTOLOGY.md §6.1 ("The Knowledge State is the SINGLE
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §6.1 ("The Knowledge State is the SINGLE
 source of all decisions. No decision can be based on information not in the Knowledge
 State"); CP-27 (Proyección derivada); CP-28 (Proyección de solo lectura).
 
@@ -282,8 +282,8 @@ input/output del Ciclo Cognitivo).
 Source and Confidence. Knowledge is the interpreted, aggregated, structured state
 derived from Evidence. Evidence is the raw material; Knowledge is the refined product.
 
-**Derivación Constitucional:** ONTOLOGY.md §5.1 (Evidence: "recorded set of Facts, each
-with its Source and Confidence"); ONTOLOGY.md §3.6 (Knowledge: "that which the system
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §5.1 (Evidence: "recorded set of Facts, each
+with its Source and Confidence"); SYSTEM_VOCABULARY.md §3.6 (Knowledge: "that which the system
 holds to be true at a given moment, composed of beliefs, data, and models");
 EVIDENCE_MODEL.md R-EM-049 (Evidence Store as persistent foundation of Knowledge
 State).
@@ -323,9 +323,9 @@ State. Knowledge is the complete organized body of all Beliefs plus their suppor
 Evidence references, active Hypotheses, and Commitments. A Belief is a unit of
 Knowledge; Knowledge is the entire epistemic structure.
 
-**Derivación Constitucional:** ONTOLOGY.md §5.2 (Belief: "a proposition that the system
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §5.2 (Belief: "a proposition that the system
 holds to be true with a degree of Certainty, based on accumulated Evidence");
-ONTOLOGY.md §3.6 (Knowledge: "composed of beliefs, data, and models").
+SYSTEM_VOCABULARY.md §3.6 (Knowledge: "composed of beliefs, data, and models").
 
 **Justificación:** Treating Knowledge as just "a set of Beliefs" misses the structure
 that makes Knowledge useful. A Belief is the "what" — but Knowledge also includes the
@@ -357,7 +357,7 @@ Knowledge State).
 is WHAT the system holds; Certainty is HOW STRONGLY it holds it. No Belief exists
 without Certainty, and no Certainty exists without a Belief to qualify.
 
-**Derivación Constitucional:** ONTOLOGY.md §6.2 (Certainty: "a property of Belief");
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §6.2 (Certainty: "a property of Belief");
 CERTAINTY_CALCULUS.md R-CC-001 (Certainty is a property of every Belief);
 CONSTITUTION.md §3.3.1 (every Belief carries a Certainty value).
 
@@ -390,9 +390,9 @@ de cada Belief en el Knowledge State).
 All Data is Knowledge, but not all Knowledge is Data. Heuristics, inferred relationships,
 active Hypotheses, and context-dependent interpretations are Knowledge without being Data.
 
-**Derivación Constitucional:** ONTOLOGY.md §3.7 (Data: "structured information that the
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §3.7 (Data: "structured information that the
 system can store and retrieve"; "is-a: Knowledge"; "Data is a subset of Knowledge");
-ONTOLOGY.md §3.6 (Knowledge: "composed of beliefs, data, and models").
+SYSTEM_VOCABULARY.md §3.6 (Knowledge: "composed of beliefs, data, and models").
 
 **Justificación:** If Knowledge were equated with Data, the system would only be able
 to express what fits in schemas. Inferred knowledge (e.g., "the user might be going
@@ -508,7 +508,7 @@ of six conceptual components:
 6. **Temporal context** — the temporal scope of each Knowledge element (when it was
    formed, when it was last confirmed, when it expires).
 
-**Derivación Constitucional:** ONTOLOGY.md §6.1 (Knowledge State: "complete set of
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §6.1 (Knowledge State: "complete set of
 Beliefs, Evidence, active Hypotheses, and current Commitments"); CERTAINTY_CALCULUS.md
 R-CC-021 (propagación a través de relaciones semánticas); CP-30 (contenido del
 Knowledge State).
@@ -686,7 +686,7 @@ trazabilidad).
 specific fact or state of affairs: "the origin is Asunción," "the user wants a
 transfer," "the price is 50,000 Gs." It is Knowledge **that** something is the case.
 
-**Derivación Constitucional:** ONTOLOGY.md §5.2 (Belief definition); ONTOLOGY.md §3.6
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §5.2 (Belief definition); SYSTEM_VOCABULARY.md §3.6
 (Knowledge definition); CONSTITUTION.md §3.2 (Evidence-based Beliefs).
 
 **Justificación:** Propositional Knowledge is the most fundamental type — it is what
@@ -719,7 +719,7 @@ other: implication (A implies B), exclusion (A and B cannot both be true), refin
 point to the same conclusion), and temporal ordering (A precedes B).
 
 **Derivación Constitucional:** CERTAINTY_CALCULUS.md R-CC-021 (tabla de relaciones
-semánticas); CP-13 (Hipótesis múltiples); ONTOLOGY.md §6.5 (Hypothesis Network).
+semánticas); CP-13 (Hipótesis múltiples); SYSTEM_VOCABULARY.md §6.5 (Hypothesis Network).
 
 **Justificación:** The system does not just hold isolated facts — it organizes them
 into a network of relationships. Relational Knowledge is what makes the Knowledge
@@ -754,7 +754,7 @@ context: a conversation session, a user interaction, a particular situation. It
 includes the current conversation's history, detected intents, user preferences
 expressed in this session, and situational parameters.
 
-**Derivación Constitucional:** ONTOLOGY.md §11.3 (Conversation Memory); CP-30 (el
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §11.3 (Conversation Memory); CP-30 (el
 Knowledge State incluye contexto conversacional del ciclo actual); CP-04 (límite
 temporal del ciclo cognitivo).
 
@@ -788,7 +788,7 @@ de Knowledge), CHANNEL_ADAPTER.md (define los límites del contexto conversacion
 and system events — the system's memory of its own history. It includes what happened,
 what was decided, what was committed, and what resulted.
 
-**Derivación Constitucional:** ONTOLOGY.md §11.5 (Episodic Memory: "record of past
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §11.5 (Episodic Memory: "record of past
 Cognitive Cycles, Outcomes, and system events"); CP-37 (Outcome feedback); CP-38
 (Learning from outcomes).
 
@@ -822,7 +822,7 @@ specific episodes or conversations: geography, business rules, pricing logic,
 operational models, policy templates. It is what the system "knows" before any
 conversation begins.
 
-**Derivación Constitucional:** ONTOLOGY.md §11.6 (Semantic Memory: "the system's general
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §11.6 (Semantic Memory: "the system's general
 knowledge about the world"); CP-30 (el Knowledge State persiste entre ciclos e incluye
 conocimiento semántico).
 
@@ -855,8 +855,8 @@ Knowledge).
 processes, decision protocols, escalation procedures, business workflows. It is
 Knowledge **how**, not Knowledge **that**.
 
-**Derivación Constitucional:** CP-01 (Ciclo Cognitivo completo); ONTOLOGY.md §12.2
-(Action); ONTOLOGY.md §7.5 (Projection Phase).
+**Derivación Constitucional:** CP-01 (Ciclo Cognitivo completo); SYSTEM_VOCABULARY.md §12.2
+(Action); SYSTEM_VOCABULARY.md §7.5 (Projection Phase).
 
 **Justificación:** The system needs to know not just facts but procedures. How to
 create a trip, how to dispatch a driver, how to escalate to a human operator, how to
@@ -930,7 +930,7 @@ deployment).
 
 **Derivación Constitucional:** CP-31 (archivo por relevancia — incluye edad como
 criterio); CERTAINTY_CALCULUS.md R-CC-010 (degradación de certeza por tiempo);
-ONTOLOGY.md §11.3 (Conversation Memory retention).
+SYSTEM_VOCABULARY.md §11.3 (Conversation Memory retention).
 
 **Justificación:** Different types of Knowledge have different shelf lives. A user's
 statement in a conversation is valid for minutes or hours; a business rule is valid
@@ -994,7 +994,7 @@ COGNITIVE_ARCHITECTURE.md (define el proceso de reconstrucción temporal).
 session between the system and a user. It is created within the session, is valid only
 within the session, and is archived when the session ends.
 
-**Derivación Constitucional:** ONTOLOGY.md §11.3 (Conversation Memory: "per-phone,
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §11.3 (Conversation Memory: "per-phone,
 created when first message arrives, destroyed after inactivity timeout"); CP-30 (el
 Knowledge State incluye contexto conversacional del ciclo actual).
 
@@ -1061,7 +1061,7 @@ Contextual Knowledge is not deleted. It is archived as an Episodic Knowledge rec
 with the session metadata. It may be retrieved for learning or audit.
 
 **Derivación Constitucional:** CP-31 (archivo por relevancia — preservación, no
-eliminación); S-P6 (Knowledge Preservation); ONTOLOGY.md §11.5 (Episodic Memory).
+eliminación); S-P6 (Knowledge Preservation); SYSTEM_VOCABULARY.md §11.5 (Episodic Memory).
 
 **Justificación:** A conversation session contains valuable information about user
 behavior, system performance, and decision outcomes. Discarding it at session end
@@ -1094,8 +1094,8 @@ A trip Belief (origin, destination, time, price) is composed of simpler Beliefs.
 The composed structure inherits properties from its components and adds emergent
 properties.
 
-**Derivación Constitucional:** ONTOLOGY.md §9.1 (Operational Model as schema);
-ONTOLOGY.md §9.2 (Operational Projection as instantiation); CP-15 (Fusión
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §9.1 (Operational Model as schema);
+SYSTEM_VOCABULARY.md §9.2 (Operational Projection as instantiation); CP-15 (Fusión
 conservadora).
 
 **Justificación:** The system reasons at multiple levels of abstraction. It needs to
@@ -1164,7 +1164,7 @@ inherits the default value from Semantic Knowledge. Semantic Knowledge provides 
 baseline; Contextual Knowledge provides the override.
 
 **Derivación Constitucional:** R-KM-026 (Contextual Knowledge overrides Semantic
-Knowledge); ONTOLOGY.md §11.6 (Semantic Memory as default knowledge).
+Knowledge); SYSTEM_VOCABULARY.md §11.6 (Semantic Memory as default knowledge).
 
 **Justificación:** The system must have a default for every parameter. If the user
 does not specify a destination, the system should not assume it knows — but it may
@@ -1199,7 +1199,7 @@ fragments into multiple competing interpretations. Each fragment contains a set 
 Beliefs that are internally consistent but incompatible with other fragments.
 
 **Derivación Constitucional:** CP-13 (Hipótesis múltiples — mantener múltiples hipótesis
-simultáneas); ONTOLOGY.md §6.5 (Hypothesis Network).
+simultáneas); SYSTEM_VOCABULARY.md §6.5 (Hypothesis Network).
 
 **Justificación:** Fragmentation is not a failure — it is the correct response to
 ambiguity. If the system cannot decide between "the user is going to the airport" and
@@ -1918,7 +1918,7 @@ Knowledge gaps. The Decision process does not access the Evidence Store directly
 reads the interpreted Knowledge.
 
 **Derivación Constitucional:** DECISION_MODEL.md R-DM-008 (precondiciones — Knowledge
-State actualizado); ONTOLOGY.md §6.1 (Knowledge State produce toda Decisión);
+State actualizado); SYSTEM_VOCABULARY.md §6.1 (Knowledge State produce toda Decisión);
 CP-27 (Proyección derivada desde Knowledge State).
 
 **Justificación:** The Knowledge State is the system's interpreted understanding. A
@@ -2026,8 +2026,8 @@ COMMITMENT_MODEL.md (define el bloqueo del Gate por gaps críticos).
 represents a promise made by the system. It is a first-class component of the
 Knowledge State with its own lifecycle, Certainty, and Evidence trace.
 
-**Derivación Constitucional:** ONTOLOGY.md §6.1 (Knowledge State contains "current
-Commitments"); ONTOLOGY.md §8.2 (Commitment definition); COMMITMENT_MODEL.md
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §6.1 (Knowledge State contains "current
+Commitments"); SYSTEM_VOCABULARY.md §8.2 (Commitment definition); COMMITMENT_MODEL.md
 R-CM-001 (naturaleza del compromiso); CP-22 (Compromiso explícito).
 
 **Justificación:** A Commitment is not an external artifact — it is part of what the
@@ -2167,7 +2167,7 @@ reusable Knowledge (user preferences, common routes, peak times). This reusable
 Knowledge is stored in the Knowledge State as new Beliefs with appropriate Semantic
 or Contextual scope.
 
-**Derivación Constitucional:** ONTOLOGY.md §11.7 (Learning Memory); ONTOLOGY.md §13.3
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §11.7 (Learning Memory); SYSTEM_VOCABULARY.md §13.3
 (Learning: actualiza Learning Memory); CP-39 (aprendizaje acumulativo).
 
 **Justificación:** The purpose of learning is to create Knowledge that makes future
@@ -2199,11 +2199,11 @@ la integración de patrones aprendidos).
 
 ### R-KM-059 — Conversation Memory is a subset of Contextual Knowledge
 
-**Enunciado:** Conversation Memory (ONTOLOGY.md §11.3) is the subset of Contextual
+**Enunciado:** Conversation Memory (SYSTEM_VOCABULARY.md §11.3) is the subset of Contextual
 Knowledge that pertains specifically to the conversational exchange: messages sent and
 received, detected intents per turn, turn-by-turn context, and short-term slot values.
 
-**Derivación Constitucional:** ONTOLOGY.md §11.3 (Conversation Memory: "messages,
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §11.3 (Conversation Memory: "messages,
 detected intents, turn-by-turn context, short-term slot values"); R-KM-018 (Contextual
 Knowledge); CP-30 (el Knowledge State incluye contexto conversacional).
 
@@ -2242,7 +2242,7 @@ conversation turn, the Conversation Memory provides the context required for cor
 interpretation: what was said before, what intents were active, what the user referred
 to.
 
-**Derivación Constitucional:** ONTOLOGY.md §11.3 (Conversation Memory); CP-30
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §11.3 (Conversation Memory); CP-30
 (preservación del estado cognitivo); CP-06 (Facts are extracted from Observations).
 
 **Justificación:** The same words can mean different things in different conversational
@@ -2275,7 +2275,7 @@ violación.
 
 ### R-KM-061 — Strategic Projection is a view of the Knowledge State
 
-**Enunciado:** The Operational Projection (ONTOLOGY.md §9.2) is a derived, read-only
+**Enunciado:** The Operational Projection (SYSTEM_VOCABULARY.md §9.2) is a derived, read-only
 view of the Knowledge State. It represents the operational commitments that the system
 has made, instantiated in the Operational Model schema. It has no independent
 existence outside the Knowledge State.
@@ -2317,7 +2317,7 @@ not create new Beliefs or Commitments. Only the Cognitive Cycle, through Evidenc
 Decision → Commitment, produces new Knowledge.
 
 **Derivación Constitucional:** CP-28 (Proyección de solo lectura); CP-27 (Proyección
-derivada); ONTOLOGY.md §7.5 (Projection Phase no crea nuevos Commitments).
+derivada); SYSTEM_VOCABULARY.md §7.5 (Projection Phase no crea nuevos Commitments).
 
 **Justificación:** If the Projection could create Knowledge, the system could make
 decisions outside the cognitive cycle. This would bypass the Commitment Gate, the
@@ -2351,7 +2351,7 @@ Projection contains committed trips, confirmed prices, and assigned drivers. It 
 translation of cognitive Knowledge into operational reality.
 
 **Derivación Constitucional:** CP-27 (la Proyección es el puente entre el conocimiento
-y la operación); ONTOLOGY.md §9.2 (Operational Projection: "what will happen based on
+y la operación); SYSTEM_VOCABULARY.md §9.2 (Operational Projection: "what will happen based on
 what the system knows").
 
 **Justificación:** The system has two audiences: its own cognitive processes (which
@@ -2474,7 +2474,7 @@ addition.
 No Decision may be based on information outside the Knowledge State. Every Decision
 reads from the Knowledge State exclusively.
 
-**Derivación Constitucional:** ONTOLOGY.md §6.1, R-KM-004.
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §6.1, R-KM-004.
 **Violation:** Decision without Knowledge State basis.
 
 ---
@@ -2526,7 +2526,7 @@ by relevance (CP-31).
 Contextual Knowledge is scoped to its conversation session and expires when the
 session ends. No Contextual Knowledge from one session leaks into another.
 
-**Derivación Constitucional:** R-KM-025, ONTOLOGY.md §11.3.
+**Derivación Constitucional:** R-KM-025, SYSTEM_VOCABULARY.md §11.3.
 **Violation:** Cross-session knowledge contamination.
 
 ---
@@ -2572,7 +2572,7 @@ The following documents receive implementation mandates from this model:
 *End of 10-KNOWLEDGE_MODEL.md — Version 1.0-draft*
 
 > Este documento especifica el modelo conceptual del conocimiento cognitivo de AITOS.
-> Deriva de CONSTITUTION.md, ONTOLOGY.md, COGNITIVE_PRINCIPLES.md, EVIDENCE_MODEL.md,
+> Deriva de CONSTITUTION.md, SYSTEM_VOCABULARY.md, COGNITIVE_PRINCIPLES.md, EVIDENCE_MODEL.md,
 > DECISION_MODEL.md, COMMITMENT_MODEL.md, y CERTAINTY_CALCULUS.md. No redefine ningún
 > concepto ontológico ni principio constitucional.
 >

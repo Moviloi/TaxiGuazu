@@ -8,7 +8,7 @@
 >
 > ⚠️ This document belongs to **Level III-d (Contractual Authority)** of the AITOS
 > Document Hierarchy (CONSTITUTION.md §6). It derives from CONSTITUTION.md (Level I-a),
-> ONTOLOGY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), EVIDENCE_MODEL.md
+> SYSTEM_VOCABULARY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), EVIDENCE_MODEL.md
 > (Level III-a), DECISION_MODEL.md (Level III-b), and COMMITMENT_MODEL.md (Level III-c).
 >
 > This document defines the **conceptual model** of certainty computation, propagation,
@@ -97,7 +97,7 @@ This document does **NOT** govern:
 | Source document | Relationship to this document |
 |----------------|------------------------------|
 | **CONSTITUTION.md** (Level I-a) | Source of supreme principles: §3.1 (Inaccessibility of Truth), §3.3 (Dual-domains of certainty), §3.4 (Epistemic Sufficiency Principle), P-E2 (Certainty Is Continuous), P-I4 (Humility Before Uncertainty), S-P1 (Evidence-Based Operation) |
-| **ONTOLOGY.md** (Level I-b) | Source of all terminology: Certainty (6.2), Confidence (6.3), Belief (5.2), Evidence (5.1), Source (4.4), Hypothesis (6.4), Knowledge State (6.1), Certainty Threshold (8.4) |
+| **SYSTEM_VOCABULARY.md** (Level I-b) | Source of all terminology: Certainty (6.2), Confidence (6.3), Belief (5.2), Evidence (5.1), Source (4.4), Hypothesis (6.4), Knowledge State (6.1), Certainty Threshold (8.4) |
 | **COGNITIVE_PRINCIPLES.md** (Level II-a) | Source of cognitive principles: CP-18 (Certidumbre continua), CP-19 (Degradación temporal), CP-20 (Actualización por Evidence), CP-21 (Límite epistémico) |
 | **EVIDENCE_MODEL.md** (Level III-a) | Defines the Evidence that feeds into Certainty: R-EM-042 (Certainty is a function of Evidence), R-EM-043 (Five factors), R-EM-044 (Epistemic bounds), R-EM-045 (Automatic recalculation) |
 | **DECISION_MODEL.md** (Level III-b) | Defines how Certainty is used in Decisions: R-DM-010 (Sufficiency criterion), R-DM-014 (Certainty as primary variable), R-DM-015 (Multiple Evidence aggregation), R-DM-018 (Epistemic margin) |
@@ -131,7 +131,7 @@ Each rule in this document follows this uniform format:
 
 ### R-CC-001 — Definition of Certainty
 
-**Enunciado:** La Certainty (ONTOLOGY.md §6.2) es la medida de cuán confiado está el
+**Enunciado:** La Certainty (SYSTEM_VOCABULARY.md §6.2) es la medida de cuán confiado está el
 sistema de que una Belief corresponde a la Verdad. Es un valor continuo, dinámico y
 siempre imperfecto. La Certainty no es una propiedad almacenada de la Belief — es una
 propiedad derivada, computada en cada ciclo a partir de la Evidence disponible.
@@ -139,7 +139,7 @@ propiedad derivada, computada en cada ciclo a partir de la Evidence disponible.
 **Derivación Constitucional:** CONSTITUTION.md §3.1 (Inaccessibility of Truth — la
 Certainty nunca es Verdad); CONSTITUTION.md §3.3.1 (Internal domain — continua,
 probabilística); P-E2 (Certainty Is Continuous); CP-18 (certidumbre continua);
-ONTOLOGY.md §6.2 (Certainty como medida de confianza en la correspondencia con Verdad).
+SYSTEM_VOCABULARY.md §6.2 (Certainty como medida de confianza en la correspondencia con Verdad).
 
 **Justificación:** La Constitución establece que AITOS no tiene acceso a la Verdad
 (§3.1). Opera sobre creencias fundamentadas en Evidence. La Certainty es el mecanismo
@@ -250,8 +250,8 @@ Certainty sin restricciones permanentes).
 
 ### R-CC-004 — Certainty and Confidence are distinct
 
-**Enunciado:** El sistema distingue explícitamente entre Confidence (ONTOLOGY.md §6.3)
-y Certainty (ONTOLOGY.md §6.2):
+**Enunciado:** El sistema distingue explícitamente entre Confidence (SYSTEM_VOCABULARY.md §6.3)
+y Certainty (SYSTEM_VOCABULARY.md §6.2):
 
 | Concepto | Confidence | Certainty |
 |----------|-----------|-----------|
@@ -261,12 +261,12 @@ y Certainty (ONTOLOGY.md §6.2):
 | **Cambia con** | Outcomes históricos de la Source | Nueva Evidence, tiempo, contexto |
 | **Se usa para** | Ponderar Evidence en el cálculo de Certainty | Decidir si comprometerse |
 
-**Derivación Constitucional:** ONTOLOGY.md §6.2 (Certainty) y §6.3 (Confidence);
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §6.2 (Certainty) y §6.3 (Confidence);
 CP-18 (certidumbre continua — se construye a partir de Confidence de las fuentes);
 CP-38 (ajuste de confianza de fuente — la Confidence se ajusta con outcomes).
 
 **Justificación:** La confusión entre Confidence y Certainty fue identificada como una
-de las principales fuentes de deuda terminológica en el sistema (ONTOLOGY.md preámbulo).
+de las principales fuentes de deuda terminológica en el sistema (SYSTEM_VOCABULARY.md preámbulo).
 La Confidence responde "¿qué tan confiable es esta fuente?" La Certainty responde "¿qué
 tan probable es que esta creencia sea correcta?" La segunda depende de la primera, pero
 no son lo mismo. Una fuente confiable puede producir una creencia que luego es
@@ -305,7 +305,7 @@ La dirección es unidireccional: la Confidence contribuye a la Certainty, pero l
 Certainty no modifica la Confidence.
 
 **Derivación Constitucional:** CP-38 (ajuste de confianza de fuente — la Confidence se
-ajusta por outcomes, no por Certainty); ONTOLOGY.md §6.3 (Confidence produce Certainty
+ajusta por outcomes, no por Certainty); SYSTEM_VOCABULARY.md §6.3 (Confidence produce Certainty
 como input).
 
 **Justificación:** Si la Certainty pudiera modificar la Confidence, se crearía un ciclo
@@ -379,7 +379,7 @@ mínimo, los siguientes cinco factores definidos en EVIDENCE_MODEL.md R-EM-043:
 
 | Factor | Qué mide | Efecto en Certainty |
 |--------|----------|-------------------|
-| **Confidence de cada Evidence** | Confiabilidad de la Source de cada Evidence (ONTOLOGY.md §6.3) | Mayor Confidence → mayor contribución a Certainty |
+| **Confidence de cada Evidence** | Confiabilidad de la Source de cada Evidence (SYSTEM_VOCABULARY.md §6.3) | Mayor Confidence → mayor contribución a Certainty |
 | **Corroboración** | Número de Evidence independientes que apoyan la misma proposición | Más corroboración → mayor Certainty (con efecto decreciente) |
 | **Contradicción** | Presencia y peso de Evidence que refuta la proposición | Contradicción reduce Certainty (una fuerte contradicción puede anular múltiples corroboraciones) |
 | **Edad** | Tiempo transcurrido desde la percepción de cada Evidence | Evidence más antigua tiene menor impacto en Certainty |
@@ -388,7 +388,7 @@ mínimo, los siguientes cinco factores definidos en EVIDENCE_MODEL.md R-EM-043:
 **Derivación Constitucional:** R-EM-043 (Evidence and Certainty — five factors);
 CP-18 (certidumbre continua — construida desde Confidence); CP-19 (degradación
 temporal — edad); CP-20 (actualización por Evidence — corroboración y contradicción);
-CP-10 (resolución de Evidence conflictiva — contradicción); ONTOLOGY.md §4.4
+CP-10 (resolución de Evidence conflictiva — contradicción); SYSTEM_VOCABULARY.md §4.4
 (precedencia de Source); CP-38 (ajuste de confianza).
 
 **Justificación:** La certeza no es una función de un solo factor. Una Belief puede
@@ -595,7 +595,7 @@ formar creencia vs. mantener hipótesis).
 
 ### R-CC-012 — Effect of evidence quality (Confidence)
 
-**Enunciado:** La Confidence de cada Evidence (ONTOLOGY.md §6.3) pondera su
+**Enunciado:** La Confidence de cada Evidence (SYSTEM_VOCABULARY.md §6.3) pondera su
 contribución al cálculo de Certainty. Una Evidence con Confidence alta contribuye más
 que una con Confidence baja, independientemente de la precedencia de Source. La
 Confidence puede ajustarse con outcomes (CP-38), y ese ajuste se refleja en el cálculo
@@ -647,7 +647,7 @@ una Belief, pero solo dentro de límites definidos y con justificación explíci
 
 **Derivación Constitucional:** R-DM-034 (Conversational context as decision input —
 el contexto afecta la interpretación de la Evidence); CP-36 (contexto mínimo — el
-sistema debe usar el contexto disponible para inferir); ONTOLOGY.md §8.5 (Strategic
+sistema debe usar el contexto disponible para inferir); SYSTEM_VOCABULARY.md §8.5 (Strategic
 Posture).
 
 **Justificación:** La misma Evidence puede tener diferente significado en diferentes
@@ -2228,7 +2228,7 @@ This document concretizes the following delegations from higher-level documents:
 > COGNITIVE_PRINCIPLES.md (CP-18, CP-19, CP-20, CP-21), EVIDENCE_MODEL.md (R-EM-042
 > a R-EM-045, R-EM-056), DECISION_MODEL.md (R-DM-010, R-DM-014, R-DM-015, R-DM-018,
 > R-DM-041, R-DM-050), COMMITMENT_MODEL.md (R-CM-033, R-CM-034), y la terminología
-> de ONTOLOGY.md.
+> de SYSTEM_VOCABULARY.md.
 >
 > Este documento contiene 0 fórmulas matemáticas, 0 porcentajes, 0 pesos fijos,
 > 0 algoritmos concretos, 0 referencias a implementación, 0 APIs, 0 clases, y

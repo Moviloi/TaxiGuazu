@@ -202,7 +202,7 @@ Donde:
 
 **No se modifica ningún invariante M-1 a M-14.** El Architecture Freeze de Memory no se viola.
 
-### 4.4 Cambios en ONTOLOGY.md
+### 4.4 Cambios en EVIDENCE_ONTOLOGY.md
 
 | Ubicación | Cambio |
 |-----------|--------|
@@ -284,7 +284,7 @@ EE → Shadow Observer → (output descartado)
 | ADR-003 (Learning Domain) | Learning operacional existente. NO es Pattern Discovery. |
 | PR-6A a PR-6F (Reflection Architecture Audits) | Evidencia completa que fundamenta esta decisión. |
 | PR-11 (Cognitive Reality Alignment) | Auditoría que reveló la separación presente/futuro. |
-| `docs/certification/ONTOLOGY.md` | Cadena ontológica actualizada. |
+| `docs/certification/EVIDENCE_ONTOLOGY.md` | Cadena ontológica actualizada. |
 
 ---
 

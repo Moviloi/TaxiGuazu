@@ -1,8 +1,24 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "default_agent": "ael",
+  "default_agent": "strategic-director",
   "instructions": ["ael/AGENTS.md"],
   "agent": {
+    "strategic-director": {
+      "description": "Strategic Director — Capa superior responsable de analizar, evaluar, planificar y recomendar escalamiento",
+      "mode": "primary",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": {
+          "*": "deny",
+          "ael": "allow"
+        }
+      }
+    },
     "ael": {
       "description": "ARNES Director — orquesta pipeline de 7 fases para cambios al sistema",
       "mode": "primary",

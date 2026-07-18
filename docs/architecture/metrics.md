@@ -14,7 +14,7 @@
 | **Total packages** | Number of package-level groupings in src/ | 21 | Stable | New package requires ADR or architecture review | scripts/architecture/generate-graphs.ts | Yes |
 | **Engines** | Number of domain engines in src/lib/services | 11 | Stable | New engine requires documentation update | scripts/architecture/report.ts | Yes |
 | **Bounded contexts** | Number of bounded contexts documented | 8 | Matches code structure | Context without code mapping is a documentation gap | scripts/architecture/report.ts | Yes |
-| **Contracts** | Number of engine contracts in docs/ai/CONTRACTS.md | 13 | One per engine | Engine without contract is a governance gap | scripts/architecture/report.ts | Yes |
+| **Contracts** | Number of engine contracts in docs/ai/ENGINE_CONTRACTS.md | 13 | One per engine | Engine without contract is a governance gap | scripts/architecture/report.ts | Yes |
 | **Invariants** | Number of architectural invariants | 24 | Stable or increasing | Invariant violation is a critical issue | scripts/architecture/report.ts | Yes |
 | **Rules** | Number of architecture rules in docs/ai/ARCHITECTURE_RULES.md | 25 | Stable or increasing | Rule violation is a critical issue | scripts/architecture/report.ts | Yes |
 | **Diagrams** | Number of architecture diagrams | 22 | Covers all critical flows | Critical flow without diagram is a documentation gap | scripts/architecture/report.ts | Yes |

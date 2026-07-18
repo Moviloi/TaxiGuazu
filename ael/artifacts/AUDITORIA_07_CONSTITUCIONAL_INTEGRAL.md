@@ -2,7 +2,7 @@
 
 > **Auditor:** AEL Director (Mission Planner)
 > **Documento auditado:** `ael/artifacts/01-CONSTITUTION.md` (v1.0-draft, 1250 líneas)
-> **Documentos de referencia:** CONSTITUTION_MASTER_PLAN.md, ONTOLOGY.md
+> **Documentos de referencia:** CONSTITUTION_MASTER_PLAN.md, SYSTEM_VOCABULARY.md
 > **Fecha:** 2026-07-11
 > **Propósito:** Determinar si la Constitución es ratificable o requiere correcciones.
 > **Postura:** Deliberadamente adversarial. Se asume la interpretación más exigente.
@@ -78,7 +78,7 @@ La CONSTITUTION.md Sección 6 define una jerarquía diferente con 4 niveles (I�
 
 | Master Plan | Constitution Sección 6 |
 |-------------|------------------------|
-| Fundacional: 01, 02, 03 | Nivel I: CONSTITUTION.md, ONTOLOGY.md |
+| Fundacional: 01, 02, 03 | Nivel I: CONSTITUTION.md, SYSTEM_VOCABULARY.md |
 | Arquitectónico: 04, 05, 06 | Nivel II: COGNITIVE_PRINCIPLES.md, ARCHITECTURE.md, ADRs |
 | Operativo: 07, 08 | Nivel III: EVIDENCE_MODEL.md, DECISION_MODEL.md, COMMITMENT_MODEL.md, CERTAINTY_CALCULUS.md, CHANNEL_ADAPTER.md, ACTION_EXECUTOR.md |
 | Transición: 09, 10 | Nivel IV: código, prompts, config |
@@ -249,7 +249,7 @@ Tres principios constitucionales dependen del concepto "Cost of Error":
 - S-P7: "When the system cannot reach a Commitment with sufficient Certainty, and the Cost of Error exceeds the cost of human intervention..."
 - 3.4: "The level of Certainty at which the expected cost of acting is less than the expected cost of not acting."
 
-ONTOLOGY.md 8.3 dice textual: "Cost of Error — **DOES NOT EXIST IN ANY FORM.** This is the single biggest gap in the current architecture."
+SYSTEM_VOCABULARY.md 8.3 dice textual: "Cost of Error — **DOES NOT EXIST IN ANY FORM.** This is the single biggest gap in the current architecture."
 
 La Constitución prescribe comportamiento basado en un concepto que:
 1. No existe en el código
@@ -425,7 +425,7 @@ La Constitución referencia "COGNITIVE_PRINCIPLES.md" en 4 lugares como si exist
 Citas:
 - "Certainty must decay over time without confirming Evidence (see COGNITIVE_PRINCIPLES.md)"
 - "The calibration of thresholds belongs to COGNITIVE_PRINCIPLES.md and DECISION_MODEL.md"
-- "Everything not explicitly governed by this Constitution is governed by subordinate documents (ONTOLOGY.md, COGNITIVE_PRINCIPLES.md...)"
+- "Everything not explicitly governed by this Constitution is governed by subordinate documents (SYSTEM_VOCABULARY.md, COGNITIVE_PRINCIPLES.md...)"
 - Level II-a: "COGNITIVE_PRINCIPLES.md — Operational principles derived from constitutional principles."
 
 **Problema:** Si COGNITIVE_PRINCIPLES.md nunca se escribe (o se escribe de forma inconsistente con lo esperado), la Constitución tiene referencias rotas. Los principios que dependen de un documento que no existe son inaplicables.
@@ -595,7 +595,7 @@ Un canal API típicamente usa JSON estructurado. Si AITOS soporta un canal API, 
 
 5.3.2: "Maximum trip price: AITOS may not commit to a trip price more than 50% above or below the standard fare without human approval."
 
-"Standard fare" no está definido en ninguna parte. ONTOLOGY.md no lo define. La Constitución no lo define. No es un concepto ontológico ni constitucional.
+"Standard fare" no está definido en ninguna parte. SYSTEM_VOCABULARY.md no lo define. La Constitución no lo define. No es un concepto ontológico ni constitucional.
 
 ¿Es la tarifa de la ruta? ¿La tarifa por minuto? ¿La tarifa mínima? ¿La tarifa que existía al inicio de la conversación? ¿Quién la define?
 

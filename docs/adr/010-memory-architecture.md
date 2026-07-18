@@ -437,7 +437,7 @@ src/lib/memory/
 | ADR-001 (Layered Architecture) | Memory lives in `src/lib/memory/`, above Evidence but below Services |
 | ADR-003 (Learning Domain) | Existing operational Learning (NOT cognitive Pattern Discovery) |
 | ADR-004 (Service Boundaries) | Memory does NOT import any service layer module |
-| `docs/certification/ONTOLOGY.md` | Memory entity added to ontology |
+| `docs/certification/EVIDENCE_ONTOLOGY.md` | Memory entity added to ontology |
 | `src/lib/services/memory/memory.ts` | Existing operational memory (NOT cognitive Memory) |
 | `src/lib/services/lead.service.ts` | Orchestrator where Memory would integrate (futuro) |
 | `src/lib/evidence/run-shadow-cognition.ts` | Evidence Engine orchestrator that produces ShadowResult |

@@ -25,7 +25,7 @@ Mismo rigor que eliminó Reflection (PR-6) y Goals (PR-8):
 | Fuente | Definición |
 |--------|-----------|
 | Architecture Milestone v3.0 | `[EXECUTE]` — cómo lo ejecuta el sistema |
-| ONTOLOGY.md (post-PR-8) | Síntesis de Patterns en intenciones y ejecución de acciones. Incluye filtrado por relevancia, dedup funcional, categorización interpretativa, priorización, y generación de respuesta. |
+| EVIDENCE_ONTOLOGY.md (post-PR-8) | Síntesis de Patterns en intenciones y ejecución de acciones. Incluye filtrado por relevancia, dedup funcional, categorización interpretativa, priorización, y generación de respuesta. |
 | PR-8 (absorción de Goals) | Planning recibe Patterns desde Learning, produce Actions. |
 
 ### 1.2 Plan propuesto para refutar

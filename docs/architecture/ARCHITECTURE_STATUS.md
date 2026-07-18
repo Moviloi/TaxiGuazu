@@ -3,7 +3,7 @@
 > Documento canónico del estado arquitectónico real del proyecto.
 > Fuente única de verdad para entender qué existe, qué está aprobado, qué permanece como diseño.
 >
-> **Actualizado:** 2026-07-16 | **Misión:** PR-H0A — Staging Hardening Audit | **ADR count:** 12 (001–012)
+> **Actualizado:** 2026-07-17 | **Misión:** PR-ADR13 — Conversation Decision Algorithm Ratification | **ADR count:** 13 (001–013)
 
 ---
 
@@ -49,12 +49,14 @@ Webhook → CORE → Conversation Interpreter → StrategyDecision → Policies 
 - Conversational Decision Architecture (ADR-008) — Freeze desde R5
 - Evidence Engine (ADR-009) — Freeze desde PR-3E
 - Cognitive Escalation Principle (ADR-012) — Architecture Freeze V3
+- Conversation Decision Algorithm (ADR-013) — Autoridad funcional normativa (complementa Freeze V3)
 
 **Ciclo de vida actual:** Staging Hardening → ACTIVA (post-RRR-1).
 **Deuda técnica:** 21 items (5 P1 + 10 P2 + 6 P3) + 10 items H0A (4 P0 bloquean staging).
 **Piloto:** Bloqueado por 4 tareas P0 (rotación de API key, SENTRY_DSN, seed choferes, CREATE TABLE faltante). Middleware (H0A-03) diferido a Post-v1 — **No bloquea v1.0 / Version Zero.** Ver `docs/architecture/DEFERRED_MIDDLEWARE.md`.
 **RRR-1 Verdict:** 🟡 READY FOR STAGING WITH CONDITIONS. Build ✅ (39.9s compile, 7/7 pages). Tests 1653/1657 PASS ✅. Contratos R1-R4 PASS ✅. 4 condiciones documentadas en PROJECT_BOARD (Pending before Production).
 **H0A Verdict:** 🟡 3 HALLASZGOS BLOQUEAN STAGING (flags sin documentar, tests fallando, key expuesta). 1 hallazgo diferido a Post-v1 (middleware — H0A-03). 3 hallazgos no bloquean. Documento: `docs/certification/H0A_STAGING_HARDENING_AUDIT.md`.
+**CDA Certification (ADR-013):** ✅ Conversation Decision Algorithm ratificado como autoridad funcional normativa. Jerarquía: Implementation → CDA → Specification → ADR. 0 cambios de código.
 
 ---
 
@@ -182,6 +184,7 @@ Business Knowledge Engine (N0) → Deterministic Reasoning Layer (N1) → Groq (
 | **010** | Cognitive Memory Architecture | ✅ Accepted | No | ⏳ **0% implementado** (diseño conceptual) | **FUTURO** ⏳ | ADR-009 |
 | **011** | Reflection Elimination | ✅ Accepted | No | ❌ Sin código (eliminación de capa nunca implementada) | **HISTÓRICO / FUTURO** | ADR-009, ADR-010 |
 | **012** | Cognitive Escalation Principle | ✅ Accepted | No | ✅ Implementado (PR-5A a PR-5G) | PRESENTE | CE-1, CE-2, CE-3A, CE-3B, CE-4 |
+| **013** | Conversation Decision Algorithm Ratification | ✅ Accepted | No | ✅ Documento normativo creado (CDA, 1026 líneas). 0 cambios de código. | PRESENTE | CDA, FUNCTIONAL_BEHAVIOR_SPECIFICATION.md, ADR-007, ADR-008, ADR-012, QA1, QA2, QA2B, QA3-S2B |
 
 ### 4.1 ADR pendientes o en riesgo
 
@@ -468,6 +471,7 @@ EE (existe) → Memory (IM-1 🟡 implementado parcialmente) → Pattern Discove
 | `docs/adr/010-memory-architecture.md` | ✅ Vigente | FUTURO ⏳ |
 | `docs/adr/011-reflection-elimination.md` | ✅ Vigente | HISTÓRICO / FUTURO |
 | `docs/adr/012-cognitive-escalation-principle.md` | ✅ Vigente | PRESENTE (decisión) + FUTURO (implementación) |
+| `docs/adr/013-conversation-decision-algorithm.md` | ✅ Vigente | PRESENTE (ratificado) |
 
 ### 12.2 Documentos arquitectónicos clave
 
@@ -491,6 +495,7 @@ EE (existe) → Memory (IM-1 🟡 implementado parcialmente) → Pattern Discove
 | `docs/architecture/CE-3B_DETERMINISTIC_REASONING_LAYER.md` | ✅ Vigente | FUTURO (diseño) |
 | `docs/architecture/CE-4_MIGRATION_ROADMAP.md` | ✅ Vigente | FUTURO (plan) |
 | `docs/SYSTEM_BIBLE.md` | ✅ Vigente | PRESENTE |
+| `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` | ✅ Vigente (normativo) | PRESENTE (ratificado ADR-013) |
 
 ### 12.3 PR series — auditorías conceptuales
 
@@ -527,7 +532,7 @@ EE (existe) → Memory (IM-1 🟡 implementado parcialmente) → Pattern Discove
 |---|---|
 | `docs/certification/` (60 archivos) | 🗃️ Archivo histórico — certificaciones puntuales (QA, audits, hardening, releases) |
 | `docs/certification/TECHNICAL_DEBT_BASELINE.md` | ✅ Vigente (referencia activa de deuda, actualizado H0A) |
-| `docs/certification/ONTOLOGY.md` | ✅ Vigente (ontología del sistema) |
+| `docs/certification/EVIDENCE_ONTOLOGY.md` | ✅ Renombrado (ontología del Evidence Engine) |
 | `docs/certification/H0A_STAGING_HARDENING_AUDIT.md` | ✅ Vigente (2026-07-16, 7 áreas auditadas) |
 
 ### 12.6 Otros documentos
@@ -614,6 +619,8 @@ Pricing, Geo, Dispatch, CORE, Policy (Reserva/Ahora), **Evidence Engine**
 | **PR-11B** — Architecture Status Audit | ✅ COMPLETED | 2026-07-14 | **Este documento** |
 | **RRR-1** — Release Readiness Review | ✅ COMPLETED | 2026-07-16 | Verdict: 🟡 READY FOR STAGING WITH CONDITIONS. Build ✅, Tests 1653/1657 ✅, Contratos ✅. |
 | **PR-H0A** — Staging Hardening Audit | ✅ COMPLETED | 2026-07-16 | 7 áreas auditadas. 4 hallazgos bloquean staging. `docs/certification/H0A_STAGING_HARDENING_AUDIT.md` |
+| **PR-QA3-S2B** — Hotel Esturión Trace | ✅ COMPLETED | 2026-07-17 | 12 puntos trazados, 3 desviaciones, 2 ambigüedades resueltas. `docs/certification/PR-QA3_S2B_HOTEL_ESTURION_TRACE.md` |
+| **Conversation Decision Algorithm Certified** | ✅ COMPLETED | 2026-07-17 | CDA creado (49KB, 1026 líneas) y ratificado como ADR-013. Jerarquía normativa establecida. `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md`, `docs/adr/013-conversation-decision-algorithm.md` |
 
 ---
 

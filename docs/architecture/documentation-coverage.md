@@ -97,7 +97,7 @@
 |---|---|---|
 | `ARCHITECTURE_BIBLE.md` | ⚠️ No auditado | No referencia ADRs por número, describe alto nivel |
 | `ARCHITECTURE_RULES.md` | ⚠️ No auditado | Menciona policy files correctamente |
-| `CONTRACTS.md` | ✅ Verificado | purchaseIntent referenciado correctamente |
+| `ENGINE_CONTRACTS.md` | ✅ Verificado | purchaseIntent referenciado correctamente |
 | `DECISION_TREE.md` | ✅ Verificado | Menciona policy files correctamente |
 | `COMMON_FAILURES.md` | ⚠️ No auditado | |
 | `INVARIANTS.md` | ⚠️ No auditado | |

@@ -52,7 +52,7 @@ This documentation is organized by reader. Pick your path:
 | Reader | Start here | Then read |
 |--------|------------|-----------|
 | Founder / investor / new team member | [`../SYSTEM_BIBLE.md`](../SYSTEM_BIBLE.md) | [`system-overview.md`](./system-overview.md), [`Architecture story`](#architecture-story) |
-| AI agent about to change code | [`docs/ai/ARCHITECTURE_BIBLE.md`](../ai/ARCHITECTURE_BIBLE.md) | [`docs/ai/CONTRACTS.md`](../ai/CONTRACTS.md), [`operational-model.md`](./operational-model.md) |
+| AI agent about to change code | [`docs/ai/ARCHITECTURE_BIBLE.md`](../ai/ARCHITECTURE_BIBLE.md) | [`docs/ai/ENGINE_CONTRACTS.md`](../ai/ENGINE_CONTRACTS.md), [`operational-model.md`](./operational-model.md) |
 | Engineer designing a feature | [`operational-model.md`](./operational-model.md) | [`decision-architecture.md`](./decision-architecture.md), [`design-principles.md`](./design-principles.md) |
 | Architect validating a design | [`../adr/`](../adr/) | [`bounded-contexts.md`](./bounded-contexts.md), [`engines.md`](./engines.md) |
 | Operator debugging production | [`system-map.md`](./system-map.md) | [`diagrams/02-webhook-entry.md`](./diagrams/02-webhook-entry.md), [`knowledge-map.md`](./knowledge-map.md) |
@@ -67,7 +67,7 @@ This documentation is organized by reader. Pick your path:
 | [`docs/SYSTEM_BIBLE.md`](../SYSTEM_BIBLE.md) | Non-technical constitution of the system. |
 | [`docs/ai/ARCHITECTURE_BIBLE.md`](../ai/ARCHITECTURE_BIBLE.md) | **Read first.** Canonical truth for AI agents. |
 | [`docs/ai/ARCHITECTURE_RULES.md`](../ai/ARCHITECTURE_RULES.md) | Strict architectural rules. |
-| [`docs/ai/CONTRACTS.md`](../ai/CONTRACTS.md) | Engine contracts. |
+| [`docs/ai/ENGINE_CONTRACTS.md`](../ai/ENGINE_CONTRACTS.md) | Engine contracts. |
 | [`docs/ai/INVARIANTS.md`](../ai/INVARIANTS.md) | Architectural invariants. |
 | [`docs/ai/DECISION_TREE.md`](../ai/DECISION_TREE.md) | Runtime decision tree. |
 | [`system-overview.md`](./system-overview.md) | Conversation → Operational Model → Execution → Learning. |

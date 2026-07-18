@@ -1,5 +1,5 @@
 # TECHNICAL DEBT BASELINE v1.0 — AITOS
-## Generated: 2026-07-08 | Last reviewed: 2026-07-13 (Evidence Engine Freeze)
+## Generated: 2026-07-08 | Last reviewed: 2026-07-17 (ADR-013 — CDA Ratification)
 
 ---
 
@@ -75,3 +75,15 @@
 | H0A-08 | Pattern Discovery: bug parseo acceptance_json + DB schema ausente — runtime error garantizado si se activa | P1 | Pattern Discovery | H0A Audit |
 | H0A-09 | LOG_LEVEL no configurado en Vercel — sin visibilidad operacional | P2 | Ops | H0A Audit, P1-07 |
 | H0A-10 | Pre-commit hooks no activos — security check script existe pero no se ejecuta automáticamente | P3 | Ops | H0A Audit |
+
+## Algorithmic Conformance Debt (detectada en PR-QA3-S2B, referencia CDA)
+
+Deuda funcional por desviación del Conversation Decision Algorithm (CDA) certificado en ADR-013. NO es deuda técnica común — representa brechas entre el comportamiento actual y el algoritmo normativo.
+
+| ID | Descripción | Violación CDA | Archivo/Línea | Prioridad |
+|---|---|---|---|---|
+| **F01-DG** | Ambiguity se activa sin verificar `session.clarify_field` ni `leadCore.roleLock` | §6 condiciones [1][4], I-11 | `lead.service.ts:203` | **P0** |
+| **F02-DG** | Intención no preservada cuando `prevIntent=BOOKING` y se clasifica como `CONSULTA` | §7 regla 1, I-04 | `core.ts:277-283` | **P0** |
+| **F03-DG** | Merge de contexto no ejecutado cuando se activa ambigüedad — mensaje no se extrae como delta | §2 paso 7, §5 regla 1, I-03 | Pipeline de ambigüedad | **P0** |
+
+**Nota**: Estas deudas no se resuelven con refactor técnico. Requieren cambios funcionales en el pipeline para alinear el comportamiento con el CDA. Planificadas en QA-3 Sprint 3.

@@ -23,7 +23,7 @@ import { detectLeadLang } from "@/lib/detect-lang";
 import { formatConfidenceNote } from "@/lib/services/extraction/format-confidence-note";
 import { loadPreviousSlots, loadPreviousSlotStates } from "@/lib/services/workflow/load-previous-slots";
 import { buildSlotStates, type SlotStateEntry } from "@/lib/ai/slot-state";
-import { evaluateCompleteness } from "@/lib/services/workflow/evaluate-completeness";
+import { resolveSimpleFieldGap } from "@/lib/ai/field-resolver";
 import { log } from "@/lib/utils/logger";
 import { parseSessionSlots } from "@/lib/services/shared/session-helpers";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
@@ -246,10 +246,10 @@ export async function runExtractionPipeline(
       const hasNewData = raw != null && Object.keys(raw!).some(k => raw![k] != null && String(raw![k]).trim() !== "");
       if (hasNewData) {
         log.info("[CONFIRMATION] negative with new slot data — treating as correction, not cancellation");
-        const completeness = evaluateCompleteness(raw!, domain);
-        if (completeness.status === "ASK") {
-          const msg = buildGenericClarify(completeness.field!, detectLeadLang(text));
-          log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
+        const fieldGap = resolveSimpleFieldGap(raw!, domain);
+        if (fieldGap.field !== null) {
+          const msg = buildGenericClarify(fieldGap.field!, detectLeadLang(text));
+          log.info("[COMPLETENESS] bloqueado", { field: fieldGap.field });
           await sendAndPersist(phone, conversationId, msg);
           return null;
         }
@@ -269,8 +269,8 @@ export async function runExtractionPipeline(
         origin: coreDecisionEarly.roleLock.origin ?? prevSlotsEarly?.origin ?? null,
         destination: coreDecisionEarly.roleLock.destination ?? prevSlotsEarly?.destination ?? null,
       };
-      const completeness = evaluateCompleteness(effectiveSlots, domain);
-      if (completeness.status === "ASK") {
+      const fieldGap = resolveSimpleFieldGap(effectiveSlots, domain);
+      if (fieldGap.field !== null) {
         // FASE 22.1: bypass para afirmaciones y correcciones
         if (
           (hasAffirmation || hasCorrection) &&
@@ -281,8 +281,8 @@ export async function runExtractionPipeline(
             previousState: convState,
           });
         } else {
-          const msg = buildGenericClarify(completeness.field!, detectLeadLang(text));
-          log.info("[COMPLETENESS] bloqueado", { field: completeness.field });
+          const msg = buildGenericClarify(fieldGap.field!, detectLeadLang(text));
+          log.info("[COMPLETENESS] bloqueado", { field: fieldGap.field });
           await sendAndPersist(phone, conversationId, msg);
           return null;
         }

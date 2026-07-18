@@ -2,7 +2,7 @@
 
 > Detailed documentation of each engine in the system.
 > Each engine includes: purpose, inputs, outputs, responsibilities, dependencies, and contracts.
-> For strict contracts, see `docs/ai/CONTRACTS.md`.
+> For strict contracts, see `docs/ai/ENGINE_CONTRACTS.md`.
 
 ---
 

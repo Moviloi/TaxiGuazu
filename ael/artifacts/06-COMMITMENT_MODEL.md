@@ -8,7 +8,7 @@
 >
 > ⚠️ This document belongs to **Level III-c (Contractual Authority)** of the AITOS
 > Document Hierarchy (CONSTITUTION.md §6). It derives from CONSTITUTION.md (Level I-a),
-> ONTOLOGY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), DECISION_MODEL.md
+> SYSTEM_VOCABULARY.md (Level I-b), COGNITIVE_PRINCIPLES.md (Level II-a), DECISION_MODEL.md
 > (Level III-b), and EVIDENCE_MODEL.md (Level III-a).
 >
 > This document does not redefine any term or principle from its source documents.
@@ -85,7 +85,7 @@ This document does **NOT** govern:
 | Source document | Relationship to this document |
 |----------------|------------------------------|
 | **CONSTITUTION.md** (Level I-a) | Source of supreme principles: S-P1 (Evidence-Based Operation), S-P7 (Human Escalation), S-P5 (Evidence Immutability), S-P6 (Knowledge Preservation), P-I4 (Humility Before Uncertainty), P-I5 (Auditability), P-E5 (Proportional Response) |
-| **ONTOLOGY.md** (Level I-b) | Source of all terminology: Commitment (8.2), Decision (8.1), Cost of Error (8.3), Certainty Threshold (8.4), Strategic Posture (8.5), Operational Projection (9.2), Belief (5.2) |
+| **SYSTEM_VOCABULARY.md** (Level I-b) | Source of all terminology: Commitment (8.2), Decision (8.1), Cost of Error (8.3), Certainty Threshold (8.4), Strategic Posture (8.5), Operational Projection (9.2), Belief (5.2) |
 | **COGNITIVE_PRINCIPLES.md** (Level II-a) | Source of cognitive principles: CP-22 (compromiso explícito), CP-23 (umbral dinámico), CP-24 (costo de error), CP-25 (informativo vs. operacional), CP-26 (escalamiento por insuficiencia), CP-35 (explicación antes de acción) |
 | **DECISION_MODEL.md** (Level III-b) | Defines the Decision that produces the Commitment; source of rules R-DM-001, R-DM-003, R-DM-004, R-DM-006, R-DM-012, R-DM-016, R-DM-021, R-DM-022, R-DM-023, R-DM-024, R-DM-027, R-DM-028, R-DM-029, R-DM-030, R-DM-044, R-DM-046 |
 | **EVIDENCE_MODEL.md** (Level III-a) | Defines the Evidence that feeds into Decisions and Commitments; sibling document |
@@ -99,7 +99,7 @@ Each rule in this document follows this uniform format:
 
 **Enunciado:** The normative statement.
 
-**Derivación Constitucional:** References to CONSTITUTION.md, ONTOLOGY.md,
+**Derivación Constitucional:** References to CONSTITUTION.md, SYSTEM_VOCABULARY.md,
 COGNITIVE_PRINCIPLES.md, DECISION_MODEL.md, and/or EVIDENCE_MODEL.md.
 
 **Justificación:** Why this rule exists and what architectural problem it solves.
@@ -125,7 +125,7 @@ transforma una creencia probabilística ("creo que el origen es Asunción con ce
 0.85") en una obligación ejecutable ("el sistema actuará como si el origen fuera
 Asunción"). Una vez comprometido, revertir tiene un costo.
 
-**Derivación Constitucional:** ONTOLOGY.md §8.2 (Commitment: "an irrevocable (or
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §8.2 (Commitment: "an irrevocable (or
 costly-to-revoke) choice to treat a Belief as true for operational purposes");
 CP-22 (compromiso explícito — el compromiso debe ser una transición cognitiva explícita
 y consciente).
@@ -199,12 +199,12 @@ de Commitments).
 ### R-CM-003 — Commitment as a transition in the cognitive cycle
 
 **Enunciado:** El Commitment ocurre en la transición entre la fase de Compromiso y la
-fase de Proyección del Ciclo Cognitivo (ONTOLOGY.md §7.4). Es el output del Compromiso
+fase de Proyección del Ciclo Cognitivo (SYSTEM_VOCABULARY.md §7.4). Es el output del Compromiso
 y el input de la Proyección. No puede existir un Commitment que no haya pasado por el
 Compromiso, ni una Proyección que no se base en un Commitment.
 
 **Derivación Constitucional:** CP-01 (ciclo completo), CP-02 (secuencia estricta),
-CP-22 (compromiso explícito), ONTOLOGY.md §7.4 (Commitment Phase).
+CP-22 (compromiso explícito), SYSTEM_VOCABULARY.md §7.4 (Commitment Phase).
 
 **Justificación:** El Ciclo Cognitivo tiene una secuencia estricta (CP-02): Percepción →
 Razonamiento → Compromiso → Proyección. El Commitment es el output de la tercera fase
@@ -604,7 +604,7 @@ EVIDENCE_MODEL.md (los eventos de transición se registran como Evidence).
 momento de creación y nunca se reutiliza, incluso si el Commitment es VOID. El ID
 sigue el mismo formato y reglas que los IDs de Evidence (EVIDENCE_MODEL.md R-EM-013).
 
-**Derivación Constitucional:** ONTOLOGY.md §3.1 (Entity identity constraint); P-I5
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §3.1 (Entity identity constraint); P-I5
 (auditabilidad — referencias estables).
 
 **Justificación:** La identidad del Commitment es necesaria para referencias cruzadas
@@ -880,7 +880,7 @@ en el ciclo), CHANNEL_ADAPTER.md (define cómo se comunica la interpretación al
 en un ciclo posterior, cuando se cumplan todas las condiciones siguientes:
 
 1. **Confirmación del usuario**: El usuario ha confirmado explícita o implícitamente la
-   interpretación (ONTOLOGY.md define los niveles de confirmación).
+   interpretación (SYSTEM_VOCABULARY.md define los niveles de confirmación).
 2. **Nuevo ciclo**: Se inicia un nuevo Ciclo Cognitivo que recibe la confirmación como
    nueva Evidence.
 3. **Nuevo gate**: El nuevo ciclo evalúa el Commitment Operacional con su propio umbral
@@ -1762,14 +1762,14 @@ DECISION_MODEL.md (define el uso de outcomes para calibración).
 
 ### R-CM-039 — Projection derives from Commitments
 
-**Enunciado:** La Operational Projection (ONTOLOGY.md §9.2) se deriva exclusivamente de
+**Enunciado:** La Operational Projection (SYSTEM_VOCABULARY.md §9.2) se deriva exclusivamente de
 los Commitments activos (ACTIVE) del sistema. La Proyección es la vista del mundo
 operacional expresada en términos de Commitments: viajes creados, conductores
 despachados, precios confirmados.
 
 **Derivación Constitucional:** CP-27 (proyección derivada — la Proyección se deriva
 del Knowledge State, que incluye los Commitments activos); CP-28 (proyección de solo
-lectura — la Proyección no modifica los Commitments); ONTOLOGY.md §9.2 (Operational
+lectura — la Proyección no modifica los Commitments); SYSTEM_VOCABULARY.md §9.2 (Operational
 Projection como vista del Knowledge State).
 
 **Justificación:** Si la Proyección pudiera existir independientemente de los
@@ -2143,7 +2143,7 @@ This document concretizes the following delegations from higher-level documents:
 
 > Este documento fue redactado a partir de la delegación constitucional de
 > COGNITIVE_PRINCIPLES.md (CP-22, CP-23, CP-24, CP-25, CP-26, CP-35), los contratos
-> de DECISION_MODEL.md (R-DM-001 a R-DM-046), y la terminología de ONTOLOGY.md.
+> de DECISION_MODEL.md (R-DM-001 a R-DM-046), y la terminología de SYSTEM_VOCABULARY.md.
 > Es un DRAFT hasta su ratificación mediante el proceso de gobierno de la Constitución
 > (CONSTITUTION.md Sección 7.2).
 > Fecha: 2026-07-11

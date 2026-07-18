@@ -63,8 +63,8 @@ vi.mock("@/lib/services/workflow/load-previous-slots", () => ({
   loadPreviousSlotStates: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/services/workflow/evaluate-completeness", () => ({
-  evaluateCompleteness: vi.fn(),
+vi.mock("@/lib/ai/field-resolver", () => ({
+  resolveSimpleFieldGap: vi.fn(),
 }));
 
 vi.mock("@/lib/services/i18n/detect-lang", () => ({
@@ -98,8 +98,8 @@ describe("runExtractionPipeline", () => {
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue({ origin: "Aeropuerto IGR" } as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "ASK", field: "destination" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: "destination", reason: "missing" });
 
     const { buildGenericClarify } = await import("@/lib/ai/response-builder");
     vi.mocked(buildGenericClarify).mockReturnValue("¿A dónde querés ir?");
@@ -124,8 +124,8 @@ describe("runExtractionPipeline", () => {
       origin: "Aeropuerto IGR", destination: "Centro", passengers: 2,
     } as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const { calculateSlotConfidence } = await import("@/lib/services/extraction/confidence");
     vi.mocked(calculateSlotConfidence).mockResolvedValue({
@@ -177,8 +177,8 @@ describe("runExtractionPipeline", () => {
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue(null as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const { parseRouteFromText } = await import("@/lib/services/extraction/regex-extractor");
     vi.mocked(parseRouteFromText).mockReturnValue({
@@ -218,8 +218,8 @@ describe("runExtractionPipeline", () => {
       origin: "Aeropuerto IGR", destination: "Centro", passengers: 1,
     } as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const { calculateSlotConfidence } = await import("@/lib/services/extraction/confidence");
     vi.mocked(calculateSlotConfidence).mockResolvedValue({
@@ -273,7 +273,7 @@ describe("runExtractionPipeline", () => {
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue(null as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
 
     const result = await runExtractionPipeline(
       "+54911111111", "sí", 1, makeCoreDecision(), [], null,
@@ -281,8 +281,8 @@ describe("runExtractionPipeline", () => {
 
     // No bloquea a pesar de raw=null porque el guard salta completeness
     expect(result).not.toBeNull();
-    // evaluateCompleteness NO fue llamada
-    expect(evaluateCompleteness).not.toHaveBeenCalled();
+    // resolveSimpleFieldGap NO fue llamada
+    expect(resolveSimpleFieldGap).not.toHaveBeenCalled();
   });
 
   it("Caso 2: awaiting_confirmation + 'no' (raw vacío) — cancela confirmación", async () => {
@@ -304,13 +304,12 @@ describe("runExtractionPipeline", () => {
     const { sendWhatsAppMessage } = await import("@/lib/sender");
     const { resetChatSession, insertMessage } = await import("@/lib/db/database");
     const { setConversationalState } = await import("@/lib/db/state-accessors");
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
     const result = await runExtractionPipeline(
       "+54911111111", "no", 1, makeCoreDecision(), [], null,
     );
 
-    expect(evaluateCompleteness).not.toHaveBeenCalled();
+    expect(resolveSimpleFieldGap).not.toHaveBeenCalled();
     expect(sendWhatsAppMessage).toHaveBeenCalledWith("+54911111111", "No hay problema. Se canceló.");
     expect(insertMessage).toHaveBeenCalledWith(1, "assistant", "No hay problema. Se canceló.");
     expect(setConversationalState).toHaveBeenCalledWith("+54911111111", "idle");
@@ -331,8 +330,8 @@ describe("runExtractionPipeline", () => {
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue({ scheduled_at: "10:00" } as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const { sendWhatsAppMessage } = await import("@/lib/sender");
     const { resetChatSession } = await import("@/lib/db/database");
@@ -342,7 +341,7 @@ describe("runExtractionPipeline", () => {
       "+54911111111", "no, a las 10", 1, makeCoreDecision(), [], null,
     );
 
-    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(resolveSimpleFieldGap).toHaveBeenCalled();
     expect(sendWhatsAppMessage).not.toHaveBeenCalledWith("+54911111111", expect.stringContaining("canceló"));
     expect(setConversationalState).not.toHaveBeenCalledWith("+54911111111", "idle");
     expect(resetChatSession).not.toHaveBeenCalled();
@@ -362,8 +361,8 @@ describe("runExtractionPipeline", () => {
     const { extractSlots } = await import("@/lib/services/extraction/extract-slots");
     vi.mocked(extractSlots).mockResolvedValue({ origin: "hotel" } as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const { sendWhatsAppMessage } = await import("@/lib/sender");
     const { resetChatSession } = await import("@/lib/db/database");
@@ -373,7 +372,7 @@ describe("runExtractionPipeline", () => {
       "+54911111111", "no, desde el hotel", 1, makeCoreDecision(), [], null,
     );
 
-    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(resolveSimpleFieldGap).toHaveBeenCalled();
     expect(sendWhatsAppMessage).not.toHaveBeenCalledWith("+54911111111", expect.stringContaining("canceló"));
     expect(setConversationalState).not.toHaveBeenCalledWith("+54911111111", "idle");
     expect(resetChatSession).not.toHaveBeenCalled();
@@ -390,14 +389,14 @@ describe("runExtractionPipeline", () => {
     vi.mocked(isAffirmativeMessage).mockReturnValue(false);
     vi.mocked(isNegativeMessage).mockReturnValue(true);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const result = await runExtractionPipeline(
       "+54911111111", "no", 1, makeCoreDecision(), [], null,
     );
 
-    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(resolveSimpleFieldGap).toHaveBeenCalled();
     expect(result).not.toBeNull();
   });
 
@@ -410,15 +409,15 @@ describe("runExtractionPipeline", () => {
     const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
     vi.mocked(isAffirmativeMessage).mockReturnValue(true);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const result = await runExtractionPipeline(
       "+54911111111", "sí", 1, makeCoreDecision(), [], null,
     );
 
     // No es awaiting_confirmation → completeness evalúa
-    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(resolveSimpleFieldGap).toHaveBeenCalled();
     expect(result).not.toBeNull();
   });
 
@@ -431,15 +430,15 @@ describe("runExtractionPipeline", () => {
     const { isAffirmativeMessage } = await import("@/lib/ai/patterns");
     vi.mocked(isAffirmativeMessage).mockReturnValue(true);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const result = await runExtractionPipeline(
       "+54911111111", "sí", 1, makeCoreDecision(), [], null,
     );
 
     // No es awaiting_confirmation → completeness evalúa
-    expect(evaluateCompleteness).toHaveBeenCalled();
+    expect(resolveSimpleFieldGap).toHaveBeenCalled();
     expect(result).not.toBeNull();
   });
 
@@ -471,8 +470,8 @@ describe("runExtractionPipeline", () => {
       divergence: null,
     } as any);
 
-    const { evaluateCompleteness } = await import("@/lib/services/workflow/evaluate-completeness");
-    vi.mocked(evaluateCompleteness).mockReturnValue({ status: "COMPLETE" });
+    const { resolveSimpleFieldGap } = await import("@/lib/ai/field-resolver");
+    vi.mocked(resolveSimpleFieldGap).mockReturnValue({ field: null, reason: "complete" });
 
     const { isAffirmativeMessage, isCorrectionMessage } = await import("@/lib/ai/patterns");
     vi.mocked(isAffirmativeMessage).mockReturnValue(false);

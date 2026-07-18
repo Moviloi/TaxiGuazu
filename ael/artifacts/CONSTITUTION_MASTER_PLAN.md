@@ -31,7 +31,7 @@ CONSTITUCIÓN COGNITIVA DE AITOS
 │
 ├── NIVEL FUNDACIONAL (estable, inmodificable sin referéndum)
 │   ├── 01-CONSTITUTION.md          — Filosofía, identidad, propósito, principios
-│   ├── 02-ONTOLOGY.md              — Glosario normativo (términos prohibidos y obsoletos)
+│   ├── 02-SYSTEM_VOCABULARY.md              — Glosario normativo (términos prohibidos y obsoletos)
 │   └── 03-COGNITIVE_PRINCIPLES.md  — 22+ principios permanentes verificables
 │
 ├── NIVEL ARQUITECTÓNICO (evolutivo, cambios requieren ADR)
@@ -53,7 +53,7 @@ CONSTITUCIÓN COGNITIVA DE AITOS
 | # | Documento | Propósito | Alcance | Estabilidad |
 |---|-----------|-----------|---------|-------------|
 | 1 | CONSTITUTION.md | Definir QUÉ es AITOS, su identidad, sus límites, su filosofía | Todo el proyecto | **Estable** |
-| 2 | ONTOLOGY.md | Glosario normativo con definiciones ÚNICAS de cada concepto | Todo el proyecto | **Estable** |
+| 2 | SYSTEM_VOCABULARY.md | Glosario normativo con definiciones ÚNICAS de cada concepto | Todo el proyecto | **Estable** |
 | 3 | COGNITIVE_PRINCIPLES.md | 22+ principios permanentes que toda decisión debe respetar | Arquitectura + decisiones | **Estable** |
 | 4 | COGNITIVE_ARCHITECTURE.md | El modelo cognitivo completo: ciclo, componentes, flujo | Arquitectura | **Evolutivo** |
 | 5 | RESPONSIBILITY_MODEL.md | Dueños de cada concepto, fronteras, prohibiciones | Arquitectura + contratos | **Evolutivo** |
@@ -120,7 +120,7 @@ CONSTITUCIÓN COGNITIVA DE AITOS
 
 2. **Un documento de nivel inferior PUEDE extender a uno de nivel superior** siempre que no lo contradiga. DECISION_MODEL.md puede detallar cómo se implementa un principio de PRINCIPLES.md, pero no puede relajarlo.
 
-3. **ONTOLOGY.md es lexicográficamente superior a todos.** Si COGNITIVE_ARCHITECTURE.md usa un término de forma diferente a ONTOLOGY.md, ONTOLOGY.md prevalece y COGNITIVE_ARCHITECTURE.md debe corregirse.
+3. **SYSTEM_VOCABULARY.md es lexicográficamente superior a todos.** Si COGNITIVE_ARCHITECTURE.md usa un término de forma diferente a SYSTEM_VOCABULARY.md, SYSTEM_VOCABULARY.md prevalece y COGNITIVE_ARCHITECTURE.md debe corregirse.
 
 4. **GOVERNANCE.md es procesalmente superior.** Define cómo se modifican los demás documentos. Ningún documento puede modificarse sin seguir el proceso que GOVERNANCE.md define.
 
@@ -131,7 +131,7 @@ CONSTITUCIÓN COGNITIVA DE AITOS
 | Si esto contradice a esto... | ...esto prevalece |
 |------------------------------|-------------------|
 | Cualquier documento | CONSTITUTION.md |
-| Cualquier término mal usado | ONTOLOGY.md |
+| Cualquier término mal usado | SYSTEM_VOCABULARY.md |
 | Cualquier decisión | PRINCIPLES.md |
 | Cualquier ADR anterior a la constitución | La constitución (si fue adoptada) |
 | Cualquier ADR posterior a la constitución | El ADR (si sigue el proceso de GOVERNANCE.md) |
@@ -150,24 +150,24 @@ CONSTITUCIÓN COGNITIVA DE AITOS
 01-CONSTITUTION.md
     └── Sin dependencias (se escribe primero)
         │
-02-ONTOLOGY.md
+02-SYSTEM_VOCABULARY.md
     └── Depende de: 01-CONSTITUTION.md (necesita la filosofía para definir términos clave)
         │
 03-COGNITIVE_PRINCIPLES.md
     └── Depende de: 01-CONSTITUTION.md (los principios derivan de la filosofía)
-        └── Depende de: 02-ONTOLOGY.md (los principios usan términos que deben estar definidos)
+        └── Depende de: 02-SYSTEM_VOCABULARY.md (los principios usan términos que deben estar definidos)
             │
 04-COGNITIVE_ARCHITECTURE.md
-    └── Depende de: 01-CONSTITUTION.md, 02-ONTOLOGY.md, 03-COGNITIVE_PRINCIPLES.md
+    └── Depende de: 01-CONSTITUTION.md, 02-SYSTEM_VOCABULARY.md, 03-COGNITIVE_PRINCIPLES.md
         │
 05-RESPONSIBILITY_MODEL.md
-    └── Depende de: 02-ONTOLOGY.md, 04-COGNITIVE_ARCHITECTURE.md
+    └── Depende de: 02-SYSTEM_VOCABULARY.md, 04-COGNITIVE_ARCHITECTURE.md
         │
 06-KNOWLEDGE_MODEL.md
-    └── Depende de: 02-ONTOLOGY.md, 04-COGNITIVE_ARCHITECTURE.md, 05-RESPONSIBILITY_MODEL.md
+    └── Depende de: 02-SYSTEM_VOCABULARY.md, 04-COGNITIVE_ARCHITECTURE.md, 05-RESPONSIBILITY_MODEL.md
         │
 07-DECISION_MODEL.md
-    └── Depende de: 02-ONTOLOGY.md, 04-COGNITIVE_ARCHITECTURE.md, 06-KNOWLEDGE_MODEL.md
+    └── Depende de: 02-SYSTEM_VOCABULARY.md, 04-COGNITIVE_ARCHITECTURE.md, 06-KNOWLEDGE_MODEL.md
         │
 08-INVARIANTS.md
     └── Depende de: 03-COGNITIVE_PRINCIPLES.md (los invariantes derivan de los principios)
@@ -178,7 +178,7 @@ CONSTITUCIÓN COGNITIVA DE AITOS
         │
 10-GOVERNANCE.md
     └── Depende de: 01-CONSTITUTION.md (el gobierno deriva de la filosofía)
-        └── Depende de: 02-ONTOLOGY.md (usa términos de gobernanza que deben estar definidos)
+        └── Depende de: 02-SYSTEM_VOCABULARY.md (usa términos de gobernanza que deben estar definidos)
 ```
 
 ### Dependencias de aprobación
@@ -198,7 +198,7 @@ La aprobación debe seguir estrictamente este orden. No se puede aprobar DECISIO
 | Si cambia... | Revisar... |
 |-------------|------------|
 | 01-CONSTITUTION.md | TODOS (es el fundamento de todo) |
-| 02-ONTOLOGY.md | TODOS (cambiar una definición afecta todos los usos) |
+| 02-SYSTEM_VOCABULARY.md | TODOS (cambiar una definición afecta todos los usos) |
 | 03-COGNITIVE_PRINCIPLES.md | 08-INVARIANTS.md (los invariantes derivan de principios) |
 | 04-COGNITIVE_ARCHITECTURE.md | 05, 06, 07, 08 |
 | 05-RESPONSIBILITY_MODEL.md | 06, 07 (cambiar dueños afecta modelos) |
@@ -219,7 +219,7 @@ Cada documento debe escribirse en el orden indicado. No se puede comenzar el sig
 | Paso | Documento | Tiempo estimado | Entregable |
 |------|-----------|----------------|------------|
 | 1 | **01-CONSTITUTION.md** | 1 día | Filosofía completa del sistema |
-| 2 | **02-ONTOLOGY.md** | 1 día | Glosario normativo con ~50 términos |
+| 2 | **02-SYSTEM_VOCABULARY.md** | 1 día | Glosario normativo con ~50 términos |
 | 3 | **03-COGNITIVE_PRINCIPLES.md** | 1 día | 22+ principios con justificación |
 
 **Criterio de finalización de la Fase 1:** Los 3 documentos están completos y consistentes entre sí. No hay contradicciones entre la filosofía, los términos y los principios.
@@ -273,7 +273,7 @@ Cada documento requiere una aprobación formal antes de considerarse vigente. La
 01-CONSTITUTION.md
     └── APROBADO (necesario para todo lo demás)
         │
-02-ONTOLOGY.md
+02-SYSTEM_VOCABULARY.md
     └── APROBADO (necesario para usar términos correctamente)
         │
 03-COGNITIVE_PRINCIPLES.md
@@ -322,7 +322,7 @@ Cada documento tiene un nivel de estabilidad que indica con qué frecuencia se e
 | Documento | Estabilidad | Justificación |
 |-----------|-------------|---------------|
 | 01-CONSTITUTION.md | **Estable** | La filosofía del sistema no cambia con cada sprint. Cambiar CONSTITUTION.md es un evento mayor. |
-| 02-ONTOLOGY.md | **Estable** | Las definiciones deben ser roca. Cambiar una definición es caro porque afecta todos los documentos. |
+| 02-SYSTEM_VOCABULARY.md | **Estable** | Las definiciones deben ser roca. Cambiar una definición es caro porque afecta todos los documentos. |
 | 03-COGNITIVE_PRINCIPLES.md | **Estable** | Los principios son permanentes. Se agregan, no se modifican ni eliminan. |
 | 04-COGNITIVE_ARCHITECTURE.md | **Evolutivo** | El modelo cognitivo se refina a medida que se implementa. Cambios controlados por ADR. |
 | 05-RESPONSIBILITY_MODEL.md | **Evolutivo** | Las responsabilidades pueden refinarse con la implementación. |
@@ -348,12 +348,12 @@ EXPERIMENTAL    ──────────────── 09 (temporal)
 
 | # | Riesgo | Probabilidad | Impacto | Mitigación |
 |---|--------|-------------|---------|-----------|
-| R1 | **Ontología inconsistente**: dos documentos usan el mismo término con significado diferente | Alta en Fase 1-2 | Catastrófico: toda la constitución pierde coherencia | Escribir ONTOLOGY.md antes que cualquier documento que use sus términos. Revisión cruzada obligatoria. |
+| R1 | **Ontología inconsistente**: dos documentos usan el mismo término con significado diferente | Alta en Fase 1-2 | Catastrófico: toda la constitución pierde coherencia | Escribir SYSTEM_VOCABULARY.md antes que cualquier documento que use sus términos. Revisión cruzada obligatoria. |
 | R2 | **Principio olvidado**: un principio importante de Auditoría #04 o #06 no se incluye en PRINCIPLES.md | Media | Alto: se descubre después, requiriendo modificación de documentos aprobados | Checklist exhaustivo contra auditorías durante la redacción de PRINCIPLES.md. |
 | R3 | **Deriva de la constitución**: la implementación se aleja del modelo cognitivo sin que la constitución se actualice | Alta (es el riesgo que causó el problema actual) | Alto: el proyecto vuelve al estado de deriva conceptual | GOVERNANCE.md debe incluir revisión periódica de adherencia. Cada release debe certificar alineación. |
 | R4 | **Migración incompleta**: el MIGRATION_GUIDE define un camino pero la implementación toma atajos que violan principios | Media | Alto: se reintroduce deuda conceptual | CHECKLIST de migración con verificación puntual contra PRINCIPLES.md. |
 | R5 | **Congelamiento prematuro**: la constitución se vuelve tan rígida que impide evolucionar el sistema | Baja | Medio: el sistema no puede adaptarse | Los niveles "Evolutivo" permiten cambio controlado. GOVERNANCE.md define el proceso para cambiar incluso documentos estables. |
-| R6 | **Multiplicación de términos**: ONTOLOGY.md define 50 términos pero la implementación introduce 20 más no definidos | Alta | Medio: el vocabulario del código diverge del vocabulario de la constitución | Todo término nuevo en cualquier documento debe agregarse a ONTOLOGY.md antes de usarse. |
+| R6 | **Multiplicación de términos**: SYSTEM_VOCABULARY.md define 50 términos pero la implementación introduce 20 más no definidos | Alta | Medio: el vocabulario del código diverge del vocabulario de la constitución | Todo término nuevo en cualquier documento debe agregarse a SYSTEM_VOCABULARY.md antes de usarse. |
 | R7 | **El MIGRATION_GUIDE se vuelve permanente**: la migración nunca termina y el guide se convierte en documento normativo | Media | Medio: el sistema queda en un estado híbrido permanente | MIGRATION_GUIDE debe tener fecha de caducidad explícita. Si no se completa, se requiere una decisión fundacional. |
 | R8 | **Solapamiento entre COGNITIVE_ARCHITECTURE y KNOWLEDGE_MODEL**: ambos describen la estructura del conocimiento | Alta en Fase 2 | Alto: duplicación y posible contradicción | COGNITIVE_ARCHITECTURE describe el "cómo" (procesos, ciclo). KNOWLEDGE_MODEL describe el "qué" (estructuras, almacenes). Separación explícita en sus propósitos. |
 
@@ -390,7 +390,7 @@ Estos documentos DEJAN de tener vigencia una vez que la constitución está apro
 | `docs/architecture/strategy-decision.md` | **DECISION_MODEL.md** | StrategyDecision (ADR-008) se redefine dentro del nuevo modelo de decisión. |
 | `docs/architecture/conversation-pipeline.md` | **COGNITIVE_ARCHITECTURE.md** | El pipeline conversacional (ADR-008) es reemplazado por el ciclo cognitivo. |
 | `docs/architecture/design-principles.md` | **PRINCIPLES.md** | Los principios de diseño se elevan a principios cognitivos. Algunos sobreviven, otros se redefinen. |
-| `docs/architecture/glossary.md` | **ONTOLOGY.md** | El glosario unificado existente se absorbe y expande en la ontología normativa. |
+| `docs/architecture/glossary.md` | **SYSTEM_VOCABULARY.md** | El glosario unificado existente se absorbe y expande en la ontología normativa. |
 | `docs/architecture/bounded-contexts.md` | **RESPONSIBILITY_MODEL.md** | Los bounded contexts actuales se redefinen como responsabilidades cognitivas. |
 | `docs/architecture/engines.md` | **KNOWLEDGE_MODEL.md + RESPONSIBILITY_MODEL.md** | Los engines actuales se redistribuyen según el nuevo modelo de conocimiento y responsabilidades. |
 
@@ -494,7 +494,7 @@ Para cambiar cualquier documento de la constitución (incluso los "Evolutivos"),
 
 #### G3 — Los documentos "Estables" requieren referéndum
 
-Para cambiar CONSTITUTION.md, ONTOLOGY.md, COGNITIVE_PRINCIPLES.md, o GOVERNANCE.md, se requiere:
+Para cambiar CONSTITUTION.md, SYSTEM_VOCABULARY.md, COGNITIVE_PRINCIPLES.md, o GOVERNANCE.md, se requiere:
 1. ADR con justificación exhaustiva
 2. Revisión de impacto contra TODOS los demás documentos
 3. Aprobación explícita de Cristian (fundador)
@@ -514,7 +514,7 @@ No puede haber dos backlogs activos. El PROJECT_BOARD, ROADMAP y BACKLOG deben f
 
 #### G7 — Los términos prohibidos se eliminan activamente
 
-ONTOLOGY.md define términos prohibidos (ej: "state machine" para describir la cognición, "llenar slots", "última intención"). Estos términos deben eliminarse activamente de TODA la documentación y código nuevo. El código existente puede mantenerlos, pero toda documentación nueva debe usar los términos correctos.
+SYSTEM_VOCABULARY.md define términos prohibidos (ej: "state machine" para describir la cognición, "llenar slots", "última intención"). Estos términos deben eliminarse activamente de TODA la documentación y código nuevo. El código existente puede mantenerlos, pero toda documentación nueva debe usar los términos correctos.
 
 #### G8 — La constitución no es un museo
 
@@ -549,7 +549,7 @@ Cada 3 meses (o cada release):
 
 **No escribas toda la constitución de una vez.**
 
-Escribe CONSTITUTION.md primero. Solo cuando esté aprobado, escribe ONTOLOGY.md. Luego COGNITIVE_PRINCIPLES.md. Un documento a la vez, en orden, sin saltos.
+Escribe CONSTITUTION.md primero. Solo cuando esté aprobado, escribe SYSTEM_VOCABULARY.md. Luego COGNITIVE_PRINCIPLES.md. Un documento a la vez, en orden, sin saltos.
 
 Cada documento debe ser **autocontenido** (puede leerse solo) pero **consistente** (no contradice a los anteriores).
 

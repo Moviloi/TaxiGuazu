@@ -2,7 +2,7 @@
 
 **Nivel:** III-e (Modelo de Adaptación de Canales)
 **Versión:** 1.0-draft
-**Dependencias:** ONTOLOGY.md, CONSTITUTION.md, COGNITIVE_PRINCIPLES.md, COGNITIVE_ARCHITECTURE.md, ACTION_EXECUTOR.md
+**Dependencias:** SYSTEM_VOCABULARY.md, CONSTITUTION.md, COGNITIVE_PRINCIPLES.md, COGNITIVE_ARCHITECTURE.md, ACTION_EXECUTOR.md
 
 > **Nota de navegación:** Este documento es parte de la familia de 8 modelos Level III.
 > Hermano de: EVIDENCE_MODEL (III-a), DECISION_MODEL (III-b), COMMITMENT_MODEL (III-c),
@@ -29,7 +29,7 @@ de interfaz con canales de comunicación**.
 | Fuente | Sección/Regla | Relación |
 |--------|---------------|----------|
 | CONSTITUTION.md | P-I4, P-E3, S-P1 | Transparencia, honestidad, operación basada en evidencia |
-| ONTOLOGY.md | §3 (Signal, Channel, VerifiedSignal), §7.2 (Perception), §12.1-12.2 (Response) | Vocabulario: Canal, Señal, Respuesta |
+| SYSTEM_VOCABULARY.md | §3 (Signal, Channel, VerifiedSignal), §7.2 (Perception), §12.1-12.2 (Response) | Vocabulario: Canal, Señal, Respuesta |
 | COGNITIVE_PRINCIPLES.md | CP-32, CP-33, CP-35 | Preguntar con propósito, acompañamiento continuo, explicación antes de acción |
 | COGNITIVE_ARCHITECTURE.md | R-CA-004, R-CA-011, R-CA-015, IP-1, IP-4 | Responsabilidades, contratos, handoffs |
 | ACTION_EXECUTOR.md | R-AE-023, R-AE-024, R-AE-025, R-AE-026 | Formato semántico de Response, contenido |
@@ -55,7 +55,7 @@ comunicación directa con el exterior.
 
 **Derivación Constitucional:** R-CA-004 (Channel Adapter responsibility — el
 Adapter es el único componente con responsabilidad de I/O externo); CP-05 (frontera
-percepción/evidencia — el Adapter está en la frontera); ONTOLOGY.md §3.4 (Channel
+percepción/evidencia — el Adapter está en la frontera); SYSTEM_VOCABULARY.md §3.4 (Channel
 como límite del sistema).
 
 **Justificación:** Si múltiples componentes tuvieran acceso al exterior, la
@@ -143,10 +143,10 @@ su operación básica? Si sí → violación.
 
 **Enunciado:** El Channel Adapter recibe Signals crudos desde canales externos.
 Un Signal es la unidad de información antes de cualquier procesamiento
-(ONTOLOGY.md §3.1). El Adapter no asume nada sobre el formato, contenido, o
+(SYSTEM_VOCABULARY.md §3.1). El Adapter no asume nada sobre el formato, contenido, o
 validez del Signal — recibe lo que el canal entrega.
 
-**Derivación Constitucional:** ONTOLOGY.md §3.1 (Signal como unidad de información
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §3.1 (Signal como unidad de información
 percibida, antes de procesamiento); R-CA-004 (Channel Adapter recibe raw Signals).
 
 **Justificación:** El sistema no puede controlar cómo los canales externos entregan
@@ -217,7 +217,7 @@ verificación? Si sí → violación.
    (cron, timer).
 
 **Derivación Constitucional:** R-CA-004 (clasificar Source y Channel del Signal);
-R-CA-011 (Channel Adapter provee Source classification); ONTOLOGY.md §3.4 (Channel
+R-CA-011 (Channel Adapter provee Source classification); SYSTEM_VOCABULARY.md §3.4 (Channel
 definido por protocolo y dirección).
 
 **Justificación:** La Source y el Channel determinan cómo el sistema cognitivo
@@ -449,7 +449,7 @@ diferente a la que el Response trae? Si sí → violación.
 Source = "system" y Channel = "cron". Activan Ciclos Cognitivos para monitoreo,
 verificación de expiración de Commitments, y otras tareas temporales.
 
-**Derivación Constitucional:** ONTOLOGY.md §3.4 (Channel definido por protocolo y
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §3.4 (Channel definido por protocolo y
 dirección — cron es un canal temporal); R-CA-004 (recepción de Signals de cualquier
 fuente externa).
 
@@ -480,7 +480,7 @@ procesamiento interno de Outcomes).
 Signals se verifican según el protocolo del sistema externo y se entregan al
 Evidence Engine con Source = "external_service" y Channel según el servicio.
 
-**Derivación Constitucional:** ONTOLOGY.md §3.4 (Channel — webhook es un tipo de
+**Derivación Constitucional:** SYSTEM_VOCABULARY.md §3.4 (Channel — webhook es un tipo de
 canal); R-CA-004 (recepción de Signals de cualquier fuente externa).
 
 **Justificación:** El sistema recibe información no solo de usuarios sino también
@@ -521,7 +521,7 @@ sin pasar por el Channel Adapter? Si sí → violación.
 | **Verification result** | Resultado de la verificación (PASSED, FAILED, BYPASSED) | Sí |
 
 **Derivación Constitucional:** R-CA-011 (VerifiedSignal con raw content, channel
-metadata, Source classification, timestamp, idempotency key); ONTOLOGY.md §3.3
+metadata, Source classification, timestamp, idempotency key); SYSTEM_VOCABULARY.md §3.3
 (VerifiedSignal como Signal validado a nivel de canal).
 
 **Justificación:** Una estructura estandarizada garantiza que el Evidence Engine
@@ -789,5 +789,5 @@ fallido, el sistema está en estado inválido.
 > COGNITIVE_PRINCIPLES.md (CP-32, CP-33, CP-35), los contratos de
 > COGNITIVE_ARCHITECTURE.md (R-CA-004, R-CA-011, R-CA-015, IP-1, IP-4),
 > ACTION_EXECUTOR.md (R-AE-023, R-AE-016, R-AE-027), y la terminología de
-> ONTOLOGY.md. Es un DRAFT hasta su ratificación mediante el proceso de gobierno
+> SYSTEM_VOCABULARY.md. Es un DRAFT hasta su ratificación mediante el proceso de gobierno
 > de la Constitución (CONSTITUTION.md Sección 7.2).
