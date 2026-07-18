@@ -45,7 +45,8 @@
 | P1-10f | **PR-5E.1: Integración BKE (consumidores + tests)** | Architecture | **DONE** | ADR-012 | CE-5 |
 | P1-10g | **PR-5F: Cognitive Metrics & Observability** | Architecture | **DONE** | ADR-012 | CE-5 |
 | P1-10h | **PR-5G: Cognitive Architecture Certification Closure** | Architecture | **DONE** | ADR-012 | PR-5G |
-
+| P1-11 | **H-CAT2-001: RECOVERY state pierde slots confirmados** | Pipeline | **OPEN** | N/A | CAT-2 |
+ 
 ## P2 — Media prioridad
 
 | ID | Tarea | Dominio | Estado | ADR | Origen |
@@ -189,7 +190,8 @@
 | **QA3-S3-02** | Fix F02-DG: Intención no preservada | Pipeline | `core.ts:277-283` solo preserva PRE_BOOKING, no BOOKING. **PR-CAT1 S7 confirmó** que la preservación actual ocurre vía LLM, no determinísticamente — frágil. | **P0** |
 | **QA3-S3-03** | Fix F03-DG: Merge bypass por ambigüedad | Pipeline | Mensajes no se fusionan cuando se activa ambigüedad | **P0** |
 | **QA3-S3-04** | UX: Resolución automática de ambigüedad sin confirmación (PR-CAT1 S13) | UX | "Hotel Iguazú" resuelto automáticamente sin preguntar al usuario. Gap contra CDA §6. | **P1** |
-
+| **QA3-S3-05** | **H-CAT2-001: RECOVERY slot loss** — RECOVERY state pierde slots confirmados al entrar en score 0.40–0.64, repitiendo preguntas ya respondidas. | Pipeline | **Descubierto en:** `docs/incidents/CAT2_RESULT_REPORT.md` (CAT-2-04, CAT-2-06). **Defecto formal:** `docs/incidents/H-CAT2-001_RECOVERY_SLOT_LOSS.md`. **No comparte implementación con F01-DG/F02-DG/F03-DG** — causa raíz independiente (comprehension scoring vs ambiguity handler). Defecto funcional descubierto durante Acceptance Testing (CAT-2). Requiere revalidación completa de CAT-2 post-fix. | **P1** |
+ 
 ---
 
 ## Deferred / Backlog Post-v1
