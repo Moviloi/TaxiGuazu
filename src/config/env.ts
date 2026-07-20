@@ -20,14 +20,9 @@ const envSchema = z.object({
   // Se lee directamente desde process.env en src/lib/memory/memory-service.ts
   // siguiendo el mismo patrón que EVIDENCE_SHADOW_MODE en src/lib/evidence/build-signal.ts.
 
-  // PATTERN_DISCOVERY_ENABLED: variable de entorno opcional (default false).
-  // Habilita el pipeline de Pattern Discovery (PD-IM-1).
-  // Se lee desde process.env en src/lib/pattern-discovery/pd-service.ts
-
-  // PATTERN_DISCOVERY_DRY_RUN: variable de entorno opcional (default false).
-  // Ejecuta el pipeline completo SIN persistencia (PD-IM-0 §2.13).
-  // Se lee desde process.env en src/lib/pattern-discovery/pd-service.ts
-  // Precedencia: discoverDryRun() > config.dryRun > PATTERN_DISCOVERY_DRY_RUN > false
+  // PATTERN_DISCOVERY_ENABLED, PATTERN_DISCOVERY_DRY_RUN:
+  // Eliminadas en BUILD misión OLA 4.2 — módulo pattern-discovery removido.
+  // Ver ADR-014 para contexto.
 });
 
 type Env = z.infer<typeof envSchema>;

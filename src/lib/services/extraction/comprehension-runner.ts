@@ -13,10 +13,7 @@ import type { PredictedContext } from "@/lib/services/memory/predictive-routing"
 import type { ChatSessionRow } from "@/lib/db/types";
 import { sendAndPersist } from "@/lib/services/shared/message-helpers";
 import { detectLangWithFallback } from "@/lib/detect-lang";
-import { isDrlComprehensionEnabled, isDrlFrustrationAssistanceEnabled } from "@/config/feature-flags";
-import { buildDrlEnrichment } from "@/lib/drl/assistance";
-import type { DRLInput } from "@/lib/drl/types";
-import { capturePipelineEvent, captureDRLEvent } from "@/lib/cognitive/collector";
+import { capturePipelineEvent } from "@/lib/cognitive/collector";
 import type { PipelineEventDetails } from "@/lib/cognitive/types";
 
 // P0.10.3: Detección de frustración del usuario (pattern desde escalation.json)
@@ -48,29 +45,9 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
   if (FRUSTRATION_RE.test(text)) {
     log.info("[FRUSTRATION_DETECTED]", { phone: phone.slice(-4), text: text.slice(0, 100) });
 
-    // PR-5D: Construir enriquecimiento DRL para C5 (frustration response)
-    let frustrationEnrichment: string | undefined;
-    if (isDrlFrustrationAssistanceEnabled()) {
-      const drlInput: DRLInput = {
-        slots: {
-          _userText: text,
-          ...(session?.slots ? (() => { try { return JSON.parse(session.slots); } catch { return {}; } })() : {}),
-        },
-        requiredSlots: ["origin", "destination", "passengers", "scheduled_at"],
-        conversationState: "frustration",
-      };
-      const enrichment = buildDrlEnrichment(drlInput, "frustration");
-      if (enrichment) {
-        frustrationEnrichment = enrichment.text;
-        log.info("[DRL_FRUSTRATION_ASSISTANCE]", {
-          decision: enrichment.raw.decision,
-          confidence: enrichment.raw.overallConfidence,
-          executionMs: enrichment.raw.executionTimeMs,
-        });
-      }
-    }
+    // PR-5D: DRL Frustration Assistance removido en BUILD OLA 4.5 (ADR-014).
 
-    const frustratedMsg = await generateFrustrationResponse(text, session, frustrationEnrichment);
+    const frustratedMsg = await generateFrustrationResponse(text, session);
     if (frustratedMsg) {
       log.info("[TRACE RESPONSE]", { source: "FRUSTRATION_RECOVERY", text: frustratedMsg });
       await sendAndPersist(phone, conversationId, frustratedMsg);
@@ -135,45 +112,10 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
       return false;
     }
 
-    // PR-5C: DRL-first — si el feature flag está activo, intentar reinterpretación determinística
-    // antes de llamar al LLM. Si DRL resuelve, se omite completamente la llamada LLM.
-    let reinterpretMsg: string | null = null;
+    // PR-5C: DRL-first removido en BUILD OLA 4.5 (ADR-014).
+    // Siempre usa LLM para reinterpretación.
 
-    if (isDrlComprehensionEnabled()) {
-      const { resolveComprehension } = await import("@/lib/bke/services/comprehension-resolver");
-      const drlStart = performance.now();
-      const drlResult = await resolveComprehension(text, session, comprehensionScore);
-      const drlDuration = Math.round((performance.now() - drlStart) * 100) / 100;
-      if (drlResult) {
-        reinterpretMsg = drlResult.message;
-        log.info("[COMPREHENSION_DRL]", {
-          source: drlResult.source,
-          message: drlResult.message,
-        });
-        captureDRLEvent(drlDuration, true, {
-          rule: "comprehension-resolver",
-          decision: "PROCEED",
-          confidence: 0.8,
-          executionTimeMs: drlDuration,
-        });
-      } else {
-        log.info("[COMPREHENSION_DRL_ESCALATE]", {
-          reason: "DRL could not resolve — falling back to LLM",
-        });
-        captureDRLEvent(drlDuration, false, {
-          rule: "comprehension-resolver",
-          decision: "ESCALATE",
-          confidence: 0,
-          executionTimeMs: drlDuration,
-        });
-      }
-    }
-
-    // P3: Si DRL no resolvió (o flag deshabilitado), intentar que el LLM reinterprete.
-    // Solo escalar a humano si el LLM también falla.
-    if (!reinterpretMsg) {
-      reinterpretMsg = await generateReinterpretResponse(text, session, comprehensionScore);
-    }
+    const reinterpretMsg = await generateReinterpretResponse(text, session, comprehensionScore);
     if (reinterpretMsg) {
       log.info("[TRACE RESPONSE]", { source: "COMPREHENSION_REINTERPRET", text: reinterpretMsg });
       await sendAndPersist(phone, conversationId, reinterpretMsg);
@@ -200,6 +142,32 @@ export async function runComprehensionCheck(params: ComprehensionRunnerParams): 
   }
 
   if (resolvedState === "RECOVERY") {
+    // H-CAT2-001: Preservar slots confirmados ANTES de recovery.
+    // Cuando el score está en 0.40-0.64 (RECOVERY), los slots CONFIRMED
+    // (origin, destination) deben preservarse explícitamente para que
+    // el recovery message no los destruya.
+    if (session?.slots) {
+      try {
+        const slots = JSON.parse(session.slots);
+        const confirmedSlots: Record<string, any> = {};
+        for (const key of ["origin", "destination"]) {
+          if (slots[key]?.status === "CONFIRMED") {
+            confirmedSlots[key] = slots[key];
+          }
+        }
+        if (Object.keys(confirmedSlots).length > 0) {
+          await import("@/lib/db/database").then(db =>
+            db.upsertChatSession(phone, { ...slots, ...confirmedSlots }, undefined, undefined, undefined)
+          );
+          log.info("[RECOVERY_SLOTS_PRESERVED]", {
+            phone: phone.slice(-4),
+            preserved: Object.keys(confirmedSlots),
+            score: comprehensionScore,
+          });
+        }
+      } catch { /* best effort */ }
+    }
+
     log.info("[TRACE RECOVERY]", {
       state: comprehensionState,
       resolvedState,

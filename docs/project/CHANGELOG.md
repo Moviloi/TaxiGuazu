@@ -3,7 +3,88 @@
 
 ---
 
-## 2026-07-18 (current)
+## 2026-07-20 (current)
+
+### BUILD-AUDIT-1 — System Audit Execution & Code Hygiene
+- **Tipo**: Auditoría sistémica + higiene de código — ejecución del plan de auditoría completo
+- **Resumen**: Se ejecutó la auditoría sistémica completa de AITOS generando `docs/audit/AUDIT_REPORT_COMPLETE.md` (~60 hallazgos clasificados). Validación cruzada contra código fuente: 56/60 hallazgos confirmados exactos, 4 inexactitudes menores corregidas. Se definió y ejecutó plan de 6 olas: **OLA 0** (higiene): eliminación de 4 archivos huérfanos (archivo corrupto, dump-output.txt, bot.db.backup, ARCHITECTURE_BASELINE.json duplicado). **OLA 4** (decisiones arquitectónicas): ADR-014 creado con 5 decisiones hacia código higiénico — Evidence Engine KEEP (shadow mode), Pattern Discovery REMOVE, BKE/DRL REMOVE, cognitive collector KEEP, hard-reset PROTECT. 34 archivos eliminados (~5,800 líneas de código muerto). **OLA 1** (corrección funcional P0): F01-DG (ambiguity verifica clarify_field+roleLock según CDA §6), F02-DG (intención preservada según CDA §7), F03-DG (merge antes de ambigüedad según CDA §2 paso 7), H-CAT2-001 (RECOVERY preserva slots confirmados). **OLA 3** (bloqueos ops): connection_cache agregado a schema.sql, seed ejecutado. **OLA 5** (limpieza estructural): layer violation display-name.ts eliminada (movido a services/), endpoint duplicado /api/bot/check-timeouts eliminado. **Validación**: 0 errores TypeScript en src/, contratos AEL PASS, build compila.
+- **Documentos creados**: `docs/adr/014-experimental-layers-hygiene.md` (nuevo, ADR con 5 decisiones), `docs/audit/AUDIT_REPORT_COMPLETE.md` (nuevo, ~60 hallazgos), `src/lib/services/shared/display-name-service.ts` (nuevo, layer compliance)
+- **Archivos modificados**: `src/lib/services/lead.service.ts` (F01-DG, F03-DG), `src/lib/ai/core.ts` (F02-DG), `src/lib/services/extraction/comprehension-runner.ts` (H-CAT2-001), `src/lib/dev/hard-reset.ts` (DEV_MODE_ENABLED guard), `src/lib/ai/handler.ts` (imports BKE/DRL removidos), `src/lib/ai/ambiguity-interpreter.ts` (imports BKE removidos), `src/lib/services/workflow/policy-pipeline.ts` (import display-name corregido), `src/config/feature-flags.ts` (BKE/DRL deprecated), `src/config/env.ts` (comentarios pattern-discovery), `schema/schema.sql` (+connection_cache), `docs/architecture/ADR_INDEX.md` (+ADR-014)
+- **Archivos eliminados**: `src/lib/pattern-discovery/` (12 archivos, 2,040 líneas), `src/lib/bke/` (10 archivos, 1,234 líneas), `src/lib/drl/` (12 archivos, 1,242 líneas), `src/lib/ai/display-name.ts` (movido a services/), `src/app/api/bot/check-timeouts/` (duplicado), `tests/unit/pattern-discovery/` (3 tests), `tests/bke/` (directorio), `tests/services/bke-*.test.ts` (4 tests), `tests/services/drl-*.test.ts` (6 tests), `tests/ai/*drl*.test.ts` (2 tests), archivos huérfanos de raíz (4)
+- **Validación**: src/ 0 errores TypeScript ✅, contratos AEL PASS ✅, seed ejecutado ✅
+
+## 2026-07-19
+
+### PR-SDL-4A — Project Context Layer
+- **Tipo**: Capa cognitiva documental — condensación del estado del proyecto en un único documento
+- **Resumen**: Se crea `docs/project/PROJECT_CONTEXT.md` como nueva capa cognitiva para el ecosistema. Su función es condensar el estado vigente del proyecto para que PLAN/SDL comprenda el estado global leyendo un solo documento. NO reemplaza ADR, SPEC, RF, RNF, Baseline, Architecture, Knowledge ni Changelog. Contiene 14 secciones: identidad del proyecto, estado actual, objetivo vigente, misión activa, baseline actual, estado arquitectónico (incluyendo Interface Freeze V2 y contrato PLAN↔BUILD), 10 RF conocidos con desviaciones, 9 RNF, 7 riesgos, deuda técnica completa (bloqueante, funcional, estructural, H0A), incidentes abiertos (H-CAT2-001), certificaciones (estado general + milestones), knowledge consolidado (decisiones clave + patrones del ecosistema), próximo objetivo. Incluye reglas de mantenimiento (cuándo se actualiza, qué lo dispara, qué NO se actualiza, formato). Sin cambios de código, configuración ni prompts funcionales.
+- **Documentos creados**: `docs/project/PROJECT_CONTEXT.md` (nuevo, 14 secciones + reglas de mantenimiento)
+- **Archivos modificados**: `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D81)
+- **Validación**: Sin cambios de código, configuración o prompts — únicamente documentación. PROJECT_CONTEXT.md no reemplaza ningún documento existente. 0 impacto en comportamiento del ecosistema.
+
+### PR-SDL-AEL-CONTRACT-1 — Strategic Thinking vs Operational Execution Contract
+- **Tipo**: Contrato arquitectónico — formalización definitiva de la separación cognitiva PLAN ↔ BUILD
+- **Resumen**: Se crea `docs/architecture/STRATEGIC_OPERATIONAL_CONTRACT.md` como contrato formal que define con precisión los tipos de información que consume y produce cada fase. Principio fundamental: PLAN consume conocimiento, produce decisiones; BUILD consume decisiones, produce evidencia. Se definen: tipos de información (conocimiento, decisión, evidencia), contrato de PLAN (4 secciones: qué conoce, qué hace, qué produce, qué nunca hace), contrato de BUILD (5 secciones: qué recibe, qué nunca hace, qué sí puede hacer, qué produce, reglas de transformación de información). Flujo oficial documentado con ciclo continuo hasta Mission Complete. Casos permitidos y prohibidos en tabla resumen. 10 invariantes SO-01 a SO-10. Relación explícita con Mission Closure Contract y Mission Phase Architecture. Sección de certificación con 10 criterios. Sin cambios de código, configuración ni prompts funcionales.
+- **Documentos creados**: `docs/architecture/STRATEGIC_OPERATIONAL_CONTRACT.md` (nuevo, 14 secciones, 10 invariantes SO-01 a SO-10, reemplaza interpretaciones anteriores de la relación PLAN ↔ BUILD)
+- **Archivos modificados**: `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D80)
+- **Validación**: Sin cambios de código, configuración o prompts — únicamente documentación arquitectónica. 10 invariantes SO-01 a SO-10 definidos. Certificación completa con 10 criterios.
+
+### PR-INTERFACE-FREEZE-1 — PLAN/BUILD Interface Consolidation
+- **Tipo**: Interface Freeze V2 — consolidación definitiva del ecosistema en solo 2 interfaces visibles
+- **Resumen**: Se reemplaza el modelo de doble capa (PR-HARNESS-UX-1) por una arquitectura donde solo PLAN y BUILD son visibles. Strategic Director y AEL pasan a ser implementaciones internas de PLAN y BUILD respectivamente. Se crean `.opencode/agents/plan.md` (basado en SDL) y `.opencode/agents/build.md` (basado en AEL) como overrides de los built-in de OpenCode. Se eliminan `strategic-director` y `ael` de `opencode.json`. `default_agent` pasa a `"plan"`. Se eliminan los archivos `strategic-director.md` y `ael.md`. Los 6 subagentes `ael-*` se preservan intactos como implementación interna de BUILD. Contratos arquitectónicos (SPEC, CONTRATS, MISSION_PHASE_ARCHITECTURE, MISSION_CLOSURE_CONTRACT) no modificados. V-01 a V-10 verificados sin regresiones.
+- **Documentos creados**: `.opencode/agents/plan.md` (nuevo, basado en SDL), `.opencode/agents/build.md` (nuevo, basado en AEL), `docs/architecture/INTERFACE_FREEZE_V2.md` (nuevo, 7 invariantes IF-01 a IF-07)
+- **Archivos modificados**: `opencode.json` (reestructuración completa), `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D79)
+- **Archivos eliminados**: `.opencode/agents/strategic-director.md` (reemplazado por plan.md), `.opencode/agents/ael.md` (reemplazado por build.md)
+- **Validación**: V-01 ✅ plan/build únicos primaries, V-02 ✅ plan edit:deny/bash:deny, V-03 ✅ build edit:ask/bash:ask + 6 subagentes, V-04 ✅ default_agent=plan, V-05 ✅ SDL/AEL eliminados, V-06 ✅ agent files legacy eliminados, V-07 ✅ 6 subagentes preservados, V-08 ✅ plan.md/build.md creados, V-09 ✅ contratos arquitectónicos no modificados, V-10 ✅ subagentes inalterados
+
+### PR-HARNESS-UX-1 — Dual Interface Architecture
+- **Tipo**: Arquitectura de doble capa — restauración de AEL como interfaz visible del ecosistema
+- **Resumen**: Se formaliza la arquitectura de doble capa: PLATAFORMA (PLAN, BUILD — capacidades nativas de OpenCode) y ECOSISTEMA DE DESARROLLO (Strategic Director, AEL — interfaces del ecosistema AITOS). AEL restaurado a `mode: "primary"` para que aparezca como interfaz visible en el selector, junto a SDL, PLAN y BUILD. V-01: SDL y AEL son las únicas interfaces del ecosistema. V-02: PLAN y BUILD continúan siendo exclusivamente capacidades de OpenCode (inalteradas). V-03: No existe duplicación de responsabilidades — cada interfaz tiene rol, permisos y prompts diferentes. V-04: Restaurar AEL a primary no altera contratos, prompts, dispatch, subagentes ni pipeline (el cambio es solo de interfaz). V-05: Documento DUAL_INTERFACE_ARCHITECTURE.md creado con modelo de doble capa, 6 invariantes DI-01 a DI-06.
+- **Documentos creados**: `docs/architecture/DUAL_INTERFACE_ARCHITECTURE.md` (nuevo, 11 secciones, 6 invariantes)
+- **Archivos modificados**: `opencode.json` (1 línea: `ael.mode` subagent → primary), `.opencode/agents/ael.md` (1 línea: `mode` subagent → primary), `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D78)
+- **Validación**: V-01 ✅ SDL y AEL únicos custom primaries, V-02 ✅ PLAN/BUILD inalterados, V-03 ✅ 0 superposición, V-04 ✅ 0 cambios funcionales, V-05 ✅ Documento creado
+
+### PR-ARCH-1 — Development Ecosystem Architecture Freeze v1.0
+- **Tipo**: Congelamiento arquitectónico — freeze del ecosistema de desarrollo
+- **Resumen**: Auditoría completa V-01 a V-06 del ecosistema PLAN → BUILD. V-01: 0 contradicciones entre todos los documentos arquitectónicos. V-02: 0 componentes eliminables — SDL, AEL, Mission Phase, Mission Closure, Harness Alignment son todos necesarios. V-03: SRP verificado — cada componente tiene una responsabilidad única. V-04: OpenCode provee el runtime, el ecosistema provee la arquitectura — decoupling limpio. V-05: 4 ítems de deuda técnica documentados (R-01 a R-04). V-06: Ready para freeze. Se creó `docs/architecture/DEVELOPMENT_ECOSYSTEM_ARCHITECTURE_FREEZE_V1.md` (10 secciones, 19 invariantes congelados: 6 MP + 7 MC + 6 SD-I). Freeze declarado: ningún contrato arquitectónico del ecosistema de desarrollo puede modificarse sin un nuevo freeze.
+- **Documentos creados**: `docs/architecture/DEVELOPMENT_ECOSYSTEM_ARCHITECTURE_FREEZE_V1.md` (nuevo, 10 secciones, veredicto: ✅ FREEZE DECLARADO)
+- **Validación**: Solo documentación — 0 cambios de código, 0 cambios de configuración, build y tests no afectados
+
+### PR-HARNESS-ALIGNMENT-3 — PLAN Mode vs Strategic Director Visibility Audit
+- **Tipo**: Auditoría de visibilidad — origen de PLAN, BUILD y Strategic Director en el selector de OpenCode
+- **Resumen**: Auditoría completa para determinar por qué PLAN y Strategic Director aparecen simultáneamente. V-01: OpenCode construye el selector desde 2 fuentes (agentes nativos + agentes personalizados primary). V-02: PLAN es un agente nativo de OpenCode (built-in), no una abstracción del ecosistema. V-03: Strategic Director aparece por tener `mode: "primary"` en `opencode.json`. V-04: NO es posible eliminar Strategic Director sin perder la arquitectura PLAN → BUILD (default_agent, Execution Plan, delegación AEL, contratos). V-05: Ocultarlo no es viable (hidden solo funciona en subagentes). V-06: No existe duplicación real — PLAN (nativo, permisos `ask`, sin contratos) y SDL (custom, permisos `deny`, con contratos PLAN→BUILD) son agentes diferentes. V-07: Opción recomendada: aceptar la coexistencia + mejorar descripción de SDL. 0 cambios de código o configuración.
+- **Documentos creados**: `docs/certification/PLAN_MODE_VISIBILITY_AUDIT.md` (nuevo, 10 secciones, V-01 a V-07 auditados)
+- **Validación**: Solo documentación — 0 cambios de código, 0 cambios de configuración, build y tests no afectados
+
+### PR-HARNESS-ALIGNMENT-2 — Convert AEL into Pure Operational Subagent
+- **Tipo**: Alineación arquitectónica — eliminación del modo AEL como agente primary
+- **Resumen**: AEL convertido de `mode: "primary"` a `mode: "subagent"` en `opencode.json` y `.opencode/agents/ael.md`. Descripción actualizada de "orquesta pipeline de 7 fases" a "motor operacional de BUILD". PLAN y BUILD son ahora los únicos modos visibles. El ecosistema refleja exactamente la arquitectura certificada: SDL (modo único visible) → task → AEL (subagente) → task → 6 subagentes. Sin modificar prompts, pipeline, subagentes, contratos ni permisos. V-01 a V-07 verificados sin regresiones.
+- **Archivos modificados**: `opencode.json` (2 líneas: `mode` + `description`), `.opencode/agents/ael.md` (2 líneas: `description` + `mode`), `docs/certification/HARNESS_ALIGNMENT_IMPLEMENTATION.md` (nuevo), `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D75)
+- **Validación**: V-01 ✅ SDL → AEL task intacto, V-02 ✅ BUILD idéntico, V-03 ✅ 6 subagentes inalterados, V-04 ✅ sin nuevos modos, V-05 ✅ SDL único primary, V-06 ✅ BUILD único operacional, V-07 ✅ 0 regresiones
+
+### PR-HARNESS-ALIGNMENT-1 — Harness Mode Alignment & Execution Visibility Audit
+- **Tipo**: Auditoría de viabilidad técnica — alineación del arnés con arquitectura PLAN → BUILD
+- **Resumen**: Auditoría completa de viabilidad técnica para eliminar AEL como modo visible y alinear el arnés con la arquitectura PLAN → BUILD. V-01: OpenCode expone modos vía `mode: "primary"` en `opencode.json`. V-02: La única dependencia del modo AEL es el ID del agente (`ael`), no su `mode`. V-03: SDL puede invocar AEL vía `task` incluso si AEL es subagente. V-04: El arnés ya produce agente activo, tool calls, resultados y errores. V-05: Toda esa información es metadata del arnés, no consume tokens. V-06: Propuesta mínima de Execution Visibility con agente activo, tarea, estado y completado — sin reasoning ni chain of thought.
+- **Veredicto**: ✅ IMPLEMENTABLE. 2 líneas de cambio (`mode: "primary"` → `"subagent"` en `opencode.json` y `ael.md`). Sin modificar arquitectura, pipeline, prompts, subagentes ni permisos. Sin aumento de consumo de tokens.
+- **Documentos creados**: `docs/certification/HARNESS_ALIGNMENT_AUDIT.md` (nuevo, 9 secciones, 6 verificaciones, propuesta de Execution Visibility)
+- **Documentos modificados**: `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D74)
+- **Validación**: Solo documentación — 0 cambios de código, build y tests no afectados
+
+### PR-SDL-3B — Mission Closure & Learning Trigger Contract
+- **Tipo**: Contrato arquitectónico — formalización de cierre de misión y trigger de Learning
+- **Resumen**: Se creó `docs/architecture/MISSION_CLOSURE_CONTRACT.md` como contrato formal que determina cuándo y cómo Learning puede ejecutarse dentro del modelo PLAN → BUILD. Auditoría V-01 a V-05 completada: Learning actualmente se ejecuta sin contrato formal (V-01), cualquier evento puede dispararlo (V-02), no existe contrato de cierre (V-03), Learning puede ejecutarse múltiples veces durante una misión (V-04), el nuevo contrato no contradice ADRs existentes (V-05). Se definen 2 estados de misión (IN PROGRESS, CLOSED), contrato de cierre con SDL como único responsable, 7 invariantes (MC-01 a MC-07), condiciones de activación y NO activación de Learning, y workflow completo. 0 cambios de código. 0 modificaciones a capacidades existentes.
+- **Documentos creados**: `docs/architecture/MISSION_CLOSURE_CONTRACT.md` (nuevo, 12 secciones, 7 invariantes, auditoría V-01 a V-05)
+- **Documentos modificados**: `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D73)
+- **Validación**: Solo documentación — 0 cambios de código, build y tests no afectados
+
+### PR-SDL-3A — Mission Phase Architecture Contract Implementation
+- **Tipo**: Contrato arquitectónico — implementación de fases PLAN → BUILD
+- **Resumen**: Implementación del contrato cognitivo PLAN → BUILD. Se creó `docs/architecture/MISSION_PHASE_ARCHITECTURE.md` como documento canónico del nuevo modelo de 2 fases. Se actualizó el prompt del **Strategic Director** para exigir el bloque de cierre obligatorio (Recommendation + Execution Plan + Execution Status). Se actualizó el prompt del **AEL** para reflejar el rol BUILD: recibe Execution Plan → descompone → ejecuta → cierra, con nuevas reglas R4 (no redefinir objetivos del EP) y R5 (no generar nuevo EP estratégico). Se clarificó la **SPEC** §2: la soberanía del Director está acotada por el Execution Plan del SDL, y se agregó sección de relación SDL↔AEL. Se actualizó **ORGANIZATION** para distinguir Product Strategy (SDL) de Execution Strategy (AEL). 0 cambios de código. 0 modificaciones a opencode.json o subagentes.
+- **Documentos creados**: `docs/architecture/MISSION_PHASE_ARCHITECTURE.md` (nuevo, 10 secciones, 6 invariantes)
+- **Documentos modificados**: `.opencode/agents/strategic-director.md` (+formato de cierre obligatorio), `.opencode/agents/ael.md` (+workflow BUILD, +R4/R5), `ael/constitution/SPEC.md` (+acotación de soberanía, +relación SDL), `ael/government/ORGANIZATION.md` (+Product Strategy / Execution Strategy), `docs/project/CHANGELOG.md` (esta entrada), `docs/project/PROJECT_BOARD.md` (+D72)
+- **Validación**: Solo documentación — 0 cambios de código, build y tests no afectados
+
+## 2026-07-18
 
 ### PR-VERIFY-SDL — Strategic Director Layer Verification
 - **Tipo**: Auditoría de certificación — verificación del SDL

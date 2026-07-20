@@ -7,16 +7,11 @@
 // Output is always validated against the candidate list — no hallucination.
 //
 // P5: Ahora usa LLMProvider (Gemini por defecto, Groq fallback)
-//
-// PR-5B: BKE.geo + DRL.desambiguación se ejecutan antes del LLM cuando
-// BKE_GEO_ENABLED=true (default false). Si DRL resuelve, se omite la llamada LLM.
 
 import type { PlaceCandidate } from "@/lib/db/domains/geo";
 import { log } from "@/lib/utils/logger";
 import { getKnownPlacesPrompt } from "@/lib/ai/iguazu-knowledge";
 import { getLLMProvider } from "./llm-provider";
-import { isBkeGeoEnabled } from "@/config/feature-flags";
-import { resolveGeoAmbiguity } from "@/lib/bke/services/geo-resolver";
 
 interface InterpretationResult {
   /** The place_id of the resolved place, or null if uncertain */
@@ -82,21 +77,8 @@ export async function interpretAmbiguity(
     return { selectedId: candidates[0].place_id, confidence: "high" };
   }
 
-  // PR-5B: DRL-first — si el feature flag está activo, intentar desambiguación determinística
-  // antes de llamar al LLM. Si DRL resuelve, se omite completamente la llamada LLM.
-  if (isBkeGeoEnabled()) {
-    const drlResult = await resolveGeoAmbiguity(userText, candidates, slotName, resolvedOtherSlot);
-    if (drlResult) {
-      log.info("[AMBIGUITY_DRL]", {
-        slot: slotName,
-        userText,
-        selected: drlResult.selectedId,
-        confidence: drlResult.confidence,
-      });
-      return drlResult;
-    }
-    // DRL no pudo resolver → fall through a LLM
-  }
+  // PR-5B: DRL-first desambiguación removida en BUILD OLA 4.5 (ADR-014).
+  // Siempre usa LLM provider directamente.
 
   const provider = getLLMProvider();
   const prompt = buildPrompt(userText, candidates, slotName, resolvedOtherSlot);

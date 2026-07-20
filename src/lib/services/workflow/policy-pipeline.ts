@@ -11,7 +11,7 @@ import { handleMessage } from "@/lib/ai/handler";
 import { saveContext } from "@/lib/services/memory/context-memory";
 import { notifyAdmin } from "@/lib/services/admin/admin.service";
 import { isAffirmativeMessage, isNegativeMessage } from "@/lib/ai/patterns";
-import { getPlaceDisplayName } from "@/lib/ai/display-name";
+import { getPlaceDisplayName } from "@/lib/services/shared/display-name-service";
 import { canDispatch as isDispatchReady, canQuote as isQuoteReady, canPrepareQuote as isPrepareQuoteReady } from "@/lib/ai/operational-readiness";
 import { executeTrip } from "@/lib/services/trip-execution/trip-execution.service";
 import { executeNowTrip } from "@/lib/services/trip-execution/now-execution.service";

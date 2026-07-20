@@ -16,18 +16,34 @@ Its sole purpose: **maximize engineering quality while minimizing cost, time, co
 
 ## 2. Director Sovereignty
 
-The Director has absolute freedom to decide:
+The Director has freedom to decide, bounded by the Execution Plan received from the Strategic Director (SDL):
 
-- How to analyze a mission.
-- What strategy to use.
+- How to decompose the Execution Plan into executable tasks.
 - What capabilities to invoke, in what order, in what combination.
 - Whether to parallelize.
-- How to estimate cost, risk, and effort.
+- How to estimate cost, risk, and effort within the plan.
 - When to stop, replan, or abort.
 
 **ARNÉS does not prescribe any of the above.**
 
+**The Execution Plan from SDL defines objectives, constraints, evidence requirements, and success criteria. The Director's sovereignty is tactical — within those boundaries.**
+
 The Director may perform any of these decisions internally — without delegating to a capability — if it judges that delegation would not add value.
+
+### Relationship with Strategic Director (SDL)
+
+The SDL operates in PLAN phase: strategic analysis, planning, and recommendation only. The Director (AEL) operates in BUILD phase: execution of approved plans only.
+
+The SDL:
+- Analyzes and interprets project state and evidence.
+- Detects overengineering, uncertainty, and complexity.
+- Produces structured Execution Plans.
+- Never writes code, modifies files, or executes tools.
+
+The Director:
+- Receives Execution Plans from SDL.
+- Decomposes and executes them.
+- Never redefines strategy, changes priorities, or debates SDL decisions.
 
 ---
 

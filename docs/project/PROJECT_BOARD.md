@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-18 | Etapa: QA-3 Sprint 1 ✅ — Sprint 2A ✅ — Sprint 2B ✅ — PR-CDA1 ✅ — ADR-013 ✅ — PR-CAT1 ✅ — PR-VERIFY-SDL ✅ — **PR-SDL-2 ✅ (SDL Contract Certification)**
+## Actualizado: 2026-07-20 | Etapa: ... — PR-SDL-4A ✅ — **BUILD-AUDIT-1 ✅ (System Audit & Code Hygiene)**
 
 ---
 
@@ -20,8 +20,8 @@
 |---|---|---|---|---|---|
 | P0-01 | Rotar ADMIN_API_KEY (expuesta en chat) | Ops | READY | N/A | OPS1 | **BLOQUEA PILOTO** |
 | P0-02 | Configurar SENTRY_DSN en Vercel | Ops | READY | N/A | OPS1 | **BLOQUEA PILOTO** |
-| P0-04 | Seed de choferes reales en Turso | Ops | READY | N/A | OPS1 | **BLOQUEA PILOTO** |
-| P0-03 | `connection_cache` sin CREATE TABLE — riesgo de runtime error | DB | READY | N/A | P3 Audit |
+| P0-04 | Seed de choferes reales en Turso | Ops | **DONE** (BUILD-AUDIT-1) | N/A | OPS1 |
+| P0-03 | `connection_cache` sin CREATE TABLE — riesgo de runtime error | DB | **DONE** (schema.sql actualizado) | N/A | P3 Audit |
 
 ## P1 — Alta prioridad
 
@@ -37,15 +37,15 @@
 | P1-08 | PAIR_BASE y CORRIDOR_PAIRS → migrar a tabla DB | Geo | READY | N/A | P3 Audit |
 | P1-09 | ENTITY_CATALOG → migrar a tabla DB | Extraction | READY | N/A | P3 Audit |
 | P1-10 | **CE-5 — Cognitive Migration Implementation** (EPIC) | Architecture | **DONE** | ADR-012 | CE Closure |
-| P1-10a | PR-5A: DRL Foundation (engine + stubs + flags) | Architecture | **DONE** | ADR-012 | CE-5 |
-| P1-10b | PR-5B: BKE Foundation (geo disambiguation) | Architecture | **DONE** | ADR-012 | CE-5 |
-| P1-10c | PR-5C: C4/C6 DRL Simplification (suficiencia rules) | Architecture | **DONE** | ADR-012 | CE-5 |
-| P1-10d | **PR-5D: DRL Assistance for A points (C1/C2/C5)** | Architecture | **DONE** | ADR-012 | CE-5 |
-| P1-10e | **PR-5E: BKE Domain Consolidation (Entity, Pricing, Message)** | Architecture | **DONE** | ADR-012 | CE-5 |
-| P1-10f | **PR-5E.1: Integración BKE (consumidores + tests)** | Architecture | **DONE** | ADR-012 | CE-5 |
-| P1-10g | **PR-5F: Cognitive Metrics & Observability** | Architecture | **DONE** | ADR-012 | CE-5 |
-| P1-10h | **PR-5G: Cognitive Architecture Certification Closure** | Architecture | **DONE** | ADR-012 | PR-5G |
-| P1-11 | **H-CAT2-001: RECOVERY state pierde slots confirmados** | Pipeline | **OPEN** | N/A | CAT-2 |
+| P1-10a | ~~PR-5A: DRL Foundation~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |
+| P1-10b | ~~PR-5B: BKE Foundation~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |
+| P1-10c | ~~PR-5C: C4/C6 DRL Simplification~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |
+| P1-10d | ~~PR-5D: DRL Assistance~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |
+| P1-10e | ~~PR-5E: BKE Domain Consolidation~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |
+| P1-10f | ~~PR-5E.1: Integración BKE~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |
+| P1-10g | **PR-5F: Cognitive Metrics & Observability** | Architecture | **KEPT** (cognitive collector preservado) | ADR-014 | CE-5 |
+| P1-10h | ~~PR-5G: Cognitive Architecture Certification Closure~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | PR-5G |
+| P1-11 | **H-CAT2-001: RECOVERY state pierde slots confirmados** | Pipeline | **DONE** (CDA §6 fix) | N/A | CAT-2 |
  
 ## P2 — Media prioridad
 
@@ -158,6 +158,16 @@
 | D69 | **PR-CAT1 — External Black-Box Acceptance Campaign**: 13 escenarios conversacionales ejecutados contra sistema real (Turso, Gemini/Groq) como caja negra. 11/13 PASS funcionales, 2 timeouts por latencia LLM, 0 errores. F01-DG y F02-DG confirmados con evidencia externa. Hallazgo UX en ambigüedad automática. Veredicto: 🟡 ACEPTABLE CON HALLAZGOS. Documento: `docs/certification/PR-CAT1_EXTERNAL_ACCEPTANCE_CAMPAIGN.md`. | — |
 | D70 | **PR-VERIFY-SDL — Strategic Director Layer Verification**: Auditoría completa de la implementación del SDL. 5 verificaciones (V-01 a V-05) — ✅ IMPLEMENTACIÓN CORRECTA. `ael` clasificado como orquestador operacional (V-01). Modelo por omisión histórica (V-02). SDL correctamente restringido a planificación pura (V-03). 6 subagentes preservan modelos hardcodeados (V-04). `ael` no constituye excepción (V-05). 4 hallazgos pre-existentes documentados (H-01 a H-04). 0 código modificado. Documento: `docs/certification/PR_VERIFY_STRATEGIC_DIRECTOR_LAYER.md`. | — |
 | D71 | **PR-SDL-2 — SDL Contract Certification**: Certificación de contrato arquitectónico del SDL. 8 verificaciones (V-01 a V-08) — ✅ CERTIFICADO. Strategic Director certificado como rol cognitivo (no modelo). Current Session Model verificado como decisión consciente (V-03). StrategicDirectorContract v1.0 formalizado con 9 elementos contractuales (V-07). 6 escenarios de ruptura evaluados sin fallos (V-08). 4 hallazgos documentados (R-01 a R-04). 0 código modificado. Documento: `docs/certification/SDL_CONTRACT_CERTIFICATION.md`. | — |
+| D72 | **PR-SDL-3A — Mission Phase Architecture Contract Implementation**: Implementación del contrato cognitivo PLAN → BUILD. Documento canónico `docs/architecture/MISSION_PHASE_ARCHITECTURE.md`. SDL actualizado con bloque de cierre obligatorio. AEL actualizado con workflow BUILD (+R4/R5). SPEC clarificada: soberanía del Director acotada por Execution Plan del SDL. ORGANIZATION: Product Strategy (SDL) vs Execution Strategy (AEL). 0 cambios de código. | — |
+| D73 | **PR-SDL-3B — Mission Closure & Learning Trigger Contract**: Contrato formal de cierre de misión. `docs/architecture/MISSION_CLOSURE_CONTRACT.md` con 12 secciones, 7 invariantes (MC-01 a MC-07), auditoría V-01 a V-05. Define 2 estados de misión (IN PROGRESS, CLOSED), SDL como único responsable de cierre, condiciones de activación de Learning solo sobre misiones cerradas. 0 cambios de código. | — |
+| D74 | **PR-HARNESS-ALIGNMENT-1 — Harness Mode Alignment & Execution Visibility Audit**: Auditoría de viabilidad técnica para eliminar AEL como modo visible. V-01 a V-06 completadas. Veredicto: ✅ IMPLEMENTABLE con 2 líneas de cambio (`opencode.json` + `ael.md`). `docs/certification/HARNESS_ALIGNMENT_AUDIT.md` con 9 secciones, propuesta mínima de Execution Visibility. Sin modificar arquitectura, pipeline, prompts ni subagentes. 0 cambios de código. | — |
+| D75 | **PR-HARNESS-ALIGNMENT-2 — Convert AEL into Pure Operational Subagent**: AEL convertido de `mode: "primary"` a `mode: "subagent"` en `opencode.json` y `ael.md`. Descripción actualizada. PLAN y BUILD son los únicos modos visibles. V-01 a V-07 verificados sin regresiones. 0 cambios a prompts, pipeline, subagentes, contratos o permisos. `docs/certification/HARNESS_ALIGNMENT_IMPLEMENTATION.md` creado. | — |
+| D76 | **PR-HARNESS-ALIGNMENT-3 — PLAN Mode vs Strategic Director Visibility Audit**: Auditoría completa de coexistencia PLAN/BUILD/Strategic Director en selector de OpenCode. Determinado: PLAN es agente nativo OpenCode, SDL es agente custom primary. No existe duplicación funcional. Se recomienda aceptar coexistencia + mejorar descripción de SDL. 0 cambios de código o configuración. | — |
+| D77 | **PR-ARCH-1 — Development Ecosystem Architecture Freeze v1.0**: Congelamiento arquitectónico del ecosistema de desarrollo. Auditoría V-01 a V-06 completada. 0 contradicciones, 0 componentes eliminables, SRP verificado, decoupling limpio con OpenCode. 19 invariantes congelados (6 MP + 7 MC + 6 SD-I). 4 ítems de deuda documentados. Freeze declarado: ningún contrato arquitectónico puede modificarse sin un nuevo freeze. 0 cambios de código o configuración. | — |
+| D78 | **PR-HARNESS-UX-1 — Dual Interface Architecture**: Arquitectura de doble capa formalizada. PLATAFORMA (PLAN, BUILD — OpenCode nativo) y ECOSISTEMA (Strategic Director, AEL — AITOS). AEL restaurado a primary. 4 interfaces visibles sin superposición. 6 invariantes DI-01 a DI-06. 0 cambios a contratos, prompts, subagentes o pipeline. | — |
+| D79 | **PR-INTERFACE-FREEZE-1 — PLAN/BUILD Interface Consolidation**: Interface Freeze V2. Solo PLAN y BUILD son visibles. SDL y AEL pasan a ser implementaciones internas. plan.md/build.md creados como overrides de built-in. strategic-director/ael eliminados de opencode.json. default_agent=plan. strategic-director.md/ael.md eliminados. 6 subagentes ael-* preservados. 7 invariantes IF-01 a IF-07. V-01 a V-10 verificados. | — |
+| D80 | **PR-SDL-AEL-CONTRACT-1 — Strategic Thinking vs Operational Execution Contract**: Contrato formal de separación cognitiva PLAN ↔ BUILD. Define tipos de información (conocimiento, decisión, evidencia). Contrato PLAN: consume conocimiento, produce decisiones, nunca inspecciona código/audita/ejecuta. Contrato BUILD: consume decisiones, produce evidencia, nunca planifica/redefine objetivos. Flujo oficial con ciclo continuo hasta Mission Complete. 10 invariantes SO-01 a SO-10. Tablas de casos permitidos/prohibidos. Relación con Mission Closure Contract y Mission Phase Architecture. 0 cambios de código/configuración/prompts. | — |
+| D81 | **PR-SDL-4A — Project Context Layer**: Capa cognitiva documental. `docs/project/PROJECT_CONTEXT.md` creado con 14 secciones: identidad, estado actual, objetivo vigente, misión activa, baseline, estado arquitectónico, RF, RNF, riesgos, deuda, incidentes, certificaciones, knowledge consolidado, próximo objetivo. Reglas de mantenimiento definidas. 0 cambios de código/configuración/prompts. | — |
 
 ---
 

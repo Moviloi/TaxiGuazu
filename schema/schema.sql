@@ -12,6 +12,12 @@ CREATE TABLE IF NOT EXISTS connection_state (
   updated_at INTEGER DEFAULT (unixepoch())
 );
 
+-- Cache para consultas rápidas de connection_state (P0-03)
+CREATE TABLE IF NOT EXISTS connection_cache (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   phone TEXT UNIQUE NOT NULL,

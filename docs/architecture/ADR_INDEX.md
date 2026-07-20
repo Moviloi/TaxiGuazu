@@ -131,6 +131,7 @@ Decisions that define the cognitive pipeline (Evidence Engine).
 | [ADR 009: Evidence Engine Architecture](../adr/009-evidence-engine-architecture.md) | 7-layer cognitive pipeline frozen. Signal→Observation→Fact→Evidence→Knowledge→Belief→Decision. Base for Memory→Reflection→Learning→Goals→Planning. | Accepted | Freezes `src/lib/evidence/`. Any future cognitive layer requires new ADR. Anticipatory fields justified as architectural contract. | `EVIDENCE_ONTOLOGY.md`, `ENGINES.md`, `knowledge-map.md`, `system-map.md` |
 | [ADR 012: Cognitive Escalation Principle](../adr/012-cognitive-escalation-principle.md) | Stack 3 niveles: BKE → DRL → LLM. Prioridad del conocimiento explícito sobre la generación. El conocimiento y las reglas determinísticas tienen prioridad sobre los modelos generativos. | Accepted | Modifica parcialmente ADR-005. Define el modelo oficial de inteligencia. Formaliza el presupuesto cognitivo como métrica arquitectónica. | `CE-1_COGNITIVE_EFFICIENCY_AUDIT.md`, `CE-2_INEVITABILITY_CLASSIFICATION.md`, `CE-3A_BUSINESS_KNOWLEDGE_ENGINE.md`, `CE-3B_DETERMINISTIC_REASONING_LAYER.md`, `CE-4_MIGRATION_ROADMAP.md` |
 | [ADR 013: Conversation Decision Algorithm Ratification](../adr/013-conversation-decision-algorithm.md) | Ratifica el Conversation Decision Algorithm como autoridad funcional normativa del comportamiento conversacional. Jerarquía: Implementation → CDA → Specification → ADR. Complementa Architecture Freeze V3 con autoridad funcional. | Accepted | Crea la primera autoridad funcional algorítmica. Resuelve ambigüedades A01-DG, A02-DG. Establece 15 invariantes verificables (I-01 a I-15). Sirve como criterio de aceptación para bugs conversacionales. | `CONVERSATION_DECISION_ALGORITHM.md`, `FUNCTIONAL_BEHAVIOR_SPECIFICATION.md`, ADR-007, ADR-008, ADR-012 |
+| [ADR 014: Experimental Layers Hygiene](../adr/014-experimental-layers-hygiene.md) | Higiene de capas experimentales: mantiene Evidence Engine (shadow), elimina Pattern Discovery, BKE, DRL; protege hard-reset con flag. | Accepted | Reduce ~23% de archivos en src/, elimina 5,800 líneas de código muerto. Preserva ADR-009 y ADR-012 como diseño conceptual. | `AUDIT_REPORT_COMPLETE.md`, ADR-009, ADR-012, `TECHNICAL_DEBT_BASELINE.md` |
 
 ---
 
@@ -168,5 +169,5 @@ These gaps are tracked in `ael/artifacts/BACKLOG.md`.
 
 ---
 
-*Last updated: 2026-07-17 (ADR-013 added)*
+*Last updated: 2026-07-20 (ADR-014 added)*
 *Authority: `docs/adr/`*

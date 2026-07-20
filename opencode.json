@@ -1,11 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "default_agent": "strategic-director",
-  "instructions": ["ael/AGENTS.md"],
+  "default_agent": "plan",
   "agent": {
-    "strategic-director": {
-      "description": "Strategic Director — Capa superior responsable de analizar, evaluar, planificar y recomendar escalamiento",
+    "plan": {
+      "description": "PLAN estratégico AITOS — produce Execution Plans y delega ejecución a BUILD",
       "mode": "primary",
+      "prompt": "{file:.opencode/agents/plan.md}",
       "permission": {
         "read": "allow",
         "glob": "allow",
@@ -15,13 +15,14 @@
         "bash": "deny",
         "task": {
           "*": "deny",
-          "ael": "allow"
+          "build": "allow"
         }
       }
     },
-    "ael": {
-      "description": "ARNES Director — orquesta pipeline de 7 fases para cambios al sistema",
+    "build": {
+      "description": "BUILD operacional AITOS — ejecuta Execution Plans de PLAN y orquesta capacidades del ecosistema",
       "mode": "primary",
+      "prompt": "{file:.opencode/agents/build.md}",
       "permission": {
         "read": "allow",
         "glob": "allow",
@@ -35,9 +36,9 @@
           "*": "deny",
           "explore": "allow",
           "ael-explore": "allow",
-          "ael-audit": "allow",
           "ael-architect": "allow",
           "ael-implementer": "allow",
+          "ael-audit": "allow",
           "ael-memory": "allow",
           "ael-learning": "allow"
         }

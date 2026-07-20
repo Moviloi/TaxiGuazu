@@ -200,7 +200,19 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
       log.warn("[AMBIGUITY_STATE_LOST] resetting to collecting_slots");
       await setConversationalState(phone, "collecting_slots", undefined);
     }
-    if (leadCore.facts?.some(f => f.startsWith("location_ambiguous:")) && currentConvState !== "ambiguity_pending") {
+    // F01-DG: Verificar CDA §6 condiciones [1][4] antes de activar ambigüedad.
+    // [1] clarify_field definido + roleLock vacío → usuario responde a pregunta, no activar.
+    // [4] roleLock vacío → términos ambiguos vienen de sesión, no del mensaje.
+    const hasAmbiguousLocation = leadCore.facts?.some(f => f.startsWith("location_ambiguous:"));
+    const isClarifyFieldActive = !!session?.clarify_field;
+    const hasRoleLock = !!(leadCore.roleLock?.origin || leadCore.roleLock?.destination);
+    if (hasAmbiguousLocation && currentConvState !== "ambiguity_pending" && !isClarifyFieldActive && hasRoleLock) {
+      // F03-DG (CDA §2 paso 7, I-03): Extraer datos del mensaje ANTES de redirigir a ambigüedad.
+      // El merge incremental debe ejecutarse siempre, incluso si se activa ambigüedad.
+      // Esto asegura que datos como passengers, date, etc. se preserven aunque la
+      // ambigüedad de ubicación impida que el pipeline normal continúe.
+      await mergeMessageDataBeforeAmbiguity(phone, trimmed, leadCore, session);
+
       const freshSessionForAmbiguity = await getChatSession(phone);
       const ambStarted = await startAmbiguityResolution(phone, conversation.id, trimmed, leadCore, freshSessionForAmbiguity);
       if (ambStarted) return;
@@ -330,6 +342,61 @@ export async function handleLeadMessage(phone: string, text: string): Promise<vo
     } catch (e3) {
       log.error("[LEAD_ERROR] fallback admin notify también falló:", e3);
     }
+  }
+}
+
+/**
+ * F03-DG (CDA §2 paso 7, I-03): Extraer datos del mensaje y mergearlos
+ * en la sesión ANTES de que la ambigüedad redirija el flujo.
+ *
+ * Extrae passengers, date, time y flight de los facts del CORE y los
+ * persiste en chat_sessions.slots para que no se pierdan cuando la
+ * ambigüedad de ubicación impide que el pipeline normal continúe.
+ */
+async function mergeMessageDataBeforeAmbiguity(
+  phone: string,
+  _text: string,
+  leadCore: import("@/lib/ai/types").CoreDecision,
+  session: import("@/lib/db/types").ChatSessionRow | null,
+): Promise<void> {
+  const facts = leadCore.facts ?? [];
+  const currentSlots: Record<string, any> = session?.slots ? parseSessionSlots(session.slots) : {};
+
+  // Definir tipo para entrada de slot
+  interface SlotEntry { value: string; status: string; source: string; score: number; reason: string; }
+
+  let hasNewData = false;
+
+  const paxFact = facts.find(f => f.startsWith("passengers:"));
+  if (paxFact && !(currentSlots.passengers as SlotEntry | undefined)?.value) {
+    currentSlots.passengers = { value: paxFact.replace("passengers:", ""), status: "RAW", source: "CORE", score: 0.7, reason: "extracted_before_ambiguity" } as SlotEntry;
+    hasNewData = true;
+  }
+
+  const flightFact = facts.find(f => f.startsWith("flight:"));
+  if (flightFact && !(currentSlots.flight as SlotEntry | undefined)?.value) {
+    currentSlots.flight = { value: flightFact.replace("flight:", ""), status: "RAW", source: "CORE", score: 0.7, reason: "extracted_before_ambiguity" } as SlotEntry;
+    hasNewData = true;
+  }
+
+  const dateFact = facts.find(f => f.startsWith("date:"));
+  if (dateFact && !(currentSlots.scheduled_at as SlotEntry | undefined)?.value) {
+    currentSlots.scheduled_at = { value: dateFact.replace("date:", ""), status: "RAW", source: "CORE", score: 0.6, reason: "extracted_before_ambiguity" } as SlotEntry;
+    hasNewData = true;
+  }
+
+  const timeFact = facts.find(f => f.startsWith("time:"));
+  if (timeFact && !(currentSlots.scheduled_at as SlotEntry | undefined)?.value && !(currentSlots.time as SlotEntry | undefined)?.value) {
+    currentSlots.time = { value: timeFact.replace("time:", ""), status: "RAW", source: "CORE", score: 0.6, reason: "extracted_before_ambiguity" } as SlotEntry;
+    hasNewData = true;
+  }
+
+  if (hasNewData) {
+    await upsertChatSession(phone, currentSlots, undefined, undefined, undefined);
+    log.info("[MERGE_BEFORE_AMBIGUITY]", {
+      phone: phone.slice(-4),
+      preserved: Object.keys(currentSlots).filter(k => (currentSlots[k] as any)?.reason === "extracted_before_ambiguity"),
+    });
   }
 }
 

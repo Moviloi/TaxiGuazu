@@ -23,11 +23,12 @@ The Director is not in this table. It is the mission planner — sovereign withi
 ## Authority Boundaries
 
 | Domain | Owned by | Delegation |
-|---|---|---|
+|---|---|---|---|
 | Architecture | Governance | Architect may veto; only Governance may change ADRs |
 | Quality gates | Auditor | Blocking authority delegated by Director |
 | Knowledge | Keeper | Preserves; Director decides what to preserve |
-| Strategy | Director | Sovereignty — no delegation possible |
+| Product Strategy | Strategic Director (SDL) | Sovereignty — no delegation possible. Defines objectives, constraints, success criteria via Execution Plans. |
+| Execution Strategy | Director (AEL) | Tactical sovereignty within Execution Plan. Decides how to execute, not what to execute. |
 | System state | Code itself | Implementation changes it; Validation verifies it |
 
 ---

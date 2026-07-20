@@ -273,10 +273,17 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
 
   const intent: Intent = classifyIntent(facts, slotStability);
 
-  // FASE A3 Capa 2: contexto de intención previa
+  // FASE A3 Capa 2: contexto de intención previa (CDA §7)
+  // F02-DG: Preservar intención operativa (BOOKING, NOW) cuando nuevo intent es de baja confianza.
+  // CDA §7 regla 1: prevIntent prevalece sobre CONSULTA/AMBIGUOUS/INFORMATIONAL sin evidencia fuerte.
+  // CDA §7 regla 2: cambios solo con evidencia operativa fuerte.
+  const highOperationalIntents: Intent[] = ["BOOKING", "NOW", "EMERGENCY", "RESCHEDULE", "POST_SERVICE"];
+  const lowConfidenceIntents: Intent[] = ["CONSULTA", "AMBIGUOUS", "INFORMATIONAL"];
   const finalIntent: Intent = (prevIntent && prevIntent !== "AMBIGUOUS" && prevIntent !== "GREETING")
     ? (intent === "PRE_BOOKING"
         ? prevIntent
+        : highOperationalIntents.includes(prevIntent as any) && lowConfidenceIntents.includes(intent as any)
+          ? prevIntent  // CDA §7 regla 1: preservar sobre baja confianza
         : intent === prevIntent && (facts.some(f => f.startsWith("commercial:")) || facts.some(f => f.startsWith("consulta:")))
           ? "CONSULTA"
           : intent)

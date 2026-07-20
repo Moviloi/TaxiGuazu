@@ -67,6 +67,9 @@ site/
 # Build artifacts
 *.tsbuildinfo
 
+# Temporary / scratch files
+.temp/
+
 # Secrets & Credentials
 *.pem
 *.key

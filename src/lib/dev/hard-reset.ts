@@ -1,6 +1,9 @@
 /**
  * hard-reset.ts — Development Command: Hard Conversation Reset (.limpiar)
  *
+ * ⚠️ PROTEGIDO: Solo se ejecuta si DEV_MODE_ENABLED=true.
+ * Ver BUILD misión: OLA 4.4 — seguridad para operación en producción.
+ *
  * IMPORTANTE:
  * - NO es funcionalidad del producto.
  * - Es una herramienta exclusiva de desarrollo para reiniciar completamente
@@ -17,6 +20,21 @@
 import { getDb, getConversationByPhone, deleteConnectionKey } from "@/lib/db/database";
 import { resetToIdle } from "@/lib/services/dispatch/dispatch-workflow";
 import { log } from "@/lib/utils/logger";
+
+// ── Guard de seguridad ──
+
+/**
+ * Verifica que DEV_MODE_ENABLED esté activo.
+ * Lanza error si no, previniendo ejecución accidental en producción.
+ */
+function guardDevMode(): void {
+  if (process.env.DEV_MODE_ENABLED !== "true") {
+    throw new Error(
+      "[HARD_RESET] DEV_MODE_ENABLED no está activo. " +
+      "Esta operación destructiva solo está permitida en modo desarrollo."
+    );
+  }
+}
 
 // ── Constantes ──
 
@@ -42,6 +60,7 @@ interface HardResetResult {
 // ── Hard Reset ──
 
 export async function hardReset(phone: string): Promise<HardResetResult> {
+  guardDevMode();
   const result: HardResetResult = {
     conversationDeleted: false,
     messagesDeleted: false,
