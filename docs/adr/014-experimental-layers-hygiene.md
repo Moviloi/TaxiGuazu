@@ -172,6 +172,8 @@ La auditoría clasificó estos componentes como **REFACTOR** o **REMOVE**. Este 
 - `ADR-012` — Cognitive Escalation Principle
 - `ARCHITECTURE_FREEZE_V3` — Congelamiento arquitectónico vigente
 - `INTERFACE_FREEZE_V2` — Congelamiento de interfaces vigente
+- `CE-3A_BKE_SPECIFICATION.md` — **Redefinido por este ADR.** Especificación BKE original. (Histórico, candidato a eliminación.)
+- `CE-3B_DRL_SPECIFICATION.md` — **Redefinido por este ADR.** Especificación DRL original. (Histórico, candidato a eliminación.)
 
 ---
 

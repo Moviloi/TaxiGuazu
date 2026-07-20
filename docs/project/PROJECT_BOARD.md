@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-20 | Etapa: ... — PR-SDL-4A ✅ — **BUILD-AUDIT-1 ✅ (System Audit & Code Hygiene)**
+## Actualizado: 2026-07-20 | Etapa: ... — PR-SDL-4A ✅ — BUILD-AUDIT-1 ✅ — OLA 6 ✅ — **KNOWLEDGE_INVENTORY ✅ (SSOT Enrichment D2/D4)**
 
 ---
 
@@ -18,7 +18,7 @@
 
 | ID | Tarea | Dominio | Estado | ADR | Origen |
 |---|---|---|---|---|---|
-| P0-01 | Rotar ADMIN_API_KEY (expuesta en chat) | Ops | READY | N/A | OPS1 | **BLOQUEA PILOTO** |
+| P0-01 | Rotar ADMIN_API_KEY (expuesta en chat) | Ops | **DONE** (OLA 6 — nueva key 40-char hex en Vercel Preview+Production) | N/A | OPS1 |
 | P0-02 | Configurar SENTRY_DSN en Vercel | Ops | READY | N/A | OPS1 | **BLOQUEA PILOTO** |
 | P0-04 | Seed de choferes reales en Turso | Ops | **DONE** (BUILD-AUDIT-1) | N/A | OPS1 |
 | P0-03 | `connection_cache` sin CREATE TABLE — riesgo de runtime error | DB | **DONE** (schema.sql actualizado) | N/A | P3 Audit |
@@ -33,7 +33,7 @@
 | P1-04 | Cerrar fase-22 T2 (decisión de producto: ¿preservar origin en corrección parcial?) | Extraction | ADR_PENDING | N/A | S0 |
 | P1-05 | `placeIdCache` nunca se invalida — agregar TTL | Geo | READY | N/A | P3 Audit |
 | P1-06 | `is_principal2` nunca se escribe en código | DB | **PARTIAL** (type agregado, write operations pendientes) | N/A | P3 Audit |
-| P1-07 | Configurar LOG_LEVEL=info en Vercel | Ops | READY | N/A | OPS1 |
+| P1-07 | Configurar LOG_LEVEL=info en Vercel | Ops | **DONE** (OLA 6) | N/A | OPS1 |
 | P1-08 | PAIR_BASE y CORRIDOR_PAIRS → migrar a tabla DB | Geo | READY | N/A | P3 Audit |
 | P1-09 | ENTITY_CATALOG → migrar a tabla DB | Extraction | READY | N/A | P3 Audit |
 | P1-10 | **CE-5 — Cognitive Migration Implementation** (EPIC) | Architecture | **DONE** | ADR-012 | CE Closure |
@@ -46,6 +46,7 @@
 | P1-10g | **PR-5F: Cognitive Metrics & Observability** | Architecture | **KEPT** (cognitive collector preservado) | ADR-014 | CE-5 |
 | P1-10h | ~~PR-5G: Cognitive Architecture Certification Closure~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | PR-5G |
 | P1-11 | **H-CAT2-001: RECOVERY state pierde slots confirmados** | Pipeline | **DONE** (CDA §6 fix) | N/A | CAT-2 |
+| P1-12 | **KNOWLEDGE_INVENTORY — SSOT Enrichment D2/D4** | Docs | **DONE** (CDA v1.1, ADR-012 §10, ADR-009/014 enriquecidos, 2 históricos eliminados) | N/A | PLAN |
  
 ## P2 — Media prioridad
 

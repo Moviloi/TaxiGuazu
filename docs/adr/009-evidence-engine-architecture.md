@@ -147,6 +147,8 @@ Some entity fields exist to serve downstream layers that have not yet been built
 The Evidence Engine is frozen and serves as the **input contract** for the next cognitive generation. Each future layer must follow the same patterns (immutable, shadow mode, never-throw builders, single authority).
 
 > **Nota PR-11/ADR-011:** El pipeline cognitivo futuro ha sido simplificado después de 7 auditorías arquitectónicas (PR-6 a PR-10). Reflection, Goals y Planning fueron eliminados como capas independientes. El pipeline vigente es: **Evidence Engine → Memory → Pattern Discovery** (3 capas). Ver ADR-011 §4.1 para el detalle completo.
+>
+> **Ontología de lenguajes cognitivos (PR-7A):** La serie PR-7 establece una distinción ontológica fundamental entre tres lenguajes cognitivos que los futuros ADRs de Pattern Discovery y Goals deberán formalizar: **lenguaje de HECHO** (factual, cierto, por turno — usado por EE y Memory), **lenguaje de TENDENCIA** (probabilístico, generalizante, cross-instance — propio de Pattern Discovery), y **lenguaje de PRESCRIPCIÓN** (directivo, deóntico — propio de Goals). Ver PR-7A §4.
 
 | Layer | Precondition | Entry Point | Description |
 |-------|-------------|-------------|-------------|
@@ -217,6 +219,7 @@ src/lib/evidence/
 | `docs/architecture/ENGINES.md` | Evidence Engine category documentation. |
 | `docs/architecture/knowledge-map.md` | How cognitive knowledge fits into the broader knowledge landscape. |
 | `docs/project/CHANGELOG.md` | Implementation history (PR-2C through PR-3E). |
+| `docs/architecture/PR-7A_LEARNING_ONTOLOGY_AUDIT.md` | Ontología de lenguajes cognitivos (hecho/tendencia/prescripción) — fundamento para Pattern Discovery y Goals. |
 | `src/lib/evidence/` | All source code for the frozen pipeline. |
 | `tests/unit/evidence/` | 378 tests across 19 files enforcing the frozen contracts. |
 

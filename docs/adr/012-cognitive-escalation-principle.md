@@ -386,4 +386,55 @@ La Serie CE fue implementada en los PRs PR-5A a PR-5F + PR-5G (cierre de certifi
 
 ---
 
+# 10. Referencias arquitectónicas preservadas
+
+Esta sección documenta la relación entre el ADR-012 (SSOT) y los documentos históricos que contienen información complementaria. El objetivo es permitir la eliminación de duplicados manteniendo la trazabilidad hacia fuentes detalladas.
+
+## 10.1 Serie CE (Cognitive Efficiency Audit) — Archivo de implementación
+
+La Serie CE documenta el diseño, implementación y certificación del stack cognitivo (BKE + DRL + LLM). Su información ha sido migrada o redefinida como sigue:
+
+| Documento | Relación con ADR-012/ADR-014 | Contenido único preservado |
+|-----------|------------------------------|----------------------------|
+| **CE-1**: Cognitive Efficiency Audit | Cubierto por ADR-012 §3 (principios P1-P7) y §6 (fases de escalamiento). Las tablas de providers con firmas y costos, detalle de interruptor y presupuesto cognitivo son implementación específica. | 📌 Detalle de providers, firmas de API, costos por proveedor |
+| **CE-2**: Instruction Evitability Analysis | La definición formal de "evitable" es un concepto arquitectónico valioso. Cubierto por ADR-012 §3 principio P4 (Valor Incremental Demostrable). | 📌 Definición formal de evitable |
+| **CE-3A**: BKE Specifications | **Redefinido por ADR-014** — ADR-014 eliminó BKE como concepto arquitectónico preservando funcionalidad. Los 11 dominios BKE del diseño original se redujeron a 4 implementados (geo, entity, pricing, message). Los 7 restantes son FUTURO. | 🗑️ Redefinido. Los principios BKE viven en ADR-014. |
+| **CE-3B**: DRL Specifications | **Redefinido por ADR-014** — ADR-014 eliminó DRL como capa independiente. Las 7 familias de reglas DRL se preservan como reglas de dominio. | 🗑️ Redefinido. Los principios DRL viven en ADR-014. |
+| **CE-4**: Migration Roadmap | Histórico — el roadmap de migración (5 tracks) ya fue ejecutado en PR-5A a PR-5F. | 🗑️ Histórico ejecutado |
+| **CE-5**: Implementation Readiness | Histórico — reporte de implementación post-PR-5G. Las desviaciones D1-D4 ya están documentadas en ADR-012 §9.1. | 🗑️ Histórico ejecutado |
+
+> **Decisión**: CE-3A, CE-3B, CE-4 y CE-5 son candidatos a eliminación post-migración. CE-1 y CE-2 se preservan como referencia arquitectónica por contener detalle de proveedores y definiciones formales no reducibles al ADR.
+
+## 10.2 Serie PR-7 (Cognitive Architecture Audit) — Exploración conceptual
+
+La serie PR-7 documenta la exploración conceptual del modelo cognitivo de AITOS. Su contenido es información única **no cubierta** por los ADRs actuales:
+
+| Documento | Contenido único | Relación con ADR-012 |
+|-----------|-----------------|----------------------|
+| **PR-7A**: Learning Ontology Audit | Distinción ontológica "lenguaje de TENDENCIA" vs "lenguaje de HECHO". Test de 5 criterios de independencia de capa. 6 invariantes L-1 a L-6 de aprendizaje. | 📌 No cubierto. La ontología de aprendizaje no está formalizada en ningún ADR. |
+| **PR-7B**: Formal Mathematical Model | Modelo matemático formal con 9 invariantes de escalamiento cognitivo. | 📌 No cubierto. Los ADRs actuales son cualitativos. |
+| **PR-7C**: Learning Parameter Space | Espacio de parámetros de aprendizaje: learning rate, temperature, confidence thresholds. | 📌 No cubierto. No hay ADR de parametrización. |
+| **PR-7D**: Contract Derivation | Derivación formal de contratos entre capas cognitivas. | 📌 No cubierto. Complementa ADR-007 (contratos generales). |
+| **PR-7E**: Identity Audit | Auditoría de identidad del sistema cognitivo. | 📌 No cubierto. |
+| **PR-7F**: Minimality Proof | Prueba de minimalidad del stack cognitivo. | 📌 No cubierto. |
+| **PR-7G**: Pattern Semantics Audit | Auditoría semántica de patrones conversacionales vs cognitivos. | 📌 No cubierto. |
+
+> **Decisión**: La serie PR-7 se preserva **completa** como archivo de exploración arquitectónica. Su información (especialmente PR-7A y PR-7B) podría fundamentar futuros ADRs de ontología de aprendizaje y parametrización cognitiva.
+
+---
+
+## 10.3 Estado de documentos históricos D4
+
+| Documento | Estado | Acción |
+|-----------|--------|--------|
+| CE-1_COGNITIVE_EFFICIENCY_AUDIT.md | 📌 Preservar | Referencia de providers y costos |
+| CE-2_INSTRUCTION_EVITABILITY_ANALYSIS.md | 📌 Preservar | Definición formal de evitable |
+| CE-3A_BKE_SPECIFICATION.md | 🗑️ Eliminar | Redefinido por ADR-014 |
+| CE-3B_DRL_SPECIFICATION.md | 🗑️ Eliminar | Redefinido por ADR-014 |
+| CE-4_MIGRATION_ROADMAP.md | 🗑️ Eliminar | Roadmap ejecutado |
+| CE-5_IMPLEMENTATION_READINESS.md | 🗑️ Eliminar | Reporte ejecutado |
+| PR-7A_LEARNING_ONTOLOGY_AUDIT.md a PR-7G_PATTERN_SEMANTICS_AUDIT.md | 📌 Preservar | Archivo de exploración conceptual |
+
+---
+
 *Fin de ADR-012 — Cognitive Escalation Principle*

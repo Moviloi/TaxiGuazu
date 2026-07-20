@@ -1,10 +1,10 @@
 # Conversation Decision Algorithm — AITOS
 
-> **Versión:** 1.0  
+> **Versión:** 1.1  
 > **Propósito:** Definir y certificar el algoritmo conversacional que AITOS **debe** ejecutar, independientemente de su implementación actual.  
 > **Autoridad:** Deriva de `FUNCTIONAL_BEHAVIOR_SPECIFICATION.md`, Principios AITOS LAB (P1-P10), PR-QA2B (QB-01 a QB-08), PR-QA3-S2B (F01-DG a F03-DG), Invariantes conversacionales (I-C1 a I-C12), ADR-007, ADR-008, CX-1.  
 > **Naturaleza:** Documento normativo. Toda implementación o refactor debe cumplir este algoritmo.  
-> **Relación con otros documentos:** Este documento es el **árbol de decisión normativo** que concreta los principios de la `FUNCTIONAL_BEHAVIOR_SPECIFICATION.md` en un algoritmo ejecutable conceptualmente.
+> **Relación con otros documentos:** Este documento es el **árbol de decisión normativo** que concreta los principios de la `FUNCTIONAL_BEHAVIOR_SPECIFICATION.md` en un algoritmo ejecutable conceptualmente. La verificación experimental contra 21 escenarios conversacionales está documentada en el Apéndice C.
 
 ---
 
@@ -1018,6 +1018,68 @@ Durante la creación de este algoritmo se detectaron dos ambigüedades en la `FU
 | Versión | Fecha | Cambios | Autor |
 |---------|-------|---------|-------|
 | 1.0 | 2026-07-17 | Versión inicial. Síntesis de FUNCTIONAL_BEHAVIOR_SPECIFICATION.md, QA2B, QA3-S2B, principios AITOS LAB. | ARNÉS (PR-CDA1) |
+| 1.1 | 2026-07-20 | Apéndice C agregado con referencias de verificación externas (CX-1, SLOT_MERGE_BUG_AUDIT). | BUILD (KNOWLEDGE_INVENTORY) |
+
+---
+
+## Apéndice C: Referencias de verificación externas
+
+Este apéndice documenta las fuentes externas que verifican experimentalmente el CDA contra escenarios reales. El CDA es normativo; estas referencias son evidencia de que el algoritmo ha sido auditado contra implementación real.
+
+### C.1 Batería de verificación CX-1 (Conversation Experience Certification)
+
+El documento `CX-1_CONVERSATION_EXPERIENCE_CERTIFICATION.md` contiene una batería de **21 escenarios conversacionales auditados** (C1–C21) trazados contra el pipeline real de AITOS. Cada caso documenta: flujo, puntos de escalamiento, llamadas LLM, y estado del arte.
+
+| # | Escenario | LLM calls | Verifica en CDA |
+|---|---|---|---|
+| **C1** | "Hotel Meliá → aeropuerto IGR" | 0 | §2 pasos 1-5 (extracción regex + entity), §5 merge |
+| **C2** | "Terminal → centro" | 0 | §6 ambigüedad con 1 candidato, §9 transición |
+| **C3** | "Aeropuerto → hotel Rafain, viernes" | 1 (rephrase) | §2 paso 7b (fecha inferida), §5 merge |
+| **C4** | "Hotel Amerian → Cataratas, 4 pax, mañana 8am" | 1 (rephrase) | §5 merge múltiples slots |
+| **C5** | "Centro → aduana Argentina, 5 pax" | 0 | §9 fleet capacity check |
+| **C6** | Multi-ride (hotel → aeropuerto → cataratas) | 1 (estructura) | §2 paso 7b multi-leg |
+| **C7** | "Aeropuerto IGR → hotel Mabu" | 0 | §5 regex + entity |
+| **C8** | "Necesito ir al aeropuerto" (ambiguo) | 1 | §6 ambigüedad, §7 preservar intención |
+| **C9** | "Parque Nacional Iguazú" | 0 | §5 entity, §9 inferPickupTime |
+| **C10** | "Aduana → centro" (lado explícito) | 0 | §5 entity + border inference |
+| **C11** | "Aduana → cataratas" (lado implícito) | 0-1 | §5 border inference sin LLM posible |
+| **C12** | "Cuánto sale...?" (consulta precio) | 0 | §9 skipLLM para low intent |
+| **C13** | "Precio 4 pax Meliá → cataratas" | 1 (rephrase) | §9 pricing + §5 merge |
+| **C14** | Corrección en slot_confirmation | 0 | §7 preserveContext, §8 UPDATE |
+| **C15** | "Cancelá el viaje" | 0 | §9 inhibitNewBooking |
+| **C16** | Spanglish + chino | 1-2 | §6 ambigüedad cross-language |
+| **C17** | "Hola" (solo saludo) | 0 | §2 paso 5 GREETING shortcut |
+| **C18** | "Sí" (afirmación) | 0-1 | §9 isAffirmativeMessage |
+| **C19** | "Quiero ir..." (incompleto) | 1 | §2 paso 9 RECOVERY, §6 ambigüedad |
+| **C20** | Audio de voz | 1 (transcripción) | §2 paso 1 pre-procesamiento |
+| **C21** | Conversación larga (15 turnos) | 3-5 | §2 paso 4 conversationStability |
+
+> **Métrica clave CX-1**: Turnos promedio por conversación exitosa: **3.2**. LLM calls por conversación: **0.8** (flags false). LLM calls evitables con DRL: **40-60%** (ver §9.3 de CX-1).
+>
+> **Veredicto CX-1**: 🟡 **READY FOR STAGING WITH OBSERVATIONS** — 0 bloqueantes, 5 importantes, 12 menores, 8 mejoras futuras.
+
+### C.2 Escenario de riesgo documentado — SLOT_MERGE_BUG_AUDIT
+
+El documento `SLOT_MERGE_BUG_AUDIT.md` contiene el análisis del bug de merge B3 (slot merge sobrescribe contexto). Este escenario verifica:
+
+| Aspecto | Referencia en CDA |
+|---------|-------------------|
+| Merge preserva slot previo si nuevo mensaje no lo menciona | §5 regla 2 |
+| Merge agrega slot nuevo sin sobrescribir existentes | §5 regla 1 |
+| Contradicción explícita → reemplazo controlado | §5 regla 3 |
+| Pseudocódigo de merge atómico | §5 pseudocódigo |
+| Invariante I-03: merge incremental correcto | §4 |
+
+### C.3 Nota sobre documentos históricos
+
+Los siguientes documentos históricos contienen información redefinida o cubierta por el CDA. Se preservan como referencia hasta completar la migración de información única:
+
+| Documento | Estado | Razón |
+|-----------|--------|-------|
+| `PIPELINE_V2_PROPOSAL.md` | 🗑️ **Eliminado** | Redefinido por CDA §2 (pipeline 11 pasos) y §9 (árbol de decisión) |
+| `CONVERSATION_PIPELINE_AUDIT.md` | 🗑️ **Eliminado** | Cubierto por CDA §2, §5, §6, §9. Info única migrada a este apéndice. |
+| `CX-1_CONVERSATION_EXPERIENCE_CERTIFICATION.md` | 📌 **Preservado** | Contiene métricas detalladas, hallazgos CX-01 a CX-15, y metodología de auditoría no reducibles al CDA. Referenciado desde §C.1. |
+| `SLOT_MERGE_BUG_AUDIT.md` | 📌 **Preservado** | Contiene trazado B3 detallado y data forense de implementación. Referenciado desde §C.2. |
 
 ---
 

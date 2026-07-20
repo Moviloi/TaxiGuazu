@@ -13,6 +13,20 @@
 - **Archivos eliminados**: `src/lib/pattern-discovery/` (12 archivos, 2,040 líneas), `src/lib/bke/` (10 archivos, 1,234 líneas), `src/lib/drl/` (12 archivos, 1,242 líneas), `src/lib/ai/display-name.ts` (movido a services/), `src/app/api/bot/check-timeouts/` (duplicado), `tests/unit/pattern-discovery/` (3 tests), `tests/bke/` (directorio), `tests/services/bke-*.test.ts` (4 tests), `tests/services/drl-*.test.ts` (6 tests), `tests/ai/*drl*.test.ts` (2 tests), archivos huérfanos de raíz (4)
 - **Validación**: src/ 0 errores TypeScript ✅, contratos AEL PASS ✅, seed ejecutado ✅
 
+### KNOWLEDGE_INVENTORY — SSOT Enrichment & Historical Pruning
+- **Tipo**: Documentación — enriquecimiento de SSOT D2/D4 + eliminación de históricos obsoletos
+- **Resumen**: Se ejecutó la fase de validación SSOT del Knowledge Inventory. **CDA v1.1** (D2): nuevo Apéndice C con 21 escenarios CX-1 (C1-C21), métricas (3.2 turnos promedio, 0.8 LLM calls, 40-60% evitables con DRL), referencia SLOT_MERGE_BUG, y tabla de estado de históricos. **ADR-012** (D4): nuevo §10 con referencias cruzadas a CE series (archivo de implementación: CE-1/2 preservados, CE-3A/3B redefinidos por ADR-014, CE-4/5 ejecutados) y PR-7 series (exploración conceptual, 100% preservados). **ADR-009** (D4): §7 enriquecido con ontología de lenguajes cognitivos PR-7A (hecho/tendencia/prescripción). **ADR-014** (D4): §5 referencias con CE-3A/CE-3B como redefinidos. **Eliminados**: `PIPELINE_V2_PROPOSAL.md` (redefinido por CDA) y `CONVERSATION_PIPELINE_AUDIT.md` (cubierto por CDA). **KNOWLEDGE_INVENTORY.md**: conteos actualizados (267→265 archivos, 146→144 históricos), change log agregado.
+- **Documentos creados**: `docs/inventory/KNOWLEDGE_INVENTORY.md` (nuevo, 553 líneas — inventario completo de 267 docs, 15 SSOT, camino de lectura P1→P2→P3→REF)
+- **Documentos enriquecidos**: `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` (CDA v1.1, +66 líneas Apéndice C), `docs/adr/012-cognitive-escalation-principle.md` (+51 líneas §10 referencias), `docs/adr/009-evidence-engine-architecture.md` (+3 líneas ontología PR-7A), `docs/adr/014-experimental-layers-hygiene.md` (+2 líneas referencias CE-3A/3B)
+- **Archivos eliminados**: `docs/certification/PIPELINE_V2_PROPOSAL.md` (70 líneas, redefinido por CDA), `docs/certification/CONVERSATION_PIPELINE_AUDIT.md` (131 líneas, cubierto por CDA)
+
+### OLA 6 — Staging Deployment (Preview)
+- **Tipo**: Deploy a Vercel Preview — rotación de credenciales + push + verificación
+- **Resumen**: Se completó el deploy a staging en Vercel Preview. ADMIN_API_KEY rotada con nueva clave de 40 caracteres hex (160 bits de entropía) configurada en Vercel para Production y Preview. LOG_LEVEL=info configurado en Preview. Build local verificado (Next.js 15.5.18 compila sin errores). Commit de todos los cambios de BUILD-AUDIT-1 (90 archivos, +4,841 / -9,928 líneas) y push a GitHub triggerearon Preview deploy automático. Deployment READY en 2 minutos.
+- **Acciones en Vercel**: `vercel env add ADMIN_API_KEY production` (nueva key), `vercel env add ADMIN_API_KEY preview` (nueva key para qa-3/architectural-sanitization), `vercel env add LOG_LEVEL preview info`
+- **URLs del deployment**: Preview — `https://taxi-guazu-g4dgeha87-movilois-projects.vercel.app` (Ready ✅)
+- **Pendiente post-deploy**: Configurar SENTRY_DSN, merge a main para producción, monitoreo 24h
+
 ## 2026-07-19
 
 ### PR-SDL-4A — Project Context Layer
