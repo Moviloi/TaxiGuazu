@@ -638,6 +638,14 @@ export async function runExtractionPipeline(
         const mergedWithMemory = mergeContext(mergedSlotsForDb, ctxMemory, confidenceResult.overall_confidence);
         log.info("[CONTEXT] merge completado:", Object.keys(mergedWithMemory).join(", "));
 
+        // F02-DG (CDA §7): Persistir leadCore.intent para que prevIntent esté disponible
+        // en el próximo turno. Sin esto, la lógica de preservación de core.ts:282-290 es
+        // estructuralmente inalcanzable porque prevIntent siempre es undefined.
+        // Solo guardamos intents operativos (no AMBIGUOUS, GREETING, ni undefined).
+        if (leadCore.intent && !["AMBIGUOUS", "GREETING"].includes(leadCore.intent)) {
+          mergedWithMemory.intent = leadCore.intent;
+        }
+
         await upsertChatSession(phone, mergedWithMemory, mergedConfidence, workflowResult.state, workflowResult.clarifyField ?? undefined, JSON.stringify(slotStates));
 
         extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing, multiRideBreakdown);

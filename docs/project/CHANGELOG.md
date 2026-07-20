@@ -20,6 +20,11 @@
 - **Documentos enriquecidos**: `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` (CDA v1.1, +66 líneas Apéndice C), `docs/adr/012-cognitive-escalation-principle.md` (+51 líneas §10 referencias), `docs/adr/009-evidence-engine-architecture.md` (+3 líneas ontología PR-7A), `docs/adr/014-experimental-layers-hygiene.md` (+2 líneas referencias CE-3A/3B)
 - **Archivos eliminados**: `docs/certification/PIPELINE_V2_PROPOSAL.md` (70 líneas, redefinido por CDA), `docs/certification/CONVERSATION_PIPELINE_AUDIT.md` (131 líneas, cubierto por CDA)
 
+### QA-3 Sprint 3 — CDA Conformance Fixes Complete
+- **Tipo**: Corrección de bugs — cierre de QA-3 Sprint 3 (F01-DG ✅, F02-DG ✅, F03-DG ✅, H-CAT2-001 ✅)
+- **Resumen**: Verificación completa del estado de los 5 bugs del Sprint 3. **3 bugs ya corregidos en BUILD-AUDIT-1** (F01-DG: `lead.service.ts` gate con `!isClarifyFieldActive`, F03-DG: `mergeMessageDataBeforeAmbiguity`, H-CAT2-001: RECOVERY preserva CONFIRMED slots). **F02-DG requirió fix adicional**: (1) `extraction-runner.ts:641` — `leadCore.intent` ahora se persiste en `mergedWithMemory` después de `mergeContext()`, rompiendo el ciclo donde `prevIntent` era siempre `undefined` y la lógica de preservación de `core.ts` era estructuralmente inalcanzable. (2) `core.ts:287-288` — eliminado downgrade espurio `BOOKING → CONSULTA` cuando hay facts mixtos `consulta:` + señales fuertes de booking. QA3-S3-04 (UX auto-resolve) queda como P1 pendiente.
+- **Archivos modificados**: `src/lib/services/extraction/extraction-runner.ts` (persistencia de intent), `src/lib/ai/core.ts` (downgrade removido), `docs/project/PROJECT_BOARD.md` (Sprint 3 marcado DONE)
+
 ### OLA 6 — Staging Deployment (Preview)
 - **Tipo**: Deploy a Vercel Preview — rotación de credenciales + push + verificación
 - **Resumen**: Se completó el deploy a staging en Vercel Preview. ADMIN_API_KEY rotada con nueva clave de 40 caracteres hex (160 bits de entropía) configurada en Vercel para Production y Preview. LOG_LEVEL=info configurado en Preview. Build local verificado (Next.js 15.5.18 compila sin errores). Commit de todos los cambios de BUILD-AUDIT-1 (90 archivos, +4,841 / -9,928 líneas) y push a GitHub triggerearon Preview deploy automático. Deployment READY en 2 minutos.

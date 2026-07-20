@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-20 | Etapa: ... — PR-SDL-4A ✅ — BUILD-AUDIT-1 ✅ — OLA 6 ✅ — **KNOWLEDGE_INVENTORY ✅ (SSOT Enrichment D2/D4)**
+## Actualizado: 2026-07-20 | Etapa: ... — PR-SDL-4A ✅ — BUILD-AUDIT-1 ✅ — OLA 6 ✅ — KNOWLEDGE_INVENTORY ✅ — **QA-3 Sprint 3 ✅ (F02-DG fixed, 4/5 CDA bugs closed)**
 
 ---
 
@@ -193,15 +193,15 @@
 | **QA3-S2B-02** | **PR-CDA1 — Conversation Decision Algorithm** | Especificación | Algoritmo normativo en 11 secciones, 15 invariantes, 49KB | `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` |
 | **QA3-S2B-03** | **ADR-013 — Ratificación del CDA** | Arquitectura | Jerarquía normativa. CDA como autoridad funcional. | `docs/adr/013-conversation-decision-algorithm.md` |
 
-## ⏳ QA-3 Sprint 3 — PENDING (CDA Conformance Implementation)
+## ✅ QA-3 Sprint 3 — COMPLETED (CDA Conformance Implementation)
 
-| ID | Tarea | Dominio | Hallazgo | Prioridad |
+| ID | Tarea | Dominio | Fix | Estado |
 |---|---|---|---|---|
-| **QA3-S3-01** | Fix F01-DG: Ambiguity sin verificar clarify_field | Pipeline | `lead.service.ts:203` activa ambiguity sin verificar `session.clarify_field` o `leadCore.roleLock`. **Confirmado por PR-CAT1 S9** — la ambigüedad se activa incluso cuando el usuario responde a `clarify_field`. | **P0** |
-| **QA3-S3-02** | Fix F02-DG: Intención no preservada | Pipeline | `core.ts:277-283` solo preserva PRE_BOOKING, no BOOKING. **PR-CAT1 S7 confirmó** que la preservación actual ocurre vía LLM, no determinísticamente — frágil. | **P0** |
-| **QA3-S3-03** | Fix F03-DG: Merge bypass por ambigüedad | Pipeline | Mensajes no se fusionan cuando se activa ambigüedad | **P0** |
-| **QA3-S3-04** | UX: Resolución automática de ambigüedad sin confirmación (PR-CAT1 S13) | UX | "Hotel Iguazú" resuelto automáticamente sin preguntar al usuario. Gap contra CDA §6. | **P1** |
-| **QA3-S3-05** | **H-CAT2-001: RECOVERY slot loss** — RECOVERY state pierde slots confirmados al entrar en score 0.40–0.64, repitiendo preguntas ya respondidas. | Pipeline | **Descubierto en:** `docs/incidents/CAT2_RESULT_REPORT.md` (CAT-2-04, CAT-2-06). **Defecto formal:** `docs/incidents/H-CAT2-001_RECOVERY_SLOT_LOSS.md`. **No comparte implementación con F01-DG/F02-DG/F03-DG** — causa raíz independiente (comprehension scoring vs ambiguity handler). Defecto funcional descubierto durante Acceptance Testing (CAT-2). Requiere revalidación completa de CAT-2 post-fix. | **P1** |
+| **QA3-S3-01** | Fix F01-DG: Ambiguity sin verificar clarify_field | Pipeline | `lead.service.ts:209` — condicion `!isClarifyFieldActive` agregada al gate de ambigüedad. **Corregido en BUILD-AUDIT-1 (b524aa0).** | ✅ **DONE** |
+| **QA3-S3-02** | Fix F02-DG: Intención no preservada | Pipeline | Dos cambios: (1) `extraction-runner.ts` — `leadCore.intent` persistido en `mergedWithMemory` después de `mergeContext()` para que `prevIntent` esté disponible en el próximo turno. (2) `core.ts:287-288` — eliminado el downgrade espurio `BOOKING → CONSULTA` cuando hay facts mixtos `consulta:` + `booking:`. | ✅ **DONE** (this session) |
+| **QA3-S3-03** | Fix F03-DG: Merge bypass por ambigüedad | Pipeline | `lead.service.ts:210` + `mergeMessageDataBeforeAmbiguity()` extrae y persiste 4 campos (passengers, flight, date, time) antes de redirigir a ambigüedad. **Corregido en BUILD-AUDIT-1 (b524aa0).** | ✅ **DONE** |
+| **QA3-S3-04** | UX: Resolución automática de ambigüedad sin confirmación (PR-CAT1 S13) | UX | Pendiente — baja prioridad P1. "Hotel Iguazú" resuelto automáticamente sin preguntar al usuario. Gap contra CDA §6. | ⏺️ P1 pendiente |
+| **QA3-S3-05** | **H-CAT2-001: RECOVERY slot loss** | Pipeline | `comprehension-runner.ts:149-169` — preserva slots CONFIRMED (origin, destination) antes de recovery message. **Corregido en BUILD-AUDIT-1 (b524aa0).** | ✅ **DONE** |
  
 ---
 

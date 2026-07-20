@@ -277,16 +277,15 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
   // F02-DG: Preservar intención operativa (BOOKING, NOW) cuando nuevo intent es de baja confianza.
   // CDA §7 regla 1: prevIntent prevalece sobre CONSULTA/AMBIGUOUS/INFORMATIONAL sin evidencia fuerte.
   // CDA §7 regla 2: cambios solo con evidencia operativa fuerte.
+  // CDA §7 tabla de evolución: prevIntent + intent → resultado (BOOKING + CONSULTA/AMBIGUOUS → BOOKING)
   const highOperationalIntents: Intent[] = ["BOOKING", "NOW", "EMERGENCY", "RESCHEDULE", "POST_SERVICE"];
   const lowConfidenceIntents: Intent[] = ["CONSULTA", "AMBIGUOUS", "INFORMATIONAL"];
   const finalIntent: Intent = (prevIntent && prevIntent !== "AMBIGUOUS" && prevIntent !== "GREETING")
     ? (intent === "PRE_BOOKING"
-        ? prevIntent
+        ? prevIntent  // PRE_BOOKING es transicional, preservar intención operativa previa
         : highOperationalIntents.includes(prevIntent as any) && lowConfidenceIntents.includes(intent as any)
           ? prevIntent  // CDA §7 regla 1: preservar sobre baja confianza
-        : intent === prevIntent && (facts.some(f => f.startsWith("commercial:")) || facts.some(f => f.startsWith("consulta:")))
-          ? "CONSULTA"
-          : intent)
+          : intent)     // Misma intención o evidencia fuerte → aceptar nueva clasificación
     : intent;
 
   confidence = computeConfidence(facts, finalIntent);
