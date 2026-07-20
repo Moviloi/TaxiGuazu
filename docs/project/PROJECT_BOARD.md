@@ -1,5 +1,5 @@
 # PROJECT BOARD — AITOS
-## Actualizado: 2026-07-20 | Etapa: ... — PR-SDL-4A ✅ — BUILD-AUDIT-1 ✅ — OLA 6 ✅ — KNOWLEDGE_INVENTORY ✅ — **QA-3 Sprint 3 ✅ (F02-DG fixed, 4/5 CDA bugs closed)**
+## Actualizado: 2026-07-20 | Etapa: ... — PR-SDL-4A ✅ — BUILD-AUDIT-1 ✅ — OLA 6 ✅ — KNOWLEDGE_INVENTORY ✅ — QA-3 Sprint 3 ✅ — **P1 Fixes FASE 2 ✅ (P1-03/05/08/09 done)**
 
 ---
 
@@ -29,13 +29,13 @@
 |---|---|---|---|---|---|
 | P1-01 | ~~Implementar Conversation Interpreter (ADR-007)~~ | Pipeline | **DONE** | 007 | B3 | `3080686` |
 | P1-02 | ~~Fix entity-extractor: guard para clarifications~~ | Extraction | **DONE** | N/A | B3 | `3080686` |
-| P1-03 | Deshabilitar auto-insert de aliases con Levenshtein ≤3 | DB | READY | N/A | B3, GEO Audit |
+| P1-03 | Deshabilitar auto-insert de aliases con Levenshtein ≤3 | DB | **DONE** (P1 fixes FASE 2) | N/A | B3, GEO Audit |
 | P1-04 | Cerrar fase-22 T2 (decisión de producto: ¿preservar origin en corrección parcial?) | Extraction | ADR_PENDING | N/A | S0 |
-| P1-05 | `placeIdCache` nunca se invalida — agregar TTL | Geo | READY | N/A | P3 Audit |
+| P1-05 | `placeIdCache` nunca se invalida — agregar TTL | Geo | **DONE** (P1 fixes FASE 2) | N/A | P3 Audit |
 | P1-06 | `is_principal2` nunca se escribe en código | DB | **PARTIAL** (type agregado, write operations pendientes) | N/A | P3 Audit |
 | P1-07 | Configurar LOG_LEVEL=info en Vercel | Ops | **DONE** (OLA 6) | N/A | OPS1 |
-| P1-08 | PAIR_BASE y CORRIDOR_PAIRS → migrar a tabla DB | Geo | READY | N/A | P3 Audit |
-| P1-09 | ENTITY_CATALOG → migrar a tabla DB | Extraction | READY | N/A | P3 Audit |
+| P1-08 | PAIR_BASE y CORRIDOR_PAIRS → migrar a tabla DB | Geo | **DONE** (P1 fixes FASE 2) | N/A | P3 Audit |
+| P1-09 | ENTITY_CATALOG → migrar a tabla DB | Extraction | **DONE** (P1 fixes FASE 2) | N/A | P3 Audit |
 | P1-10 | **CE-5 — Cognitive Migration Implementation** (EPIC) | Architecture | **DONE** | ADR-012 | CE Closure |
 | P1-10a | ~~PR-5A: DRL Foundation~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |
 | P1-10b | ~~PR-5B: BKE Foundation~~ | Architecture | **REMOVED** (ADR-014, BUILD-AUDIT-1) | ADR-012/014 | CE-5 |

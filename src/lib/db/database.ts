@@ -573,30 +573,18 @@ export async function resolveAlias(text: string): Promise<{ resolved: boolean; n
      WHERE p.active_status = 'active'`
   );
   let bestDist = Infinity;
-  let bestAlias: string | undefined;
   let bestCanonical: string | undefined;
-  let bestPlaceId: string | undefined;
   for (const row of all) {
     const d = levenshtein(lower, row.alias.toLowerCase());
     if (d < bestDist) {
       bestDist = d;
-      bestAlias = row.alias;
       bestCanonical = row.canonical_name;
-      bestPlaceId = row.place_id;
     }
   }
-  if (bestDist <= 3 && bestCanonical && bestPlaceId && bestAlias) {
-    // Auto-insert the new alias so future requests get exact match
-    const exists = await query<{ id: number }>(
-      "SELECT id FROM aliases WHERE place_id = ? AND alias = ? AND language = 'es'",
-      [bestPlaceId, lower]
-    );
-    if (exists.length === 0) {
-      await getDb().execute({
-        sql: "INSERT INTO aliases (place_id, alias, language) VALUES (?, ?, 'es')",
-        args: [bestPlaceId, lower],
-      });
-    }
+  if (bestDist <= 3 && bestCanonical) {
+    // P1-03: Fuzzy match retorna el alias resuelto sin auto-insert.
+    // El auto-insert causó contaminación de la DB en el pasado (ej: "argentino",
+    // "jl hotel"). El exact match (paso 1) ya cubre los casos frecuentes.
     return { resolved: true, names: [bestCanonical] };
   }
 

@@ -20,6 +20,15 @@
 - **Documentos enriquecidos**: `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md` (CDA v1.1, +66 líneas Apéndice C), `docs/adr/012-cognitive-escalation-principle.md` (+51 líneas §10 referencias), `docs/adr/009-evidence-engine-architecture.md` (+3 líneas ontología PR-7A), `docs/adr/014-experimental-layers-hygiene.md` (+2 líneas referencias CE-3A/3B)
 - **Archivos eliminados**: `docs/certification/PIPELINE_V2_PROPOSAL.md` (70 líneas, redefinido por CDA), `docs/certification/CONVERSATION_PIPELINE_AUDIT.md` (131 líneas, cubierto por CDA)
 
+### P1 Fixes FASE 2 — Technical Debt Cleanup (P1-03/05/08/09)
+- **Tipo**: Migración a DB y eliminación de side effects — 4 P1 items cerrados
+- **Resumen**: 
+  - **P1-03**: `resolveAlias()` ya no hace auto-INSERT de aliases con Levenshtein ≤3. El fuzzy matching se conserva, pero el side effect que contaminó la DB en el pasado (ej: "argentino", "jl hotel") fue eliminado. (`src/lib/db/database.ts`)
+  - **P1-05**: `placeIdCache` en `hub-discount.ts` ahora tiene TTL de 5 minutos + normalización de acentos en key. Previene datos stale sin retener entradas para siempre.
+  - **P1-08**: `PAIR_BASE` (20 pares de zona) y `CORRIDOR_PAIRS` (6 pares) migrados de hardcode en `location-resolver.ts` a tablas DB `zone_proximity` y `zone_corridors`. Carga dual: defaults hardcodeados + función `loadProximityFromDB()` que reemplaza desde DB en startup.
+  - **P1-09**: `ENTITY_CATALOG` (10 entidades turísticas) migrado de hardcode en `entity-catalog.ts` a tabla DB `entity_patterns`. Carga dual: defaults compilados + función `loadEntityCatalogFromDB()`. Consumidores (memory, comprehension, predictive-routing, opportunity-engine) no requieren cambios.
+- **Archivos modificados**: `schema/schema.sql` (3 nuevas tablas), `scripts/seed-data.ts` (seed para zone_proximity, zone_corridors, entity_patterns), `src/lib/db/database.ts` (P1-03), `src/lib/services/pricing/hub-discount.ts` (P1-05), `src/lib/services/geo/location-resolver.ts` (P1-08), `src/lib/config/entity-catalog.ts` (P1-09), `src/lib/db/domains/geo.ts` (funciones getZoneProximity/isZoneCorridor)
+
 ### QA-3 Sprint 3 — CDA Conformance Fixes Complete
 - **Tipo**: Corrección de bugs — cierre de QA-3 Sprint 3 (F01-DG ✅, F02-DG ✅, F03-DG ✅, H-CAT2-001 ✅)
 - **Resumen**: Verificación completa del estado de los 5 bugs del Sprint 3. **3 bugs ya corregidos en BUILD-AUDIT-1** (F01-DG: `lead.service.ts` gate con `!isClarifyFieldActive`, F03-DG: `mergeMessageDataBeforeAmbiguity`, H-CAT2-001: RECOVERY preserva CONFIRMED slots). **F02-DG requirió fix adicional**: (1) `extraction-runner.ts:641` — `leadCore.intent` ahora se persiste en `mergedWithMemory` después de `mergeContext()`, rompiendo el ciclo donde `prevIntent` era siempre `undefined` y la lógica de preservación de `core.ts` era estructuralmente inalcanzable. (2) `core.ts:287-288` — eliminado downgrade espurio `BOOKING → CONSULTA` cuando hay facts mixtos `consulta:` + señales fuertes de booking. QA3-S3-04 (UX auto-resolve) queda como P1 pendiente.

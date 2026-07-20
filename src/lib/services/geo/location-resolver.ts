@@ -131,8 +131,11 @@ export async function resolveLocationToPlaceId(text: string): Promise<string | n
 }
 
 // ── Proximity (from deprecated geo-engine.ts) ──
+// P1-08: Dual source — hardcoded defaults (fallback) + DB override.
+// loadProximityFromDB() reemplaza estos valores con datos de zona_proximity/zone_corridors.
+// La función se puede llamar durante startup del servidor.
 
-const PAIR_BASE: Record<string, number> = {
+let _pairBase: Record<string, number> = {
   "Z_AIRPORT→Z_CITY_CORE": 0.65, "Z_AIRPORT→Z_HOTEL_ZONE": 0.55,
   "Z_AIRPORT→Z_LANDMARK": 0.4, "Z_AIRPORT→Z_BORDER": 0.25,
   "Z_CITY_CORE→Z_AIRPORT": 0.65, "Z_CITY_CORE→Z_HOTEL_ZONE": 0.8,
@@ -145,18 +148,50 @@ const PAIR_BASE: Record<string, number> = {
   "Z_BORDER→Z_HOTEL_ZONE": 0.3, "Z_BORDER→Z_LANDMARK": 0.2,
 };
 
-const CORRIDOR_PAIRS = new Set([
+let _corridorPairs: Set<string> = new Set([
   "Z_AIRPORT→Z_CITY_CORE", "Z_CITY_CORE→Z_AIRPORT",
   "Z_AIRPORT→Z_HOTEL_ZONE", "Z_HOTEL_ZONE→Z_AIRPORT",
   "Z_HOTEL_ZONE→Z_CITY_CORE", "Z_CITY_CORE→Z_HOTEL_ZONE",
 ]);
 
+/**
+ * Carga proximidad y corredores desde DB (tablas zone_proximity / zone_corridors).
+ * Reemplaza los defaults hardcodeados. Seguro de llamar múltiples veces.
+ * Si la DB no está disponible, los defaults hardcodeados se conservan.
+ */
+export async function loadProximityFromDB(): Promise<void> {
+  try {
+    // No podemos importar query genérico aquí sin crear ciclo,
+    // usamos las funciones de dominio específicas.
+    // En lugar de hacer N queries, cargamos todo en una pasada.
+    const { query } = await import("@/lib/db/core/helpers");
+    const rows = await query<{ zone_a: string; zone_b: string; score: number }>(
+      "SELECT zone_a, zone_b, score FROM zone_proximity"
+    );
+    if (rows && rows.length > 0) {
+      const newBase: Record<string, number> = {};
+      for (const r of rows) {
+        newBase[`${r.zone_a}→${r.zone_b}`] = r.score;
+      }
+      _pairBase = newBase;
+    }
+    const corridorRows = await query<{ zone_a: string; zone_b: string }>(
+      "SELECT zone_a, zone_b FROM zone_corridors"
+    );
+    if (corridorRows && corridorRows.length > 0) {
+      _corridorPairs = new Set(corridorRows.map(r => `${r.zone_a}→${r.zone_b}`));
+    }
+  } catch {
+    // DB no disponible — conservar defaults hardcodeados
+  }
+}
+
 function computeProximity(a: string | null, b: string | null): number {
   if (!a || !b) return 0.3;
   const pairKey = `${a}→${b}`;
-  let baseScore = PAIR_BASE[pairKey] ?? 0.3;
+  let baseScore = _pairBase[pairKey] ?? 0.3;
   if (a === "Z_BORDER" || b === "Z_BORDER") baseScore = Math.max(0.1, baseScore - 0.5);
-  if (CORRIDOR_PAIRS.has(pairKey)) baseScore = Math.min(1.0, baseScore + 0.15);
+  if (_corridorPairs.has(pairKey)) baseScore = Math.min(1.0, baseScore + 0.15);
   let roadAccess = 0.6;
   if (a === "Z_AIRPORT" || b === "Z_AIRPORT") roadAccess = 0.8;
   else if (a === "Z_BORDER" || b === "Z_BORDER") roadAccess = 0.4;

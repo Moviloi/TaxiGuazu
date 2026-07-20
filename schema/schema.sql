@@ -536,6 +536,32 @@ CREATE TABLE IF NOT EXISTS transfer_priority (
   priority INTEGER NOT NULL CHECK(priority BETWEEN 1 AND 4)
 );
 
+-- ── GEO (P1-08: migrated from hardcoded PAIR_BASE / CORRIDOR_PAIRS) ──
+
+CREATE TABLE IF NOT EXISTS zone_proximity (
+  zone_a TEXT NOT NULL,
+  zone_b TEXT NOT NULL,
+  score REAL NOT NULL CHECK(score >= 0.0 AND score <= 1.0),
+  PRIMARY KEY (zone_a, zone_b)
+);
+
+CREATE TABLE IF NOT EXISTS zone_corridors (
+  zone_a TEXT NOT NULL,
+  zone_b TEXT NOT NULL,
+  PRIMARY KEY (zone_a, zone_b)
+);
+
+-- ── ENTITY PATTERNS (P1-09: migrated from ENTITY_CATALOG hardcode) ──
+
+CREATE TABLE IF NOT EXISTS entity_patterns (
+  entity_key TEXT PRIMARY KEY,
+  aliases_json TEXT NOT NULL DEFAULT '[]',
+  domains_json TEXT NOT NULL DEFAULT '[]',
+  ambiguous INTEGER NOT NULL DEFAULT 0,
+  semantic_associations_json TEXT NOT NULL DEFAULT '[]',
+  patterns_json TEXT NOT NULL DEFAULT '[]'
+);
+
 -- ── OPERATIONS ──
 
 CREATE TABLE IF NOT EXISTS tours (

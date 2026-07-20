@@ -44,6 +44,29 @@ export interface PlaceCandidate {
   display_name?: string;
 }
 
+/** Obtiene el score de proximidad entre dos tipos de zona abstractos (P1-08). */
+export async function getZoneProximity(
+  zoneA: string,
+  zoneB: string,
+): Promise<{ score: number } | null> {
+  return queryOne<{ score: number }>(
+    "SELECT score FROM zone_proximity WHERE zone_a = ? AND zone_b = ?",
+    [zoneA, zoneB],
+  );
+}
+
+/** Verifica si un par de zonas es un corredor conocido (P1-08). */
+export async function isZoneCorridor(
+  zoneA: string,
+  zoneB: string,
+): Promise<boolean> {
+  const row = await queryOne<{ count: number }>(
+    "SELECT COUNT(*) as count FROM zone_corridors WHERE zone_a = ? AND zone_b = ?",
+    [zoneA, zoneB],
+  );
+  return (row?.count ?? 0) > 0;
+}
+
 export async function searchPlaces(
   searchText: string,
   limit = 5,

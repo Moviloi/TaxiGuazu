@@ -68,15 +68,29 @@ function detectHubs(legs: LegPricingInput[]): Set<string> {
 
 /**
  * Resuelve el place_id para un texto de ubicación.
- * Cache simple para evitar resolver el mismo lugar múltiples veces.
+ * Cache con TTL para evitar resolver el mismo lugar múltiples veces
+ * sin retener datos stale para siempre (P1-05).
  */
-const placeIdCache = new Map<string, string | null>();
+interface CacheEntry {
+  value: string | null;
+  timestamp: number;
+}
+const placeIdCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+/** Normaliza texto: lowercase + trim + remove accents para key del cache */
+function normalizeCacheKey(text: string): string {
+  return text.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 async function resolvePlaceId(text: string): Promise<string | null> {
-  const key = text.toLowerCase().trim();
-  if (placeIdCache.has(key)) return placeIdCache.get(key) ?? null;
+  const key = normalizeCacheKey(text);
+  const entry = placeIdCache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+    return entry.value;
+  }
   const id = await resolveLocationToPlaceId(text);
-  placeIdCache.set(key, id);
+  placeIdCache.set(key, { value: id, timestamp: Date.now() });
   return id;
 }
 

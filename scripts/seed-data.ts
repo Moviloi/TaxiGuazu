@@ -681,6 +681,64 @@ const ZONE_PAIRS = generateZonePairs();
 const TARIFFS = [...OVERRIDES, ...ZONE_PAIRS];
 
 // ═══════════════════════════════════════════════════════════════════════
+// ── ZONE PROXIMITY (P1-08: migrated from PAIR_BASE) ──
+
+const ZONE_PROXIMITY: Array<{ zone_a: string; zone_b: string; score: number }> = [
+  { zone_a: "Z_AIRPORT", zone_b: "Z_CITY_CORE", score: 0.65 },
+  { zone_a: "Z_AIRPORT", zone_b: "Z_HOTEL_ZONE", score: 0.55 },
+  { zone_a: "Z_AIRPORT", zone_b: "Z_LANDMARK", score: 0.40 },
+  { zone_a: "Z_AIRPORT", zone_b: "Z_BORDER", score: 0.25 },
+  { zone_a: "Z_CITY_CORE", zone_b: "Z_AIRPORT", score: 0.65 },
+  { zone_a: "Z_CITY_CORE", zone_b: "Z_HOTEL_ZONE", score: 0.80 },
+  { zone_a: "Z_CITY_CORE", zone_b: "Z_LANDMARK", score: 0.50 },
+  { zone_a: "Z_CITY_CORE", zone_b: "Z_BORDER", score: 0.35 },
+  { zone_a: "Z_HOTEL_ZONE", zone_b: "Z_AIRPORT", score: 0.55 },
+  { zone_a: "Z_HOTEL_ZONE", zone_b: "Z_CITY_CORE", score: 0.80 },
+  { zone_a: "Z_HOTEL_ZONE", zone_b: "Z_LANDMARK", score: 0.45 },
+  { zone_a: "Z_HOTEL_ZONE", zone_b: "Z_BORDER", score: 0.30 },
+  { zone_a: "Z_LANDMARK", zone_b: "Z_AIRPORT", score: 0.40 },
+  { zone_a: "Z_LANDMARK", zone_b: "Z_CITY_CORE", score: 0.50 },
+  { zone_a: "Z_LANDMARK", zone_b: "Z_HOTEL_ZONE", score: 0.45 },
+  { zone_a: "Z_LANDMARK", zone_b: "Z_BORDER", score: 0.20 },
+  { zone_a: "Z_BORDER", zone_b: "Z_AIRPORT", score: 0.25 },
+  { zone_a: "Z_BORDER", zone_b: "Z_CITY_CORE", score: 0.35 },
+  { zone_a: "Z_BORDER", zone_b: "Z_HOTEL_ZONE", score: 0.30 },
+  { zone_a: "Z_BORDER", zone_b: "Z_LANDMARK", score: 0.20 },
+];
+
+// ── ENTITY PATTERNS (P1-09: migrated from ENTITY_CATALOG) ──
+
+interface EntityPatternSeed {
+  entity_key: string;
+  aliases: string[];
+  domains: string[];
+  ambiguous: boolean;
+  semantic_associations: string[];
+  patterns: string[];  // regex source strings (without flags)
+}
+
+const ENTITY_PATTERNS: EntityPatternSeed[] = [
+  { entity_key: "rafain",            aliases: ["rafain","rafain cena show","rafain palace hotel","rafain centro hotel"], domains: ["SHOW_TURISTICO","HOTEL"], ambiguous: true,  semantic_associations: ["show","cena show","hotel zona"],        patterns: ["rafain\\s*cena\\s*show","rafain\\s*(palace|centro)?\\s*hotel","rafain"] },
+  { entity_key: "madero show",       aliases: ["madero show"],                                                                     domains: ["SHOW_TURISTICO"],            ambiguous: false, semantic_associations: ["cena show","espectáculo"],             patterns: ["madero\\s*show"] },
+  { entity_key: "itaipu",            aliases: ["itaipu","itaipú","itaipú by night","itaipu by night"],                             domains: ["ATRACCION","SHOW_TURISTICO"], ambiguous: true,  semantic_associations: ["by night","show","represa"],            patterns: ["itaipú\\s*by\\s*night","itaipu\\s*by\\s*night","itaipú","itaipu"] },
+  { entity_key: "cataratas",         aliases: ["cataratas","cataratas argentinas","cataratas brasil"],                             domains: ["ATRACCION","TOUR"],          ambiguous: false, semantic_associations: ["excursión","argentina","brasil"],      patterns: [] },
+  { entity_key: "aeropuerto",        aliases: ["aeropuerto","aeroparque","igr","igu"],                                            domains: ["TOUR"],                      ambiguous: false, semantic_associations: ["traslado","transfer","taxi"],        patterns: [] },
+  { entity_key: "dinner show",       aliases: ["dinner show"],                                                                     domains: ["SHOW_TURISTICO"],            ambiguous: false, semantic_associations: ["show","cena show"],                 patterns: ["dinner\\s*show"] },
+  { entity_key: "show folklórico",   aliases: ["show folklórico","feirinha"],                                                     domains: ["SHOW_TURISTICO"],            ambiguous: false, semantic_associations: ["show","folklore"],                patterns: ["show\\s*folklórico","feirinha"] },
+  { entity_key: "dreams show",       aliases: ["dreams show"],                                                                     domains: ["SHOW_TURISTICO"],            ambiguous: false, semantic_associations: ["show","espectáculo"],             patterns: ["dreams\\s*show"] },
+  { entity_key: "parque das aves",   aliases: ["parque das aves"],                                                                 domains: ["ATRACCION"],                 ambiguous: false, semantic_associations: ["paseo","naturaleza"],              patterns: ["parque\\s*das\\s*aves"] },
+  { entity_key: "marco das 3 fronteiras", aliases: ["marco das 3 fronteiras","marco das três fronteiras"],                         domains: ["ATRACCION"],                 ambiguous: false, semantic_associations: ["paseo","frontera"],               patterns: ["marco\\s*das\\s*3\\s*fronteiras"] },
+];
+
+const ZONE_CORRIDORS: Array<{ zone_a: string; zone_b: string }> = [
+  { zone_a: "Z_AIRPORT", zone_b: "Z_CITY_CORE" },
+  { zone_a: "Z_CITY_CORE", zone_b: "Z_AIRPORT" },
+  { zone_a: "Z_AIRPORT", zone_b: "Z_HOTEL_ZONE" },
+  { zone_a: "Z_HOTEL_ZONE", zone_b: "Z_AIRPORT" },
+  { zone_a: "Z_HOTEL_ZONE", zone_b: "Z_CITY_CORE" },
+  { zone_a: "Z_CITY_CORE", zone_b: "Z_HOTEL_ZONE" },
+];
+
 // SEED EXECUTION
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -732,6 +790,48 @@ async function seed() {
     aliasCount++;
   }
   console.log(`  ✓ ${aliasCount} aliases insertados (${ALIASES.length} definidos)`);
+
+  // ── Zone Proximity (P1-08) ─────────────────────────────────────
+  let proxCount = 0;
+  for (const p of ZONE_PROXIMITY) {
+    await db.execute({
+      sql: "INSERT OR IGNORE INTO zone_proximity (zone_a, zone_b, score) VALUES (?, ?, ?)",
+      args: [p.zone_a, p.zone_b, p.score],
+    });
+    proxCount++;
+  }
+  console.log(`  ✓ ${proxCount} zone_proximity entries`);
+
+  // ── Zone Corridors (P1-08) ─────────────────────────────────────
+  let corrCount = 0;
+  for (const c of ZONE_CORRIDORS) {
+    await db.execute({
+      sql: "INSERT OR IGNORE INTO zone_corridors (zone_a, zone_b) VALUES (?, ?)",
+      args: [c.zone_a, c.zone_b],
+    });
+    corrCount++;
+  }
+  console.log(`  ✓ ${corrCount} zone_corridors entries`);
+
+  // ── Entity Patterns (P1-09) ────────────────────────────────────
+  let epCount = 0;
+  for (const ep of ENTITY_PATTERNS) {
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO entity_patterns
+        (entity_key, aliases_json, domains_json, ambiguous, semantic_associations_json, patterns_json)
+        VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [
+        ep.entity_key,
+        JSON.stringify(ep.aliases),
+        JSON.stringify(ep.domains),
+        ep.ambiguous ? 1 : 0,
+        JSON.stringify(ep.semantic_associations),
+        JSON.stringify(ep.patterns),
+      ],
+    });
+    epCount++;
+  }
+  console.log(`  ✓ ${epCount} entity_patterns`);
 
   // ── Tarifas ────────────────────────────────────────────────────
   let tariffCount = 0;

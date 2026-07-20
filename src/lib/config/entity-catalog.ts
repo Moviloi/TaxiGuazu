@@ -9,18 +9,18 @@ export interface EntityCatalogEntry {
   patterns: RegExp[];
 }
 
-export const ENTITY_CATALOG: EntityCatalogEntry[] = [
+// ── Compile-time default/fallback catalog ──
+// P1-09: ENTITY_CATALOG se carga desde DB vía loadEntityCatalogFromDB().
+// Los valores hardcodeados aquí son el fallback si DB no está disponible.
+
+const DEFAULT_CATALOG: EntityCatalogEntry[] = [
   {
     key: "rafain",
     aliases: ["rafain", "rafain cena show", "rafain palace hotel", "rafain centro hotel"],
     domains: ["SHOW_TURISTICO", "HOTEL"],
     ambiguous: true,
     semanticAssociations: ["show", "cena show", "hotel zona"],
-    patterns: [
-      /rafain\s*cena\s*show/i,
-      /rafain\s*(palace|centro)?\s*hotel/i,
-      /rafain/i,
-    ],
+    patterns: [/rafain\s*cena\s*show/i, /rafain\s*(palace|centro)?\s*hotel/i, /rafain/i],
   },
   {
     key: "madero show",
@@ -96,14 +96,59 @@ export const ENTITY_CATALOG: EntityCatalogEntry[] = [
   },
 ];
 
+// Mutable reference — inicializado con defaults, reemplazable vía loadEntityCatalogFromDB()
+let _catalog: EntityCatalogEntry[] = [...DEFAULT_CATALOG];
+
+interface EntityPatternRow {
+  entity_key: string;
+  aliases_json: string;
+  domains_json: string;
+  ambiguous: number;
+  semantic_associations_json: string;
+  patterns_json: string;
+}
+
+/**
+ * Carga el catálogo de entidades desde la tabla entity_patterns en DB.
+ * Reemplaza la referencia mutable _catalog. Seguro de llamar múltiples veces.
+ * Si DB no está disponible, los defaults hardcodeados se conservan.
+ */
+export async function loadEntityCatalogFromDB(): Promise<void> {
+  try {
+    const { query } = await import("@/lib/db/core/helpers");
+    const rows = await query<EntityPatternRow>("SELECT * FROM entity_patterns");
+    if (!rows || rows.length === 0) return;
+
+    const loaded: EntityCatalogEntry[] = rows.map((r) => {
+      const aliases: string[] = JSON.parse(r.aliases_json);
+      const domains: EntityDomain[] = JSON.parse(r.domains_json);
+      const semanticAssociations: string[] = JSON.parse(r.semantic_associations_json);
+      const patternSources: string[] = JSON.parse(r.patterns_json);
+      const patterns: RegExp[] = patternSources.map((src) => new RegExp(src, "i"));
+      return {
+        key: r.entity_key,
+        aliases,
+        domains,
+        ambiguous: r.ambiguous !== 0,
+        semanticAssociations,
+        patterns,
+      };
+    });
+
+    _catalog = loaded;
+  } catch {
+    // DB no disponible — conservar defaults
+  }
+}
+
 export function getAllEntityKeys(): string[] {
-  return ENTITY_CATALOG.map((e) => e.key);
+  return _catalog.map((e) => e.key);
 }
 
 export function getAllDomainPatterns(): RegExp[] {
   const seen = new Set<string>();
   const result: RegExp[] = [];
-  for (const entry of ENTITY_CATALOG) {
+  for (const entry of _catalog) {
     for (const p of entry.patterns) {
       const src = p.source;
       if (!seen.has(src)) {
@@ -116,7 +161,7 @@ export function getAllDomainPatterns(): RegExp[] {
 }
 
 export function resolveEntityFromCatalog(text: string): { matched: boolean; domains: EntityDomain[]; ambiguous: boolean } {
-  for (const entry of ENTITY_CATALOG) {
+  for (const entry of _catalog) {
     for (const pattern of entry.patterns) {
       if (pattern.test(text)) {
         return {
@@ -133,10 +178,14 @@ export function resolveEntityFromCatalog(text: string): { matched: boolean; doma
 export function extractEntitiesFromCatalog(text: string): string[] {
   const found: string[] = [];
   const lower = text.toLowerCase();
-  for (const entry of ENTITY_CATALOG) {
+  for (const entry of _catalog) {
     if (entry.aliases.some((a) => lower.includes(a))) {
       found.push(entry.key);
     }
   }
   return found;
 }
+
+// Mantener ENTITY_CATALOG como export para compatibilidad con código legacy
+/** @deprecated Usar las funciones exportadas (getAllEntityKeys, etc.) o loadEntityCatalogFromDB */
+export const ENTITY_CATALOG: ReadonlyArray<EntityCatalogEntry> = DEFAULT_CATALOG;
