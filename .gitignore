@@ -18,6 +18,7 @@ dist/
 .env.production.local
 .env.vercel
 .env.vercel.*
+.env.build
 
 # Auth & Session (Baileys)
 auth/
