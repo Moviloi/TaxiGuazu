@@ -4,7 +4,7 @@
 >
 > **Este documento NO reemplaza ADR, SPEC, RF, RNF, Baseline, Architecture, Knowledge ni Changelog. Lo condensa para referencia rápida.**
 >
-> **Actualizado:** 2026-07-19 | **Última misión:** PR-SDL-AEL-CONTRACT-1
+> **Actualizado:** 2026-07-22 | **Última misión:** AITOS POST-ARNÉS AUDIT — Fase 0 Limpieza de contexto
 
 ---
 
@@ -16,7 +16,7 @@
 | **Stack** | Next.js 15 + TypeScript + Turso (libSQL) |
 | **Propósito** | Chatbot conversacional para reserva de taxis vía WhatsApp |
 | **Canales** | WhatsApp Cloud API (único canal en producción) |
-| **Modelo de inteligencia** | BKE → DRL → Groq → Gemini (ADR-012, certificado PR-5G) |
+| **Modelo de inteligencia** | Cognitive Escalation Principle (ADR-012). Implementación BKE/DRL removida por ADR-014. Futuras capas determinísticas sujetas a evaluación post-v1. |
 | **Estado del deploy** | LOCALHOST (staging bloqueado por 4 P0, ver §9) |
 | **Arquitectura** | Layered (ADR-001), 2 capas de ecosistema: PLAN (estratégico, visible) → BUILD (operacional, visible). SDL y AEL son implementaciones internas. |
 
@@ -28,12 +28,12 @@
 |-----------|-------|
 | **Build** | ✅ PASS (~40s compile, 7/7 static pages) |
 | **Contracts R1-R4** | ✅ PASS (enforce.sh) |
-| **Tests** | ✅ 1653/1657 PASS (4 pre-existing: 2 LLM timeout, 1 mock compat, 1 DRL geo assertion) |
+| **Tests** | 🟡 1653/1657 PASS (4 pre-existing: T1 LLM timeout, T2 Vitest mock compat, T3 DRL geo assertion regresión, T4 memory-integration timeout — ver PRD-04) |
 | **Deuda resuelta** | 19 items (P0+P1) |
 | **Deuda pendiente** | 21 items (5 P1, 10 P2, 6 P3) + 10 H0A (4 bloquean) |
-| **ADRs** | 13 vigentes (001–013), todos ACCEPTED |
+| **ADRs** | 14 vigentes (001–014), todos ACCEPTED. ADR-014 eliminó BKE/DRL/Pattern Discovery (~5800 líneas). |
 | **Architecture Freeze** | V3 activo (ADR-008, ADR-009, ADR-012, ADR-013) |
-| **Fase del roadmap** | Fase 0: Staging Hardening (activa, post-RRR-1) |
+| **Fase del roadmap** | Fase 0: Staging Readiness — desbloqueo y estabilización |
 | **Piloto** | 🟡 BLOQUEADO (P0-01 a P0-04 pendientes) |
 
 ### 2.1 Pipeline real del sistema
@@ -65,23 +65,27 @@ Objetivos específicos:
 
 ## 4. Misión activa
 
-No hay una misión activa en este momento. La misión más reciente completada fue:
+**AITOS POST-ARNÉS AUDIT — Fase 0: Limpieza de contexto.** Serie de correcciones rápidas para alinear documentación viva con el estado real del proyecto post-estabilización de ARNÉS Framework.
 
-| PR | Descripción | Estado |
-|----|-------------|--------|
-| PR-SDL-AEL-CONTRACT-1 | Strategic Thinking vs Operational Execution Contract | ✅ COMPLETED (2026-07-19) |
-| PR-INTERFACE-FREEZE-1 | PLAN/BUILD Interface Consolidation (Freeze V2) | ✅ COMPLETED (2026-07-19) |
-| PR-SDL-4A | Project Context Layer | ⏳ EN EJECUCIÓN |
+| Misión | Descripción | Estado |
+|--------|-------------|--------|
+| DOC-01 a DOC-06 | Auditoría documental completa del ecosistema | ✅ COMPLETED (2026-07-22) |
+| BUILD-AUDIT-1 | Auditoría sistémica + higiene de código | ✅ COMPLETED (2026-07-20) |
+| QA-3 Sprint 3 | CDA Conformance Implementation | ✅ COMPLETED (BUILD-AUDIT-1) |
+| P1 Fixes FASE 2 | P1-03/05/08/09 cerrados | ✅ COMPLETED |
+| KNOWLEDGE_INVENTORY | SSOT Enrichment D2/D4 | ✅ COMPLETED |
+| ARNÉS Framework v1.1.0 | Certificación y maintenance mode | ✅ COMPLETED |
+| AITOS POST-ARNÉS AUDIT | Auditoría de alineación constitucional | ⏳ FASE 0 — Limpieza de contexto |
 
-### 4.1 Pendientes inmediatos (QA-3 Sprint 3)
+### 4.1 Pendientes inmediatos (Staging Readiness)
 
 | ID | Tarea | Prioridad | Estado |
 |----|-------|-----------|--------|
-| QA3-S3-01 | Fix F01-DG: Ambiguity sin verificar clarify_field | P0 | PENDIENTE |
-| QA3-S3-02 | Fix F02-DG: Intención no preservada | P0 | PENDIENTE |
-| QA3-S3-03 | Fix F03-DG: Merge bypass por ambigüedad | P0 | PENDIENTE |
-| QA3-S3-04 | UX: Resolución automática sin confirmación (PR-CAT1 S13) | P1 | PENDIENTE |
-| QA3-S3-05 | H-CAT2-001: RECOVERY slot loss | P1 | PENDIENTE |
+| P0-02 | Configurar SENTRY_DSN en Vercel | P0 | READY — bloquea piloto |
+| PRD-03 | Completar .env.example (flags shadow mode) | P0 | READY — bloquea staging |
+| PRD-04 | Estabilizar 4 tests fallidos (T1-T4) | P0 | READY — bloquea staging |
+| P1-04 | Cerrar fase-22 T2: ADR sobre preservar origin | P1 | ADR_PENDING |
+| P1-06 | is_principal2: implementar write o eliminar | P1 | PARTIAL |
 
 ---
 
@@ -115,15 +119,15 @@ No hay una misión activa en este momento. La misión más reciente completada f
 | **Pipeline conversacional** | ✅ Implementado | Código fuente |
 | **Evidence Engine** | 🔒 Freeze (ADR-009) | `src/lib/evidence/` (20 archivos, 378 tests) |
 | **Memory** (cognitiva) | 🟡 IM-1 parcial (7 archivos, flag false) | ADR-010 |
-| **Pattern Discovery** | 🟡 PD-IM-1 parcial (12 archivos, bug conocido, flag false) | PR-7 |
+| **Pattern Discovery** | 🟡 Concepto futuro post-v1 | PR-7, ADR-014 |
 | **Operational Learning** | ✅ Implementado (15 archivos) | ADR-003 |
-| **BKE** | ✅ Implementado (flags false) | ADR-012, PR-5 |
-| **DRL** | ✅ Implementado (flags false) | ADR-012, PR-5 |
 
 ### 6.2 Capas eliminadas
 
 | Capa | Eliminada en |
 |------|-------------|
+| BKE (código) | ADR-014 (principio preservado como diseño conceptual en ADR-012) |
+| DRL (código) | ADR-014 (principio preservado como diseño conceptual en ADR-012) |
 | Reflection | ADR-011, PR-6 |
 | Goals (cognitivo) | PR-8 |
 | Planning (cognitivo) | PR-9 |
@@ -179,8 +183,8 @@ Basados en `docs/specification/FUNCTIONAL_BEHAVIOR_SPECIFICATION.md` y el CDA (A
 | ID | RNF | Estado |
 |----|-----|--------|
 | **RNF-01** | Determinismo del núcleo (CORE sin LLM) | ✅ Implementado |
-| **RNF-02** | LLM opcional (BKE+DRL intentan resolver primero) | 🟡 Parcial (flags false por defecto) |
-| **RNF-03** | Triple fallback (BKE → DRL → LLM → Plantilla) | 🟡 Parcial |
+| **RNF-02** | LLM opcional (Cognitive Escalation Principle) | 🟡 Diferido — flags BKE/DRL deprecadas por ADR-014. Principio a re-evaluar post-v1. |
+| **RNF-03** | Triple fallback (cognitivo → LLM → Plantilla) | 🟡 Diferido — implementación BKE/DRL removida por ADR-014. |
 | **RNF-04** | Phone como identidad de conversación | ✅ Implementado |
 | **RNF-05** | Sin escritura directa desde AI (solo policies) | ✅ Implementado |
 | **RNF-06** | Idempotencia en webhook | ✅ Implementado |
@@ -323,26 +327,27 @@ Basados en `docs/specification/FUNCTIONAL_BEHAVIOR_SPECIFICATION.md` y el CDA (A
 | **Execution Plan como único contrato** | BUILD solo recibe EP estructurado. No hay instrucciones informales. |
 | **Execution Report como única respuesta** | BUILD solo produce ER. No hay recomendaciones estratégicas. |
 | **No code changes without BUILD** | PLAN nunca escribe código. Toda modificación pasa por BUILD. |
-| **Shadow Mode para nuevas capacidades** | Nuevas capacidades se implementan con feature flag false por defecto (BKE, DRL, Memory, Evidence). |
-| **Feature flags para todo lo cognitivo** | Toda capacidad BKE/DRL/Memory/Pattern Discovery tiene flag independiente, todas false por defecto. |
-| **Architecture Freeze progresivo** | ADR-008 (R5), ADR-009 (PR-3E), ADR-012 (PR-5G), INTERFACE_FREEZE_V2. Cada freeze es acumulativo. |
+| **Shadow Mode para nuevas capacidades** | Evidence Engine y Memory operan en shadow mode con flag false por defecto. |
+| **Feature flags para capacidades cognitivas** | EVIDENCE_SHADOW_MODE, COGNITIVE_MEMORY_ENABLED, EVIDENCE_SHADOW_LOGGING — todas false por defecto. |
+| **Architecture Freeze progresivo** | ADR-008 (R5), ADR-009 (PR-3E), ADR-012, ADR-013, ADR-014. Cada freeze es acumulativo. |
+| **Capas eliminadas por ADR-014** | BKE, DRL, Pattern Discovery: código removido (~5800 líneas). Principios preservados como diseño conceptual. |
 
 ---
 
 ## 14. Próximo objetivo
 
-**Cerrar QA-3 Sprint 3 (CDA Conformance Implementation) y revalidar CAT-1/CAT-2.**
+**Desbloquear AITOS para staging.** Resolver los bloqueos operacionales pendientes: SENTRY_DSN, .env.example, estabilización de tests, y limpieza de documentación viva.
 
-Pasos inmediatos:
+Pasos inmediatos (Fase 0 — BUILD directo):
+1. Actualizar PROJECT_CONTEXT.md a estado actual. ✅ (esta misión)
+2. Compactar PROJECT_BOARD.md (remover ruido REMOVED).
+3. Documentar shadow flags activas en .env.example.
 
-1. Implementar correcciones F01-DG, F02-DG, F03-DG (QA3-S3-01/02/03).
-2. Corregir H-CAT2-001 (RECOVERY slot loss).
-3. Resolver UX S13 (ambigüedad automática sin confirmación).
-4. Re-ejecutar CAT-1 (13 escenarios) y CAT-2 (6 escenarios).
-5. Certificar CAT-1 y CAT-2 como CERTIFIED.
-6. Resolver bloqueos P0 (H0A-01, H0A-02, P0-01 a P0-04).
-7. Desplegar en staging con feature flags desactivadas.
-8. Iniciar piloto controlado.
+Próximas fases:
+4. Configurar SENTRY_DSN en Vercel.
+5. Estabilizar 4 tests (PRD-04).
+6. Resolver P1-04 (ADR) y P1-06 (is_principal2).
+7. Higiene: eliminar stubs BKE/DRL, dropear tablas dead.
 
 ---
 

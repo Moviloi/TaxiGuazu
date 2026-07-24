@@ -1,6 +1,6 @@
 # ARNÉS — Agent Execution Layer
 
-Sistema operativo basado en restricciones para ingeniería de software asistida por IA. Gobierna la evolución de TaxiGuazú (AITOS).
+Sistema operativo basado en restricciones para ingeniería de software asistida por IA. Implementación de referencia del ARNÉS Framework para el ecosistema OpenCode. Actualmente gobierna la evolución de AITOS (TaxiGuazú).
 
 ---
 

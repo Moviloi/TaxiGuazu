@@ -198,18 +198,6 @@ CREATE TABLE IF NOT EXISTS driver_discounts (
   created_at INTEGER DEFAULT (unixepoch())
 );
 
-CREATE TABLE IF NOT EXISTS driver_invitations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  code TEXT UNIQUE NOT NULL,
-  phone TEXT,
-  created_by TEXT NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  expires_at INTEGER,
-  used_at INTEGER,
-  driver_id TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','expired','revoked'))
-);
-
 CREATE TABLE IF NOT EXISTS client_preferred_drivers (
   client_phone TEXT PRIMARY KEY,
   preferred_driver_phone TEXT NOT NULL,
@@ -529,11 +517,6 @@ CREATE TABLE IF NOT EXISTS aliases (
   place_id TEXT NOT NULL,
   alias TEXT NOT NULL,
   language TEXT NOT NULL CHECK(language IN ('es','en','pt'))
-);
-
-CREATE TABLE IF NOT EXISTS transfer_priority (
-  place_id TEXT PRIMARY KEY,
-  priority INTEGER NOT NULL CHECK(priority BETWEEN 1 AND 4)
 );
 
 -- ── GEO (P1-08: migrated from hardcoded PAIR_BASE / CORRIDOR_PAIRS) ──

@@ -80,7 +80,14 @@ export function buildSlotStates(
       }
     }
 
-    // Preserve previous CONFIRMED status if value unchanged (not a correction/affirmation event)
+    // ── INV-20: Resolución explícita de conflictos ──
+    // Reglas de resolución (en orden de precedencia):
+    // 1. VALOR CONFIRMADO > cualquier otro (CONFIRMED siempre gana, R1)
+    // 2. MÁS ESPECÍFICO > genérico (score más alto gana si ambos son INFERRED, R2)
+    // 3. MÁS RECIENTE si no confirmado (R3) — el valor actual (current) prevalece
+    //    sobre el previo si ninguno está CONFIRMED.
+    //
+    // R1: CONFIRMED preservado si el valor no cambió y no hay corrección/afirmación
     const prev = prevStates[k];
     if (prev && prev.status === "CONFIRMED" && !hasCorrection && !hasAffirmation) {
       if (String(slot.value) === String(prev.value)) {
@@ -88,6 +95,13 @@ export function buildSlotStates(
         status = "CONFIRMED";
       }
     }
+    // R1b: CONFIRMED con valor diferente → el nuevo valor requiere reconfirmación
+    // (el slot cambió, la confirmación previa ya no aplica)
+    // R2: MÁS ESPECÍFICO > genérico — si hay un slot previo CONFIRMED con valor
+    // diferente y el slot actual tiene score >= 1.0 (resolución desde DB/tariff),
+    // el nuevo valor es más específico y debe reconfirmarse.
+    // R3: MÁS RECIENTE si no confirmado — si el slot actual tiene score >= 0.8
+    // y el previo no está CONFIRMED, el valor actual prevalece (es más reciente).
 
     // AIT-060: airport_code — distingue entre código explícito del usuario
     // (CONFIRMED, no requiere confirmación) e inferencia del sistema

@@ -97,22 +97,26 @@ Se ratifica el documento `docs/specifications/CONVERSATION_DECISION_ALGORITHM.md
 
 ## 3.1 Jerarquía normativa
 
-A partir de este ADR, la jerarquía de autoridad para resolver conflictos es:
+A partir de este ADR, y en alineación con la Constitución de AITOS (`docs/architecture/AITOS_CONSTITUTION.md`), la jerarquía de autoridad para resolver conflictos es:
 
 ```
-Implementation (código)
+AITOS Constitution (autoridad suprema)
         ↓
 Conversation Decision Algorithm (CDA)
         ↓
 Functional Behavior Specification
         ↓
 Architecture Decision Records (ADR)
+        ↓
+Implementation (código)
 ```
 
 **El nivel superior prevalece sobre el inferior.**
 
-- Si el **código** contradice al **CDA**, el código está incorrecto (bug).
-- Si el **CDA** contradice a la **Specification**, prevalece el CDA (resolución de ambigüedad documentada).
+- Si la **Constitución** contradice al **CDA**, el CDA debe modificarse.
+- Si la **Constitución** contradice a la **Specification**, la Specification debe modificarse.
+- Si la **Constitución** contradice a un **ADR**, el ADR debe modificarse.
+- Si el **CDA** contradice a la **Specification**, prevalece el CDA.
 - Si el **CDA** contradice a un **ADR**, prevalece el ADR. El CDA debe modificarse para alinearse.
 - Si la **Specification** contradice a un **ADR**, prevalece el ADR.
 

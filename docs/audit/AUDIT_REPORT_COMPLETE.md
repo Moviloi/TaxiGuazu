@@ -134,7 +134,7 @@ Capas auxiliares operacionales: **Dispatch**, **Survey**, **Operational Learning
 | **V-01** | AI→DB: `display-name.ts` importa `queryOne` de `db/core/helpers` | `src/lib/ai/display-name.ts:5` | `import { queryOne } from "@/lib/db/core/helpers"` | 🔴 REFACTOR — mover a services |
 | **V-02** | AI→DB: `ambiguity-interpreter.ts` importa tipo de `db/domains/geo` | `src/lib/ai/ambiguity-interpreter.ts:14` | `import type { PlaceCandidate } from "@/lib/db/domains/geo"` | 🟡 REFACTOR — extraer tipo compartido |
 | **V-03** | AI→Services: `response-builder.ts` depende de `OpportunityResult` | DEBT-07 documentado | Conceptual | 🟡 REFACTOR — conocido |
-| **V-04** | Survey→Lead: `lead-event-helpers.ts` crea acoplamiento vertical | DEBT-02 | `src/lib/services/shared/lead-event-helpers.ts` | 🟡 REFACTOR — conocido P1-03 |
+| **V-04** | Survey→Lead: acoplamiento vertical | DEBT-02 | ~~`src/lib/services/shared/lead-event-helpers.ts`~~ | ✅ RESUELTO — archivo eliminado en T3 |
 | **V-05** | DRL: nombres de tabla con tags de fase (`f9_`, `f4_`) en producción | schema.sql | `f9_admin_commands`, `f9_events`, `conversation_f4_log` | 🟡 REFACTOR — renombrar (P1-04) |
 
 ### C.2 Sobre-arquitectura
@@ -186,7 +186,7 @@ Capas auxiliares operacionales: **Dispatch**, **Survey**, **Operational Learning
 |---------|---------------|---------------|
 | `src/lib/ai/display-name.ts:5` | `import { queryOne } from "@/lib/db/core/helpers"` | 🔴 REFACTOR |
 | `src/lib/ai/ambiguity-interpreter.ts:14` | `import type { PlaceCandidate } from "@/lib/db/domains/geo"` | 🟡 REFACTOR |
-| `src/lib/services/shared/lead-event-helpers.ts` | Survey→Lead acoplamiento | 🟡 REFACTOR |
+| ~~`src/lib/services/shared/lead-event-helpers.ts`~~ | Survey→Lead acoplamiento | ✅ RESUELTO — archivo eliminado T3 |
 
 ### D.3 DB Zombie (columnas/tablas sin uso)
 

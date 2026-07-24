@@ -10,7 +10,7 @@ import { queryOne } from "@/lib/db/database";
 // ── Types ──
 
 export interface Adjustment {
-  type: "promotion" | "provider_adjustment" | "package" | "tg_campaign";
+  type: "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "night_surcharge";
   amount: number;
   reason: string;
   valid_until: number | null;
@@ -33,7 +33,7 @@ export interface CommercialOutput {
   markup: number;
   adjustments: Adjustment[];
   final_price: number;
-  source: "standard" | "promotion" | "provider_adjustment" | "package" | "tg_campaign";
+  source: "standard" | "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "night_surcharge";
   explanation: string[];
 }
 

@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ARNÉS Product Rules Schema",
+  "description": "Schema for product-specific enforcement rules. Each product provides its own product-rules.json conforming to this schema.",
+  "type": "object",
+  "required": ["product", "rules"],
+  "properties": {
+    "product": {
+      "type": "string",
+      "description": "Name of the product these rules apply to."
+    },
+    "rules": {
+      "type": "object",
+      "required": ["r1_contract_integrity", "r2_dependency_rules", "r4_ai_first"],
+      "properties": {
+        "r1_contract_integrity": {
+          "type": "object",
+          "description": "R1: Contract Integrity — verify layer import contracts.",
+          "required": ["forbidden_imports"],
+          "properties": {
+            "forbidden_imports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["description", "from_path", "import_pattern"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "from_path": { "type": "string", "description": "Directory to search in." },
+                  "import_pattern": { "type": "string", "description": "Grep pattern for forbidden imports." },
+                  "except_patterns": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Patterns to exclude from violations."
+                  }
+                }
+              }
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["description", "from_path", "pattern"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "from_path": { "type": "string" },
+                  "pattern": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "r2_dependency_rules": {
+          "type": "object",
+          "description": "R2: Dependency Rules — verify ADR 001-004 compliance.",
+          "required": ["layer_constraints", "facade_checks"],
+          "properties": {
+            "layer_constraints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["description", "search_path", "forbidden_pattern"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "search_path": { "type": "string" },
+                  "forbidden_pattern": { "type": "string" }
+                }
+              }
+            },
+            "facade_checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["description", "search_path", "pattern"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "search_path": { "type": "string" },
+                  "pattern": { "type": "string" },
+                  "except_files": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "r4_ai_first": {
+          "type": "object",
+          "description": "R4: AI-First Interpretation — no heuristic patches in code.",
+          "required": ["no_heuristic_ranking", "no_hardcoded_priorities"],
+          "properties": {
+            "no_heuristic_ranking": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["description", "file", "pattern"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "file": { "type": "string" },
+                  "pattern": { "type": "string" }
+                }
+              }
+            },
+            "no_hardcoded_priorities": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["description", "file", "pattern"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "file": { "type": "string" },
+                  "pattern": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "r3_code_existence": {
+          "type": "object",
+          "description": "R3: Code Existence — verify referenced files exist.",
+          "properties": {
+            "spec_files": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Design spec files to check for referenced paths."
+            }
+          }
+        }
+      }
+    }
+  }
+}

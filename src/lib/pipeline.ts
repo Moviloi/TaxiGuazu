@@ -40,7 +40,7 @@ export interface ExecutionDeps {
   persist: (convId: number, role: string, msg: string) => Promise<number>;
   handler: (text: string, mode: any, ctx?: any) => any;
   geo: {
-    resolveGeoRoute: (slots: any) => any;
+    resolveGeoRoute: (slots: any) => Promise<any>;
   };
   memory: {
     saveContext: (phone: string, data: any) => Promise<void>;
@@ -88,7 +88,7 @@ export async function processLead(
 
     if (needsGeo && needsSaveContext) {
       const slots = execCtx.extractionCtx?.slots ?? {};
-      const geo = deps.geo.resolveGeoRoute(slots);
+      const geo = await deps.geo.resolveGeoRoute(slots);
       await deps.memory.saveContext(execCtx.phone, {
         slots,
         intent: execCtx.intent,

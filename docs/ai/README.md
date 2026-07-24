@@ -1,7 +1,10 @@
 # AI Context Pack — AITOS
 
 > This folder contains documentation specifically designed for AI agents working on the AI Transportation Operating System.
-> **Every AI agent must read `ARCHITECTURE_BIBLE.md` first.**
+> **Before reading this pack, read the AITOS Constitution (`docs/architecture/AITOS_CONSTITUTION.md`).**
+> **Every AI agent must then read `ARCHITECTURE_BIBLE.md` first.**
+> 
+> **Authority:** This pack is derived context. The supreme normative authority is the AITOS Constitution.
 
 ---
 

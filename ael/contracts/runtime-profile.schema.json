@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ARNÉS Runtime Profile Schema",
+  "description": "Schema for runtime execution profiles. Defines how agents execute missions.",
+  "type": "object",
+  "required": ["profile", "models", "timeouts", "parallelism", "logging"],
+  "properties": {
+    "profile": { "type": "string", "description": "Profile name." },
+    "description": { "type": "string" },
+    "models": {
+      "type": "object",
+      "required": ["default"],
+      "properties": {
+        "default": { "type": "string", "description": "Default model for all agents." },
+        "per_capability": {
+          "type": "object",
+          "properties": {
+            "discovery": { "type": "string" },
+            "architecture": { "type": "string" },
+            "implementation": { "type": "string" },
+            "validation": { "type": "string" },
+            "memory": { "type": "string" },
+            "learning": { "type": "string" }
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "properties": {
+        "primary": { "type": "string" },
+        "fallback_chain": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "properties": {
+        "circuit_breaker": {
+          "type": "object",
+          "properties": {
+            "max_failures": { "type": "integer" },
+            "pause_seconds": { "type": "integer" }
+          }
+        },
+        "graceful_degradation": { "type": "string" }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "properties": {
+        "tokens_per_mission": { "type": "integer" },
+        "tokens_per_agent": { "type": "integer" },
+        "enforcement": { "type": "string", "enum": ["WARN", "HALT"] }
+      }
+    },
+    "cost_limits": {
+      "type": "object",
+      "properties": {
+        "per_mission": { "type": ["number", "null"] },
+        "per_day": { "type": ["number", "null"] },
+        "enforcement": { "type": "string", "enum": ["WARN", "HALT"] }
+      }
+    },
+    "timeouts": {
+      "type": "object",
+      "required": ["mission_minutes", "agent_minutes", "llm_seconds"],
+      "properties": {
+        "mission_minutes": { "type": "integer" },
+        "plan_minutes": { "type": "integer" },
+        "agent_minutes": { "type": "integer" },
+        "llm_seconds": { "type": "integer" }
+      }
+    },
+    "parallelism": {
+      "type": "object",
+      "required": ["strategy", "max_agents"],
+      "properties": {
+        "strategy": { "type": "string", "enum": ["SEQUENTIAL", "OPPORTUNISTIC", "AGGRESSIVE"] },
+        "max_agents": { "type": "integer" },
+        "dependency_aware": { "type": "boolean" }
+      }
+    },
+    "cache": {
+      "type": "object",
+      "properties": {
+        "strategy": { "type": "string", "enum": ["NONE", "SESSION", "PERSISTENT"] },
+        "scope": { "type": "array", "items": { "type": "string" } },
+        "invalidation": { "type": "string" }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": { "type": "string", "enum": ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"] },
+        "trace_enabled": { "type": "boolean" },
+        "metrics_enabled": { "type": "boolean" }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "enum": ["ENABLED", "DISABLED", "EXPERIMENTAL"] }
+    },
+    "mission_overrides": {
+      "type": "object",
+      "properties": {
+        "allowed_fields": { "type": "array", "items": { "type": "string" } },
+        "ttl": { "type": "string", "enum": ["mission"] }
+      }
+    }
+  }
+}

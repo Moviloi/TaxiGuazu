@@ -1,65 +1,11 @@
-// FEATURE FLAGS — Cognitive Stack flags (deprecated).
+// FEATURE FLAGS — Cognitive Stack flags.
 //
 // BUILD misión OLA 4.3+4.5: módulos BKE/DRL/Pattern Discovery removidos.
-// Ver ADR-014 para contexto.
+// Ver ADR-014 para contexto. Stubs BKE/DRL eliminados en FASE 3 higiene.
 //
-// Las funciones se mantienen como stubs que retornan false para no romper
-// imports que pudieran existir. Se eliminarán en OLA 5 cuando se verifique
-// que ningún consumidor las referencia.
-//
-// Patrón: COGNITIVE_MEMORY_ENABLED (process.env, zod-documented, optional).
+// Flags activas:
+//   EVIDENCE_SHADOW_MODE (process.env) — controla runShadowCognition
+//   EVIDENCE_SHADOW_LOGGING (process.env) — logging detallado de shadow
+//   COGNITIVE_MEMORY_ENABLED (process.env) — controla memoryService.store()
 
-/** @deprecated BKE fue removido en BUILD OLA 4.5. Retorna false. */
-export function isBkeEnabled(): boolean {
-  return false;
-}
 
-/** @deprecated DRL fue removido en BUILD OLA 4.5. Retorna false. */
-export function isDrlEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated BKE.geo — módulo removido. Retorna false. */
-export function isBkeGeoEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated DRL Comprehension — módulo removido. Retorna false. */
-export function isDrlComprehensionEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated DRL Recovery — módulo removido. Retorna false. */
-export function isDrlRecoveryEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated DRL Extraction — módulo removido. Retorna false. */
-export function isDrlExtractionAssistanceEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated DRL Response — módulo removido. Retorna false. */
-export function isDrlResponseAssistanceEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated DRL Frustration — módulo removido. Retorna false. */
-export function isDrlFrustrationAssistanceEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated BKE Entity — módulo removido. Retorna false. */
-export function isBkeEntityEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated BKE Pricing — módulo removido. Retorna false. */
-export function isBkePricingEnabled(): boolean {
-  return false;
-}
-
-/** @deprecated BKE Message — módulo removido. Retorna false. */
-export function isBkeMessageEnabled(): boolean {
-  return false;
-}

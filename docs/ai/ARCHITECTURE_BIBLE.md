@@ -1,9 +1,10 @@
 # Architecture Bible — AI Transportation Operating System (AITOS)
 
-> **Read this first.**
-> This document is the canonical source of architectural truth for the AI Transportation Operating System.
-> Every AI agent must read this file before modifying any code in this repository.
-> If this document contradicts any other document, this document prevails unless the code itself contradicts it — in which case the code prevails.
+> **Read after the Constitution.**
+> This document is a derived technical reference for the AI Transportation Operating System.
+> The supreme normative authority is the AITOS Constitution (`docs/architecture/AITOS_CONSTITUTION.md`).
+> Every AI agent must read the Constitution first, then this document, before modifying any code in this repository.
+> If this document contradicts the Constitution, the Constitution prevails. If it contradicts the code, the code prevails.
 
 ---
 
@@ -292,7 +293,7 @@ If the answer to any of questions 1-6 is "no", the change must be rejected or re
 
 ## 10. Reading order for AI agents
 
-After this file, read in this order:
+After the Constitution (`docs/architecture/AITOS_CONSTITUTION.md`), read in this order:
 
 1. `docs/ai/ARCHITECTURE_RULES.md` — strict rules
 2. `docs/ai/ENGINE_CONTRACTS.md` — engine contracts
@@ -306,5 +307,5 @@ After this file, read in this order:
 
 ---
 
-*Last updated: 2026-07-06*
-*Authority: source code, ADRs, and database schema*
+*Last updated: 2026-07-21*
+*Authority: derived from the AITOS Constitution (`docs/architecture/AITOS_CONSTITUTION.md`). Source code, ADRs, and database schema are the technical ground truth.*

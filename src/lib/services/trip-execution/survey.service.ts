@@ -5,7 +5,7 @@ import {
   setSurveyResponse,
   getTripById,
 } from "@/lib/db/database";
-import { createNewLeadFromSurvey } from "@/lib/services/shared/lead-event-helpers";
+import { injectLeadFromText } from "@/lib/services/shared/lead-injection.service";
 import { log } from "@/lib/utils/logger";
 
 export async function sendPendingSurveys(): Promise<void> {
@@ -70,5 +70,11 @@ export async function handleNewTripResponse(phone: string, buttonId: string): Pr
 
   if (dest === "none") return;
 
-  await createNewLeadFromSurvey(phone, dest);
+  const destMap: Record<string, string> = {
+    cataratas: "Hola! Quiero ir a Cataratas lado argentino",
+    foz: "Hola! Quiero ir a Foz do Iguaçu",
+  };
+
+  const simulatedText = destMap[dest] || "Hola! Quiero info sobre un viaje";
+  await injectLeadFromText(phone, simulatedText);
 }

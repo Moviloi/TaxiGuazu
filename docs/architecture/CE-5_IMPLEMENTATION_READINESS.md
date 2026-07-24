@@ -5,10 +5,9 @@
 > **Prerrequisitos confirmados:** CE-1, CE-2, CE-3A, CE-3B, CE-4, ADR-012 ✅
 > **Rol:** Arquitecto Principal
 > **Tipo:** Auditoría de preparación — no modifica código, no inicia implementación
+> **Estado:** HISTÓRICO — Readiness previo a implementación de la Serie CE. La implementación fue ejecutada (PR-5A a PR-5G) y luego removida por ADR-014 (2026-07-20) por higiene. Principio de escalamiento cognitivo preservado como diseño conceptual. Este documento se conserva como registro de auditoría y trazabilidad histórica.
 
 ---
-
-## Tabla de contenidos
 
 1. [Inventario de componentes afectados](#1-inventario-de-componentes-afectados)
 2. [Contratos que deben preservarse](#2-contratos-que-deben-preservarse)

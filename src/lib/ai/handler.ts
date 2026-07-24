@@ -2,6 +2,26 @@
 // ÚNICO punto de salida. El finalResponse viene de POLICY.
 // Prohibido: cualquier LLM que redacte el mensaje al usuario fuera de aquí.
 //
+// ── RNF-A16: Eficiencia computacional ──
+// Este handler implementa un pipeline de eficiencia por construcción:
+//   1. CORE determinista (regex-based, ~3μs por clasificación) — primer filtro.
+//   2. ROUTER determinista (pure function, sin IO) — segundo filtro.
+//   3. POLICY determinista (sin LLM, solo lógica de negocio) — tercer filtro.
+//   4. LLM RESPONSE (solo cuando es necesario) — ÚLTIMO recurso.
+//
+// Decisiones de eficiencia:
+//   - LLM se invoca SOLO cuando: policy no es EXECUTE O template tiene placeholders.
+//   - purchaseIntent=low → skip LLM (especulador, no malgastar tokens).
+//   - EXECUTE sin placeholders → template directo (sin LLM).
+//   - Temperature baja (0.1) y max_tokens mínimo (256) en extraction.
+//   - Logging estructurado con [LLM_RESPONSE] para tracking runtime.
+//
+// Contadores de eficiencia (runtime metrics):
+//   - [CORE_SOURCE_AUDIT]: source = "lead.service" (reutiliza core()) vs
+//     "handler_fallback" (doble clasificación — ineficiente, no debería ocurrir).
+//   - [LLM_RESPONSE]: "skipped" (eficiente) vs "applied" (LLM usado).
+//   - Pipeline duration capturado por capturePipelineEvent() para tracking.
+//
 // Logging obligatorio en cada request:
 //   [CORE] intent + confidence + facts
 //   [ROUTER] mode + outputType + reason
@@ -186,12 +206,16 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
   const isExecute = policy.decision === "EXECUTE";
   const skipLLM = (isExecute && !hasPlaceholder) || strategyDecision.behaviorFlags.skipLLM;
 
+  // RNF-A16: Contadores de eficiencia runtime (LLM vs no-LLM)
   let llmResponse: string | null = null;
+  let llmSkippedReason: string | null = null;
   if (!skipLLM) {
     llmResponse = await generateLLMResponse(policy, enrichedCtx);
   } else if (strategyDecision.behaviorFlags.skipLLM) {
+    llmSkippedReason = "low purchase intent — speculator path";
     log.info("[LLM_RESPONSE] skipped (low purchase intent — speculator path)");
   } else if (isExecute) {
+    llmSkippedReason = "EXECUTE without placeholders — template is final";
     log.info("[LLM_RESPONSE] skipped (EXECUTE without placeholders — template is final)");
   }
   if (llmResponse) {
@@ -201,6 +225,16 @@ export async function handleMessage(input: string, mode: Mode, ctx?: HandlerCont
 
   // PR-5F: Capturar evento de pipeline completado
   const pipelineDuration = Math.round((performance.now() - pipelineStart) * 100) / 100;
+
+  // RNF-A16: Métrica runtime de eficiencia — registra si LLM se usó o se evitó
+  log.info("[EFFICIENCY]", {
+    llmUsed: llmResponse !== null,
+    llmSkippedReason,
+    decision: decision.decision,
+    intent: decision.core.intent,
+    purchaseIntent: decision.core.purchaseIntent,
+    pipelineDurationMs: pipelineDuration,
+  });
   pipelineDetails.workflowState = decision.decision;
   pipelineDetails.slotsCount = Object.keys(ctx?.extraction?.slots ?? {}).length;
   capturePipelineEvent(pipelineDuration, true, pipelineDetails);

@@ -96,4 +96,13 @@ export async function searchPlaces(
   return query<PlaceCandidate>(sql, [pattern, pattern, exact, limit]);
 }
 
+export async function getZoneSurcharge(zoneId: string): Promise<{ surcharge_pct: number; surcharge_description: string | null } | null> {
+  const row = await queryOne<{ surcharge_pct: number; surcharge_description: string | null }>(
+    "SELECT surcharge_pct, surcharge_description FROM zones WHERE zone_id = ? AND active = 1",
+    [zoneId]
+  );
+  if (!row || !row.surcharge_pct) return null;
+  return { surcharge_pct: row.surcharge_pct, surcharge_description: row.surcharge_description };
+}
+
 

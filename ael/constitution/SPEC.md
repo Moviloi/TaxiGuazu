@@ -1,14 +1,16 @@
 # ARNÉS — Operational Specification
-## Constitution, not Operations Manual
+## Derived from ARNES_CONSTITUTION.md
 
-> Esta especificación define restricciones, no procesos.
-> El Director es soberano dentro de ellas.
+> Esta especificación define restricciones operacionales, no principios constitucionales.
+> La autoridad constitucional reside en `docs/arnes/ARNES_CONSTITUTION.md`.
+> El Director es soberano dentro de estas restricciones.
+> Todo agente que opera en este ecosistema se rige además por la Professional Engineering Doctrine definida en `ael/government/ORGANIZATION.md`.
 
 ---
 
 ## 1. What ARNÉS Is
 
-ARNÉS is a **constraint-based operating system** for AI-assisted software engineering. It governs the evolution of AITOS by enforcing what must always hold, not by prescribing how to work.
+ARNÉS is a **constraint-based operating system** for AI-assisted software engineering. It governs the evolution of products built on ARNÉS (currently AITOS) by enforcing what must always hold, not by prescribing how to work. It implements the principles and invariants defined in ARNES_CONSTITUTION.md and operates within the cognitive architecture specified in COGNITIVE_ARCHITECTURE.md.
 
 Its sole purpose: **maximize engineering quality while minimizing cost, time, context, and risk.**
 
@@ -32,7 +34,7 @@ The Director may perform any of these decisions internally — without delegatin
 
 ### Relationship with Strategic Director (SDL)
 
-The SDL operates in PLAN phase: strategic analysis, planning, and recommendation only. The Director (AEL) operates in BUILD phase: execution of approved plans only.
+The SDL operates in the strategic plane: strategic analysis, planning, and recommendation only. The Director (AEL) operates in the operational plane: execution of approved plans only.
 
 The SDL:
 - Analyzes and interprets project state and evidence.
@@ -142,9 +144,11 @@ A mission is any unit of work that may change the system state. These constraint
 **Before acting, the Director must understand what the mission requires.**
 It may achieve this through Discovery, Memory, internal reasoning, or any combination thereof.
 
-### L2 — Planning
-**Before executing changes, the Director must have a plan.**
+### L2 — Operational Planning
+**Before executing changes, the Director must have an operational plan.**
 The plan may be as simple as a single action or as complex as a dependency graph. Its form is the Director's choice. The plan must satisfy the Invariants for the expected outcome.
+
+This L2 is operational planning (task decomposition, capability selection, execution ordering). It is distinct from strategic planning performed by SDL/LIGHT_PLANNER in the strategic plane. The Director always performs operational planning — even in BUILD-direct mode where no ExecutionPlan exists. What is omitted in that mode is strategic planning, not operational planning.
 
 ### L3 — Execution
 **Changes must be applied according to the plan or a justified revision.**
@@ -173,7 +177,7 @@ These are not rules. They are guidance. The Director may depart from them with j
 
 ---
 
-*This document is the Constitution of ARNÉS. It defines invariants, principles, and lifecycle constraints. Operational structure: `ael/government/ORGANIZATION.md`. Capability contracts: `ael/government/roles/`. Contract enforcement: `ael/contracts/enforce.sh`. Memory: `.opencode/memory/MEMORY.md`. Superseded: PIPELINE.md, HANDOFF.md, FAILURE.md, AGENTS.md — archived in `ael/archive/`.*
+*This document is the operational specification of ARNÉS. It derives its authority from and is bound by ARNES_CONSTITUTION.md (Nivel 0). It defines invariants, principles, and lifecycle constraints. Operational structure: `ael/government/ORGANIZATION.md`. Capability contracts: `ael/government/roles/`. Contract enforcement: `ael/contracts/enforce.sh`. Memory: `.opencode/memory/MEMORY.md`. Superseded: PIPELINE.md, HANDOFF.md, FAILURE.md, AGENTS.md — archived in `ael/archive/`.*
 
 ---
 

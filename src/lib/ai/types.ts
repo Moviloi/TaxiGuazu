@@ -131,6 +131,9 @@ export interface SlotAssignmentConfidence {
 
 import type { CoreLateral } from "./laterals/types";
 
+// RF-03: Tipo de cambio de intención para distinguir corrección, expansión y contradicción.
+export type IntentChangeType = "correction" | "expansion" | "contradiction" | "continuation" | "new" | "none";
+
 export interface CoreDecision {
   intent: Intent;
   facts: string[];
@@ -140,8 +143,11 @@ export interface CoreDecision {
   slotAssignmentConfidence?: SlotAssignmentConfidence;
   // lateral metadata (optional for backward compat)
   lateral?: CoreLateral;
-  // P0.6: detecciÃ³n de intenciÃ³n de compra (high = pasajero da datos especÃ­ficos, low = especula)
+  // P0.6: detección de intención de compra (high = pasajero da datos específicos, low = especula)
   purchaseIntent?: "high" | "medium" | "low";
+  // RF-03: Clasificación del cambio entre prevIntent e intent actual.
+  // Permite a los consumidores distinguir entre corrección, expansión y contradicción.
+  intentChange?: IntentChangeType;
 }
 
 export interface FinalDecision {

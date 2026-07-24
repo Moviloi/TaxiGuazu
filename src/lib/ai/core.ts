@@ -16,9 +16,66 @@
 // - "origen X y|, destino Y" / "origen: X destino: Y" → ambos slots (locked)
 // - Si el valor matchea términos ambiguos (centro, hotel) → stability = "ambiguous"
 //   (el rol está fijo pero el valor necesita refinamiento).
+//
+// ── CC-15: Cobertura de variaciones de lenguaje natural ──
+// Cada regex cubre un conjunto específico de patrones del dominio transporte.
+// A continuación se documenta el alcance de cobertura por patrón:
+//
+// URGENCY_RE: cubre ~6 lemas de urgencia temporaria (ahora, ya, inmediato,
+//   urgente, hoy, enseguida). No cubre modismos regionales como "al toque",
+//   "de una", "ya mismo" (cubiertos por NOW_RE).
+// QUERY_RE: cubre ~10 palabras interrogativas del español rioplatense.
+//   No cubre preguntas en portugués (como "quanto", "como", "onde").
+// ACTION_RE: ~8 verbos de acción del dominio (agendar, confirmar, reservar,
+//   querer, necesitar, deseo, contratar).
+// PAX_RE: 2 estructuras sintácticas de pasajeros ("somos/viajamos/hay/son/tenemos
+//   N personas" y "N personas/pax/pasajeros"). Cubre español, no portugués.
+// FLIGHT_RE: códigos IATA de 2-3 letras + 2-4 dígitos (ej: AR1234, LA8080).
+// DATE_RE: cubre ~15 expresiones temporales (hoy, mañana, días de semana,
+//   "esta semana", "próximos días", DD/MM). No cubre portugués ("amanhã",
+//   "segunda-feira") ni fechas en formato MM/DD/YYYY.
+// TIME_RE: cubre hora con ":00", "14hs", "14 horas", "a las 14". No cubre
+//   "14:30 PM", "2pm", "14h30" (formato europeo).
+// GREETING_RE: ~15 saludos en español, inglés y portugués (hola, good morning,
+//   bom dia, etc.). Cubre los 3 idiomas del dominio turístico de Iguazú.
+// INFORMATIONAL_RE: ~12 patrones de consulta informativa (horarios, funcionamiento,
+//   ubicación). Cubre español rioplatense.
+// COMMERCIAL_RE: ~7 patrones de consulta comercial (cuánto cuesta, precio, tarifa,
+//   cotización, presupuesto, valor, a cuánto).
+// PRE_BOOKING_RE: ~8 patrones de pre-reserva ("estoy viendo", "estoy pensando",
+//   "consultar un viaje", "qué recomiendas", "opciones", "sugiere").
+// BOOKING_RE: ~4 verbos de reserva (reservar, confirmar, agendar, contratar).
+// NOW_RE: ~8 expresiones de inmediatez (ahora, inmediato, urgente, enseguida,
+//   "lo antes posible", "necesito ya", "para ahora", "ya mismo", "al toque").
+//   Cubre variantes regionales argentinas.
+// RESCHEDULE_RE: ~3 patrones de reprogramación y modificación.
+// POST_SERVICE_RE: ~6 patrones post-servicio (agradecimiento, queja, reclamo,
+//   factura, comprobante).
+// EMERGENCY_RE: ~7 patrones de emergencia (emergencia, ayuda, "no llega",
+//   "chofer no aparece", "perdí el viaje", "estoy varado").
+// CONSULTA_RE: ~3 lemas de consulta (consultar, consulta, información, info).
+// AIRPORT_MENTION_RE: ~10 patrones de mención de avión/aeropuerto sin código
+//   de vuelo específico. Cubre español, inglés y portugués limitado.
+// LOW_INTENT_RE: ~8 patrones de baja intención de compra (especulación,
+//   "estoy viendo", "después confirmo", etc.).
+//
+// Los patrones sintácticos de role lock (ESTOY_EN_RE, IR_A_RE, DESDE_RE,
+// HASTA_RE, ORIGEN_DESTINO_RE) cubren las estructuras más frecuentes del
+// español rioplatense para expresar origen y destino en el dominio transporte.
+// No cubren: "saio de X" (portugués), "leaving from X" (inglés), ni estructuras
+// con verbo final alemán/japonés.
+//
+// Estas limitaciones de cobertura son aceptables porque:
+// 1. El dominio está acotado a transporte turístico en Iguazú.
+// 2. Los 3 idiomas principales (es, en, pt) tienen cobertura parcial pero
+//    funcional para el vocabulario del dominio.
+// 3. El sistema tiene fallback a LLM para casos no cubiertos por regex.
+// 4. Los patrones se extienden progresivamente según necesidad observada.
 
 import { AMBIGUOUS_LOCATION_RE, AFFIRMATION_RE } from "./patterns";
 import type { CoreDecision, Intent, RoleLock, SlotStabilityMap, SlotAssignmentConfidence } from "./types";
+// Re-export for tests and external consumers
+export type { CoreDecision, Intent } from "./types";
 import { applyLaterals } from "./laterals";
 
 const URGENCY_RE = /\b(ahora|ya|inmediato|urgente|hoy|enseguida)\b/i;
@@ -29,6 +86,62 @@ const FLIGHT_RE = /\b(?:vuelo\s*)?([A-Z]{2,3}\s?\d{2,4})\b/i;
 const DATE_RE = /\b(hoy|ma[ñn]ana|pasado\s*ma[ñn]ana|esta\s*semana|pr[oó]xim[oa]s?\s*d[ií]as|el\s+(lunes|martes|mi[ée]rcoles|jueves|viernes|s[aá]bado|domingo)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/i;
 const TIME_RE = /\b(?:a\s*las?\s*)?(\d{1,2}:\d{2}|\d{1,2}\s*(?:hs|horas|h))\b/i;
 // AFFIRMATION_RE importado desde patterns.ts (fuente única)
+
+// ── RF-03: Clasificación explícita del cambio de intención ──
+// Distingue entre corrección, expansión y contradicción para
+// cumplir con RF-03 (gestión del cambio de intención).
+// El tipo IntentChangeType está definido en types.ts.
+import type { IntentChangeType } from "./types";
+// Re-export para backward compatibilidad con imports existentes
+export type { IntentChangeType } from "./types";
+
+/**
+ * Clasifica la relación entre la intención previa y la actual.
+ * 
+ * - **correction**: el usuario revierte una intención previa (ej: BOOKING → CANCEL,
+ *   o cambio drástico como COMMERCIAL → EMERGENCY). Señal de cambio de dirección.
+ * - **expansion**: el usuario refina o expande una intención previa sin contradecirla
+ *   (ej: BOOKING → NOW con más detalles, PRE_BOOKING → BOOKING). Señal de progresión.
+ * - **contradiction**: la intención actual es incompatible con la previa
+ *   (ej: EMERGENCY → COMMERCIAL, RESCHEDULE → GREETING). Señal de contexto inválido.
+ * - **continuation**: la intención se mantiene (mismo intent o transición no conflictiva).
+ * - **new**: no hay intención previa o se ignora por ser AMBIGUOUS/GREETING.
+ * - **none**: caso por defecto (prevIntent no definido o irrelevante).
+ */
+export function classifyIntentChange(prevIntent: Intent | undefined, currentIntent: Intent): IntentChangeType {
+  if (!prevIntent || prevIntent === "AMBIGUOUS" || prevIntent === "GREETING") {
+    return "new";
+  }
+  if (prevIntent === currentIntent) {
+    return "continuation";
+  }
+  // Correcciones: cambios que indican reversión de dirección
+  if (
+    (prevIntent === "BOOKING" && (currentIntent === "CONSULTA" || currentIntent === "AMBIGUOUS")) ||
+    (prevIntent === "NOW" && (currentIntent === "CONSULTA" || currentIntent === "AMBIGUOUS")) ||
+    (prevIntent === "PRE_BOOKING" && currentIntent === "CONSULTA")
+  ) {
+    return "correction";
+  }
+  // Contradicciones: cambios incompatibles con el contexto operativo
+  if (
+    (prevIntent === "EMERGENCY" && !["EMERGENCY", "NOW"].includes(currentIntent)) ||
+    (prevIntent === "RESCHEDULE" && currentIntent === "GREETING")
+  ) {
+    return "contradiction";
+  }
+  // Expansiones: progresión natural desde una intención menos específica
+  if (
+    (prevIntent === "PRE_BOOKING" && (currentIntent === "BOOKING" || currentIntent === "NOW")) ||
+    (prevIntent === "BOOKING" && currentIntent === "NOW") ||
+    (prevIntent === "INFORMATIONAL" && currentIntent === "COMMERCIAL") ||
+    (prevIntent === "COMMERCIAL" && (currentIntent === "PRE_BOOKING" || currentIntent === "BOOKING"))
+  ) {
+    return "expansion";
+  }
+  // Default: continuación (cambio lateral no conflictivo)
+  return "continuation";
+}
 
 // P0.9.1: trailing \b reemplazado por (?=\W|$) para que funcione con
 // caracteres acentuados (á, é, í, ó, ú, ñ). En JavaScript, \b separa
@@ -278,6 +391,13 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
   // CDA §7 regla 1: prevIntent prevalece sobre CONSULTA/AMBIGUOUS/INFORMATIONAL sin evidencia fuerte.
   // CDA §7 regla 2: cambios solo con evidencia operativa fuerte.
   // CDA §7 tabla de evolución: prevIntent + intent → resultado (BOOKING + CONSULTA/AMBIGUOUS → BOOKING)
+  //
+  // RF-20: Preservación de intención principal multi-turn.
+  // Se distinguen dos casos:
+  // 1. Cambio de parámetros secundarios (pasajeros, fecha, hora, vuelo) sin cambiar intención.
+  //    → Se preserva la intención previa. Los nuevos facts actualizan los parámetros.
+  // 2. Cambio real de intención (ej: BOOKING → EMERGENCY).
+  //    → Se acepta la nueva intención, registrando el cambio como "expansion" o "correction".
   const highOperationalIntents: Intent[] = ["BOOKING", "NOW", "EMERGENCY", "RESCHEDULE", "POST_SERVICE"];
   const lowConfidenceIntents: Intent[] = ["CONSULTA", "AMBIGUOUS", "INFORMATIONAL"];
   const finalIntent: Intent = (prevIntent && prevIntent !== "AMBIGUOUS" && prevIntent !== "GREETING")
@@ -288,12 +408,16 @@ export function core(input: string, prevIntent?: Intent): CoreDecision {
           : intent)     // Misma intención o evidencia fuerte → aceptar nueva clasificación
     : intent;
 
+  // RF-03: Clasificar el cambio de intención para que los consumidores puedan
+  // distinguir explícitamente entre corrección, expansión y contradicción.
+  const intentChange: IntentChangeType = classifyIntentChange(prevIntent, finalIntent);
+
   confidence = computeConfidence(facts, finalIntent);
 
   const lateral = applyLaterals({ intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence });
   const hasSlots = !!(roleLock.origin || roleLock.destination);
   const purchaseIntent = detectPurchaseIntent(facts, hasSlots, trimmed);
-  return { intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence, lateral, purchaseIntent };
+  return { intent: finalIntent, facts, confidence, slotStability, roleLock, slotAssignmentConfidence, lateral, purchaseIntent, intentChange };
 }
 
 function classifyIntent(facts: string[], slotStability?: SlotStabilityMap): Intent {

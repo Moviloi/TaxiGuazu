@@ -3,7 +3,7 @@
 > Documento canónico del estado arquitectónico real del proyecto.
 > Fuente única de verdad para entender qué existe, qué está aprobado, qué permanece como diseño.
 >
-> **Actualizado:** 2026-07-17 | **Misión:** PR-ADR13 — Conversation Decision Algorithm Ratification | **ADR count:** 13 (001–013)
+> **Actualizado:** 2026-07-22 | **Misión:** DOC-03 — Canonical Documentation Alignment | **ADR count:** 14 (001–014)
 
 ---
 
@@ -157,14 +157,14 @@ Business Knowledge Engine (N0) → Deterministic Reasoning Layer (N1) → Groq (
 
 | Nivel | Capa | Responsabilidad | Estado |
 |:-----:|------|----------------|--------|
-| **N0** | Business Knowledge Engine | Conocer: consulta a fuentes de verdad existentes | ✅ Implementado (PR-5A, PR-5E, PR-5E.1) |
-| **N1** | Deterministic Reasoning Layer | Decidir: reglas determinísticas sobre datos del BKE | ✅ Implementado (PR-5B, PR-5C, PR-5D) |
+| **N0** | Business Knowledge Engine | Conocer: consulta a fuentes de verdad existentes | 🗑️ Código removido (ADR-014). Diseño conceptual. |
+| **N1** | Deterministic Reasoning Layer | Decidir: reglas determinísticas sobre datos del BKE | 🗑️ Código removido (ADR-014). Diseño conceptual. |
 | **N2a** | Groq (llama-3.3-70b) | Generar/extraer/comprender semánticamente | 🔴 No operativo (rate limit 429) |
 | **N2b** | Gemini (gemini-2.0-flash) | Generar/extraer/comprender semánticamente | 🔴 No operativo (sin API key) |
 | **Fallback** | Plantilla estática (BKE.obtenerMensaje) | Responder cuando todos los niveles fallan | 🟡 Parcial (templates existen, sin DRL) |
 
-**Documentos**: ADR-012, CE-1, CE-2, CE-3A, CE-3B, CE-4, CE-5 (PR-5A a PR-5G).
-**Implementación**: ✅ COMPLETADA — Serie CE certificada (PR-5G, 2026-07-16). Ver ADR-012 Sección 9 para desviaciones documentadas.
+**Documentos**: ADR-012, ADR-014, CE-1, CE-2, CE-3A, CE-3B, CE-4, CE-5 (PR-5A a PR-5G).
+**Implementación**: 🗑️ Código removido por ADR-014 (2026-07-20, higiene: 0 consumidores, 0 tests). El Cognitive Escalation Principle (ADR-012) permanece vigente como diseño conceptual para re-evaluación post-v1. Ver ADR-012 §10.1 y ADR-014 §2.5.
 
 ---
 
@@ -183,7 +183,7 @@ Business Knowledge Engine (N0) → Deterministic Reasoning Layer (N1) → Groq (
 | **009** | Evidence Engine Architecture | ✅ Accepted | 🔒 **FREEZE** | ✅ Implementado (378 tests) | PRESENTE | ADR-001, ADR-003, ADR-004, ADR-008 |
 | **010** | Cognitive Memory Architecture | ✅ Accepted | No | ⏳ **0% implementado** (diseño conceptual) | **FUTURO** ⏳ | ADR-009 |
 | **011** | Reflection Elimination | ✅ Accepted | No | ❌ Sin código (eliminación de capa nunca implementada) | **HISTÓRICO / FUTURO** | ADR-009, ADR-010 |
-| **012** | Cognitive Escalation Principle | ✅ Accepted | No | ✅ Implementado (PR-5A a PR-5G) | PRESENTE | CE-1, CE-2, CE-3A, CE-3B, CE-4 |
+| **012** | Cognitive Escalation Principle | ✅ Accepted | No | 🗑️ Código removido (ADR-014). Principio vigente como diseño conceptual. | PRESENTE + FUTURO | CE-1, CE-2, CE-3A, CE-3B, CE-4, ADR-014 |
 | **013** | Conversation Decision Algorithm Ratification | ✅ Accepted | No | ✅ Documento normativo creado (CDA, 1026 líneas). 0 cambios de código. | PRESENTE | CDA, FUNCTIONAL_BEHAVIOR_SPECIFICATION.md, ADR-007, ADR-008, ADR-012, QA1, QA2, QA2B, QA3-S2B |
 
 ### 4.1 ADR pendientes o en riesgo
@@ -363,7 +363,7 @@ Estas decisiones arquitectónicas están consolidadas y no se revertirán sin un
 | **Pipeline cognitivo final: EE → Memory → Pattern Discovery** | PR-11 | 2026-07-13 | Documentación del pipeline futuro |
 | **Nombre compartido "Learning" resuelto: cognitivo→Pattern Discovery, operacional preservado** | PR-11A | 2026-07-13 | Renombre documental |
 | **Documentación separada en presente/futuro** | PR-11A, PR-11B | 2026-07-14 | Alineamiento documental |
-| **Cognitive Escalation Principle** | ADR-012 | 2026-07-15 | Modelo oficial de inteligencia: BKE → DRL → Groq → Gemini |
+| **Cognitive Escalation Principle** | ADR-012 → ADR-014 | 2026-07-15 / 2026-07-20 | Modelo oficial de inteligencia: BKE → DRL → Groq → Gemini. ADR-014 (2026-07-20): implementación removida, principio preservado como diseño conceptual para re-evaluación post-v1. |
 
 ---
 
@@ -380,7 +380,7 @@ EE (existe) → Memory (IM-1 🟡 implementado parcialmente) → Pattern Discove
 | Componente | Dependencia | Prioridad | Nota |
 |---|---|---|---|
 | `src/lib/memory/` (7 archivos) | EE (existe) | 🟡 IM-1 (2026-07-14) | 14 invariantes. 45 tests. Build ✅, Contratos ✅. COGNITIVE_MEMORY_ENABLED=false. |
-| `src/lib/pattern-discovery/` (12 archivos) | Memory | 🟡 PD-IM-1 (2026-07-16) | ⚠️ Bug en repository.ts (parseo acceptance_json). PATTERN_DISCOVERY_ENABLED=false. NO ACTIVAR. |
+| Pattern Discovery (concepto) | Memory | 🟡 Futuro post-v1 | Implementación experimental removida por ADR-014 (2026-07-20). Concepto preservado para evaluación futura post-v1. Código histórico disponible en git history. |
 | `COGNITIVE_MEMORY_ENABLED` feature flag | Memory | 🟡 IM-1 (2026-07-14) | Implementado. Default false. Mismo patrón Shadow Mode. |
 | API `getPatterns()` | Pattern Discovery | ⏳ Pospuesta | Consumidor no definido |
 | Memory → Pattern Discovery contract | Ambos | ⏳ Pospuesta | Definido en PR-7D |

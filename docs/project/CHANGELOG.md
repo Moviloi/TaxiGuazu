@@ -3,7 +3,59 @@
 
 ---
 
-## 2026-07-20 (current)
+## 2026-07-23 (current)
+
+### PR-PROMPT-REFACTOR-1 — ARNÉS Prompt Refactoring (continuation → execution_engine + planning_engine)
+- **Tipo**: Refactorización de prompts del ecosistema — 5 archivos modificados
+- **Resumen**: Se aplicó el plan de refactorización de prompts ARNÉS. **plan.md**: redefinido como entry point de planificación (no "dominio de razonamiento"). **build.md**: redefinido como entry point de ejecución hacia AEL (no "interfaz operacional de ARNÉS"). **arnes.md**: DecisionPackage simplificado — eliminados `continuation: BUILD_DIRECT/PLAN_SDL`, reemplazados por `execution_engine: BUILD` + `planning_engine: SDL|LIGHT_PLANNER|NONE`. Ciclo actualizado a "SDL/LIGHT_PLANNER → AEL". **light-planner.md**: referencias "dominio PLAN" → "entry point PLAN". **DECISION_PACKAGE_CONTRACT.md**: v2.2 — `continuation` eliminado, reemplazado por `execution_engine` + `planning_engine`. Separación de concerns entre planificación y ejecución. ~35 bloques de reemplazo en 5 archivos. Contratos PASS.
+- **Archivos modificados**: `.opencode/agents/plan.md` (~14 bloques), `.opencode/agents/build.md` (~9 bloques), `.opencode/agents/arnes.md` (~12 bloques), `.opencode/agents/light-planner.md` (~4 bloques), `docs/arnes/DECISION_PACKAGE_CONTRACT.md` (v2.2, continuation→execution_engine+planning_engine)
+- **Validación**: Contratos AEL PASS ✅
+
+## 2026-07-22
+
+### DOC-01 — Document Inventory & Classification
+- **Tipo**: Auditoría documental — inventario completo del ecosistema documental AITOS
+- **Resumen**: Se analizaron ~260 documentos en 16 directorios bajo `docs/`, más `.opencode/` y `ael/`. **Hallazgos**: 5 contradicciones activas (2 críticas: ADR-012 vs ADR-014, PROJECT_CONTEXT.md stale; 3 medias: H-CAT2-001 inconsistente, SYSTEM_BIBLE.md stale, ops guides stale). 4 documentos legacy candidatos a ARCHIVE (CE-3A, CE-3B, CE-4, CE-5). 0 ocurrencias de "autonomous reasoning" u "old memory system" en documentación activa. 9 riesgos documentales clasificados (3 altos, 5 medios, 1 bajo). Mapa de términos legacy completo.
+- **Documentos creados**: `docs/audit/DOC-01_INVENTORY_REPORT.md` (521 líneas, 40+ secciones, 278 docs analizados)
+- **Archivos modificados**: 0 (solo lectura — mandato explícito de no modificar)
+
+### DOC-02 — ADR-012/ADR-014 Consistency Resolution
+- **Tipo**: Resolución de contradicción normativa — ADR-012 vs ADR-014
+- **Resumen**: Se determinó Opción B (ADR-014 **modifica parcialmente** ADR-012). No existe contradicción: ADR-012 preserva el principio como diseño conceptual; ADR-014 eliminó el código BKE/DRL (22 archivos, 2,476 líneas). Ambos ADRs se reconocen mutuamente. 2 documentos críticos desactualizados identificados: ARCHITECTURE_STATUS.md y PROJECT_CONTEXT.md. 0 ADRs modificados.
+- **Documentos creados**: `docs/audit/DOC-02_ADR_CONSISTENCY_REPORT.md` (Opción B documentada, relación ADR-012/014 clara)
+- **Archivos modificados**: 0
+
+### DOC-03 — Canonical Documentation Alignment
+- **Tipo**: Alineación documental — actualización de 6 archivos para reflejar estado post ADR-014
+- **Resumen**: Se actualizaron **6 archivos** con aprobación y 2 ajustes post-revisión. **ARCHITECTURE_STATUS.md**: header (2026-07-22, 14 ADRs), §3.4 N0/N1 → código removido, ADR-012 row → diseño conceptual, Pattern Discovery → concepto futuro. **PROJECT_CONTEXT.md**: modelo → Cognitive Escalation Principle, BKE/DRL movidos a capas eliminadas. **CE-3A, CE-3B**: banners ARCHIVE_CANDIDATE. **CE-4, CE-5**: banners HISTÓRICO. Validación: 0 referencias "BKE/DRL ✅ Implementado" remanentes. 0 ADRs modificados. 0 código modificado. Enforce.sh PASS. Build ✅. Tests ✅.
+- **Documentos creados**: `docs/audit/DOC-03_ALIGNMENT_REPORT.md` (156 líneas, 6 archivos modificados, 3 secciones de validación)
+- **Archivos modificados**: `docs/architecture/ARCHITECTURE_STATUS.md` (5 cambios), `docs/project/PROJECT_CONTEXT.md` (5 cambios), `docs/architecture/CE-3A_BUSINESS_KNOWLEDGE_ENGINE.md` (+banner), `docs/architecture/CE-3B_DETERMINISTIC_REASONING_LAYER.md` (+banner), `docs/architecture/CE-4_MIGRATION_ROADMAP.md` (+banner), `docs/architecture/CE-5_IMPLEMENTATION_READINESS.md` (+banner)
+
+### DOC-04 — SSOT Authority Audit
+- **Tipo**: Auditoría de autoridad documental — clasificación L0-L5 del ecosistema completo
+- **Resumen**: Se clasificaron ~132 documentos en 5 niveles de autoridad (L0 Constitución a L5 Histórico). **7 SSOT conflicts detectados**: 1 crítico (C-SSOT-1: AITOS_CONSTITUTION.md y AEL SPEC.md no se referencian mutuamente), 3 medios (C-SSOT-2: SYSTEM_BIBLE.md contradice GOVERNANCE.md sobre su autoridad; C-SSOT-3: 3 documentos describen "qué es AITOS"; C-SSOT-4: strategy-decision.md se auto-denomina SSOT incorrectamente), 3 bajos. **Resueltos de DOC-01**: R-01 (CE docs deprecation ✅), R-02 (ADR-012/014 ✅), R-09 (CDA vs Constitución ✅). **Pendientes**: R-03 (SYSTEM_BIBLE.md stale), R-05 (duplicación "qué es AITOS"), R-06 (H-CAT2-001 inconsistente), R-08 (ops guides stale). Jerarquía SSOT recomendada documentada. 0 archivos de código modificados.
+- **Documentos creados**: `docs/audit/DOC-04_SSOT_AUTHORITY_REPORT.md` (clasificación L0-L5 completa, 7 SSOT conflicts, jerarquía recomendada)
+- **Archivos modificados**: `docs/project/PROJECT_BOARD.md` (header + D82), `docs/project/CHANGELOG.md` (esta entrada)
+
+### DOC-05 — SSOT Governance Report
+- **Tipo**: Análisis de gobernanza documental — jerarquía definitiva de 7 documentos clave
+- **Resumen**: Se analizaron 7 documentos clave (AITOS_CONSTITUTION, AEL SPEC, GOVERNANCE, SYSTEM_BIBLE, ARCHITECTURE_STATUS, PROJECT_CONTEXT, strategy-decision) para determinar la jerarquía definitiva de autoridad. **7 SSOT authority rules propuestas**: (1) AITOS_CONSTITUTION es L0-P supremo del Product System, (2) AEL SPEC es L0-D supremo del Development System, (3) AEL SPEC prevalece sobre GOVERNANCE.md en caso de conflicto, (4) SYSTEM_BIBLE.md debe relegarse a L4/L5 referencial, (5) ARCHITECTURE_STATUS.md es L2 derivado, (6) PROJECT_CONTEXT.md es L3 coyuntural, (7) strategy-decision.md debe perder pretensión SSOT. 0 archivos modificados — pendiente de decisión PLAN para implementar los ~9 cambios recomendados.
+- **Documentos creados**: `docs/audit/DOC-05_SSOT_GOVERNANCE_REPORT.md` (7 reglas, jerarquía documental, 9 cambios recomendados)
+- **Archivos modificados**: 0
+
+### DOC-05R — System Boundary Clarification
+- **Tipo**: Delimitación formal Product System vs Development System
+- **Resumen**: Se determinó la frontera formal entre el Sistema Producto (AITOS desplegado) y el Sistema de Desarrollo (herramientas de ingeniería). **Conclusión**: SDL, AEL, PLAN, BUILD, OpenCode **no son parte del AITOS Product System**. Pertenecen al AITOS Development System. Analogía compilador validada con matiz: son herramientas purpose-built, no genéricas. **Dos planos ortogonales identificados**: L0-P (AITOS_CONSTITUTION) para el Product System, L0-D (AEL SPEC) para el Development System. 0 archivos modificados.
+- **Documentos creados**: `docs/audit/DOC-05R_SYSTEM_BOUNDARY_CLARIFICATION.md` (2 planos, analogía compilador, implicaciones SSOT)
+- **Archivos modificados**: 0
+
+### DOC-06 — Ecosystem Boundary Report
+- **Tipo**: Modelo de 3 niveles para el ecosistema documental completo
+- **Resumen**: Se estableció un modelo de tres niveles: **AITOS Ecosystem** (contenedor), **AITOS Product System** (sistema desplegado), **AITOS Development System** (herramientas de ingeniería). Se clasificaron >100 documentos en los 3 niveles. **Hallazgo crítico**: 7 documentos del Development System están físicamente ubicados en `docs/architecture/` (directorio de Producto): GOVERNANCE.md, INTERFACE_FREEZE_V2.md, MISSION_PHASE_ARCHITECTURE.md, MISSION_CLOSURE_CONTRACT.md, STRATEGIC_OPERATIONAL_CONTRACT.md, SDL_2_0_STRATEGIC_DECISION_FRAMEWORK.md, SDL_2_0_ARCHITECTURAL_CONSOLIDATION.md. **3 significados ambiguos de "AITOS" resueltos** (ecosistema, producto, desarrollo). **6 reglas de naming** propuestas. **13 cambios recomendados** pendientes de decisión PLAN. 0 archivos modificados.
+- **Documentos creados**: `docs/audit/DOC-06_ECOSYSTEM_BOUNDARY_REPORT.md` (modelo 3 niveles, >100 docs clasificados, 7 mislocated, 6 reglas naming, 13 cambios recomendados)
+- **Archivos modificados**: 0
+
+## 2026-07-20
 
 ### BUILD-AUDIT-1 — System Audit Execution & Code Hygiene
 - **Tipo**: Auditoría sistémica + higiene de código — ejecución del plan de auditoría completo

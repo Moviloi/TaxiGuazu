@@ -8,6 +8,8 @@
 
 ---
 
+> **Estado:** ARCHIVE CANDIDATE — Diseño redefinido por ADR-014 (2026-07-20). Código DRL eliminado de `src/lib/drl/`. El Cognitive Escalation Principle (ADR-012) se preserva como diseño conceptual para re-evaluación post-v1. Este documento se conserva como referencia de diseño y trazabilidad histórica.
+
 ## Preámbulo
 
 Este documento define la arquitectura conceptual de la Deterministic Reasoning Layer (DRL), una nueva capa del sistema que aplica reglas determinísticas sobre los datos provistos por el Business Knowledge Engine (BKE) para producir decisiones, antes de escalar a un LLM.

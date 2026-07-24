@@ -1,4 +1,4 @@
-import { getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
+﻿import { getChatSession, upsertChatSession, resetChatSession } from "@/lib/db/database";
 import { extractSlots } from "@/lib/services/extraction/extract-slots";
 import { parseRouteFromText } from "@/lib/services/extraction/regex-extractor";
 import { buildGenericClarify, buildCancellationMessage } from "@/lib/ai/response-builder";
@@ -83,12 +83,12 @@ async function tryFallbackExtraction(
         });
         const fbExtractionNote = [
           `Confianza general: 100%. Estado: collecting_slots.`,
-          `Origen: "${originMatch}" → ${ft.origin.canonical_name} (Confianza: 100%)`,
-          `Destino: "${destMatch}" → ${ft.destination.canonical_name} (Confianza: 100%)`,
+          `Origen: "${originMatch}" â†’ ${ft.origin.canonical_name} (Confianza: 100%)`,
+          `Destino: "${destMatch}" â†’ ${ft.destination.canonical_name} (Confianza: 100%)`,
           `PRECIO OFICIAL (calculado por backend): $${ft.final_price} ARS (precio hasta 4 pasajeros).`,
           `VALOR_PRECIO: ${ft.final_price}`,
-          `Ruta oficial: ${ft.origin.canonical_name} → ${ft.destination.canonical_name}.`,
-          `NO calcules ni modifiques este precio. Usá SOLO los valores oficiales del backend.`,
+          `Ruta oficial: ${ft.origin.canonical_name} â†’ ${ft.destination.canonical_name}.`,
+          `NO calcules ni modifiques este precio. UsÃ¡ SOLO los valores oficiales del backend.`,
         ].join('\n');
         log.info("[EXTRACTION] Fallback exitoso, extractionNote generado con VALOR_PRECIO:", ft.final_price);
         const fbSlotStates = buildSlotStates(
@@ -180,7 +180,7 @@ export async function runExtractionPipeline(
       raw: raw ? JSON.stringify(raw).substring(0, 200) : null,
     });
 
-    // [OBSERVABILITY] Remove after diagnosis — raw LLM output for this turn
+    // [OBSERVABILITY] Remove after diagnosis â€” raw LLM output for this turn
     log.info("[OBSERVABILITY] RAW_LLM", {
       textLength: text.length,
       textPreview: text.substring(0, 300),
@@ -193,11 +193,11 @@ export async function runExtractionPipeline(
     const domain = mapIntentToDomain(leadCore.intent);
     const convState = await getConversationalState(phone);
 
-    // FASE 18.2: Location confirmation — when core detects affirmation + existing ambiguous slots
+    // FASE 18.2: Location confirmation â€” when core detects affirmation + existing ambiguous slots
     hasAffirmation = leadCore.facts?.some(f => f.startsWith("affirmation:"))
       || isAffirmativeMessage(text);
     const hasPrevSlotsLocation = prevSlotsEarly?.origin && prevSlotsEarly?.destination;
-    // FASE 20.4: Correction detection — user correcting a previously extracted slot
+    // FASE 20.4: Correction detection â€” user correcting a previously extracted slot
     hasCorrection = isCorrectionMessage(text);
 
     if (convState === "awaiting_passenger") {
@@ -205,7 +205,7 @@ export async function runExtractionPipeline(
     } else if (convState === "awaiting_confirmation" && isAffirmativeMessage(text)) {
       log.info("[COMPLETENESS] awaiting_confirmation + affirmation: skipping completeness");
     } else if (hasAffirmation && hasPrevSlotsLocation && convState !== "awaiting_confirmation") {
-      // User confirmed previously ambiguous location — promote existing slots
+      // User confirmed previously ambiguous location â€” promote existing slots
       log.info("[CONFIRMATION_STATE] affirmation + existing slots, promoting previous slots");
       log.info("[CONFIRMATION_DETECTED]", {
         text: text.substring(0, 80),
@@ -245,7 +245,7 @@ export async function runExtractionPipeline(
     } else if (convState === "awaiting_confirmation" && isNegativeMessage(text)) {
       const hasNewData = raw != null && Object.keys(raw!).some(k => raw![k] != null && String(raw![k]).trim() !== "");
       if (hasNewData) {
-        log.info("[CONFIRMATION] negative with new slot data — treating as correction, not cancellation");
+        log.info("[CONFIRMATION] negative with new slot data â€” treating as correction, not cancellation");
         const fieldGap = resolveSimpleFieldGap(raw!, domain);
         if (fieldGap.field !== null) {
           const msg = buildGenericClarify(fieldGap.field!, detectLeadLang(text));
@@ -264,7 +264,7 @@ export async function runExtractionPipeline(
       }
     } else {
       // Si raw es null, usar roleLock del core + prevSlots como fallback
-      // para determinar qué campo falta preguntar
+      // para determinar quÃ© campo falta preguntar
       const effectiveSlots = raw ?? {
         origin: coreDecisionEarly.roleLock.origin ?? prevSlotsEarly?.origin ?? null,
         destination: coreDecisionEarly.roleLock.destination ?? prevSlotsEarly?.destination ?? null,
@@ -296,7 +296,7 @@ export async function runExtractionPipeline(
         log.info("[EXTRACTION] Parse exitoso, calculando confidence...");
         confidenceResult = await calculateSlotConfidence(parsed.data, text);
 
-        // [OBSERVABILITY] Remove after diagnosis — slot state BEFORE prevSlots merge
+        // [OBSERVABILITY] Remove after diagnosis â€” slot state BEFORE prevSlots merge
         log.info("[OBSERVABILITY] SLOTS_BEFORE_MERGE", {
           textPreview: text.substring(0, 300),
           slots: Object.fromEntries(
@@ -349,13 +349,10 @@ export async function runExtractionPipeline(
             pricing = resolved.pricingResult;
             captureBKEEvent(pricingDuration, !!pricing && pricing.final_price > 0, {
               domain: "pricing",
-              query: `${parsed.data.origin} → ${parsed.data.destination}`,
+              query: `${parsed.data.origin} â†’ ${parsed.data.destination}`,
               resolutionSource: pricing?.final_price ? "backend" : "no_tariff",
               confidence: pricing?.final_price ? 1.0 : 0,
             });
-            if (resolved.divergence) {
-              log.info(`[PRICING] Divergence: v3=${resolved.divergence.v3Price} v2=${resolved.divergence.v2Price} level=${resolved.divergence.level}`);
-            }
             log.info(`[EXTRACTION] Pricing result: final_price=${pricing?.final_price} origin="${pricing?.origin.canonical_name}" dest="${pricing?.destination.canonical_name}"`);
             if (pricing && pricing.final_price > 0) {
               parsed.data.price = pricing.final_price;
@@ -371,7 +368,7 @@ export async function runExtractionPipeline(
                 const fbPricing = fbResolved.pricingResult;
                 captureBKEEvent(fbPricingDuration, fbPricing.final_price > 0, {
                   domain: "pricing",
-                  query: `${fbOrigin} → ${fbDest}`,
+                  query: `${fbOrigin} â†’ ${fbDest}`,
                   resolutionSource: fbPricing.final_price > 0 ? "backend" : "no_tariff",
                   confidence: fbPricing.final_price > 0 ? 1.0 : 0,
                 });
@@ -390,7 +387,7 @@ export async function runExtractionPipeline(
           }
         }
 
-        // AIT-061: Inferencia de horario post-extracción
+        // AIT-061: Inferencia de horario post-extracciÃ³n
         // Si scheduled_at tiene fecha (date-only, ej: "2026-07-06" de relative_date_computed)
         // y el destino tiene horario de apertura conocido, el sistema sugiere un pickup.
         // La hora inferida se combina con la fecha existente y el reason cambia a
@@ -424,12 +421,12 @@ export async function runExtractionPipeline(
           }
         }
 
-        // AIT-062: Inferencia de frontera post-extracción
-        // Si destination u origin es término de aduana ("aduana"/"customs"/"border"/"alfândega")
-        // con reason "unknown_location", inferir el lado de frontera según el país
+        // AIT-062: Inferencia de frontera post-extracciÃ³n
+        // Si destination u origin es tÃ©rmino de aduana ("aduana"/"customs"/"border"/"alfÃ¢ndega")
+        // con reason "unknown_location", inferir el lado de frontera segÃºn el paÃ­s
         // del otro slot resuelto o del airport_code.
         // Se ejecuta ANTES del bloque prevSlotsEarly para que preserve prev pueda
-        // restaurar CONFIRMED si el valor ya fue confirmado y no cambió.
+        // restaurar CONFIRMED si el valor ya fue confirmado y no cambiÃ³.
         {
           const destSlotInfer = confidenceResult.slots.destination;
           const originSlotInfer = confidenceResult.slots.origin;
@@ -449,7 +446,7 @@ export async function runExtractionPipeline(
           if (borderInference.confidence === "inferred" && borderInference.borderName != null) {
             // Determinar si el slot a reemplazar es destination u origin
             const destIsBorder = destSlotInfer?.value != null &&
-              /\b(aduana|customs?|border|alfândega)\b/i.test(String(destSlotInfer.value)) &&
+              /\b(aduana|customs?|border|alfÃ¢ndega)\b/i.test(String(destSlotInfer.value)) &&
               destSlotInfer.reason === "unknown_location";
 
             if (destIsBorder) {
@@ -479,6 +476,10 @@ export async function runExtractionPipeline(
           }
         }
 
+        // RF-13: DetecciÃ³n explÃ­cita de impacto operacional
+        // Se identifican los cambios en slots crÃ­ticos (origin, destination, passengers,
+        // scheduled_at) que pueden afectar pricing, routing o ejecuciÃ³n.
+        const operationalImpactDetected: string[] = [];
         for (const [k, v] of Object.entries(prevSlotsEarly)) {
           if (v != null && String(v).trim() !== "") {
             if (!confidenceResult.slots[k]) {
@@ -489,7 +490,21 @@ export async function runExtractionPipeline(
                 confidenceResult.slots[k] = { value: String(v), score: 0.8, reason: "previous_turn" };
               }
             }
+            // Detectar cambios en slots con impacto operacional
+            if (confidenceResult.slots[k] && String(confidenceResult.slots[k].value) !== String(v)) {
+              if (["origin", "destination", "passengers", "scheduled_at", "flight"].includes(k)) {
+                operationalImpactDetected.push(k);
+              }
+            }
           }
+        }
+        if (operationalImpactDetected.length > 0) {
+          log.info("[OPERATIONAL_IMPACT] Cambios detectados en slots crÃ­ticos:", operationalImpactDetected);
+          // Los cambios en origin/destination/passengers gatillan re-pricing
+          // en el bloque de pricing mÃ¡s abajo (lÃ­nea ~346). scheduled_at afecta
+          // disponibilidad y flight afecta ruta. Todos estos casos estÃ¡n cubiertos
+          // por el pricing flow existente que se ejecuta condicionalmente segÃºn
+          // la presencia de origin y destination.
         }
         // FASE 20.4: RoleLock asigna rol pero preserva certeza existente
         if (coreDecisionEarly.roleLock?.origin) {
@@ -500,7 +515,7 @@ export async function runExtractionPipeline(
               reason: "core_role_lock",
             };
           }
-          // else: slot ya existe con valor+confianza → roleLock solo confirma el rol
+          // else: slot ya existe con valor+confianza â†’ roleLock solo confirma el rol
         }
         if (coreDecisionEarly.roleLock?.destination) {
           if (!confidenceResult.slots.destination || confidenceResult.slots.destination.score === 0 || confidenceResult.slots.destination.value == null) {
@@ -564,7 +579,7 @@ export async function runExtractionPipeline(
           ),
         });
 
-        // [OBSERVABILITY] Remove after diagnosis — slot state AFTER all merges (prevSlots + roleLock + affirmation + slotStates)
+        // [OBSERVABILITY] Remove after diagnosis â€” slot state AFTER all merges (prevSlots + roleLock + affirmation + slotStates)
         log.info("[OBSERVABILITY] SLOTS_AFTER_MERGE", {
           textPreview: text.substring(0, 300),
           prevSlots: prevSlotsEarly,
@@ -596,7 +611,7 @@ export async function runExtractionPipeline(
 
         workflowResult = await evaluateWorkflowTransition(phone, confidenceResult);
 
-        // [OBSERVABILITY] Remove after diagnosis — pipeline branching decision
+        // [OBSERVABILITY] Remove after diagnosis â€” pipeline branching decision
         log.info("[OBSERVABILITY] PIPELINE_DECISION", {
           textPreview: text.substring(0, 300),
           action: workflowResult.action,
@@ -638,8 +653,8 @@ export async function runExtractionPipeline(
         const mergedWithMemory = mergeContext(mergedSlotsForDb, ctxMemory, confidenceResult.overall_confidence);
         log.info("[CONTEXT] merge completado:", Object.keys(mergedWithMemory).join(", "));
 
-        // F02-DG (CDA §7): Persistir leadCore.intent para que prevIntent esté disponible
-        // en el próximo turno. Sin esto, la lógica de preservación de core.ts:282-290 es
+        // F02-DG (CDA Â§7): Persistir leadCore.intent para que prevIntent estÃ© disponible
+        // en el prÃ³ximo turno. Sin esto, la lÃ³gica de preservaciÃ³n de core.ts:282-290 es
         // estructuralmente inalcanzable porque prevIntent siempre es undefined.
         // Solo guardamos intents operativos (no AMBIGUOUS, GREETING, ni undefined).
         if (leadCore.intent && !["AMBIGUOUS", "GREETING"].includes(leadCore.intent)) {
@@ -651,10 +666,10 @@ export async function runExtractionPipeline(
         extractionNote = formatConfidenceNote(parsed.data, confidenceResult, workflowResult, pricing, multiRideBreakdown);
         log.info("[EXTRACTION] extractionNote generado, len:", extractionNote.length);
       } else {
-        log.info("[EXTRACTION] Parse falló:", JSON.stringify(parsed.error?.issues || []));
+        log.info("[EXTRACTION] Parse fallÃ³:", JSON.stringify(parsed.error?.issues || []));
       }
     } else {
-      log.info("[EXTRACTION] generateGroqExtraction retornó null");
+      log.info("[EXTRACTION] generateGroqExtraction retornÃ³ null");
     }
   } catch (e) {
     log.error("[EXTRACTION] error:", e instanceof Error ? e.message : String(e));

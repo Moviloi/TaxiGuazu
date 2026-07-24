@@ -1,11 +1,32 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "default_agent": "plan",
+  "subagent_depth": 2,
+  "default_agent": "arnes",
   "agent": {
     "plan": {
-      "description": "PLAN estratégico AITOS — produce Execution Plans y delega ejecución a BUILD",
+      "description": "PLAN — entry point de planificación ARNÉS | Delega en Cognitive Engines (SDL, LIGHT_PLANNER) | Consume DecisionPackage",
       "mode": "primary",
       "prompt": "{file:.opencode/agents/plan.md}",
+      "permission": {
+        "read": "allow",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": {
+          "*": "deny",
+          "build": "allow",
+          "sdl": "allow",
+          "light-planner": "allow"
+        }
+      }
+    },
+    "sdl": {
+      "description": "SDL v2.0 — Strategic Director Layer | Cognitive Engine de planificación para misiones DEEP",
+      "mode": "subagent",
+      "model": "current",
+      "prompt": "{file:.opencode/agents/sdl.md}",
       "permission": {
         "read": "allow",
         "glob": "allow",
@@ -14,13 +35,12 @@
         "edit": "deny",
         "bash": "deny",
         "task": {
-          "*": "deny",
-          "build": "allow"
+          "*": "deny"
         }
       }
     },
     "build": {
-      "description": "BUILD operacional AITOS — ejecuta Execution Plans de PLAN y orquesta capacidades del ecosistema",
+      "description": "BUILD operacional ARNÉS — ejecuta Execution Plans de PLAN y orquesta capacidades del ecosistema",
       "mode": "primary",
       "prompt": "{file:.opencode/agents/build.md}",
       "permission": {
@@ -40,6 +60,70 @@
           "ael-implementer": "allow",
           "ael-audit": "allow",
           "ael-memory": "allow",
+          "ael-learning": "allow",
+          "amc": "allow"
+        }
+      }
+    },
+    "arnes": {
+      "description": "ARNÉS Mode — router cognitivo con desarrollo gobernado (Product Context, Runtime Profile, trazabilidad y enforcement)",
+      "mode": "primary",
+      "model": "opencode/deepseek-v4-flash-free",
+      "prompt": "{file:.opencode/agents/arnes.md}",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": {
+          "*": "deny",
+          "plan": "allow",
+          "build": "allow",
+          "sdl": "allow",
+          "light-planner": "allow",
+          "amc": "allow"
+        }
+      }
+    },
+    "light-planner": {
+      "description": "LIGHT_PLANNER — motor de planificación reducido para misiones estratégicas STANDARD/SHALLOW",
+      "mode": "subagent",
+      "model": "opencode/deepseek-v4-flash-free",
+      "prompt": "{file:.opencode/agents/light-planner.md}",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": {
+          "*": "deny",
+          "build": "allow"
+        }
+      }
+    },
+    "amc": {
+      "description": "AMC — AEL Mission Coordinator | Coordinador operacional del dominio AEL | Recibe ExecutionPlan y coordina capacidades ael-*",
+      "mode": "subagent",
+      "model": "opencode/deepseek-v4-flash-free",
+      "prompt": "{file:.opencode/agents/amc.md}",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": {
+          "*": "deny",
+          "ael-explore": "allow",
+          "ael-architect": "allow",
+          "ael-implementer": "allow",
+          "ael-audit": "allow",
+          "ael-memory": "allow",
           "ael-learning": "allow"
         }
       }
@@ -47,7 +131,7 @@
     "ael-explore": {
       "description": "Explorador — descubre estado real del codigo, solo lectura",
       "mode": "subagent",
-      "model": "opencode/DeepSeek V4 Flash Freeh",
+      "model": "opencode/deepseek-v4-flash-free",
       "permission": {
         "read": "allow",
         "glob": "allow",
@@ -60,7 +144,7 @@
     "ael-architect": {
       "description": "Arquitecto — valida diseno contra ADRs y contratos",
       "mode": "subagent",
-      "model": "opencode/DeepSeek V4 Flash Free",
+      "model": "opencode/deepseek-v4-flash-free",
       "permission": {
         "read": "allow",
         "glob": "allow",
@@ -73,7 +157,7 @@
     "ael-implementer": {
       "description": "Implementador — aplica cambios aprobados al codigo",
       "mode": "subagent",
-      "model": "opencode/DeepSeek V4 Flash Free",
+      "model": "opencode/deepseek-v4-flash-free",
       "permission": {
         "read": "allow",
         "glob": "allow",

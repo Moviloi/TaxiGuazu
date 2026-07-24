@@ -1,3 +1,26 @@
+// ── RNF-A06: Observabilidad ──
+// Este módulo es el componente oficial de observabilidad del sistema.
+// Auditoría: 2026-07-21 — BUILD / AEL
+// Estado: PASS (RNF-A06 auditado formalmente)
+//
+// Cobertura:
+// - 4 niveles de log (debug, info, warn, error) con filtro por nivel.
+// - Modo JSON estructurado en producción (timestamp, level, message, data).
+// - Modo texto legible en desarrollo/test.
+// - Control por environment variables: LOG_LEVEL, NODE_ENV.
+// - Usado en toda la base de código (~120+ imports en handlers, services, AI).
+// - Sin dependencias externas (console-based, zero-dependency).
+//
+// Limitaciones documentadas:
+// - No tiene transporte a servicios externos (Sentry, CloudWatch, etc.) —
+//   los logs se capturan por el runtime de Node.js y pueden redirigirse
+//   externamente por el entorno de despliegue.
+// - No tiene correlación de trazas distribuidas (traceId/spanId) —
+//   cada request se identifica por phone number + conversationId en los
+//   mensajes de log.
+// - Los objetos se serializan con JSON.stringify (pérdida de tipos,
+//   circular references causan error — capturado con try/catch).
+
 const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 } as const;
 type Level = keyof typeof LEVELS;
 

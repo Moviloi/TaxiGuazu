@@ -1,3 +1,8 @@
+> **STATUS: ARCHIVED**
+> **REASON:** Historical artifact from ARNÉS pre-v1.0 architecture (pipeline de 7 fases).
+> **REPLACED BY:** `ael/constitution/SPEC.md` (operational specification) and `ael/government/roles/` (capability contracts).
+> **ARCHIVED:** 2026-07-23 — Sprint 9.2
+
 # AEL Pipeline — Agent Execution Layer
 
 Pipeline formal de ejecución agéntica para el sistema TaxGuazú.

@@ -31,7 +31,7 @@
 |---|---|---|---|
 | P1-01 | Fix 17 test failures | 6 test files | Estabiliza CI/CD |
 | P1-02 | `updateTripTariff` ownership (Trip vs Pricing) | `trips.ts` | Claridad de dominio |
-| P1-03 | DEBT-02: survey→lead dependency documentada pero no resuelta | `lead-event-helpers.ts` | Eliminar acoplamiento vertical |
+| P1-03 | DEBT-02: survey→lead dependency resuelta | ~~`lead-event-helpers.ts`~~ | ✅ Eliminado en T3 — archivo borrado, sin consumidores |
 | P1-04 | DEBT-13: nombres de tabla con tags de fase | `connection.ts` | Higiene de schema |
 | P1-05 | ai/display-name.ts importa de db/ | `display-name.ts` | Violación de capa AI→DB |
 

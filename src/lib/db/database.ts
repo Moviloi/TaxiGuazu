@@ -857,4 +857,5 @@ export {
   findPlaceByAlias,
   findPlaceByName,
   getPlaceZone,
+  getZoneSurcharge,
 } from "./domains/geo";

@@ -1,0 +1,59 @@
+{
+  "_description": "TEMPLATE — Copiar y adaptar para un nuevo producto construido sobre ARNÉS.",
+  "_usage": "1. Copiar este archivo como 'product-rules.json' en el directorio ael/contracts/ de tu proyecto. 2. Reemplazar los paths de ejemplo con los paths reales de tu producto. 3. Ejecutar 'bash ael/contracts/enforce.sh' para verificar.",
+  "product": "NOMBRE_DEL_PRODUCTO",
+  "rules": {
+    "r1_contract_integrity": {
+      "forbidden_imports": [
+        {
+          "description": "DESCRIBIR: qué capa no debe importar de qué otra capa",
+          "from_path": "src/ruta/a/capa/origen/",
+          "import_pattern": "from.*@/ruta/prohibida/",
+          "except_patterns": ["patrón a excluir (opcional)"]
+        }
+      ],
+      "warnings": [
+        {
+          "description": "DESCRIBIR: advertencia no bloqueante",
+          "from_path": "src/ruta/archivo.ts",
+          "pattern": "patrón a warning"
+        }
+      ]
+    },
+    "r2_dependency_rules": {
+      "layer_constraints": [
+        {
+          "description": "DESCRIBIR: restricción de capa",
+          "search_path": "src/ruta/a/capa/",
+          "forbidden_pattern": "from.*@/ruta/prohibida/"
+        }
+      ],
+      "facade_checks": [
+        {
+          "description": "DESCRIBIR: verificación de facade",
+          "search_path": "src/ruta/a/capa/",
+          "pattern": "from.*patrón/prohibido"
+        }
+      ]
+    },
+    "r3_code_existence": {
+      "spec_files": ["ruta/a/especificacion.md"]
+    },
+    "r4_ai_first": {
+      "no_heuristic_ranking": [
+        {
+          "description": "DESCRIBIR: dónde no debe haber heurísticas",
+          "file": "src/ruta/archivo.ts",
+          "pattern": "CASE.*WHEN"
+        }
+      ],
+      "no_hardcoded_priorities": [
+        {
+          "description": "DESCRIBIR: dónde no debe haber prioridades hardcodeadas",
+          "file": "src/ruta/archivo.ts",
+          "pattern": "_PRIORITY"
+        }
+      ]
+    }
+  }
+}

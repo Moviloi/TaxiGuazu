@@ -1,5 +1,27 @@
 // ARCHITECTURE NOTE: This module manages conversational slot-collection states
 // via conversational_state (chat_sessions column).
+//
+// ── INV-18: Interpretación del campo esperado ──
+// El campo `clarifyField` se determina en evaluateWorkflowTransition() a partir
+// del `extractionResult.clarify_field`, que a su vez es establecido por:
+//   1. extract-slots.ts / extraction-schema.ts → determina qué campo falta
+//      según el domain (booking o ahora) y los slots actuales.
+//   2. completeness-engine → evalúa si los slots existentes son suficientes
+//      para proceder, identificando el campo prioritario faltante.
+//   3. resolveSimpleFieldGap (field-resolver.ts) → mapeo explícito de gaps.
+//
+// La interpretación del campo esperado NO está centralizada en slot-workflow
+// porque el conocimiento sobre qué campo falta reside en el motor de extracción
+// (extraction-schema) y el motor de completitud (completeness-engine).
+// slot-workflow solo PERSISTE y COMUNICA el clarifyField entre turnos.
+//
+// Flujo:
+//   extract-slots determina campo faltante → extraction-schema.clarify_field
+//   → extraction-runner pasa al workflow → slot-workflow PERSISTE en DB
+//   → próximo turno: handler/lead-service LEE de DB y usa resolveSimpleFieldGap
+//
+// Esta distribución es INTENCIONAL: cada capa tiene el conocimiento necesario
+// (extraction → qué extraer, completeness → qué falta, workflow → estado).
 
 import { getChatSession, resetChatSession } from "@/lib/db/database";
 import { getConversationalState, setConversationalState } from "@/lib/db/state-accessors";

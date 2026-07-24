@@ -15,7 +15,7 @@ Veto. A rejected design cannot proceed without Governance intervention. Cannot o
 ## Input
 - Mission plan and scope from the Director
 - System state snapshot (from Discovery or the Director)
-- All applicable architectural constraints (ADRs, contracts)
+- All applicable architectural constraints (ADRs, contracts, the product constitution, e.g. `docs/architecture/AITOS_CONSTITUTION.md`)
 
 ## Output
 - Assessment: compliant or rejected, with explicit references to violated or preserved constraints

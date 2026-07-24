@@ -8,6 +8,8 @@
 
 ---
 
+> **Estado:** HISTÓRICO — Roadmap ejecutado en PR-5A a PR-5F (2026-07-15/16). La implementación resultante fue removida por ADR-014 (2026-07-20) por higiene (0 consumidores, 0 tests). El Cognitive Escalation Principle (ADR-012) se preserva como diseño conceptual para re-evaluación post-v1. Este documento se conserva como referencia de planificación y trazabilidad histórica.
+
 ## Preámbulo
 
 Este documento define el roadmap de migración desde la arquitectura actual de TaxiGuazú (documentada en CE-1) hacia la arquitectura cognitiva objetivo (diseñada en CE-3A y CE-3B), basada en tres niveles de inteligencia:

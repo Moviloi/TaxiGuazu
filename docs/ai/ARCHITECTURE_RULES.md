@@ -1,6 +1,7 @@
 # Architecture Rules — AITOS
 
 > Strict rules derived from the code. Every AI agent must follow them.
+> These rules are subordinate to the AITOS Constitution (`docs/architecture/AITOS_CONSTITUTION.md`).
 > If you are about to break a rule, stop and ask for an ADR-level decision.
 
 ---

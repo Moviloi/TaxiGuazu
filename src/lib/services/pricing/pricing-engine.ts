@@ -3,6 +3,7 @@
 import { resolveLocation } from "../geo/location-resolver";
 import { resolveTariff } from "./tariff-resolver";
 import { applyCommercialRules, type Adjustment } from "./commercial-pricing-engine";
+import { getZoneSurcharge } from "@/lib/db/database";
 
 export interface PricingRequest {
   origin: string;
@@ -10,6 +11,7 @@ export interface PricingRequest {
   passengers: number;
   modality?: string;
   customerPhone?: string;
+  dateTime?: Date;
 }
 
 export interface PricingResult {
@@ -29,8 +31,40 @@ export interface PricingResult {
     zone_id: string | null;
   };
   level: string;
-  source: "standard" | "promotion" | "provider_adjustment" | "package" | "tg_campaign";
+  source: "standard" | "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "night_surcharge";
   explanation: string[];
+}
+
+export function isNightWindow(date: Date): boolean {
+  // UTC-3 (Argentina): restar 3 horas de UTC
+  const argHour = (date.getUTCHours() - 3 + 24) % 24;
+  return argHour >= 22 || argHour < 6;
+}
+
+export async function applyNightSurcharge(
+  price: number,
+  originZoneId: string | null,
+  destZoneId: string | null,
+  dateTime: Date,
+  adjustments: Adjustment[],
+  explanation: string[],
+): Promise<number> {
+  const zoneIds = [originZoneId, destZoneId].filter(Boolean) as string[];
+  for (const zoneId of zoneIds) {
+    const surcharge = await getZoneSurcharge(zoneId);
+    if (surcharge && surcharge.surcharge_pct > 0 && isNightWindow(dateTime)) {
+      const amount = Math.round(price * surcharge.surcharge_pct / 100);
+      adjustments.push({
+        type: "night_surcharge",
+        amount,
+        reason: surcharge.surcharge_description ?? `Recargo nocturno ${surcharge.surcharge_pct}%`,
+        valid_until: null,
+      });
+      explanation.push(`Recargo nocturno (${surcharge.surcharge_description ?? zoneId}): +$${amount} (${surcharge.surcharge_pct}%)`);
+      return price + amount;
+    }
+  }
+  return price;
 }
 
 export async function calculatePrice(req: PricingRequest): Promise<PricingResult> {
@@ -86,10 +120,22 @@ export async function calculatePrice(req: PricingRequest): Promise<PricingResult
   explanation.push(`Base price (costo proveedor): $${base_price}`);
   explanation.push(`Markup TaxiGuazú: $${markup}`);
 
+  // 3.5 Apply night surcharge if applicable
+  const dateTime = req.dateTime ?? new Date();
+  const adjustments: Adjustment[] = [];
+  const surchargedPrice = await applyNightSurcharge(
+    match.price,
+    originLoc.zone_id,
+    destLoc.zone_id,
+    dateTime,
+    adjustments,
+    explanation,
+  );
+
   // 4. Apply commercial rules
   const commercial = await applyCommercialRules({
     base_price,
-    preliminary_price,
+    preliminary_price: surchargedPrice,
     tariff_id: match.tariffId,
     origin_place_id: originLoc.place_id,
     destination_place_id: destLoc.place_id,
@@ -105,13 +151,13 @@ export async function calculatePrice(req: PricingRequest): Promise<PricingResult
   return {
     base_price: commercial.base_price,
     markup: commercial.markup,
-    adjustments: commercial.adjustments,
+    adjustments: [...adjustments, ...commercial.adjustments],
     final_price: commercial.final_price,
     tariff_id: match.tariffId,
     origin: { place_id: originLoc.place_id, canonical_name: originLoc.canonical_name, zone_id: originLoc.zone_id },
     destination: { place_id: destLoc.place_id, canonical_name: destLoc.canonical_name, zone_id: destLoc.zone_id },
     level: match.level,
-    source: commercial.source,
+    source: adjustments.length > 0 ? "night_surcharge" : commercial.source,
     explanation,
   };
 }

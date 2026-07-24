@@ -1,0 +1,67 @@
+{
+  "product": "AITOS",
+  "rules": {
+    "r1_contract_integrity": {
+      "forbidden_imports": [
+        {
+          "description": "AI layer must not import from Services (except types and i18n)",
+          "from_path": "src/lib/ai/",
+          "import_pattern": "from.*@/lib/services/",
+          "except_patterns": ["types", "/i18n/"]
+        }
+      ],
+      "warnings": [
+        {
+          "description": "response-builder should not import OpportunityResult from learning",
+          "from_path": "src/lib/ai/response-builder.ts",
+          "pattern": "OpportunityResult"
+        }
+      ]
+    },
+    "r2_dependency_rules": {
+      "layer_constraints": [
+        {
+          "description": "ADR 001: Utils must not import from project",
+          "search_path": "src/lib/utils/",
+          "forbidden_pattern": "from.*@/lib/"
+        }
+      ],
+      "facade_checks": [
+        {
+          "description": "ADR 002: Services must use DB facade, not db/core directly",
+          "search_path": "src/lib/services/",
+          "pattern": "from.*db/core"
+        },
+        {
+          "description": "ADR 002: Services must not use getDb() directly",
+          "search_path": "src/lib/services/",
+          "pattern": "getDb()"
+        },
+        {
+          "description": "ADR 004: trip-execution must not import from lead.service",
+          "search_path": "src/lib/services/trip-execution/",
+          "pattern": "from.*lead.service"
+        }
+      ]
+    },
+    "r4_ai_first": {
+      "no_heuristic_ranking": [
+        {
+          "description": "geo.ts must not have heuristic CASE/WHEN in ORDER BY",
+          "file": "src/lib/db/domains/geo.ts",
+          "pattern": "CASE.*WHEN"
+        }
+      ],
+      "no_hardcoded_priorities": [
+        {
+          "description": "geo.ts must not have hardcoded priority maps",
+          "file": "src/lib/db/domains/geo.ts",
+          "pattern": "_PRIORITY"
+        }
+      ]
+    },
+    "r3_code_existence": {
+      "spec_files": ["ael/artifacts/DESIGN_SPEC.md"]
+    }
+  }
+}

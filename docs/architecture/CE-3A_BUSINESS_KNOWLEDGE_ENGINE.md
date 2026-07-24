@@ -8,6 +8,8 @@
 
 ---
 
+> **Estado:** ARCHIVE CANDIDATE — Diseño redefinido por ADR-014 (2026-07-20). Código BKE eliminado de `src/lib/bke/`. El Cognitive Escalation Principle (ADR-012) se preserva como diseño conceptual para re-evaluación post-v1. Este documento se conserva como referencia de diseño y trazabilidad histórica.
+
 ## Preámbulo
 
 Este documento define la arquitectura conceptual del Business Knowledge Engine (BKE), una nueva capa del sistema cuyo propósito es encapsular el conocimiento del dominio de TaxiGuazú en una API interna de consultas de alto nivel.

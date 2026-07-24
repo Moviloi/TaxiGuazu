@@ -10,7 +10,7 @@ const ZONES = [
   { zone_id: "600HAS_RESTO", zone_name: "600 Hectáreas Resto", country: "AR", area_group: "iguazu_norte", dispatch_priority: 4, base_eta_min: 12, surcharge_description: null, surcharge_pct: 0 },
   { zone_id: "ACCESO_RUTA12", zone_name: "Acceso Ruta 12", country: "AR", area_group: "iguazu_norte", dispatch_priority: 2, base_eta_min: 8, surcharge_description: null, surcharge_pct: 0 },
   { zone_id: "ADUANA_TN", zone_name: "Aduana Tancredo Neves", country: "AR", area_group: "iguazu_norte", dispatch_priority: 3, base_eta_min: 15, surcharge_description: null, surcharge_pct: 0 },
-  { zone_id: "AEROPUERTO_IGR", zone_name: "Aeropuerto IGR", country: "AR", area_group: "iguazu_norte", dispatch_priority: 2, base_eta_min: 20, surcharge_description: null, surcharge_pct: 0 },
+  { zone_id: "AEROPUERTO_IGR", zone_name: "Aeropuerto IGR", country: "AR", area_group: "iguazu_norte", dispatch_priority: 2, base_eta_min: 20, surcharge_description: "Recargo nocturno Aeropuerto IGR (22:00-06:00)", surcharge_pct: 20 },
   { zone_id: "AEROPUERTO_IGU", zone_name: "Aeropuerto IGU", country: "BR", area_group: "foz_centro", dispatch_priority: 2, base_eta_min: 20, surcharge_description: null, surcharge_pct: 0 },
   { zone_id: "CATARATAS", zone_name: "Cataratas Argentinas", country: "AR", area_group: "iguazu_norte", dispatch_priority: 4, base_eta_min: 20, surcharge_description: null, surcharge_pct: 0 },
   { zone_id: "CATARATAS_BR", zone_name: "Cataratas Brasileñas", country: "BR", area_group: "foz_centro", dispatch_priority: 4, base_eta_min: 20, surcharge_description: null, surcharge_pct: 0 },

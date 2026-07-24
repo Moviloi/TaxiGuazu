@@ -3,6 +3,7 @@
 > Navigable index of all Architecture Decision Records.
 > This file groups decisions by domain and links them to related documentation.
 > For the full text of each decision, see `docs/adr/`.
+> **Authority:** The AITOS Constitution (`docs/architecture/AITOS_CONSTITUTION.md`) is the supreme normative authority. ADRs are subordinate to the Constitution.
 
 ---
 

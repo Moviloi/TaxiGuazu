@@ -174,13 +174,11 @@ Estos dominios admiten cambios en las fases indicadas:
 - **Riesgo**: BAJO — mover función, no cambiar lógica
 - **Criterios de finalización**: `updateTripTariff` reside en `services/pricing/`
 
-### I1.3 — Eliminar dependencia survey→lead
-- **Problema**: `lead-event-helpers.ts` crea acoplamiento vertical post-venta→preventa. Documentado en DEBT-02.
-- **Impacto**: Elimina acoplamiento entre bounded contexts
-- **Dominios**: Survey, Lead
-- **Dependencias**: Ninguna
-- **Riesgo**: BAJO — extraer interfaz compartida
-- **Criterios de finalización**: Survey no importa de Lead
+### ~~I1.3 — Eliminar dependencia survey→lead~~ `DONE` ✅
+- **Problema**: `lead-event-helpers.ts` creaba acoplamiento vertical post-venta→preventa. Documentado en DEBT-02.
+- **Resolución (T3 — 2026-07-23)**: Archivo `lead-event-helpers.ts` eliminado — sin consumidores restantes tras T2. La dependencia survey→lead queda resuelta por eliminación del puente.
+- **Impacto**: Eliminado acoplamiento entre bounded contexts
+- **Criterios de finalización**: Survey no importa de Lead ✅
 
 ### I1.4 — Renombrar tablas con tags de fase
 - **Problema**: `f9_events`, `f4_log`, `conversation_f4_log` tienen etiquetas de desarrollo en producción.

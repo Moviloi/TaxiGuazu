@@ -1,10 +1,10 @@
 # Conversation Decision Algorithm — AITOS
 
-> **Versión:** 1.1  
-> **Propósito:** Definir y certificar el algoritmo conversacional que AITOS **debe** ejecutar, independientemente de su implementación actual.  
-> **Autoridad:** Deriva de `FUNCTIONAL_BEHAVIOR_SPECIFICATION.md`, Principios AITOS LAB (P1-P10), PR-QA2B (QB-01 a QB-08), PR-QA3-S2B (F01-DG a F03-DG), Invariantes conversacionales (I-C1 a I-C12), ADR-007, ADR-008, CX-1.  
-> **Naturaleza:** Documento normativo. Toda implementación o refactor debe cumplir este algoritmo.  
-> **Relación con otros documentos:** Este documento es el **árbol de decisión normativo** que concreta los principios de la `FUNCTIONAL_BEHAVIOR_SPECIFICATION.md` en un algoritmo ejecutable conceptualmente. La verificación experimental contra 21 escenarios conversacionales está documentada en el Apéndice C.
+> **Versión:** 1.2  
+> **Propósito:** Algoritmo conversacional detallado que implementa el Contrato de Decisión Conversacional (CON-01) de la Constitución de AITOS.  
+> **Autoridad:** Documento técnico derivado de la Constitución de AITOS (`docs/architecture/AITOS_CONSTITUTION.md`).  
+> **Jerarquía:** CONST §1.4 (nivel 8: Contratos). CON-01 es el contrato; este documento es su implementación algorítmica.  
+> **En caso de conflicto, prevalece la Constitución.**
 
 ---
 

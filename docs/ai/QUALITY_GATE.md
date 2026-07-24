@@ -5,6 +5,14 @@
 
 ---
 
+## Constitutional compliance
+
+- [ ] **AITOS Constitution respected**
+  - No change violates any invariant documented in CONST (INV-01..INV-20).
+  - No change contradicts any constitutional principle (CC-01..CC-17).
+  - No change redefines capabilities, contracts, or governance without amending CONST.
+  - The Constitution (`docs/architecture/AITOS_CONSTITUTION.md`) is the supreme authority. If this change requires modifying a derived document, the derived document's hierarchy must be preserved.
+
 ## Architectural checks
 
 - [ ] **No new architectural violations**
@@ -143,6 +151,7 @@ Before considering the change complete, verify:
 
 - [ ] The change can be explained to a new architect using only this documentation and the code.
 - [ ] The change does not contradict any ADR.
+- [ ] The change does not violate any invariant in `docs/architecture/AITOS_CONSTITUTION.md`.
 - [ ] The change does not violate any invariant in `docs/ai/INVARIANTS.md`.
 - [ ] The change follows all rules in `docs/ai/ARCHITECTURE_RULES.md`.
 

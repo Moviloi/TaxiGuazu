@@ -1,8 +1,10 @@
-# System Bible — AITOS
+# AITOS Overview
 
-> The non-technical constitution of the AI Transportation Operating System.
-> Read this before any other document if you want to understand what the system is, why it exists, and what it promises.
-> For implementation details, see `docs/ai/ARCHITECTURE_BIBLE.md` and `docs/architecture/`.
+> **Propósito:** Documento de onboarding y contexto para nuevos miembros del equipo.
+> **Autoridad:** Este documento es una introducción contextual. No es un documento normativo.
+> **La autoridad normativa del sistema es la Constitución de AITOS (`docs/architecture/AITOS_CONSTITUTION.md`).**
+> **Para detalles de implementación, ver `docs/ai/ARCHITECTURE_BIBLE.md` y `docs/architecture/`.**
+> **Actualizado:** 2026-07-06 (pendiente de alineación completa con la Constitución)
 
 ---
 

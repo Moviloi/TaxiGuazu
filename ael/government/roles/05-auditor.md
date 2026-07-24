@@ -14,7 +14,7 @@ Blocking. A failed validation halts the mission. Cannot approve changes it has n
 
 ## Input
 - Modified system state (from Implementation)
-- Applicable quality gates and their criteria
+- Applicable quality gates and their criteria (including the product constitution invariants, e.g. `docs/architecture/AITOS_CONSTITUTION.md`)
 
 ## Output
 - Validation report: pass/fail per quality gate, evidence for each result

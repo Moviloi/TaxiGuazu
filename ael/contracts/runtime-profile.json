@@ -1,0 +1,62 @@
+{
+  "profile": "default",
+  "description": "Perfil balanceado para misiones estándar de ingeniería. Aplica a todas las misiones estratégicas salvo override explícito. NOTA: Los campos 'models' y 'providers' están reservados para resolución futura. La asignación actual de modelos se resuelve en opencode.json. Ver RUNTIME_PROFILE_CONTRACT.md.",
+  "models": {
+    "default": "current",
+    "per_capability": {
+      "discovery": "current",
+      "architecture": "current",
+      "implementation": "current",
+      "validation": "current",
+      "memory": "current",
+      "learning": "current"
+    }
+  },
+  "providers": {
+    "primary": "current",
+    "fallback_chain": ["current"]
+  },
+  "fallback": {
+    "circuit_breaker": { "max_failures": 5, "pause_seconds": 60 },
+    "graceful_degradation": "deterministic_templates"
+  },
+  "budgets": {
+    "tokens_per_mission": 500000,
+    "tokens_per_agent": 100000,
+    "enforcement": "WARN"
+  },
+  "cost_limits": {
+    "per_mission": null,
+    "per_day": null,
+    "enforcement": "WARN"
+  },
+  "timeouts": {
+    "mission_minutes": 30,
+    "plan_minutes": 5,
+    "agent_minutes": 3,
+    "llm_seconds": 60
+  },
+  "parallelism": {
+    "strategy": "OPPORTUNISTIC",
+    "max_agents": 4,
+    "dependency_aware": true
+  },
+  "cache": {
+    "strategy": "SESSION",
+    "scope": ["llm_responses", "file_reads"],
+    "invalidation": "file_change"
+  },
+  "logging": {
+    "level": "INFO",
+    "trace_enabled": true,
+    "metrics_enabled": true
+  },
+  "features": {
+    "parallel_validation": "ENABLED",
+    "incremental_context": "DISABLED"
+  },
+  "mission_overrides": {
+    "allowed_fields": ["timeouts.mission_minutes", "timeouts.agent_minutes", "budgets.tokens_per_mission", "models.default"],
+    "ttl": "mission"
+  }
+}

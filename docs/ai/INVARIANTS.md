@@ -2,6 +2,7 @@
 
 > Invariants are statements that must remain true before, during, and after every operation.
 > If a change violates an invariant, it must be rejected or elevated to an ADR.
+> The AITOS Constitution (`docs/architecture/AITOS_CONSTITUTION.md`) defines additional invariants (INV-01..INV-20) that supersede these product invariants.
 
 ---
 

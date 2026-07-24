@@ -1,4 +1,4 @@
-// Tool Pricing — contrato estable para cálculo de precios.
+﻿// Tool Pricing â€” contrato estable para cÃ¡lculo de precios.
 // Parte de AIT-021 (P1-tools). Wrapper alrededor de resolve-pricing-for-slots.ts.
 // Exporta SOLO la interfaz con Zod (PricingToolInput/Output/pricingTool).
 // Las funciones originales se usan puertas adentro, no se re-exportan.
@@ -7,17 +7,18 @@ import { z } from "zod";
 import { resolvePricingForSlots as _resolvePricingForSlots } from "./resolve-pricing-for-slots";
 import type { PricingResult as _PricingResult } from "./resolve-pricing-for-slots";
 
-// ── Tipos de entrada ──
+// â”€â”€ Tipos de entrada â”€â”€
 
 export const PricingToolInputSchema = z.object({
   origin: z.string().min(1, "origin is required"),
   destination: z.string().min(1, "destination is required"),
   passengers: z.number().int().min(1).max(6),
   modality: z.string().optional(),
+  dateTime: z.date().optional(),
 });
 export type PricingToolInput = z.infer<typeof PricingToolInputSchema>;
 
-// ── Tipos de salida ──
+// â”€â”€ Tipos de salida â”€â”€
 
 export interface PricingToolAdjustment {
   type: string;
@@ -53,31 +54,26 @@ export const PricingToolOutputSchema = z.object({
     amount: z.number(),
     description: z.string(),
   })).optional(),
-  breakdown: z.object({
-    v2Price: z.number(),
-    v3Price: z.number(),
-    divergence: z.number().optional(),
-  }).optional(),
 
   // Backward-compat fields (snake_case, mismo valor que camelCase)
   final_price: z.number(),
   base_price: z.number(),
   tariff_id: z.number().nullable(),
   markup: z.number().default(0),
-  source: z.enum(["standard", "promotion", "provider_adjustment", "package", "tg_campaign"]).default("standard"),
+  source: z.enum(["standard", "promotion", "provider_adjustment", "package", "tg_campaign", "night_surcharge"]).default("standard"),
   explanation: z.array(z.string()).default([]),
 });
 export type PricingToolOutput = z.infer<typeof PricingToolOutputSchema>;
 
-// ── Interfaz del tool ──
+// â”€â”€ Interfaz del tool â”€â”€
 
 export interface PricingTool {
   calculatePrice(input: PricingToolInput): Promise<PricingToolOutput>;
 }
 
-// ── Implementación concreta ──
+// â”€â”€ ImplementaciÃ³n concreta â”€â”€
 
-/** Convierte PricingResult interno → PricingToolOutput (contrato público).
+/** Convierte PricingResult interno â†’ PricingToolOutput (contrato pÃºblico).
  *  Exportado para uso en la frontera entre capas. */
 export function pricingResultToToolOutput(r: _PricingResult): PricingToolOutput {
   return {
@@ -114,15 +110,15 @@ export function pricingResultToToolOutput(r: _PricingResult): PricingToolOutput 
   };
 }
 
-/** Convierte PricingToolOutput (contrato público) → PricingResult interno.
+/** Convierte PricingToolOutput (contrato pÃºblico) â†’ PricingResult interno.
  *  Necesario en la frontera porque los consumidores legacy (executeTrip, etc.)
- *  todavía esperan PricingResult. */
+ *  todavÃ­a esperan PricingResult. */
 export function pricingToolOutputToResult(target: PricingToolOutput): _PricingResult {
   return {
     base_price: target.base_price,
     markup: target.markup,
     adjustments: (target.adjustments ?? []).map(a => ({
-      type: a.type as "promotion" | "provider_adjustment" | "package" | "tg_campaign",
+      type: a.type as "promotion" | "provider_adjustment" | "package" | "tg_campaign" | "night_surcharge",
       amount: a.amount,
       reason: a.description,
       valid_until: null,
@@ -152,6 +148,7 @@ export const pricingTool: PricingTool = {
       origin: parsed.origin,
       destination: parsed.destination,
       passengers: parsed.passengers,
+      dateTime: parsed.dateTime,
     });
     return PricingToolOutputSchema.parse(pricingResultToToolOutput(result.pricingResult));
   },

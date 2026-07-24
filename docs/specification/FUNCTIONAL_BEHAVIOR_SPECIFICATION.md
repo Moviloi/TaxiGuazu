@@ -1,10 +1,11 @@
 # Functional & Behavioral Specification — AITOS
 
-> **Versión:** 1.0  
-> **Propósito:** Fuente de Verdad funcional del sistema conversacional AITOS.  
-> **Autoridad:** Deriva de AITOS LAB, ADRs vigentes, Architecture Freeze, CX-1, QA-1, QA-2, QA-2B, Conversation Acceptance Tests y documentación del proyecto.  
-> **Este documento describe el comportamiento *esperado*, no necesariamente el *implementado*.**  
-> **Toda corrección, auditoría o desarrollo nuevo debe compararse contra esta especificación.**
+> **Versión:** 1.1  
+> **Propósito:** Especificación funcional detallada del sistema conversacional AITOS.  
+> **Autoridad:** Documento derivado de la Constitución de AITOS (`docs/architecture/AITOS_CONSTITUTION.md`).  
+> **Jerarquía:** En caso de conflicto, prevalece la Constitución.  
+> **Este documento desarrolla los Requerimientos Funcionales y las Invariantes definidas en la Constitución, agregando detalle de especificación.**
+> **Toda corrección, auditoría o desarrollo nuevo deberá compararse contra la Constitución primero, y contra esta especificación para detalle funcional.**
 
 ---
 
